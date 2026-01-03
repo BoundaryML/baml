@@ -4,9 +4,9 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
+use baml_vm::bytecode::CmpOp;
 
 #[test]
-#[ignore = "watch not yet in HIR"]
 fn watch_primitive() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -21,13 +21,195 @@ fn watch_primitive() -> anyhow::Result<()> {
         expected: vec![(
             "primitive",
             vec![
+                // Initialize locals with null
+                Instruction::LoadConst(Value::Null),
+                Instruction::LoadConst(Value::Null),
+                // Initialize watched variable
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::StoreVar("value".to_string()),
+                // Register watch (only once, at initialization)
                 Instruction::LoadConst(Value::string("value")), // channel "value"
                 Instruction::LoadConst(Value::Null),            // filter null
-                Instruction::Watch(1),
+                Instruction::Watch(2),
+                // Assignment: value = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("value".to_string()),
+                // Return value
                 Instruction::LoadVar("value".to_string()),
+                Instruction::StoreVar("_0".to_string()),
+                // Unwatch on scope exit
+                Instruction::Unwatch(2),
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// VizEnter/VizExit Tests
+// ============================================================================
+
+#[test]
+fn viz_header_before_if_emits_viz_enter_exit() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function header_before_if() -> int {
+                //# MyHeader
+                if (true) {
+                    1
+                } else {
+                    2
+                }
+            }
+        "#,
+        expected: vec![(
+            "header_before_if",
+            vec![
+                Instruction::LoadConst(Value::Null), // result temp init
+                Instruction::NotifyBlock(0),         // //# MyHeader
+                Instruction::VizEnter(0),            // VizEnter because header precedes if
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(2)), // else branch
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                Instruction::LoadConst(Value::Int(1)), // then branch
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::VizExit(0), // VizExit at join
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn viz_header_before_while_emits_viz_enter_exit() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function header_before_while() -> int {
+                let x = 0;
+                //# LoopHeader
+                while (x < 5) {
+                    x = x + 1;
+                }
+                x
+            }
+        "#,
+        expected: vec![(
+            "header_before_while",
+            vec![
+                Instruction::LoadConst(Value::Null),   // local x init
+                Instruction::LoadConst(Value::Int(0)), // x = 0
+                Instruction::StoreVar("x".to_string()),
+                Instruction::NotifyBlock(0), // //# LoopHeader
+                Instruction::VizEnter(0),    // VizEnter because header precedes while
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(5)),
+                Instruction::CmpOp(CmpOp::Lt),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::VizExit(0), // VizExit at loop exit
+                Instruction::LoadVar("x".to_string()),
+                Instruction::Return,
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::BinOp(baml_vm::bytecode::BinOp::Add),
+                Instruction::StoreVar("x".to_string()),
+                Instruction::Jump(-12),
+            ],
+        )],
+    })
+}
+
+#[test]
+fn viz_standalone_header_no_viz_enter_exit() -> anyhow::Result<()> {
+    // Note: `let x = 5; x` is optimized to just returning 5 directly
+    assert_compiles(Program {
+        source: r#"
+            function standalone_header() -> int {
+                //# JustAHeader
+                let x = 5;
+                x
+            }
+        "#,
+        expected: vec![(
+            "standalone_header",
+            vec![
+                Instruction::NotifyBlock(0), // //# JustAHeader - only NotifyBlock, no VizEnter
+                Instruction::LoadConst(Value::Int(5)), // constant-propagated x
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn viz_multiple_headers_only_one_before_if() -> anyhow::Result<()> {
+    // Note: x=1 is constant-propagated, so no StoreVar for x appears
+    assert_compiles(Program {
+        source: r#"
+            function multiple_headers() -> int {
+                //# FirstHeader
+                let x = 1;
+                //# SecondHeader
+                if (x > 0) {
+                    2
+                } else {
+                    3
+                }
+            }
+        "#,
+        expected: vec![(
+            "multiple_headers",
+            vec![
+                Instruction::LoadConst(Value::Null),   // result temp
+                Instruction::NotifyBlock(0), // //# FirstHeader - no VizEnter (not before control flow)
+                Instruction::NotifyBlock(1), // //# SecondHeader
+                Instruction::VizEnter(0),    // VizEnter because this header precedes if
+                Instruction::LoadConst(Value::Int(1)), // x (inlined constant)
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Gt),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(3)), // else branch
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::Jump(3),
+                Instruction::LoadConst(Value::Int(2)), // then branch
+                Instruction::StoreVar("_0".to_string()),
+                Instruction::VizExit(0), // VizExit at join
+                Instruction::LoadVar("_0".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn viz_if_without_header_no_viz() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function if_no_header() -> int {
+                if (true) {
+                    1
+                } else {
+                    2
+                }
+            }
+        "#,
+        expected: vec![(
+            "if_no_header",
+            vec![
+                // No VizEnter because no header before if
+                Instruction::LoadConst(Value::Bool(true)),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(3),
+                Instruction::LoadConst(Value::Int(2)), // else branch
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(1)), // then branch
+                // No VizExit
                 Instruction::Return,
             ],
         )],

@@ -258,17 +258,14 @@ fn else_if_with_comparisons() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             // ReturnPhi optimization: _0 stays on stack, no Store/Load needed
-            // x is Real (used multiple times)
+            // Constant propagation: x = 5 is single-definition constant, inlined at each use
             vec![
-                Instruction::LoadConst(Value::Null), // Pre-allocate x
-                Instruction::LoadConst(Value::Int(5)),
-                Instruction::StoreVar("x".to_string()),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(5)), // x inlined
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(10),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(5)), // x inlined
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::CmpOp(CmpOp::Lt),
                 Instruction::PopJumpIfFalse(2),
@@ -820,36 +817,29 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // MIR-based codegen with local pre-allocation
-            // Locals: _0 (unused), b (param), x (else), y (else), x (then), y (then)
-            // Note: a=1 is inlined as literal return value
+            // Constant propagation: single-def constants x, y are inlined at use sites
+            // Only unused user-named variables (x in else, y in then) need slots
             vec![
-                // Pre-allocate locals for both branches
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                // Pre-allocate 2 slots for unused user-named variables
                 Instruction::LoadConst(Value::Null),
                 Instruction::LoadConst(Value::Null),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(10),
-                // Else branch: x = 3, y = 4, identity(y)
+                Instruction::Jump(8),
+                // Else branch: x = 3 (unused, stored), identity(4) (y inlined)
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("x".to_string()),
-                Instruction::LoadConst(Value::Int(4)),
-                Instruction::StoreVar("y".to_string()),
                 Instruction::LoadGlobal(Value::function("identity")),
-                Instruction::LoadVar("y".to_string()),
+                Instruction::LoadConst(Value::Int(4)), // y inlined
                 Instruction::Call(1),
                 Instruction::Pop(1), // discard unused call result
-                Instruction::Jump(9),
-                // Then branch: x = 1, y = 2, identity(x)
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("x".to_string()),
+                Instruction::Jump(7),
+                // Then branch: y = 2 (unused, stored), identity(1) (x inlined)
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("y".to_string()),
                 Instruction::LoadGlobal(Value::function("identity")),
-                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(1)), // x inlined
                 Instruction::Call(1),
                 Instruction::Pop(1), // discard unused call result
                 // Return a (inlined as 1)
@@ -1088,55 +1078,43 @@ fn return_with_stack() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "WithStack",
-            // ReturnPhi optimization: _0 stays on stack, no Store/Load needed
-            // Pre-allocate locals: a, c, b (3 nulls - _0 is ReturnPhi)
+            // Constant propagation: a, b, c are all single-def constants inlined at use sites
+            // No local slots needed (all inlined), _0 is ReturnPhi
             vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                // a = 1
+                // if (a == 0) where a=1 is inlined
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::StoreVar("a".to_string()),
-                // if (a == 0) - jumps to instruction 34 (return 0)
-                Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(25), // 9 + 25 = 34
-                // if (a != 1) - b=1 is virtual, jumps to instruction 32 (return 0)
-                Instruction::LoadVar("a".to_string()),
+                Instruction::Jump(21),
+                // if (a != b) where a=1 and b=1 are both inlined
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(18), // 14 + 18 = 32
-                // c = 2
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::StoreVar("c".to_string()),
-                // b = 3
+                Instruction::Jump(14),
+                // while (b != c) where b=3 and c=2 are both inlined
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::StoreVar("b".to_string()),
-                // while (b != c) condition
-                Instruction::LoadVar("b".to_string()),
-                Instruction::LoadVar("c".to_string()),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3), // 23 + 3 = 26 (loop body)
-                // Loop exit: return 7 (ReturnPhi: value on stack, no Store/Load)
+                Instruction::Jump(3),
+                // Loop exit: return 7
                 Instruction::LoadConst(Value::Int(7)),
                 Instruction::Return,
                 // Loop body: if (true)
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2), // 28 + 2 = 30 (return 0)
-                // Jump back to while condition (instruction 19)
-                Instruction::Jump(-10), // 29 - 10 = 19
-                // return 0 (from inner if true) - instruction 30
+                Instruction::Jump(2),
+                // Jump back to while condition
+                Instruction::Jump(-10),
+                // return 0 (from if true in loop)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
-                // return 0 (from a != b check) - instruction 32
+                // return 0 (from a != b check)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
-                // return 0 (from a == 0 check) - instruction 34
+                // return 0 (from a == 0 check)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
             ],

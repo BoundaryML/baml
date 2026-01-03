@@ -76,10 +76,7 @@ pub fn from_type_ir(r#type: &TypeIR, _lookup: &impl TypeLookups) -> TypeNonStrea
         ),
         TypeIR::Union(union_type, _) => {
             let variants = union_type.iter_include_null();
-            let variants = variants
-                .into_iter()
-                .cloned()
-                .map(|t| from_type_ir(&t, _lookup));
+            let variants = variants.into_iter().map(|t| from_type_ir(t, _lookup));
 
             TypeNonStreaming::Union(
                 unsafe { UnionTypeGeneric::new_unsafe(variants.collect()) },

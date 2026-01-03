@@ -4,8 +4,8 @@ use baml_base::Span;
 use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_NAME, ErrorCode, INVALID_OPERATOR,
     NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
-    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_TYPE,
-    UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN,
+    UNKNOWN_ENUM_VARIANT, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -32,6 +32,9 @@ where
                 span,
                 UNEXPECTED_EOF,
             ),
+            ParseError::InvalidSyntax { message, span } => {
+                simple_error(message, span, UNEXPECTED_TOKEN)
+            }
         },
         CompilerError::TypeError(type_error) => match type_error {
             // TODO: This error should provide a second span that indicates the source
@@ -103,6 +106,15 @@ where
                 span,
                 UNREACHABLE_ARM,
             ),
+            TypeError::UnknownEnumVariant {
+                enum_name,
+                variant_name,
+                span,
+            } => simple_error(
+                format!("Enum '{enum_name}' has no variant '{variant_name}'"),
+                span,
+                UNKNOWN_ENUM_VARIANT,
+            ),
         },
         CompilerError::NameError(name_error) => match name_error {
             NameError::DuplicateName {
@@ -123,6 +135,26 @@ where
                         Label::new(first)
                             .with_message(format!("'{name}' previously defined in {first_path}")),
                     ),
+                DUPLICATE_NAME,
+            ),
+            NameError::DuplicateTestForFunction {
+                test_name,
+                function_name,
+                first,
+                first_path,
+                second,
+                second_path,
+            } => (
+                Report::build(ReportKind::Error, second)
+                    .with_message(format!(
+                        "Duplicate test '{test_name}' for function '{function_name}'"
+                    ))
+                    .with_label(Label::new(second).with_message(format!(
+                        "test '{test_name}' for function '{function_name}' defined in {second_path}"
+                    )))
+                    .with_label(Label::new(first).with_message(format!(
+                        "'{test_name}' for '{function_name}' previously defined in {first_path}"
+                    ))),
                 DUPLICATE_NAME,
             ),
         },

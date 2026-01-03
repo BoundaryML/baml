@@ -155,6 +155,22 @@ impl TypeRef {
             return TypeRef::IntLiteral(int_val);
         }
 
+        // Check for map type (e.g., "map<string, int>")
+        if let Some(rest) = text.strip_prefix("map<") {
+            if let Some(inner) = rest.strip_suffix('>') {
+                // Find the comma that separates key and value types
+                // Need to handle nested generics like map<string, map<int, bool>>
+                if let Some((key_text, value_text)) = Self::split_generic_params(inner) {
+                    let key = Self::from_type_text(key_text.trim());
+                    let value = Self::from_type_text(value_text.trim());
+                    return TypeRef::Map {
+                        key: Box::new(key),
+                        value: Box::new(value),
+                    };
+                }
+            }
+        }
+
         // Detect numeric literals that failed parsing above:
         // - Integer overflow (e.g., "9...9" > i64::MAX)
         // - Float literals (e.g., "3.14")
@@ -169,6 +185,23 @@ impl TypeRef {
         }
 
         Self::from_type_name(text)
+    }
+
+    /// Split generic parameters at the top-level comma.
+    /// Handles nested generics like `string, map<int, bool>`.
+    fn split_generic_params(s: &str) -> Option<(&str, &str)> {
+        let mut depth = 0;
+        for (i, c) in s.char_indices() {
+            match c {
+                '<' => depth += 1,
+                '>' => depth -= 1,
+                ',' if depth == 0 => {
+                    return Some((&s[..i], &s[i + 1..]));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Create a `TypeRef` from a type name string.

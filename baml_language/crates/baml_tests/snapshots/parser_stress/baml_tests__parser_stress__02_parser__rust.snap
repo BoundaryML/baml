@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -60,13 +60,11 @@ SOURCE_FILE
   WORD "ast_node"
   L_BRACE "{"
   L_PAREN "("
-  DOLLAR "$"
-  WORD "name"
+  WORD "$name"
   COLON ":"
   WORD "ident"
   COMMA ","
-  DOLLAR "$"
-  WORD "kind"
+  WORD "$kind"
   COLON ":"
   WORD "ident"
   R_PAREN ")"
@@ -89,8 +87,7 @@ SOURCE_FILE
   R_BRACKET "]"
   WORD "pub"
   WORD "struct"
-  DOLLAR "$"
-  WORD "name"
+  WORD "$name"
   L_BRACE "{"
   WORD "syntax"
   COLON ":"
@@ -100,15 +97,13 @@ SOURCE_FILE
   WORD "impl"
   WORD "BamlAstNode"
   KW_FOR "for"
-  DOLLAR "$"
-  WORD "name"
+  WORD "$name"
   L_BRACE "{"
   R_BRACE "}"
   WORD "impl"
   WORD "AstNode"
   KW_FOR "for"
-  DOLLAR "$"
-  WORD "name"
+  WORD "$name"
   L_BRACE "{"
   TYPE_ALIAS_DEF
     WORD "type"
@@ -143,8 +138,7 @@ SOURCE_FILE
   EQUALS_EQUALS "=="
   WORD "SyntaxKind"
   DOUBLE_COLON "::"
-  DOLLAR "$"
-  WORD "kind"
+  WORD "$kind"
   DOT "."
   WORD "into"
   L_PAREN "("
@@ -1986,22 +1980,12 @@ Error: Expected top-level declaration, found LParen
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:21:6 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │      ┬  
-    │      ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:21:7 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │       ──┬─  
-    │         ╰─── Expected top-level declaration, found Word
+    │      ──┬──  
+    │        ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -2036,22 +2020,12 @@ Error: Expected top-level declaration, found Comma
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:21:19 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │                   ┬  
-    │                   ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:21:20 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │                    ──┬─  
-    │                      ╰─── Expected top-level declaration, found Word
+    │                   ──┬──  
+    │                     ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -2276,22 +2250,12 @@ Error: Expected top-level declaration, found Word
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:23:20 ]
     │
  23 │         pub struct $name {
-    │                    ┬  
-    │                    ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:23:21 ]
-    │
- 23 │         pub struct $name {
-    │                     ──┬─  
-    │                       ╰─── Expected top-level declaration, found Word
+    │                    ──┬──  
+    │                      ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -2386,22 +2350,12 @@ Error: Expected top-level declaration, found For
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:27:30 ]
     │
  27 │         impl BamlAstNode for $name {}
-    │                              ┬  
-    │                              ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:27:31 ]
-    │
- 27 │         impl BamlAstNode for $name {}
-    │                               ──┬─  
-    │                                 ╰─── Expected top-level declaration, found Word
+    │                              ──┬──  
+    │                                ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -2456,22 +2410,12 @@ Error: Expected top-level declaration, found For
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:29:26 ]
     │
  29 │         impl AstNode for $name {
-    │                          ┬  
-    │                          ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:29:27 ]
-    │
- 29 │         impl AstNode for $name {
-    │                           ──┬─  
-    │                             ╰─── Expected top-level declaration, found Word
+    │                          ──┬──  
+    │                            ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -2756,22 +2700,12 @@ Error: Expected top-level declaration, found DoubleColon
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Dollar
+Error: Expected top-level declaration, found Word
     ╭─[ 0:33:37 ]
     │
  33 │                 kind == SyntaxKind::$kind.into()
-    │                                     ┬  
-    │                                     ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found Word
-    ╭─[ 0:33:38 ]
-    │
- 33 │                 kind == SyntaxKind::$kind.into()
-    │                                      ──┬─  
-    │                                        ╰─── Expected top-level declaration, found Word
+    │                                     ──┬──  
+    │                                       ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯

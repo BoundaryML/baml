@@ -50,3 +50,21 @@ function GetTodoMissingTypeArg() -> Todo {
 //     │     
 //     │     Note: Error code: E0003
 // ────╯
+// Error: Unknown variable baml
+//     ╭─[ 0:17:12 ]
+//     │
+//  17 │     method: baml.HttpMethod.Get,
+//     │            ──────────┬─────────  
+//     │                      ╰─────────── Unknown variable baml
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
+// Error: Unknown variable baml
+//     ╭─[ 0:10:12 ]
+//     │
+//  10 │     method: baml.HttpMethod.Get,
+//     │            ──────────┬─────────  
+//     │                      ╰─────────── Unknown variable baml
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯

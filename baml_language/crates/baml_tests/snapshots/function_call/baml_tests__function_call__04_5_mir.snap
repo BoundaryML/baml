@@ -145,13 +145,15 @@ fn GreetBaz(n: String) -> String {
     let _1: String // n // param
     let _2: Named("Baz") // baz
     let _3: String
-    let _4: Function { params: [Named("Baz")], ret: String }
+    let _4: Named("Baz")
+    let _5: Function { params: [Named("Baz")], ret: String }
 
     bb0: {
         _3 = copy _1;
         _2 = Baz { copy _3 };
-        _4 = const fn Greeting;
-        _0 = call copy _4() -> [bb2];
+        _4 = copy _2;
+        _5 = const fn Greeting;
+        _0 = call copy _5(copy _4) -> [bb2];
     }
 
     bb1: {

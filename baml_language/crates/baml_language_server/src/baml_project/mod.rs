@@ -145,6 +145,7 @@ impl BamlProject {
                 e
             )
         })?;
+
         let workspace_files = workspace_file_paths
             .into_iter()
             .map(|file_path| {

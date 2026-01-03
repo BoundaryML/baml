@@ -46,12 +46,4 @@ client<llm> ValidFallbackClient {
 
 //----
 //- diagnostics
-// Error: Expected config key, found Comma
-//     ╭─[ 0:40:30 ]
-//     │
-//  40 │     strategy [ValidHttpClient, ValidStreamingClient]
-//     │                              ┬  
-//     │                              ╰── Expected config key, found Comma
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+// <no-diagnostics-expected>

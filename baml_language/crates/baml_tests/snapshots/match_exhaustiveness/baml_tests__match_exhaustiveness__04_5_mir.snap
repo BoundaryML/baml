@@ -1520,8 +1520,90 @@ fn BoolWithCatchAll(b: Bool) -> String {
 
 }
 
-fn GuardedOnlyNonExhaustive:
-  (no MIR due to errors: MissingExpression { span: Some(1798..1801) })
+fn GuardedOnlyNonExhaustive(x: Int) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // x // param
+    let _2: Int
+    let _3: Bool
+    let _4: Int // n
+    let _5: Bool
+    let _6: Int
+    let _7: Int
+    let _8: Int
+    let _9: Int
+    let _10: Bool
+    let _11: Int // n
+    let _12: Bool
+    let _13: Int
+    let _14: Int
+    let _15: Int
+    let _16: Int
+    let _17: Int
+
+    bb0: {
+        _2 = copy _1;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb5, bb4];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _6 = copy _4;
+        _7 = const 0_i64;
+        _5 = copy _6 > copy _7;
+        branch copy _5 -> [bb6, bb4];
+    }
+
+    bb4: {
+        _10 = is_type(copy _2, Int);
+        branch copy _10 -> [bb9, bb8];
+    }
+
+    bb5: {
+        _4 = copy _2;
+        goto -> bb3;
+    }
+
+    bb6: {
+        _8 = copy _4;
+        _9 = const 2_i64;
+        _0 = copy _8 * copy _9;
+        goto -> bb2;
+    }
+
+    bb7: {
+        _13 = copy _11;
+        _14 = const 0_i64;
+        _12 = copy _13 < copy _14;
+        branch copy _12 -> [bb10, bb8];
+    }
+
+    bb8: {
+        goto -> bb2;
+    }
+
+    bb9: {
+        _11 = copy _2;
+        goto -> bb7;
+    }
+
+    bb10: {
+        _15 = copy _11;
+        _17 = const 1_i64;
+        _16 = -copy _17;
+        _0 = copy _15 * copy _16;
+        goto -> bb2;
+    }
+
+}
 
 fn NonExhaustiveBoolMissingFalse(b: Bool) -> String {
     // Locals:

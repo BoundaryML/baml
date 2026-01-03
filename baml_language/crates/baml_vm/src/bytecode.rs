@@ -217,6 +217,12 @@ pub enum Instruction {
     /// [`crate::Vm::stack`] array.
     Watch(usize),
 
+    /// Unregisters a watched variable when it goes out of scope.
+    ///
+    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
+    /// [`crate::Vm::stack`] array.
+    Unwatch(usize),
+
     /// Manually triggers notifications for a watched variable.
     Notify(usize),
 
@@ -246,6 +252,18 @@ pub enum Instruction {
     /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
     /// into the current function's `block_notifications` array.
     NotifyBlock(usize),
+
+    /// Enter a visualization node.
+    ///
+    /// Format: `VIZ_ENTER i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizEnter(usize),
+
+    /// Exit a visualization node.
+    ///
+    /// Format: `VIZ_EXIT i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizExit(usize),
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -267,6 +285,65 @@ pub enum BlockNotificationType {
     While,
     For,
     Function,
+}
+
+/// Visualization node metadata stored in the Function struct.
+/// Used for control flow visualization (branches, loops, scopes).
+#[derive(Clone, Debug, PartialEq)]
+pub struct VizNodeMeta {
+    /// Unique node ID within this function.
+    pub node_id: u32,
+    /// Encoded log filter key for this node.
+    pub log_filter_key: String,
+    /// Parent node's log filter key (None for root).
+    pub parent_log_filter_key: Option<String>,
+    /// Type of this visualization node.
+    pub node_type: VizNodeType,
+    /// Human-readable label for this node.
+    pub label: String,
+    /// Header level (only for `HeaderContextEnter`).
+    pub header_level: Option<u8>,
+}
+
+/// Type of visualization node.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VizNodeType {
+    /// Root of a function's control flow.
+    FunctionRoot,
+    /// Header context from `//# header` annotation.
+    HeaderContextEnter,
+    /// Group of branches (if-else chain).
+    BranchGroup,
+    /// Single branch arm (if/else if/else).
+    BranchArm,
+    /// Loop construct (while/for).
+    Loop,
+    /// Other block scope.
+    OtherScope,
+}
+
+/// Delta type for viz execution events.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VizExecDelta {
+    /// Entering a visualization node.
+    Enter,
+    /// Exiting a visualization node.
+    Exit,
+}
+
+/// Visualization execution event emitted when entering/exiting a viz node.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VizExecEvent {
+    /// Enter or exit.
+    pub delta: VizExecDelta,
+    /// Node ID within the function.
+    pub node_id: u32,
+    /// Type of the node.
+    pub node_type: VizNodeType,
+    /// Human-readable label.
+    pub label: String,
+    /// Header level (for `HeaderContextEnter`).
+    pub header_level: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -372,10 +449,13 @@ impl std::fmt::Display for Instruction {
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
             Instruction::NotifyBlock(block_index) => {
                 write!(f, "NOTIFY_BLOCK {block_index}")
             }
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
+            Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
+            Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
         }
     }
 }

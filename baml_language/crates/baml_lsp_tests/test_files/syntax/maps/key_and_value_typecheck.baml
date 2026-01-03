@@ -54,12 +54,12 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected map<int, string>, found int
+// Error: Expected map<int, string>, found string
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ // For now, errors with 'map keys must be string literals'
 //    │ │ 
-//    │ ╰─ Expected map<int, string>, found int
+//    │ ╰─ Expected map<int, string>, found string
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
@@ -72,30 +72,21 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0007
 // ───╯
-// Error: Type map<int, string> is not indexable
-//    ╭─[ 0:9:9 ]
-//    │
-//  9 │         map[1]
-//    │         ───┬──  
-//    │            ╰──── Type map<int, string> is not indexable
-//    │ 
-//    │ Note: Error code: E0008
-// ───╯
-// Error: Expected string, found unknown | void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // For now, errors with 'map keys must be string literals'
-//    │ │ 
-//    │ ╰─ Expected string, found unknown | void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Type map<int, string> is not indexable
+// Error: Expected int, found string
 //     ╭─[ 0:18:5 ]
 //     │
 //  18 │     map["string"]
 //     │     ──────┬──────  
-//     │           ╰──────── Type map<int, string> is not indexable
+//     │           ╰──────── Expected int, found string
 //     │ 
-//     │ Note: Error code: E0008
+//     │ Note: Error code: E0001
 // ────╯
+// Error: Expected int, found string
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ // For now, errors with 'map keys must be string literals'
+//    │ │ 
+//    │ ╰─ Expected int, found string
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

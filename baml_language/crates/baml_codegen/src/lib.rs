@@ -6,7 +6,7 @@
 //!
 //! The compilation pipeline is:
 //! ```text
-//! Source -> CST -> HIR -> THIR -> MIR -> Bytecode
+//! Source -> CST -> HIR -> TIR -> VIR -> MIR -> Bytecode
 //! ```
 //!
 //! This crate handles the final step: MIR -> Bytecode.
@@ -36,6 +36,10 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub classes: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Pre-allocated Class object indices in the program's object pool.
     pub class_object_indices: &'ctx HashMap<String, usize>,
+    /// Pre-allocated Enum object indices in the program's object pool.
+    pub enum_object_indices: &'ctx HashMap<String, usize>,
+    /// Enum variant mappings (enum name -> variant name -> variant index).
+    pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool for strings, etc.
     pub objects: &'obj mut ObjectPool,
 }
@@ -44,7 +48,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile};
 use baml_hir::{self, ItemId, function_body, function_signature};
-pub use baml_typed_ir::LoweringError;
+pub use baml_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value,
@@ -53,7 +57,7 @@ pub use baml_vm::{
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
-/// It collects all functions from HIR, type-checks them via THIR,
+/// It collects all functions from HIR, type-checks them via TIR,
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
@@ -104,7 +108,7 @@ pub fn compile_files(
     // Build classes map (class name -> field name -> field index) and add Class objects to program
     // Also build class_field_types for type inference (class name -> field name -> Ty)
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_field_types: HashMap<Name, HashMap<Name, baml_thir::Ty>> = HashMap::new();
+    let mut class_field_types: HashMap<Name, HashMap<Name, baml_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
@@ -122,7 +126,7 @@ pub fn compile_files(
                     field_indices.insert(field.name.to_string(), idx);
                     field_names.push(field.name.to_string());
                     // Lower TypeRef to Ty for type inference
-                    let ty = baml_thir::lower_type_ref(db, &field.type_ref);
+                    let ty = baml_tir::lower_type_ref(db, &field.type_ref);
                     field_types.insert(field.name.clone(), ty);
                 }
 
@@ -140,6 +144,43 @@ pub fn compile_files(
         }
     }
 
+    // Build enums map (enum name -> variant name -> variant index) and add Enum objects to program
+    // Also build enum_variant_names for type inference (enum name -> list of variant names)
+    let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+    let mut enum_variant_names: HashMap<Name, Vec<Name>> = HashMap::new();
+    let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
+
+    for file in files {
+        let item_tree = baml_hir::file_item_tree(db, *file);
+        let items_struct = baml_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Enum(enum_loc) = item {
+                let enum_def = &item_tree[enum_loc.id(db)];
+                let enum_name = enum_def.name.to_string();
+
+                let mut variant_indices = HashMap::new();
+                let mut variant_names = Vec::new();
+                let mut variant_name_list: Vec<Name> = Vec::new();
+                for (idx, variant) in enum_def.variants.iter().enumerate() {
+                    variant_indices.insert(variant.name.to_string(), idx);
+                    variant_names.push(variant.name.to_string());
+                    variant_name_list.push(variant.name.clone());
+                }
+
+                // Add Enum object to program and record its index
+                let enum_obj = Object::Enum(Enum {
+                    name: enum_name.clone(),
+                    variant_names,
+                });
+                let enum_obj_idx = program.add_object(enum_obj);
+                enum_object_indices.insert(enum_name.clone(), enum_obj_idx);
+
+                enum_variants.insert(enum_name, variant_indices);
+                enum_variant_names.insert(enum_def.name.clone(), variant_name_list);
+            }
+        }
+    }
+
     // Add builtin functions to globals FIRST (stable indices)
     for (path, (native_fn, arity)) in &builtins {
         let builtin_fn = Function {
@@ -150,6 +191,7 @@ pub fn compile_files(
             locals_in_scope: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
         };
         let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
         program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
@@ -182,6 +224,7 @@ pub fn compile_files(
                             ],
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
+                            viz_nodes: Vec::new(),
                         }
                     }
                     baml_hir::FunctionBody::Missing => {
@@ -201,42 +244,38 @@ pub fn compile_files(
                             ],
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
+                            viz_nodes: Vec::new(),
                         }
                     }
                     baml_hir::FunctionBody::Expr(_) => {
                         // Run type inference
-                        // Note: type_aliases and enum_variants are not passed here,
-                        // so exhaustiveness checking for type aliases and enums won't work.
-                        // This is acceptable since codegen is for runtime execution,
-                        // and type errors should be caught in the THIR phase.
-                        //
-                        // TODO(codegen-inference): Re-evaluate whether we need full type context.
-                        // Currently this works because:
-                        //   1. Exhaustiveness errors are caught in the THIR/Diagnostics phase
-                        //   2. The core type inference doesn't depend on these maps
-                        //   3. Codegen only uses inference.expr_types and path_segment_types
-                        let inference = baml_thir::infer_function(
+                        // Note: type_aliases is not passed here, so exhaustiveness
+                        // checking for type aliases won't work. This is acceptable
+                        // since codegen is for runtime execution, and type errors
+                        // should be caught in the TIR phase.
+                        let inference = baml_tir::infer_function(
                             db,
                             &signature,
                             &body,
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
                             None, // type_aliases - not needed for codegen
-                            None, // enum_variants - not needed for codegen
+                            Some(enum_variant_names.clone()), // enum_variants - needed for enum variant detection
                             *func_loc,
                         );
 
-                        // Lower HIR → TypedIR → MIR
+                        // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let typed_ir = baml_typed_ir::lower_from_hir(db, &body, &inference)?;
-                        let mir =
-                            baml_mir::lower_from_typed_ir(&signature, &typed_ir, db, &classes);
+                        let vir = baml_vir::lower_from_hir(db, &body, &inference)?;
+                        let mir = baml_mir::lower(&signature, &vir, db, &classes);
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {
                             globals: &globals,
                             classes: &classes,
                             class_object_indices: &class_object_indices,
+                            enum_object_indices: &enum_object_indices,
+                            enum_variants: &enum_variants,
                             objects: &mut program.objects,
                         };
                         compile_mir_function(&mir, ctx)
@@ -266,7 +305,7 @@ pub fn compile_files(
 fn build_typing_context<'db>(
     db: &'db dyn baml_mir::Db,
     files: &[SourceFile],
-) -> HashMap<Name, baml_thir::Ty<'db>> {
+) -> HashMap<Name, baml_tir::Ty<'db>> {
     let mut context = HashMap::new();
 
     for file in files {
@@ -276,15 +315,15 @@ fn build_typing_context<'db>(
                 let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_thir::Ty<'db>> = signature
+                let param_types: Vec<baml_tir::Ty<'db>> = signature
                     .params
                     .iter()
-                    .map(|p| baml_thir::lower_type_ref(db, &p.type_ref))
+                    .map(|p| baml_tir::lower_type_ref(db, &p.type_ref))
                     .collect();
 
-                let return_type = baml_thir::lower_type_ref(db, &signature.return_type);
+                let return_type = baml_tir::lower_type_ref(db, &signature.return_type);
 
-                let func_type = baml_thir::Ty::Function {
+                let func_type = baml_tir::Ty::Function {
                     params: param_types,
                     ret: Box::new(return_type),
                 };

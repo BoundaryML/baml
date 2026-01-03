@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "1.89.0"
+    default: "1.92.0"
   enable-wasm:
     description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
     required: false

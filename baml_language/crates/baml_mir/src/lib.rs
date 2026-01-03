@@ -1,7 +1,7 @@
 //! Mid-level Intermediate Representation (MIR) for BAML.
 //!
 //! MIR is a Control Flow Graph (CFG) based representation that sits between
-//! THIR (type-checked HIR) and bytecode generation. It simplifies the compilation
+//! VIR (validated IR) and bytecode generation. It simplifies the compilation
 //! of complex control flow constructs like match statements and error handling.
 //!
 //! # Architecture
@@ -45,12 +45,12 @@
 
 mod builder;
 mod ir;
-mod lower_typed_ir;
+mod lower;
 pub mod pretty;
 
 pub use builder::MirBuilder;
 pub use ir::*;
-pub use lower_typed_ir::lower_from_typed_ir;
+pub use lower::lower;
 
 // ============================================================================
 // Database Trait
@@ -58,6 +58,6 @@ pub use lower_typed_ir::lower_from_typed_ir;
 
 /// Database trait for MIR queries.
 ///
-/// Extends THIR's database to access type information during lowering.
+/// Extends TIR's database to access type information during lowering.
 #[salsa::db]
-pub trait Db: baml_thir::Db {}
+pub trait Db: baml_tir::Db {}

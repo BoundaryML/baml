@@ -4,16 +4,17 @@
 //! results to emit optimized bytecode. Virtual locals are inlined at their
 //! use sites instead of being stored to stack slots.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_mir::{
-    AggregateKind, BasicBlock, BinOp, BlockId, Constant, Local, MirFunction, Operand, Place,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
+    Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_thir::Ty;
+use baml_tir::Ty;
 use baml_vm::{
     BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
+    bytecode::{BlockNotification, BlockNotificationType},
 };
 
 use crate::{
@@ -34,6 +35,10 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
     classes: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Pre-allocated Class object indices.
     class_object_indices: &'ctx HashMap<String, usize>,
+    /// Pre-allocated Enum object indices.
+    enum_object_indices: &'ctx HashMap<String, usize>,
+    /// Enum variant mappings (enum name -> variant name -> variant index).
+    enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool.
     objects: &'obj mut ObjectPool,
 
@@ -57,6 +62,13 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
 
     /// The next block in RPO order (for fall-through optimization).
     next_block: Option<BlockId>,
+
+    /// Watched locals that have already had Watch instruction emitted.
+    /// We only emit Watch once per watched local (at initialization).
+    watched_locals_initialized: HashSet<Local>,
+
+    /// Block notifications to be attached to the compiled function.
+    block_notifications: Vec<BlockNotification>,
 }
 
 impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
@@ -67,6 +79,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             globals: ctx.globals,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
+            enum_object_indices: ctx.enum_object_indices,
+            enum_variants: ctx.enum_variants,
             objects: ctx.objects,
             analysis,
             local_slots: HashMap::new(),
@@ -75,6 +89,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             bytecode: Bytecode::new(),
             current_source_line: 0,
             next_block: None,
+            watched_locals_initialized: HashSet::new(),
+            block_notifications: Vec::new(),
         }
     }
 
@@ -95,7 +111,21 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
         // 3. Patch all jump targets
         self.patch_jumps();
 
-        // 4. Build the Function
+        // 4. Convert MIR VizNodes to VM VizNodeMeta
+        let viz_nodes = mir
+            .viz_nodes
+            .iter()
+            .map(|node| baml_vm::VizNodeMeta {
+                node_id: node.node_id,
+                log_filter_key: node.log_filter_key.clone(),
+                parent_log_filter_key: node.parent_log_filter_key.clone(),
+                node_type: Self::convert_viz_node_type(node.node_type),
+                label: node.label.clone(),
+                header_level: node.header_level,
+            })
+            .collect();
+
+        // 5. Build the Function
         Function {
             name: mir.name.clone(),
             arity: mir.arity,
@@ -103,7 +133,20 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             kind: FunctionKind::Exec,
             locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
             span: baml_base::Span::fake(),
-            block_notifications: Vec::new(),
+            block_notifications: self.block_notifications,
+            viz_nodes,
+        }
+    }
+
+    /// Convert MIR `VizNodeType` to VM `VizNodeType`.
+    fn convert_viz_node_type(mir_type: baml_mir::VizNodeType) -> baml_vm::VizNodeType {
+        match mir_type {
+            baml_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
+            baml_mir::VizNodeType::HeaderContextEnter => baml_vm::VizNodeType::HeaderContextEnter,
+            baml_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
+            baml_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
+            baml_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,
+            baml_mir::VizNodeType::OtherScope => baml_vm::VizNodeType::OtherScope,
         }
     }
 
@@ -136,8 +179,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 LocalClassification::Virtual
                 | LocalClassification::PhiLike
                 | LocalClassification::ReturnPhi
+                | LocalClassification::CallResultImmediate
+                | LocalClassification::CopyOf
                 | LocalClassification::Dead => {
-                    // Virtual, phi-like, return-phi, and dead locals don't get slots!
+                    // Virtual, phi-like, return-phi, call-result-immediate, copy-of, and dead locals don't get slots!
                 }
             }
         }
@@ -241,6 +286,11 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             self.emit_rvalue_pull(value, mir);
                             return;
                         }
+                        LocalClassification::CopyOf => {
+                            // Copy propagation - skip the copy entirely.
+                            // Uses of this local will load from the source instead.
+                            return;
+                        }
                         LocalClassification::Dead => {
                             // Dead store elimination - skip entirely
                             return;
@@ -258,23 +308,94 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         self.emit_rvalue_pull(value, mir); // push value
                         self.emit(Instruction::StoreField(*field));
                     }
-                    Place::Index { base, index } => {
-                        // For index store: push array, then index, then value, then StoreArrayElement
-                        self.emit_place_value_pull(base, mir); // push array
-                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index
+                    Place::Index { base, index, kind } => {
+                        // For index store: push array/map, then index/key, then value, then Store*Element
+                        self.emit_place_value_pull(base, mir); // push array/map
+                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index/key
                         self.emit_rvalue_pull(value, mir); // push value
-                        self.emit(Instruction::StoreArrayElement);
+                        match kind {
+                            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
+                            IndexKind::Map => self.emit(Instruction::StoreMapElement),
+                        };
                     }
-                    Place::Local(_) => {
+                    Place::Local(local) => {
                         // Local assignment: emit rvalue then store
                         self.emit_rvalue_pull(value, mir);
                         self.emit_store_place(destination, mir);
+                        // Emit Watch only once for watched locals (at initialization)
+                        let local_decl = mir.local(*local);
+                        if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
+                        {
+                            self.watched_locals_initialized.insert(*local);
+                            if let Some(&slot) = self.local_slots.get(local) {
+                                // Push channel name (variable name) and filter (null for default)
+                                let channel =
+                                    local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
+                                let channel_obj_idx = self.objects.len();
+                                self.objects.push(Object::String(channel.to_string()));
+                                let channel_const_idx = self.add_constant(Value::Object(
+                                    ObjectIndex::from_raw(channel_obj_idx),
+                                ));
+                                self.emit(Instruction::LoadConst(channel_const_idx));
+                                let null_const_idx = self.add_constant(Value::Null);
+                                self.emit(Instruction::LoadConst(null_const_idx));
+                                self.emit(Instruction::Watch(slot));
+                            }
+                        }
                     }
                 }
             }
             StatementKind::Drop(place) => {
                 self.emit_place_value_pull(place, mir);
                 self.emit(Instruction::Pop(1));
+            }
+            StatementKind::Unwatch(local) => {
+                // Emit unwatch for a watched local going out of scope
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::Unwatch(slot));
+                }
+            }
+            StatementKind::NotifyBlock { name, level } => {
+                // Add block notification to the function's metadata
+                let block_index = self.block_notifications.len();
+                self.block_notifications.push(BlockNotification {
+                    function_name: String::new(), // Filled in by VM at runtime
+                    block_name: name.to_string(),
+                    level: *level,
+                    block_type: BlockNotificationType::Statement,
+                    is_enter: true,
+                });
+                self.emit(Instruction::NotifyBlock(block_index));
+            }
+            StatementKind::WatchOptions { local, filter } => {
+                // Emit Watch instruction with new filter
+                // This updates the watch settings for an already-watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    let local_decl = mir.local(*local);
+                    // Push channel name
+                    let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
+                    let channel_obj_idx = self.objects.len();
+                    self.objects.push(Object::String(channel.to_string()));
+                    let channel_const_idx =
+                        self.add_constant(Value::Object(ObjectIndex::from_raw(channel_obj_idx)));
+                    self.emit(Instruction::LoadConst(channel_const_idx));
+                    // Push filter value
+                    self.emit_operand_pull(filter, mir);
+                    // Re-emit Watch with new filter
+                    self.emit(Instruction::Watch(slot));
+                }
+            }
+            StatementKind::WatchNotify(local) => {
+                // Emit manual notify for a watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::Notify(slot));
+                }
+            }
+            StatementKind::VizEnter(node_idx) => {
+                self.emit(Instruction::VizEnter(*node_idx));
+            }
+            StatementKind::VizExit(node_idx) => {
+                self.emit(Instruction::VizExit(*node_idx));
             }
             StatementKind::Nop => {}
         }
@@ -316,10 +437,19 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             .unwrap_or_else(|| panic!("virtual local {local} without definition"));
                         self.emit_rvalue_pull(&rvalue, mir);
                     }
-                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
+                    LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate => {
                         // PhiLike: value is already on the stack from the predecessor block.
                         // ReturnPhi: value is already on the stack from the assignment.
+                        // CallResultImmediate: value is already on the stack from the Call.
                         // Don't emit any instruction - the value is there waiting for us.
+                    }
+                    LocalClassification::CopyOf => {
+                        // Copy propagation: load from the source local instead.
+                        let source = self.analysis.resolve_copy_source(*local);
+                        let slot = self.local_slots[&source];
+                        self.emit(Instruction::LoadVar(slot));
                     }
                     _ => {
                         // Real/Parameter local: emit LoadVar
@@ -333,12 +463,15 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 self.emit_place_value_pull(base, mir);
                 self.emit(Instruction::LoadField(*field));
             }
-            Place::Index { base, index } => {
-                // Load base, load index, then LoadArrayElement
+            Place::Index { base, index, kind } => {
+                // Load base, load index, then LoadArrayElement or LoadMapElement
                 self.emit_place_value_pull(base, mir);
                 // Index may be virtual or real
                 self.emit_place_value_pull(&Place::Local(*index), mir);
-                self.emit(Instruction::LoadArrayElement);
+                match kind {
+                    IndexKind::Array => self.emit(Instruction::LoadArrayElement),
+                    IndexKind::Map => self.emit(Instruction::LoadMapElement),
+                };
             }
         }
     }
@@ -366,6 +499,19 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                     self.emit_operand_pull(elem, mir);
                 }
                 self.emit(Instruction::AllocArray(elements.len()));
+            }
+
+            Rvalue::Map(entries) => {
+                // For maps, VM expects stack layout: [value1, value2, ..., valueN, key1, key2, ..., keyN]
+                // Push all values first
+                for (_key, value) in entries {
+                    self.emit_operand_pull(value, mir);
+                }
+                // Then push all keys
+                for (key, _value) in entries {
+                    self.emit_operand_pull(key, mir);
+                }
+                self.emit(Instruction::AllocMap(entries.len()));
             }
 
             Rvalue::Aggregate { kind, fields } => {
@@ -396,10 +542,29 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             self.emit(Instruction::StoreField(field_idx));
                         }
                     }
-                    AggregateKind::EnumVariant { .. } => {
-                        // TODO: Implement enum variant construction
-                        let idx = self.add_constant(Value::Null);
+                    AggregateKind::EnumVariant { enum_name, variant } => {
+                        // Look up the enum object index
+                        let enum_obj_idx = self
+                            .enum_object_indices
+                            .get(enum_name)
+                            .copied()
+                            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
+
+                        // Look up the variant index
+                        let variant_idx = self
+                            .enum_variants
+                            .get(enum_name)
+                            .and_then(|variants| variants.get(variant))
+                            .copied()
+                            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
+
+                        // Load variant index onto stack, then allocate variant
+                        #[allow(clippy::cast_possible_wrap)]
+                        let idx = self.add_constant(Value::Int(variant_idx as i64));
                         self.emit(Instruction::LoadConst(idx));
+                        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+                            enum_obj_idx,
+                        )));
                     }
                 }
             }
@@ -482,11 +647,31 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 let idx = self.add_constant(Value::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
-            Constant::EnumVariant { .. } => {
-                // TODO: Implement proper enum variant constant emission
-                // This needs to look up the enum object and create a Variant object
-                let idx = self.add_constant(Value::Null);
+            Constant::EnumVariant { enum_name, variant } => {
+                // Look up the enum object index
+                let enum_name_str = enum_name.to_string();
+                let enum_obj_idx = self
+                    .enum_object_indices
+                    .get(&enum_name_str)
+                    .copied()
+                    .unwrap_or_else(|| panic!("undefined enum: {enum_name_str}"));
+
+                // Look up the variant index
+                let variant_str = variant.to_string();
+                let variant_idx = self
+                    .enum_variants
+                    .get(&enum_name_str)
+                    .and_then(|variants| variants.get(&variant_str))
+                    .copied()
+                    .unwrap_or_else(|| panic!("undefined variant: {enum_name_str}.{variant_str}"));
+
+                // Load variant index onto stack, then allocate variant
+                #[allow(clippy::cast_possible_wrap)]
+                let idx = self.add_constant(Value::Int(variant_idx as i64));
                 self.emit(Instruction::LoadConst(idx));
+                self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+                    enum_obj_idx,
+                )));
             }
         }
     }
@@ -510,13 +695,16 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                         let slot = self.local_slots[local];
                         self.emit(Instruction::StoreVar(slot));
                     }
-                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
-                        // PhiLike/ReturnPhi: keep value on stack (no-op)
-                        // Note: This case shouldn't occur because phi-like and return-phi
-                        // locals require specific terminator patterns (Goto/Return).
+                    LocalClassification::PhiLike
+                    | LocalClassification::ReturnPhi
+                    | LocalClassification::CallResultImmediate => {
+                        // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
+                        // CallResultImmediate: keep value on stack (no-op) - value used immediately.
                     }
-                    LocalClassification::Virtual | LocalClassification::Dead => {
-                        // Virtual or Dead local - just pop the value
+                    LocalClassification::Virtual
+                    | LocalClassification::CopyOf
+                    | LocalClassification::Dead => {
+                        // Virtual, CopyOf, or Dead local - just pop the value
                         self.emit(Instruction::Pop(1));
                     }
                 }
@@ -699,6 +887,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             BinOp::BitXor => Instruction::BinOp(VmBinOp::BitXor),
             BinOp::Shl => Instruction::BinOp(VmBinOp::Shl),
             BinOp::Shr => Instruction::BinOp(VmBinOp::Shr),
+            BinOp::Instanceof => Instruction::CmpOp(CmpOp::InstanceOf),
         }
     }
 

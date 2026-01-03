@@ -54,7 +54,7 @@ pub use type_ref::*;
 ///
 /// This is the base trait for the BAML compiler's Db hierarchy.
 /// It provides access to the project being compiled and is extended by
-/// downstream crates (`baml_thir::Db`, `baml_mir::Db`, etc.) to add
+/// downstream crates (`baml_tir::Db`, `baml_mir::Db`, etc.) to add
 /// phase-specific queries.
 ///
 /// The Db trait hierarchy starts here because this is the first compiler
@@ -378,6 +378,49 @@ pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> Project
     }
 
     ProjectTypeNames::new(db, names)
+}
+
+/// Returns the names and spans of all functions defined in the project.
+///
+/// This is a convenience function for WASM/external consumers that just need
+/// a list of function names without dealing with HIR internals.
+/// Returns (`function_name`, span) pairs for `CodeLens` positioning.
+pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(String, Span)> {
+    let items = project_items(db, root);
+    let mut functions = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Function(func_loc) = item {
+            let file = func_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[func_loc.id(db)];
+            let func_name = func.name.clone();
+
+            // Get the span from the CST
+            let tree = syntax_tree(db, file);
+            let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+            let file_id = file.file_id(db);
+
+            // Find the function in the CST to get its name span
+            let span = source_file
+                .items()
+                .flat_map(|item| match item {
+                    baml_syntax::ast::Item::Function(func_node) => vec![func_node],
+                    baml_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+                    _ => vec![],
+                })
+                .find(|function_def| {
+                    function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
+                })
+                .and_then(|f| f.name())
+                .map(|name_token| Span::new(file_id, name_token.text_range()))
+                .unwrap_or_else(|| Span::new(file_id, TextRange::empty(0.into())));
+
+            functions.push((func_name.to_string(), span));
+        }
+    }
+
+    functions
 }
 
 /// Returns the body of a function (LLM prompt or expression IR).
@@ -714,11 +757,12 @@ fn lower_test(node: &SyntaxNode) -> Option<Test> {
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("UnnamedTest"));
 
-    // Extract function reference using AST accessor
+    // Extract all function references using AST accessor
     let function_refs = test
-        .function_name()
-        .map(|t| vec![Name::new(t.text())])
-        .unwrap_or_default();
+        .function_names()
+        .into_iter()
+        .map(|t| Name::new(t.text()))
+        .collect();
 
     Some(Test {
         name,
@@ -740,22 +784,34 @@ struct ItemInfo {
 
 /// Validate that there are no duplicate names in the project.
 ///
-/// All top-level entities (classes, enums, functions, type aliases, clients, tests)
+/// Top-level entities (classes, enums, functions, type aliases, clients)
 /// share the same namespace, so any duplicate name is an error.
+///
+/// Tests are validated separately: only tests with the same name AND
+/// targeting the same function are considered duplicates.
 pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
     let items = project_items(db, root);
     let mut seen: FxHashMap<Name, ItemInfo> = FxHashMap::default();
+    // For tests: key is (test_name, function_name)
+    let mut seen_tests: FxHashMap<(Name, Name), ItemInfo> = FxHashMap::default();
     let mut errors = Vec::new();
 
     for item in items.items(db) {
-        let (name, kind, span, path) = match item {
+        match item {
             ItemId::Function(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let func = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (func.name.clone(), "function", span, path)
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    func.name.clone(),
+                    "function",
+                    span,
+                    path,
+                );
             }
             ItemId::Class(loc) => {
                 let file = loc.file(db);
@@ -763,7 +819,14 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                 let class = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (class.name.clone(), "class", span, path)
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    class.name.clone(),
+                    "class",
+                    span,
+                    path,
+                );
             }
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
@@ -771,7 +834,14 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                 let enum_def = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (enum_def.name.clone(), "enum", span, path)
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    enum_def.name.clone(),
+                    "enum",
+                    span,
+                    path,
+                );
             }
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
@@ -779,7 +849,14 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                 let alias = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (alias.name.clone(), "type alias", span, path)
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    alias.name.clone(),
+                    "type alias",
+                    span,
+                    path,
+                );
             }
             ItemId::Client(loc) => {
                 let file = loc.file(db);
@@ -787,31 +864,71 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                 let client = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (client.name.clone(), "client", span, path)
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    client.name.clone(),
+                    "client",
+                    span,
+                    path,
+                );
             }
             ItemId::Test(loc) => {
+                // Tests are validated separately: only same name + same function is a duplicate
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let test = &item_tree[loc.id(db)];
                 let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
                 let path = file.path(db).display().to_string();
-                (test.name.clone(), "test", span, path)
-            }
-        };
 
-        if let Some(existing) = seen.get(&name) {
-            errors.push(NameError::DuplicateName {
-                name: name.to_string(),
-                kind,
-                first: existing.span,
-                first_path: existing.path.clone(),
-                second: span,
-                second_path: path,
-            });
-        } else {
-            seen.insert(name, ItemInfo { span, path });
+                // Check each function reference in the test
+                for func_ref in &test.function_refs {
+                    let key = (test.name.clone(), func_ref.clone());
+                    if let Some(existing) = seen_tests.get(&key) {
+                        errors.push(NameError::DuplicateTestForFunction {
+                            test_name: test.name.to_string(),
+                            function_name: func_ref.to_string(),
+                            first: existing.span,
+                            first_path: existing.path.clone(),
+                            second: span,
+                            second_path: path.clone(),
+                        });
+                    } else {
+                        seen_tests.insert(
+                            key,
+                            ItemInfo {
+                                span,
+                                path: path.clone(),
+                            },
+                        );
+                    }
+                }
+            }
         }
     }
 
     errors
+}
+
+/// Helper to check for duplicate names and record errors.
+fn check_duplicate(
+    seen: &mut FxHashMap<Name, ItemInfo>,
+    errors: &mut Vec<NameError>,
+    name: Name,
+    kind: &'static str,
+    span: Span,
+    path: String,
+) {
+    if let Some(existing) = seen.get(&name) {
+        errors.push(NameError::DuplicateName {
+            name: name.to_string(),
+            kind,
+            first: existing.span,
+            first_path: existing.path.clone(),
+            second: span,
+            second_path: path,
+        });
+    } else {
+        seen.insert(name, ItemInfo { span, path });
+    }
 }

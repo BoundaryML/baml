@@ -22,7 +22,6 @@ fn array_constructor() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method calls on arrays not yet implemented"]
 fn array_push() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r"

@@ -12,5 +12,9 @@ pub enum ParseError {
         expected: String,
         span: Span,
     },
-    // Add more variants as needed
+    /// A syntax hint with a custom message (not using "Expected/found" format)
+    InvalidSyntax {
+        message: String,
+        span: Span,
+    },
 }

@@ -23,7 +23,10 @@ pub mod watch;
 pub use builtins::{
     FunctionDef, TypePattern, builtins, find_builtin_by_path, find_function, find_method, functions,
 };
-pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, UnaryOp};
+pub use bytecode::{
+    BinOp, Bytecode, CmpOp, Instruction, UnaryOp, VizExecDelta, VizExecEvent, VizNodeMeta,
+    VizNodeType,
+};
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use native::NativeFunction;

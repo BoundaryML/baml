@@ -31,8 +31,7 @@ function NextFunction() -> string {
 
 class Partial {
   field1: str
-  field2: // Missing type entirely
-  field3
+  field2: field3
   string: <unknown>
   string: <unknown>
   string: <unknown>

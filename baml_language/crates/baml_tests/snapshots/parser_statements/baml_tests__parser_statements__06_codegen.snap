@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -316,29 +316,26 @@ Function nested_for_loop (arity: 0, kind: Exec):
 
 Function nested_while_loop (arity: 0, kind: Exec):
      0    LOAD_CONST 0           (null)
-     1    LOAD_CONST 0           (null)
-     2    LOAD_CONST 1           (0)
-     3    STORE_VAR 1            (i)
-     4    LOAD_VAR 1             (i)
-     5    LOAD_CONST 2           (10)
-     6    CMP_OP <               
-     7    POP_JUMP_IF_FALSE +2   (to 9)
-     8    JUMP +3                (to 11)
-     9    LOAD_VAR 1             (i)
-     10   RETURN                 
-     11   LOAD_CONST 1           (0)
-     12   STORE_VAR 2            (j)
-     13   LOAD_VAR 2             (j)
-     14   LOAD_CONST 2           (10)
-     15   CMP_OP <               
-     16   POP_JUMP_IF_FALSE +2   (to 18)
-     17   JUMP +2                (to 19)
-     18   JUMP -14               (to 4)
-     19   LOAD_VAR 2             (j)
-     20   LOAD_CONST 3           (1)
-     21   BIN_OP +               
-     22   STORE_VAR 2            (j)
-     23   JUMP -10               (to 13)
+     1    LOAD_CONST 1           (0)
+     2    LOAD_CONST 2           (10)
+     3    CMP_OP <               
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    JUMP +3                (to 8)
+     6    LOAD_CONST 1           (0)
+     7    RETURN                 
+     8    LOAD_CONST 1           (0)
+     9    STORE_VAR 1            (j)
+     10   LOAD_VAR 1             (j)
+     11   LOAD_CONST 2           (10)
+     12   CMP_OP <               
+     13   POP_JUMP_IF_FALSE +2   (to 15)
+     14   JUMP +2                (to 16)
+     15   JUMP -14               (to 1)
+     16   LOAD_VAR 1             (j)
+     17   LOAD_CONST 3           (1)
+     18   BIN_OP +               
+     19   STORE_VAR 1            (j)
+     20   JUMP -10               (to 10)
 
 Function simple_assign (arity: 0, kind: Exec):
      0   LOAD_CONST 0   (5)

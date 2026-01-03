@@ -150,6 +150,20 @@ fn convert_parse_error(error: &ParseError, line_index: &LineIndex) -> Diagnostic
                 data: None,
             }
         }
+        ParseError::InvalidSyntax { message, span } => {
+            let range = span_to_range_with_index(line_index, span);
+            Diagnostic {
+                range,
+                severity: Some(DiagnosticSeverity::ERROR),
+                code: Some(NumberOrString::String("E0010".to_string())),
+                code_description: None,
+                source: Some("baml".to_string()),
+                message: message.clone(),
+                related_information: None,
+                tags: None,
+                data: None,
+            }
+        }
     }
 }
 
@@ -228,6 +242,78 @@ fn convert_name_error(error: &NameError, db: &LspDatabase) -> Vec<LspDiagnostic>
 
             diagnostics
         }
+        NameError::DuplicateTestForFunction {
+            test_name,
+            function_name,
+            first,
+            first_path,
+            second,
+            second_path,
+        } => {
+            let mut diagnostics = Vec::new();
+
+            // Get line indices for both files
+            let first_line_index = db
+                .get_file(first_path.as_ref())
+                .map(|f| LineIndex::new(f.text(db.db())));
+            let second_line_index = db
+                .get_file(second_path.as_ref())
+                .map(|f| LineIndex::new(f.text(db.db())));
+
+            // Diagnostic at second location (the duplicate)
+            if let Some(line_index) = second_line_index {
+                let range = span_to_range_with_index(&line_index, second);
+                diagnostics.push(LspDiagnostic {
+                    file_path: PathBuf::from(second_path),
+                    diagnostic: Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        code: Some(NumberOrString::String("E0012".to_string())),
+                        code_description: None,
+                        source: Some("baml".to_string()),
+                        message: format!(
+                            "Duplicate test `{test_name}` for function `{function_name}` (first defined in {first_path})"
+                        ),
+                        related_information: Some(vec![lsp_types::DiagnosticRelatedInformation {
+                            location: lsp_types::Location {
+                                uri: Url::from_file_path(first_path)
+                                    .unwrap_or_else(|_| Url::parse("file:///unknown").unwrap()),
+                                range: first_line_index
+                                    .as_ref()
+                                    .map(|li| span_to_range_with_index(li, first))
+                                    .unwrap_or_default(),
+                            },
+                            message: format!("First definition of test `{test_name}` for `{function_name}` here"),
+                        }]),
+                        tags: None,
+                        data: None,
+                    },
+                });
+            }
+
+            // Also add a hint at the first location
+            if let Some(line_index) = first_line_index {
+                let range = span_to_range_with_index(&line_index, first);
+                diagnostics.push(LspDiagnostic {
+                    file_path: PathBuf::from(first_path),
+                    diagnostic: Diagnostic {
+                        range,
+                        severity: Some(DiagnosticSeverity::HINT),
+                        code: Some(NumberOrString::String("E0012".to_string())),
+                        code_description: None,
+                        source: Some("baml".to_string()),
+                        message: format!(
+                            "Test `{test_name}` for function `{function_name}` first defined here"
+                        ),
+                        related_information: None,
+                        tags: None,
+                        data: None,
+                    },
+                });
+            }
+
+            diagnostics
+        }
     }
 }
 
@@ -291,6 +377,15 @@ fn convert_type_error<T: std::fmt::Display>(
             "E0012",
         ),
         TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
+        TypeError::UnknownEnumVariant {
+            enum_name,
+            variant_name,
+            span,
+        } => (
+            format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
+            span,
+            "E0064",
+        ),
     };
 
     let range = span_to_range_with_index(line_index, span);

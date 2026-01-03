@@ -16,8 +16,8 @@ pub use baml_lexer;
 pub use baml_mir;
 pub use baml_parser;
 pub use baml_syntax;
-pub use baml_thir;
-pub use baml_typed_ir;
+pub use baml_tir;
+pub use baml_vir;
 pub use baml_workspace;
 pub use salsa::Setter;
 use salsa::Storage;
@@ -48,7 +48,7 @@ impl baml_hir::Db for RootDatabase {
 }
 
 #[salsa::db]
-impl baml_thir::Db for RootDatabase {}
+impl baml_tir::Db for RootDatabase {}
 
 #[salsa::db]
 impl baml_mir::Db for RootDatabase {}

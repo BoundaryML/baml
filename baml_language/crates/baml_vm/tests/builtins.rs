@@ -3,7 +3,6 @@
 use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
-#[ignore = "builtin method calls not yet implemented"]
 fn builtin_method_call() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -18,7 +17,6 @@ fn builtin_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "builtin method calls not yet implemented"]
 fn bind_method_call() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -35,7 +33,6 @@ fn bind_method_call() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "baml.unstable.string not yet implemented"]
 fn any_value_to_string() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

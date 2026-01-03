@@ -202,12 +202,21 @@ impl BlockEvent {
     }
 }
 
+/// Test-friendly visualization event.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VizEvent {
+    pub function_name: String,
+    pub label: String,
+    pub is_enter: bool,
+}
+
 /// Test-friendly representation of `NodeId` that uses variable names and test Objects.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Notification {
     Channel(String),
     Object(Object),
     Block(BlockEvent),
+    Viz(VizEvent),
 }
 
 impl Notification {
@@ -273,6 +282,17 @@ impl ExecState {
                 VmWatchNotification::Block(ref notification) => {
                     Ok(ExecState::Emit(vec![Notification::block(notification)]))
                 }
+                VmWatchNotification::Viz {
+                    function_name,
+                    event,
+                } => {
+                    let is_enter = event.delta == baml_vm::bytecode::VizExecDelta::Enter;
+                    Ok(ExecState::Emit(vec![Notification::Viz(VizEvent {
+                        function_name,
+                        label: event.label,
+                        is_enter,
+                    })]))
+                }
             },
         }
     }
@@ -307,9 +327,12 @@ pub enum Instruction {
     DispatchFuture(usize),
     Await,
     Watch(usize),
+    Unwatch(usize),
     Notify(usize),
     Call(usize),
     Return,
     Assert,
     NotifyBlock(usize),
+    VizEnter(usize),
+    VizExit(usize),
 }

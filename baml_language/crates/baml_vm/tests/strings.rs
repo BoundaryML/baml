@@ -166,7 +166,6 @@ fn string_trim() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string method with args not yet implemented"]
 fn string_includes() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -181,7 +180,6 @@ fn string_includes() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string method with args not yet implemented"]
 fn string_starts_with() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -196,7 +194,6 @@ fn string_starts_with() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string method with args not yet implemented"]
 fn string_ends_with() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -211,7 +208,6 @@ fn string_ends_with() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string method with args not yet implemented"]
 fn string_split() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -258,7 +254,6 @@ fn string_substring_bounds() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "string method with args not yet implemented"]
 fn string_replace() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

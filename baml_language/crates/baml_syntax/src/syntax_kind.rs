@@ -59,6 +59,7 @@ pub enum SyntaxKind {
     DOUBLE_COLON, // ::
     COMMA,        // ,
     SEMICOLON,    // ;
+    DOT_DOT_DOT,  // ...
     DOT,          // .
     DOLLAR,       // $
     ARROW,        // ->
@@ -113,8 +114,9 @@ pub enum SyntaxKind {
     // Whitespace and comments (preserved for losslessness)
     WHITESPACE,
     NEWLINE,
-    LINE_COMMENT,  // //...
-    BLOCK_COMMENT, // /* ... */
+    LINE_COMMENT,   // //...
+    BLOCK_COMMENT,  // /* ... */
+    HEADER_COMMENT, // //# Header (MDX-style)
 
     // Error token
     ERROR_TOKEN,
@@ -228,6 +230,7 @@ pub enum SyntaxKind {
     GENERIC_ARGS,
     OBJECT_LITERAL,
     OBJECT_FIELD,
+    SPREAD_ELEMENT, // ...expr in object/array literals
     ARRAY_LITERAL,
     MAP_LITERAL,
 
