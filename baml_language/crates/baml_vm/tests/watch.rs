@@ -1,7 +1,9 @@
 //! VM tests for watch functionality.
 
-use baml_tests::bytecode::{Notification, WatchProgram, assert_vm_emits};
-use baml_tests::vm::VizEvent;
+use baml_tests::{
+    bytecode::{Notification, WatchProgram, assert_vm_emits},
+    vm::VizEvent,
+};
 
 #[test]
 fn notify_primitive_on_change() -> anyhow::Result<()> {
