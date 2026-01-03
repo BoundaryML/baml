@@ -1216,11 +1216,11 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
 fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => {
-            // Check if this assignment modifies a variable that the rvalue reads
-            if let Place::Local(local) = destination {
-                if rvalue_reads.contains(local) {
-                    return true;
-                }
+            // Check if this assignment modifies a variable (or field/index of a variable)
+            // that the rvalue reads from.
+            let base_local = get_base_local(destination);
+            if rvalue_reads.contains(&base_local) {
+                return true;
             }
             // All other assignments (including loading constants) are pure
             _ = value;
@@ -1228,6 +1228,15 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
         }
         StatementKind::Drop(_) => true,
         StatementKind::Nop => false,
+    }
+}
+
+/// Get the base local from a place, following field/index projections.
+fn get_base_local(place: &Place) -> Local {
+    match place {
+        Place::Local(local) => *local,
+        Place::Field { base, .. } => get_base_local(base),
+        Place::Index { base, .. } => get_base_local(base),
     }
 }
 
