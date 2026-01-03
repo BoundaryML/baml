@@ -303,10 +303,12 @@ where
                     "Invalid value '{value}' for property '{property_name}' in generator '{generator_name}'"
                 );
                 if let Some(valid) = valid_values {
-                    msg.push_str(&format!(". Valid values: {}", valid.join(", ")));
+                    use std::fmt::Write;
+                    let _ = write!(msg, ". Valid values: {}", valid.join(", "));
                 }
                 if let Some(h) = help {
-                    msg.push_str(&format!(". {h}"));
+                    use std::fmt::Write;
+                    let _ = write!(msg, ". {h}");
                 }
                 simple_error(msg, span, INVALID_GENERATOR_PROPERTY_VALUE)
             }

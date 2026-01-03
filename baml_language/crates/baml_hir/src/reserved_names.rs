@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 
 /// Python reserved keywords.
-/// Copied from https://www.w3schools.com/python/python_ref_keywords.asp
+/// Copied from <https://www.w3schools.com/python/python_ref_keywords.asp>
 pub const RESERVED_NAMES_PYTHON: &[&str] = &[
     "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
     "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
@@ -81,8 +81,8 @@ pub enum OutputType {
 }
 
 impl OutputType {
-    /// Parse output type from generator's output_type string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    /// Parse output type from generator's `output_type` string.
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "python/pydantic" | "python/pydantic/v1" => Some(OutputType::PythonPydantic),
             "typescript" | "typescript/react" => Some(OutputType::Typescript),

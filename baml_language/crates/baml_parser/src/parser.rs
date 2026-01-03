@@ -271,7 +271,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if the current token can start a type expression.
-    /// Valid type starts: Word (type name), string literal, integer/float literal, LParen (tuple).
+    /// Valid type starts: Word (type name), string literal, integer/float literal, `LParen` (tuple).
     fn is_at_type_start(&self) -> bool {
         self.at(TokenKind::Word)
             || self.at(TokenKind::Quote) // string literal type
@@ -1270,10 +1270,7 @@ impl<'a> Parser<'a> {
                 // Field is incomplete - emit error and don't consume more tokens
                 if let Some(span) = field_name_span {
                     let name = field_name_text.as_deref().unwrap_or("field");
-                    p.error(
-                        format!("field '{}' is missing a type annotation", name),
-                        span,
-                    );
+                    p.error(format!("field '{name}' is missing a type annotation"), span);
                 }
             }
         });

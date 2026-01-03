@@ -355,7 +355,7 @@ impl std::fmt::Display for TokenKind {
             // Spread/Ellipsis
             TokenKind::DotDotDot => "'...'",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

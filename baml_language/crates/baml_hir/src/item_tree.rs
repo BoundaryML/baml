@@ -202,7 +202,7 @@ pub struct Generator {
     pub name: Name,
     /// The output type (e.g., "python/pydantic", "typescript").
     pub output_type: Option<String>,
-    /// The output directory (relative to baml_src).
+    /// The output directory (relative to `baml_src`).
     pub output_dir: Option<String>,
     /// The version string.
     pub version: Option<String>,

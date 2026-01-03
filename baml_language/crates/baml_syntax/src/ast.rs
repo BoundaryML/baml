@@ -478,22 +478,108 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
     }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::DOT
+                )
+            })
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
+    }
 }
 
 impl Attribute {
-    /// Get the attribute name (e.g., "alias" from @alias).
+    /// Get the first segment of the attribute name (e.g., "stream" from @stream.done).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @stream.done returns "stream.done", for @alias returns "alias".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    /// For @stream.done returns the range from "stream" to "done".
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
     }
 }
 

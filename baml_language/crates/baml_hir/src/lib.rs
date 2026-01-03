@@ -716,9 +716,16 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
             // Validate field attributes for duplicates
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in field_node.attributes() {
-                if let Some(attr_name_token) = attr.name() {
-                    let attr_name = attr_name_token.text().to_string();
-                    let attr_span = ctx.span(attr_name_token.text_range());
+                // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+                if let Some(attr_name) = attr.full_name() {
+                    let attr_span =
+                        attr.full_name_range()
+                            .map(|r| ctx.span(r))
+                            .unwrap_or_else(|| {
+                                attr.name()
+                                    .map(|t| ctx.span(t.text_range()))
+                                    .unwrap_or_default()
+                            });
 
                     if let Some(first_span) = seen_field_attrs.get(&attr_name) {
                         ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
@@ -753,10 +760,17 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
 
     // Validate block attributes
     for attr in class.block_attributes() {
-        if let Some(attr_name_token) = attr.name() {
-            let attr_name = attr_name_token.text().to_string();
-            // Use the attribute name token's range for precise error highlighting
-            let attr_span = ctx.span(attr_name_token.text_range());
+        // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+        if let Some(attr_name) = attr.full_name() {
+            // Use the full attribute name range for precise error highlighting
+            let attr_span = attr
+                .full_name_range()
+                .map(|r| ctx.span(r))
+                .unwrap_or_else(|| {
+                    attr.name()
+                        .map(|t| ctx.span(t.text_range()))
+                        .unwrap_or_default()
+                });
 
             // Check for duplicate attribute
             if let Some(first_span) = seen_attrs.get(&attr_name) {
@@ -851,9 +865,16 @@ fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
             // Validate variant attributes for duplicates
             let mut seen_variant_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in variant.attributes() {
-                if let Some(attr_name_token) = attr.name() {
-                    let attr_name = attr_name_token.text().to_string();
-                    let attr_span = ctx.span(attr_name_token.text_range());
+                // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+                if let Some(attr_name) = attr.full_name() {
+                    let attr_span =
+                        attr.full_name_range()
+                            .map(|r| ctx.span(r))
+                            .unwrap_or_else(|| {
+                                attr.name()
+                                    .map(|t| ctx.span(t.text_range()))
+                                    .unwrap_or_default()
+                            });
 
                     if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
                         ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
@@ -879,10 +900,17 @@ fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
 
     // Validate block attributes
     for attr in enum_def.block_attributes() {
-        if let Some(attr_name_token) = attr.name() {
-            let attr_name = attr_name_token.text().to_string();
-            // Use the attribute name token's range for precise error highlighting
-            let attr_span = ctx.span(attr_name_token.text_range());
+        // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+        if let Some(attr_name) = attr.full_name() {
+            // Use the full attribute name range for precise error highlighting
+            let attr_span = attr
+                .full_name_range()
+                .map(|r| ctx.span(r))
+                .unwrap_or_else(|| {
+                    attr.name()
+                        .map(|t| ctx.span(t.text_range()))
+                        .unwrap_or_default()
+                });
 
             // Check for duplicate attribute
             if let Some(first_span) = seen_attrs.get(&attr_name) {
@@ -1040,9 +1068,8 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
     // Process config block if present
     if let Some(config_block) = generator.config_block() {
         for item in config_block.items() {
-            let key_token = match item.key() {
-                Some(t) => t,
-                None => continue,
+            let Some(key_token) = item.key() else {
+                continue;
             };
             let key = key_token.text();
             let key_span = ctx.span(key_token.text_range());
@@ -1076,7 +1103,7 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                                         valid_values: Some(
                                             VALID_OUTPUT_TYPES
                                                 .iter()
-                                                .map(|s| s.to_string())
+                                                .map(|s| (*s).to_string())
                                                 .collect(),
                                         ),
                                         help: None,
@@ -1106,7 +1133,7 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                                         valid_values: Some(
                                             VALID_CLIENT_MODES
                                                 .iter()
-                                                .map(|s| s.to_string())
+                                                .map(|s| (*s).to_string())
                                                 .collect(),
                                         ),
                                         help: Some("Use \"sync\" or \"async\"".to_string()),
@@ -1139,7 +1166,7 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                                         valid_values: Some(
                                             VALID_MODULE_FORMATS
                                                 .iter()
-                                                .map(|s| s.to_string())
+                                                .map(|s| (*s).to_string())
                                                 .collect(),
                                         ),
                                         help: Some("Use \"cjs\" or \"esm\"".to_string()),
@@ -1387,10 +1414,10 @@ fn check_duplicate(
     }
 }
 
-/// Extract the base type name from a TypeRef, unwrapping Optional, List, etc.
+/// Extract the base type name from a `TypeRef`, unwrapping Optional, List, etc.
 fn get_base_type_name(type_ref: &TypeRef) -> Option<String> {
     match type_ref {
-        TypeRef::Path(path) => path.last_segment().map(|s| s.to_string()),
+        TypeRef::Path(path) => path.last_segment().map(std::string::ToString::to_string),
         TypeRef::Optional(inner) => get_base_type_name(inner),
         TypeRef::List(inner) => get_base_type_name(inner),
         TypeRef::Generic { base, .. } => get_base_type_name(base),
@@ -1516,7 +1543,7 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
             let generator = &item_tree[loc.id(db)];
 
             if let Some(ref output_type_str) = generator.output_type {
-                if let Some(output_type) = reserved_names::OutputType::from_str(output_type_str) {
+                if let Some(output_type) = reserved_names::OutputType::parse(output_type_str) {
                     output_types.insert(output_type);
                 }
             }
