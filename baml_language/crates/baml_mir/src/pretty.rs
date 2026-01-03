@@ -126,6 +126,12 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
+        StatementKind::Unwatch(local) => {
+            write!(f, "unwatch({local});")
+        }
+        StatementKind::NotifyBlock { name, level } => {
+            write!(f, "notify_block({name}, level={level});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
         }

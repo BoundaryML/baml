@@ -1595,6 +1595,27 @@ impl Vm {
                     }
                 }
 
+                Instruction::Unwatch(index) => {
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+
+                    // Remove from watched_vars tracking
+                    if self.watched_vars.remove(&local_var_index).is_some() {
+                        let var_node = NodeId::LocalVar(local_var_index);
+                        // Unregister this variable as a root
+                        self.watch.unregister_root(var_node);
+
+                        // If it was linked to an object, unlink it
+                        let value = self.stack[local_var_index];
+                        if let Value::Object(object_index) = value {
+                            self.watch.unlink_edge(
+                                var_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(object_index),
+                            );
+                        }
+                    }
+                }
+
                 Instruction::Notify(index) => {
                     let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
                     let var_node = NodeId::LocalVar(local_var_index);

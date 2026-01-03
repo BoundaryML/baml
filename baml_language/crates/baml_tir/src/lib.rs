@@ -1639,6 +1639,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             type_annotation,
             type_span,
             initializer,
+            ..
         } => {
             let ty = if let Some(init) = initializer {
                 let init_ty = infer_expr(ctx, *init, body);
@@ -1749,5 +1750,9 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         }
 
         Stmt::Missing => {}
+
+        Stmt::HeaderComment { .. } => {
+            // Header comments don't need type checking - they're just annotations
+        }
     }
 }

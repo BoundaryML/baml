@@ -307,6 +307,7 @@ pub enum Instruction {
     DispatchFuture(usize),
     Await,
     Watch(usize),
+    Unwatch(usize),
     Notify(usize),
     Call(usize),
     Return,

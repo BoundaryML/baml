@@ -233,9 +233,14 @@ impl<'a> CodePrinter<'a> {
                 pattern,
                 type_annotation,
                 initializer,
+                is_watched,
                 ..
             } => {
-                self.output.push_str("let ");
+                if *is_watched {
+                    self.output.push_str("watch let ");
+                } else {
+                    self.output.push_str("let ");
+                }
                 self.print_pattern(*pattern);
                 if let Some(ty) = type_annotation {
                     write!(self.output, ": {}", type_ref_to_str(ty)).unwrap();
@@ -290,6 +295,14 @@ impl<'a> CodePrinter<'a> {
             }
             Stmt::Missing => {
                 self.output.push_str("<missing>;");
+            }
+            Stmt::HeaderComment { name, level } => {
+                self.output.push_str("//");
+                for _ in 0..*level {
+                    self.output.push('#');
+                }
+                self.output.push(' ');
+                self.output.push_str(name.as_ref());
             }
         }
     }

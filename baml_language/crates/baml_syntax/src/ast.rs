@@ -125,7 +125,35 @@ impl TypeExpr {
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);
-ast_node!(LetStmt, LET_STMT);
+
+// LetStmt accepts both LET_STMT and WATCH_LET syntax kinds
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LetStmt {
+    syntax: SyntaxNode,
+}
+
+impl BamlAstNode for LetStmt {}
+
+impl AstNode for LetStmt {
+    type Language = crate::BamlLanguage;
+
+    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
+        kind == SyntaxKind::LET_STMT || kind == SyntaxKind::WATCH_LET
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
 ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
 ast_node!(ForExpr, FOR_EXPR);
@@ -750,12 +778,14 @@ pub enum BlockElement {
     ExprNode(SyntaxNode),
     /// A literal or identifier token that forms an expression
     ExprToken(SyntaxToken),
+    /// A header comment (`//# name`)
+    HeaderComment(SyntaxNode),
 }
 
 impl BlockElement {
     /// Returns true if this element is a statement (has no value).
     pub fn is_stmt(&self) -> bool {
-        matches!(self, BlockElement::Stmt(_))
+        matches!(self, BlockElement::Stmt(_) | BlockElement::HeaderComment(_))
     }
 
     /// Returns true if this element is an expression (has a value).
@@ -766,7 +796,9 @@ impl BlockElement {
     /// Get the syntax node if this is a node-based element.
     pub fn as_node(&self) -> Option<&SyntaxNode> {
         match self {
-            BlockElement::Stmt(n) | BlockElement::ExprNode(n) => Some(n),
+            BlockElement::Stmt(n) | BlockElement::ExprNode(n) | BlockElement::HeaderComment(n) => {
+                Some(n)
+            }
             BlockElement::ExprToken(_) => None,
         }
     }
@@ -798,6 +830,7 @@ impl BlockElement {
                     .filter_map(rowan::NodeOrToken::into_token)
                     .any(|t| t.kind() == SyntaxKind::SEMICOLON)
             }
+            BlockElement::HeaderComment(_) => false, // Header comments don't have trailing semicolons
         }
     }
 }
@@ -814,11 +847,14 @@ impl BlockExpr {
                     match n.kind() {
                         // Statement nodes
                         SyntaxKind::LET_STMT
+                        | SyntaxKind::WATCH_LET
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
+                        // Header comment (//# name)
+                        SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR

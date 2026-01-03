@@ -84,6 +84,8 @@ pub struct LocalDecl<'db> {
     pub ty: Ty<'db>,
     /// Source span (for diagnostics).
     pub span: Option<TextRange>,
+    /// Whether this local is being watched for changes.
+    pub is_watched: bool,
 }
 
 // ============================================================================
@@ -145,6 +147,19 @@ pub enum StatementKind<'db> {
 
     /// Drop a value (run destructor if any).
     Drop(Place),
+
+    /// Unwatch a local variable (unregister from watch tracking).
+    /// Emitted when a watched variable goes out of scope.
+    Unwatch(Local),
+
+    /// Block notification: `//# name`
+    /// Emits a block notification when executed.
+    NotifyBlock {
+        /// The name of the block annotation
+        name: Name,
+        /// The header level (number of # symbols)
+        level: usize,
+    },
 
     /// No-op (placeholder for removed statements).
     Nop,

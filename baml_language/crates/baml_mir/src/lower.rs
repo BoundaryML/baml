@@ -23,7 +23,7 @@ use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Patte
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
-    Rvalue, UnaryOp as MirUnaryOp,
+    Rvalue, StatementKind, UnaryOp as MirUnaryOp,
 };
 
 /// Source of a field value in spread expansion.
@@ -59,6 +59,8 @@ struct LoweringContext<'db, 'ctx> {
     loop_context: Option<LoopContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Stack of watched locals for tracking scope exit.
+    watched_locals_stack: Vec<Local>,
 }
 
 /// Context for the current loop (for break/continue).
@@ -68,6 +70,9 @@ struct LoopContext {
     break_target: BlockId,
     /// Block to jump to on `continue`.
     continue_target: BlockId,
+    /// Depth of `watched_locals_stack` at loop entry.
+    /// Used to emit Unwatch for watched locals on break/continue.
+    watched_locals_depth: usize,
 }
 
 impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
@@ -82,6 +87,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
+            watched_locals_stack: Vec::new(),
         }
     }
 
@@ -96,7 +102,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
         let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
-        let ret = self.builder.declare_local(None, ret_ty, None);
+        let ret = self.builder.declare_local(None, ret_ty, None, false);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
@@ -104,7 +110,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
             let local = self
                 .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
+                .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
         }
 
@@ -217,6 +223,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 ty: var_ty,
                 value,
                 body: let_body,
+                is_watched,
             } => {
                 // Extract the variable name from the pattern first
                 let pat = body.pattern(*pattern);
@@ -232,17 +239,31 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
                 // Lower the value with the actual variable name
                 let local_ty = Self::lower_typed_ir_ty(var_ty);
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), local_ty, None);
+                let local =
+                    self.builder
+                        .declare_local(Some(name.clone()), local_ty, None, *is_watched);
                 self.lower_expr(*value, Place::local(local), body);
 
                 // Bind the variable
                 self.locals.insert(name, local);
 
+                // Track watched local for scope exit
+                if *is_watched {
+                    self.watched_locals_stack.push(local);
+                }
+
                 // Lower the body - this IS the result
                 // No special "tail expression" handling needed!
                 self.lower_expr(*let_body, dest, body);
+
+                // Emit Unwatch when watched local goes out of scope
+                if *is_watched {
+                    self.watched_locals_stack.pop();
+                    // Only emit if body didn't diverge
+                    if !self.builder.is_current_terminated() {
+                        self.builder.unwatch(local);
+                    }
+                }
             }
 
             Expr::Seq { first, second } => {
@@ -292,6 +313,10 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Break => {
                 if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
                     let target = ctx.break_target;
                     self.builder.goto(target);
                 } else {
@@ -301,6 +326,10 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Continue => {
                 if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
                     let target = ctx.continue_target;
                     self.builder.goto(target);
                 } else {
@@ -691,6 +720,20 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.goto(join_block);
                 self.builder.set_current_block(join_block);
             }
+
+            Expr::NotifyBlock { name, level } => {
+                // Emit a block notification statement
+                self.builder.push_statement(
+                    StatementKind::NotifyBlock {
+                        name: name.clone(),
+                        level: *level,
+                    },
+                    None,
+                );
+                // NotifyBlock returns unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
         }
     }
 
@@ -709,9 +752,12 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         match pat {
             Pattern::Binding(name) => {
                 // Binding always matches - bind the variable and go to success
-                let local =
-                    self.builder
-                        .declare_local(Some(name.clone()), scrutinee_ty.clone(), None);
+                let local = self.builder.declare_local(
+                    Some(name.clone()),
+                    scrutinee_ty.clone(),
+                    None,
+                    false,
+                );
                 self.builder.assign(
                     Place::local(local),
                     Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -745,7 +791,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.set_current_block(bind_block);
                 let local = self
                     .builder
-                    .declare_local(Some(name.clone()), pattern_ty, None);
+                    .declare_local(Some(name.clone()), pattern_ty, None, false);
                 self.builder.assign(
                     Place::local(local),
                     Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -1036,6 +1082,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         let old_loop_ctx = self.loop_context.replace(LoopContext {
             break_target: bb_exit,
             continue_target: bb_cond,
+            watched_locals_depth: self.watched_locals_stack.len(),
         });
 
         // Body block

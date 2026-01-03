@@ -75,6 +75,7 @@ pub fn display_instruction(
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::Watch(index)
+        | Instruction::Unwatch(index)
         | Instruction::Notify(index) => {
             format!(
                 "({})",
@@ -209,7 +210,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
-        Instruction::Watch(_) | Instruction::Notify(_) => Color::BrightRed,
+        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
+            Color::BrightRed
+        }
     }
 }
 

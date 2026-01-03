@@ -119,11 +119,13 @@ pub enum Expr {
     ///
     /// Binds the pattern with type `ty` to `value`, then evaluates `body`.
     /// Returns the value of `body`.
+    /// If `is_watched` is true, variable changes are tracked for notifications.
     Let {
         pattern: PatId,
         ty: Ty,
         value: ExprId,
         body: ExprId,
+        is_watched: bool,
     },
 
     /// Sequence: evaluate `first` for side effects, return `second`.
@@ -211,6 +213,17 @@ pub enum Expr {
     Match {
         scrutinee: ExprId,
         arms: Vec<MatchArm>,
+    },
+
+    // ========== Watch Notifications ==========
+    /// Block notification: `//# name`
+    ///
+    /// Emits a block notification when executed. Returns Unit.
+    NotifyBlock {
+        /// The name of the block annotation
+        name: Name,
+        /// The header level (number of # symbols)
+        level: usize,
     },
 }
 

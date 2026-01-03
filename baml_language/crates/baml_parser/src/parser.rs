@@ -1512,7 +1512,9 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at(TokenKind::Let) {
+        if self.at(TokenKind::Watch) {
+            self.parse_watch_let_stmt();
+        } else if self.at(TokenKind::Let) {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
@@ -1550,6 +1552,35 @@ impl<'a> Parser<'a> {
             if p.eat(TokenKind::Equals) {
                 // Parse expression but exclude assignment operators (parse_expr_bp with min_bp=3)
                 // This prevents `let a = b = c` from being parsed as nested assignment
+                p.parse_expr_bp(3);
+            } else {
+                p.error_unexpected_token("initializer (=)".to_string());
+            }
+
+            // Consume trailing semicolon
+            p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    fn parse_watch_let_stmt(&mut self) {
+        self.with_node(SyntaxKind::WATCH_LET, |p| {
+            p.expect(TokenKind::Watch);
+            p.expect(TokenKind::Let);
+
+            // Variable name
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("variable name".to_string());
+            }
+
+            // Optional type annotation
+            if p.eat(TokenKind::Colon) {
+                p.parse_type();
+            }
+
+            // Initializer
+            if p.eat(TokenKind::Equals) {
                 p.parse_expr_bp(3);
             } else {
                 p.error_unexpected_token("initializer (=)".to_string());

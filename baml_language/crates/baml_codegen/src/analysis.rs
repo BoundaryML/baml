@@ -448,6 +448,24 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_idx, &mut def_use);
                 }
+                StatementKind::Unwatch(local) => {
+                    // Unwatch uses the local (we need to read its value to unlink from watch graph)
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                }
+                StatementKind::NotifyBlock { .. } => {
+                    // NotifyBlock doesn't use any locals - it's a pure side effect
+                }
                 StatementKind::Nop => {}
             }
         }
@@ -678,7 +696,11 @@ fn classify_locals<'db>(
         // simple check handles the common pattern-matching wildcard case.
         let is_unused_wildcard = du.uses.is_empty() && local_decl.name.as_deref() == Some("_");
 
-        let classification = if idx > 0 && idx <= mir.arity {
+        let classification = if local_decl.is_watched {
+            // Watched variables must always be Real - no optimizations allowed.
+            // This ensures they have a stable stack slot for Watch/Unwatch instructions.
+            LocalClassification::Real
+        } else if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if idx != 0
@@ -1227,6 +1249,8 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
             false
         }
         StatementKind::Drop(_) => true,
+        StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
+        StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
         StatementKind::Nop => false,
     }
 }

@@ -579,6 +579,7 @@ impl<'db> LoweringContext<'db> {
                 pattern,
                 type_annotation,
                 initializer,
+                is_watched,
                 ..
             } => {
                 // Create a Let with dangling body
@@ -613,6 +614,7 @@ impl<'db> LoweringContext<'db> {
                         ty,
                         value,
                         body: dangling_body,
+                        is_watched: *is_watched,
                     },
                     Ty::Unknown, // Will be updated when body is filled
                     text_range,
@@ -688,6 +690,15 @@ impl<'db> LoweringContext<'db> {
                     text_range,
                 ))
             }
+
+            HirStmt::HeaderComment { name, level } => Ok(self.builder.alloc(
+                Expr::NotifyBlock {
+                    name: name.clone(),
+                    level: *level,
+                },
+                Ty::Unit,
+                text_range,
+            )),
         }
     }
 

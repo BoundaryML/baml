@@ -217,6 +217,12 @@ pub enum Instruction {
     /// [`crate::Vm::stack`] array.
     Watch(usize),
 
+    /// Unregisters a watched variable when it goes out of scope.
+    ///
+    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
+    /// [`crate::Vm::stack`] array.
+    Unwatch(usize),
+
     /// Manually triggers notifications for a watched variable.
     Notify(usize),
 
@@ -372,6 +378,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
             Instruction::NotifyBlock(block_index) => {
                 write!(f, "NOTIFY_BLOCK {block_index}")
             }

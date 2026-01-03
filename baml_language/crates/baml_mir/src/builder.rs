@@ -78,15 +78,21 @@ impl<'db> MirBuilder<'db> {
         name: Option<Name>,
         ty: Ty<'db>,
         span: Option<TextRange>,
+        is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
-        self.locals.push(LocalDecl { name, ty, span });
+        self.locals.push(LocalDecl {
+            name,
+            ty,
+            span,
+            is_watched,
+        });
         id
     }
 
     /// Allocate a temporary (unnamed local).
     pub fn temp(&mut self, ty: Ty<'db>) -> Local {
-        self.declare_local(None, ty, None)
+        self.declare_local(None, ty, None, false)
     }
 
     /// Get the number of locals declared so far.
@@ -169,6 +175,11 @@ impl<'db> MirBuilder<'db> {
     /// Emit a nop statement.
     pub fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
+    }
+
+    /// Emit an unwatch statement for a watched local going out of scope.
+    pub fn unwatch(&mut self, local: Local) {
+        self.push_statement(StatementKind::Unwatch(local), None);
     }
 
     // ========================================================================
