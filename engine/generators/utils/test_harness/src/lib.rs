@@ -21,6 +21,30 @@ fn get_cargo_root() -> Result<PathBuf, anyhow::Error> {
 }
 
 fn get_dylib_path() -> Result<PathBuf, anyhow::Error> {
+    // Prefer BAML_LIBRARY_PATH env var if set (used in CI to point to a stable copy)
+    if let Ok(env_path) = std::env::var("BAML_LIBRARY_PATH") {
+        let path = PathBuf::from(&env_path);
+        eprintln!("[test-harness] Using BAML_LIBRARY_PATH: {}", path.display());
+        if path.exists() {
+            let size = std::fs::metadata(&path)?.len();
+            eprintln!("[test-harness] File exists, size: {} bytes", size);
+            if size < 1024 {
+                anyhow::bail!(
+                    "BAML_LIBRARY_PATH file is too small ({} bytes): {}",
+                    size,
+                    path.display()
+                );
+            }
+            return Ok(path);
+        } else {
+            eprintln!(
+                "[test-harness] Warning: BAML_LIBRARY_PATH set but file doesn't exist: {}",
+                path.display()
+            );
+        }
+    }
+
+    // Fall back to cargo target directory
     let dylib_path = get_cargo_root()?
         .join("target/debug")
         .join(if cfg!(target_os = "macos") {
@@ -30,6 +54,7 @@ fn get_dylib_path() -> Result<PathBuf, anyhow::Error> {
         } else {
             "libbaml_cffi.so"
         });
+
     Ok(dylib_path)
 }
 

@@ -182,7 +182,7 @@ impl GEPAOrchestrator {
 
             // Decide whether to do a merge or reflection
             // Do a merge every 3rd iteration if we have 2+ candidates on Pareto frontier
-            let should_merge = self.current_iteration % 3 == 0
+            let should_merge = self.current_iteration.is_multiple_of(3)
                 && self.pareto.len() >= 2
                 && self.config.objectives.len() > 1;
 
