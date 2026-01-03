@@ -104,4 +104,43 @@ pub enum HirDiagnostic {
         type_name: String,
         span: Span,
     },
+
+    // ============ Client Diagnostics ============
+    /// Invalid value for `client_response_type`.
+    InvalidClientResponseType {
+        client_name: String,
+        value: String,
+        span: Span,
+        valid_values: Vec<&'static str>,
+    },
+
+    /// http configuration must be a block, not a scalar value.
+    HttpConfigNotBlock { client_name: String, span: Span },
+
+    /// Unrecognized field in http configuration block.
+    UnknownHttpConfigField {
+        client_name: String,
+        field_name: String,
+        span: Span,
+        suggestion: Option<String>,
+        is_composite: bool,
+    },
+
+    /// Negative timeout value in http configuration.
+    NegativeTimeout {
+        client_name: String,
+        field_name: String,
+        value: i64,
+        span: Span,
+    },
+
+    /// Missing required `provider` field in client definition.
+    MissingProvider { client_name: String, span: Span },
+
+    /// Unknown field in client configuration block.
+    UnknownClientProperty {
+        client_name: String,
+        field_name: String,
+        span: Span,
+    },
 }

@@ -582,3 +582,5 @@ expression: output
   [parse] Error: Expected top-level declaration, found '#'
 
   [parse] Error: Expected top-level declaration, found '}'
+
+  [hir] Error: Missing `provider` field in client. e.g. `provider openai`

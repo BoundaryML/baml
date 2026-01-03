@@ -15,4 +15,12 @@ client<llm> HttpNotMap {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: http must be a configuration block with timeout settings
+//    ╭─[ 0:5:5 ]
+//    │
+//  5 │     http "invalid"  // Should be a map
+//    │     ──┬─  
+//    │       ╰─── http must be a configuration block with timeout settings
+//    │ 
+//    │ Note: Error code: E0023
+// ───╯

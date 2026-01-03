@@ -716,12 +716,110 @@ fn hir_diagnostic_to_lsp_diagnostic(
             span,
         } => (
             format!(
-                "Field '{}' in class '{}' has the same name as its type '{}'. This causes issues in Python.",
+                "Field '{}' in class '{}' has the same name as its type '{}', which is not supported in generated Python code.",
                 field_name, class_name, type_name
             ),
             span,
             None,
             "E0021",
+            String::new(),
+        ),
+        HirDiagnostic::InvalidClientResponseType {
+            client_name: _,
+            value,
+            span,
+            valid_values,
+        } => (
+            format!(
+                "client_response_type must be one of {}. Got: {}",
+                valid_values.join(", "),
+                value
+            ),
+            span,
+            None,
+            "E0022",
+            String::new(),
+        ),
+        HirDiagnostic::HttpConfigNotBlock {
+            client_name: _,
+            span,
+        } => (
+            "http must be a configuration block with timeout settings".to_string(),
+            span,
+            None,
+            "E0023",
+            String::new(),
+        ),
+        HirDiagnostic::UnknownHttpConfigField {
+            client_name: _,
+            field_name,
+            span,
+            suggestion,
+            is_composite,
+        } => {
+            let valid_fields = if *is_composite {
+                "total_timeout_ms"
+            } else {
+                "connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms"
+            };
+
+            let mut msg = format!(
+                "Unrecognized field '{}' in http configuration block.",
+                field_name
+            );
+
+            if let Some(suggested) = suggestion {
+                msg.push_str(&format!(" Did you mean '{}'?", suggested));
+            }
+
+            if *is_composite {
+                msg.push_str(&format!(
+                    " Composite clients (fallback/round-robin) only support: {}",
+                    valid_fields
+                ));
+            } else if field_name == "total_timeout_ms" {
+                msg.push_str(&format!(
+                    " 'total_timeout_ms' is only available for composite clients (fallback/round-robin). For regular clients, use: {}",
+                    valid_fields
+                ));
+            }
+
+            (msg, span, None, "E0024", String::new())
+        }
+        HirDiagnostic::NegativeTimeout {
+            client_name: _,
+            field_name,
+            value,
+            span,
+        } => (
+            format!("{} must be non-negative, got: {}ms", field_name, value),
+            span,
+            None,
+            "E0025",
+            String::new(),
+        ),
+        HirDiagnostic::MissingProvider {
+            client_name: _,
+            span,
+        } => (
+            "Missing `provider` field in client. e.g. `provider openai`".to_string(),
+            span,
+            None,
+            "E0026",
+            String::new(),
+        ),
+        HirDiagnostic::UnknownClientProperty {
+            client_name: _,
+            field_name,
+            span,
+        } => (
+            format!(
+                "Unknown field `{}` in client. Only `provider` and `options` are supported.",
+                field_name
+            ),
+            span,
+            None,
+            "E0027",
             String::new(),
         ),
     };
@@ -775,6 +873,12 @@ fn get_hir_diagnostic_file_id(error: &HirDiagnostic) -> FileId {
         HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
         HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
         HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
+        HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
+        HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
+        HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
+        HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
+        HirDiagnostic::MissingProvider { span, .. } => span.file_id,
+        HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
     }
 }
 

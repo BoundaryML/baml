@@ -2309,6 +2309,12 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
             HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
             HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
+            HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
+            HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
+            HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
+            HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
+            HirDiagnostic::MissingProvider { span, .. } => span.file_id,
+            HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
         },
     }
 }

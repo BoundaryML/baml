@@ -79,6 +79,14 @@ const INVALID_GENERATOR_PROPERTY_VALUE: ErrorCode = ErrorCode(19);
 const RESERVED_FIELD_NAME: ErrorCode = ErrorCode(20);
 const FIELD_NAME_MATCHES_TYPE_NAME: ErrorCode = ErrorCode(21);
 
+// Client diagnostics
+const INVALID_CLIENT_RESPONSE_TYPE: ErrorCode = ErrorCode(22);
+const HTTP_CONFIG_NOT_BLOCK: ErrorCode = ErrorCode(23);
+const UNKNOWN_HTTP_CONFIG_FIELD: ErrorCode = ErrorCode(24);
+const NEGATIVE_TIMEOUT: ErrorCode = ErrorCode(25);
+const MISSING_PROVIDER: ErrorCode = ErrorCode(26);
+const UNKNOWN_CLIENT_PROPERTY: ErrorCode = ErrorCode(27);
+
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);

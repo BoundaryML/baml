@@ -288,10 +288,18 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
-    /// Check if there's a newline before the next non-trivia token
+    /// Check if there's a newline before the next non-trivia token.
+    /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
         let mut i = self.current;
         while i < self.tokens.len() {
+            // Skip comments (they're trivia for line termination purposes)
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
             let kind = self.tokens[i].kind;
             if kind == TokenKind::Newline {
                 return true;

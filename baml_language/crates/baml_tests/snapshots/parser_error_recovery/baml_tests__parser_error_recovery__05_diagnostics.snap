@@ -113,10 +113,20 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: field 'string' is missing a type annotation
-   ╭─[ 2:5:10 ]
+  [parse] Error: field 'field2' is missing a type annotation
+   ╭─[ 2:4:3 ]
    │
- 5 │   field3 string @  // Incomplete attribute
+ 4 │   field2  // Missing type entirely
+   │   ───┬──  
+   │      ╰──── field 'field2' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ 2:6:10 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
    │          ───┬──  
    │             ╰──── field 'string' is missing a type annotation
    │ 
@@ -124,9 +134,9 @@ expression: output
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found '@'
-   ╭─[ 2:5:17 ]
+   ╭─[ 2:6:17 ]
    │
- 5 │   field3 string @  // Incomplete attribute
+ 6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
    │                 ╰── Expected Unexpected token in class body, found '@'
    │ 
@@ -252,7 +262,7 @@ expression: output
    │
    ├─[ 2:7:10 ]
    │
- 5 │   field3 string @  // Incomplete attribute
+ 6 │   field4 string @alias(  // Unclosed attribute
    │          ───┬──  
    │             ╰──── first definition here
    │ 

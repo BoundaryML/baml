@@ -3,12 +3,14 @@ use baml_base::Span;
 
 use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_ATTRIBUTE, DUPLICATE_FIELD, DUPLICATE_NAME,
-    DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HirDiagnostic,
-    INVALID_ATTRIBUTE_CONTEXT, INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR,
-    MISSING_GENERATOR_PROPERTY, NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE,
-    NameError, ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH, TypeError,
-    UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_ENUM_VARIANT,
-    UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HTTP_CONFIG_NOT_BLOCK,
+    HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_CLIENT_RESPONSE_TYPE,
+    INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR, MISSING_GENERATOR_PROPERTY,
+    MISSING_PROVIDER, NEGATIVE_TIMEOUT, NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE,
+    NOT_INDEXABLE, NameError, ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH,
+    TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY,
+    UNKNOWN_ENUM_VARIANT, UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE,
+    UNKNOWN_VARIABLE, UNREACHABLE_ARM,
 };
 
 /// The message format and id of each compiler error variant.
@@ -345,6 +347,89 @@ where
                 ),
                 span,
                 FIELD_NAME_MATCHES_TYPE_NAME,
+            ),
+            HirDiagnostic::InvalidClientResponseType {
+                client_name: _,
+                value,
+                span,
+                valid_values,
+            } => {
+                let valid = valid_values.join(", ");
+                simple_error(
+                    format!(
+                        "client_response_type must be one of {valid}. Got: {value}"
+                    ),
+                    span,
+                    INVALID_CLIENT_RESPONSE_TYPE,
+                )
+            }
+            HirDiagnostic::HttpConfigNotBlock { client_name: _, span } => simple_error(
+                "http must be a configuration block with timeout settings".to_string(),
+                span,
+                HTTP_CONFIG_NOT_BLOCK,
+            ),
+            HirDiagnostic::UnknownHttpConfigField {
+                client_name: _,
+                field_name,
+                span,
+                suggestion,
+                is_composite,
+            } => {
+                let valid_fields = if is_composite {
+                    "total_timeout_ms"
+                } else {
+                    "connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms"
+                };
+
+                let mut msg = format!("Unrecognized field '{field_name}' in http configuration block.");
+
+                if let Some(ref suggested) = suggestion {
+                    use std::fmt::Write;
+                    let _ = write!(msg, " Did you mean '{suggested}'?");
+                }
+
+                if is_composite {
+                    use std::fmt::Write;
+                    let _ = write!(
+                        msg,
+                        " Composite clients (fallback/round-robin) only support: {valid_fields}"
+                    );
+                } else if field_name == "total_timeout_ms" {
+                    use std::fmt::Write;
+                    let _ = write!(
+                        msg,
+                        " 'total_timeout_ms' is only available for composite clients (fallback/round-robin). For regular clients, use: {valid_fields}"
+                    );
+                }
+
+                simple_error(msg, span, UNKNOWN_HTTP_CONFIG_FIELD)
+            }
+            HirDiagnostic::NegativeTimeout {
+                client_name: _,
+                field_name,
+                value,
+                span,
+            } => simple_error(
+                format!("{field_name} must be non-negative, got: {value}ms"),
+                span,
+                NEGATIVE_TIMEOUT,
+            ),
+            HirDiagnostic::MissingProvider {
+                client_name: _,
+                span,
+            } => simple_error(
+                "Missing `provider` field in client. e.g. `provider openai`".to_string(),
+                span,
+                MISSING_PROVIDER,
+            ),
+            HirDiagnostic::UnknownClientProperty {
+                client_name: _,
+                field_name,
+                span,
+            } => simple_error(
+                format!("Unknown field `{field_name}` in client. Only `provider` and `options` are supported."),
+                span,
+                UNKNOWN_CLIENT_PROPERTY,
             ),
         },
     }

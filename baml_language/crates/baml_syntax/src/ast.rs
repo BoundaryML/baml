@@ -419,6 +419,47 @@ impl ConfigItem {
             })
             .filter(|s| !s.is_empty())
     }
+
+    /// Get a nested config block, if this item has one.
+    /// For items like `options { ... }` or `http { ... }`.
+    pub fn nested_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+
+    /// Check if this config item has a `CONFIG_VALUE` child (vs a nested `CONFIG_BLOCK`).
+    pub fn has_value(&self) -> bool {
+        self.syntax
+            .children()
+            .any(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+    }
+
+    /// Get the integer value if this is an integer literal.
+    pub fn value_int(&self) -> Option<i64> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .and_then(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
+                    .and_then(|token| token.text().parse().ok())
+            })
+    }
+
+    /// Check if the value starts with a minus sign (for negative numbers).
+    pub fn is_negative(&self) -> bool {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::MINUS)
+            })
+            .unwrap_or(false)
+    }
 }
 
 impl TestDef {

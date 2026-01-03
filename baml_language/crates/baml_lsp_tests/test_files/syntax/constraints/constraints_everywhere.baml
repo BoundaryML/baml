@@ -400,6 +400,16 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Missing `provider` field in client. e.g. `provider openai`
+//     ╭─[ 0:9:119 ]
+//     │
+//   9 │ ╭─▶ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
+//  10 │ ├─▶    client Bar
+//     │ │                   
+//     │ ╰─────────────────── Missing `provider` field in client. e.g. `provider openai`
+//     │     
+//     │     Note: Error code: E0026
+// ────╯
 // Error: Duplicate client 'Bar'
 //    ╭─[ 0:1:1 ]
 //    │
