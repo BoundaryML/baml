@@ -3,21 +3,37 @@
 //
 // Learn more at https://docs.boundaryml.com
 
+
 //! Generated class types.
 
+use baml::{BamlEncode, BamlDecode};
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+
+
+
 
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 
 pub struct Example {
+
+
+
     #[baml(name = "type")]
+
     pub r#type: String,
+
+
 
     pub a: Checked<i64>,
 
+
+
     pub b: String,
+
+
 }
+
+
 
 impl AsRef<Example> for Example {
     fn as_ref(&self) -> &Example {
@@ -25,21 +41,39 @@ impl AsRef<Example> for Example {
     }
 }
 
+
+
+
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 
 pub struct Example2 {
+
+
+
     #[baml(name = "type")]
+
     pub r#type: String,
+
+
 
     pub item: Example,
 
+
+
     pub element: String,
 
+
+
     pub element2: String,
+
+
 }
+
+
 
 impl AsRef<Example2> for Example2 {
     fn as_ref(&self) -> &Example2 {
         self
     }
 }
+

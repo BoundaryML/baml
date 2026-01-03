@@ -3,20 +3,24 @@
 //
 // Learn more at https://docs.boundaryml.com
 
+
 //! Generated union types.
 
+use baml::{BamlEncode, BamlDecode};
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+
 
 /// Generated from: (Example | Example2)
 #[derive(Debug, Clone, BamlEncode, BamlDecode)]
 #[baml(union)]
 pub enum Union2ExampleOrExample2 {
+
     #[baml(name = "Example")]
     Example(Example),
 
     #[baml(name = "Example2")]
     Example2(Example2),
+
 }
 
 impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
@@ -27,6 +31,9 @@ impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
 
 impl Default for Union2ExampleOrExample2 {
     fn default() -> Self {
-        Self::Example(Default::default())
+        
+            Self::Example(Default::default())
+        
     }
 }
+

@@ -243,13 +243,69 @@ impl BamlRuntime {
     }
 
     /// Parse raw LLM output into typed result
+    ///
+    /// Given the name of a BAML function and the raw text response from an LLM,
+    /// this method parses the response according to the function's output type.
+    ///
+    /// # Arguments
+    /// * `function_name` - Name of the BAML function that defines the output type
+    /// * `llm_response` - Raw text response from the LLM
+    ///
+    /// # Example
+    /// ```ignore
+    /// let raw_response = "Hello, World!";
+    /// let result: String = runtime.parse("SayHello", raw_response)?;
+    /// ```
     pub fn parse<T: BamlDecode>(
         &self,
-        _function_name: &str,
-        _llm_response: &str,
+        function_name: &str,
+        llm_response: &str,
     ) -> Result<T, BamlError> {
-        // TODO: Implement using call_function_parse_from_c
-        Err(BamlError::internal("parse not yet implemented"))
+        // Build args using FunctionArgs with parse-specific fields
+        let args = FunctionArgs::new()
+            .arg("llm_response", llm_response);
+
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(function_name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_callback();
+
+        #[allow(unsafe_code)]
+        let error_ptr = unsafe {
+            ffi::call_function_parse_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+        };
+
+        // Check for immediate error
+        if !error_ptr.is_null() {
+            callbacks::remove_callback(id);
+            #[allow(unsafe_code)]
+            let error_msg = unsafe {
+                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
+                cstr.to_string_lossy().into_owned()
+            };
+            return Err(BamlError::internal(error_msg));
+        }
+
+        // Wait for result
+        match receiver.recv() {
+            Ok(callbacks::CallbackResult::Final(data)) => {
+                let holder = CffiValueHolder::decode(&data[..])
+                    .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                T::baml_decode(&holder)
+            }
+            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
+                "unexpected partial result in parse call",
+            )),
+            Ok(callbacks::CallbackResult::Error(e)) => Err(e),
+            Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
     }
 
     // =========================================================================

@@ -65,9 +65,22 @@ pub use raw_objects::{
     EnumBuilder,
     EnumValueBuilder,
     FunctionLog,
+    // HTTP types
+    HTTPBody,
+    HTTPRequest,
+    HTTPResponse,
     Image,
+    // LLM call types
+    LLMCall,
+    LLMCallKind,
+    LLMStreamCall,
     LogType,
     Pdf,
+    // SSE types
+    SSEResponse,
+    // Timing types
+    StreamTiming,
+    Timing,
     TypeBuilder,
     TypeDef,
     Usage,

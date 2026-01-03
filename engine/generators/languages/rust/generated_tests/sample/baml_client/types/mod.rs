@@ -7,13 +7,13 @@
 
 mod classes;
 mod enums;
-mod type_aliases;
 mod unions;
+mod type_aliases;
 
 pub use classes::*;
 pub use enums::*;
-pub use type_aliases::*;
 pub use unions::*;
+pub use type_aliases::*;
 
 // Re-export types from baml runtime
 pub use baml::{Audio, Image, Pdf, Video};
@@ -23,11 +23,15 @@ pub use baml::{Checked, StreamState};
 /// Serves as the compile-time type registry for BamlValue.
 #[derive(Debug, Clone)]
 pub enum Types {
+
     Example(Example),
 
     Example2(Example2),
 
+
+
     Union2ExampleOrExample2(Union2ExampleOrExample2),
+
 }
 
 impl baml::KnownTypes for Types {
@@ -37,11 +41,16 @@ impl baml::KnownTypes for Types {
 
     fn type_name(&self) -> &'static str {
         match self {
+
             Types::Example(_) => "Example",
 
             Types::Example2(_) => "Example2",
 
+
+
             Types::Union2ExampleOrExample2(_) => "Union2ExampleOrExample2",
+
+
         }
     }
 }

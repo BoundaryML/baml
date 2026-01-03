@@ -49,11 +49,15 @@ pub(crate) use define_raw_object_wrapper;
 
 // Submodules for specific object types (Phase 11-13)
 mod collector;
+mod http;
+mod llm_call;
 mod media;
 mod type_builder;
 
 // Re-export all public types from submodules
-pub use collector::{Collector, FunctionLog, LogType, Usage};
+pub use collector::{Collector, FunctionLog, LogType, StreamTiming, Timing, Usage};
+pub use http::{HTTPBody, HTTPRequest, HTTPResponse, SSEResponse};
+pub use llm_call::{LLMCall, LLMCallKind, LLMStreamCall};
 pub use media::{Audio, Image, Pdf, Video};
 pub use type_builder::{
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
@@ -398,7 +402,7 @@ pub(crate) fn extract_ptr_from_handle(handle: &BamlObjectHandle) -> Result<i64, 
 }
 
 /// Get the object type from a `BamlObjectHandle`
-fn object_type_from_handle(handle: &BamlObjectHandle) -> Result<BamlObjectType, BamlError> {
+pub(crate) fn object_type_from_handle(handle: &BamlObjectHandle) -> Result<BamlObjectType, BamlError> {
     match &handle.object {
         Some(obj) => {
             let object_type = match obj {
@@ -515,18 +519,14 @@ pub(crate) fn decode_object_handle(
         BamlObjectType::ObjectClassPropertyBuilder => {
             Ok(Box::new(ClassPropertyBuilder::from_raw(raw)))
         }
-        // Types we don't expose directly yet
-        BamlObjectType::ObjectTiming
-        | BamlObjectType::ObjectStreamTiming
-        | BamlObjectType::ObjectLlmCall
-        | BamlObjectType::ObjectLlmStreamCall
-        | BamlObjectType::ObjectHttpRequest
-        | BamlObjectType::ObjectHttpResponse
-        | BamlObjectType::ObjectHttpBody
-        | BamlObjectType::ObjectSseResponse => Err(BamlError::internal(format!(
-            "object type {:?} not yet exposed in Rust API",
-            object_type
-        ))),
+        BamlObjectType::ObjectTiming => Ok(Box::new(Timing::from_raw(raw))),
+        BamlObjectType::ObjectStreamTiming => Ok(Box::new(StreamTiming::from_raw(raw))),
+        BamlObjectType::ObjectHttpRequest => Ok(Box::new(HTTPRequest::from_raw(raw))),
+        BamlObjectType::ObjectHttpResponse => Ok(Box::new(HTTPResponse::from_raw(raw))),
+        BamlObjectType::ObjectHttpBody => Ok(Box::new(HTTPBody::from_raw(raw))),
+        BamlObjectType::ObjectSseResponse => Ok(Box::new(SSEResponse::from_raw(raw))),
+        BamlObjectType::ObjectLlmCall => Ok(Box::new(LLMCall::from_raw(raw))),
+        BamlObjectType::ObjectLlmStreamCall => Ok(Box::new(LLMStreamCall::from_raw(raw))),
         BamlObjectType::ObjectUnspecified => Err(BamlError::internal("unspecified object type")),
     }
 }

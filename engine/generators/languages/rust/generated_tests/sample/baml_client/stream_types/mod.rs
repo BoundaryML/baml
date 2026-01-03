@@ -8,21 +8,24 @@
 //! Full implementation coming in Phase 6.
 
 mod classes;
-mod type_aliases;
 mod unions;
+mod type_aliases;
 
 pub use classes::*;
-pub use type_aliases::*;
 pub use unions::*;
+pub use type_aliases::*;
 
 /// Streaming variants of types (all fields Optional).
 #[derive(Debug, Clone)]
 pub enum StreamTypes {
+
     Example(Example),
 
     Example2(Example2),
 
+
     Union2ExampleOrExample2(Union2ExampleOrExample2),
+
 }
 
 impl baml::KnownTypes for StreamTypes {
@@ -32,11 +35,15 @@ impl baml::KnownTypes for StreamTypes {
 
     fn type_name(&self) -> &'static str {
         match self {
+
             StreamTypes::Example(_) => "Example",
 
             StreamTypes::Example2(_) => "Example2",
 
+
             StreamTypes::Union2ExampleOrExample2(_) => "Union2ExampleOrExample2",
+
+
         }
     }
 }

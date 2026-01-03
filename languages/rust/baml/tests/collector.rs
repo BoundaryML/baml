@@ -531,4 +531,286 @@ mod collector {
             assert_ne!(log1.id(), log2.id(), "Logs should have different IDs");
         }
     }
+
+    // =========================================================================
+    // Timing Tests
+    // =========================================================================
+
+    mod timing_tests {
+        use super::*;
+
+        /// Helper macro to skip test if env var is not set
+        macro_rules! require_env {
+            ($name:expr) => {
+                match std::env::var($name) {
+                    Ok(val) if !val.is_empty() => val,
+                    _ => {
+                        eprintln!("Skipping test: {} not set", $name);
+                        return;
+                    }
+                }
+            };
+        }
+
+        /// Create a runtime with a simple function for testing
+        fn create_runtime_with_function() -> BamlRuntime {
+            let mut files = HashMap::new();
+            files.insert(
+                "main.baml".to_string(),
+                r##"
+                client<llm> GPT4 {
+                    provider openai
+                    options {
+                        model "gpt-4o-mini"
+                        api_key env.OPENAI_API_KEY
+                    }
+                }
+
+                function SayHello(name: string) -> string {
+                    client GPT4
+                    prompt #"Say hello to {{name}} in exactly 3 words."#
+                }
+                "##
+                .to_string(),
+            );
+
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+        }
+
+        #[test]
+        fn timing_has_start_time_after_call() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("timing_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let log = collector.last().expect("Should have a log");
+            let timing = log.timing();
+
+            assert!(timing.start_time_utc_ms() > 0, "start_time should be positive");
+            assert!(timing.duration_ms().is_some(), "duration should be set");
+            assert!(timing.duration_ms().unwrap() > 0, "duration should be positive");
+        }
+    }
+
+    // =========================================================================
+    // LLMCall Tests
+    // =========================================================================
+
+    mod llm_call_tests {
+        use super::*;
+
+        /// Helper macro to skip test if env var is not set
+        macro_rules! require_env {
+            ($name:expr) => {
+                match std::env::var($name) {
+                    Ok(val) if !val.is_empty() => val,
+                    _ => {
+                        eprintln!("Skipping test: {} not set", $name);
+                        return;
+                    }
+                }
+            };
+        }
+
+        /// Create a runtime with a simple function for testing
+        fn create_runtime_with_function() -> BamlRuntime {
+            let mut files = HashMap::new();
+            files.insert(
+                "main.baml".to_string(),
+                r##"
+                client<llm> GPT4 {
+                    provider openai
+                    options {
+                        model "gpt-4o-mini"
+                        api_key env.OPENAI_API_KEY
+                    }
+                }
+
+                function SayHello(name: string) -> string {
+                    client GPT4
+                    prompt #"Say hello to {{name}} in exactly 3 words."#
+                }
+                "##
+                .to_string(),
+            );
+
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+        }
+
+        #[test]
+        fn calls_returns_llm_calls_after_function_call() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("calls_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let log = collector.last().expect("Should have a log");
+            let calls = log.calls();
+
+            assert_eq!(calls.len(), 1, "Should have exactly 1 LLM call");
+
+            let call = &calls[0];
+            assert_eq!(call.provider(), "openai");
+            assert!(call.selected(), "The call should be selected");
+        }
+
+        #[test]
+        fn llm_call_has_http_request() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("http_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let log = collector.last().expect("Should have a log");
+            let calls = log.calls();
+            let call = &calls[0];
+
+            let request = call.http_request().expect("Should have HTTP request");
+            assert!(!request.url().is_empty(), "URL should not be empty");
+            assert_eq!(request.method(), "POST");
+
+            // Check body is valid JSON
+            let body_json = request.body().json();
+            assert!(body_json.is_ok(), "Body should be valid JSON");
+        }
+
+        #[test]
+        fn llm_call_has_usage() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("usage_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let log = collector.last().expect("Should have a log");
+            let calls = log.calls();
+            let call = &calls[0];
+
+            let usage = call.usage().expect("Should have usage");
+            assert!(usage.input_tokens() > 0);
+            assert!(usage.output_tokens() > 0);
+        }
+
+        #[test]
+        fn selected_call_returns_selected_llm_call() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("selected_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let log = collector.last().expect("Should have a log");
+            let selected = log.selected_call().expect("Should have a selected call");
+
+            assert!(selected.selected());
+            assert_eq!(selected.provider(), "openai");
+        }
+    }
+
+    // =========================================================================
+    // Cached Input Tokens Tests
+    // =========================================================================
+
+    mod cached_tokens_tests {
+        use super::*;
+
+        /// Helper macro to skip test if env var is not set
+        macro_rules! require_env {
+            ($name:expr) => {
+                match std::env::var($name) {
+                    Ok(val) if !val.is_empty() => val,
+                    _ => {
+                        eprintln!("Skipping test: {} not set", $name);
+                        return;
+                    }
+                }
+            };
+        }
+
+        /// Create a runtime with a simple function for testing
+        fn create_runtime_with_function() -> BamlRuntime {
+            let mut files = HashMap::new();
+            files.insert(
+                "main.baml".to_string(),
+                r##"
+                client<llm> GPT4 {
+                    provider openai
+                    options {
+                        model "gpt-4o-mini"
+                        api_key env.OPENAI_API_KEY
+                    }
+                }
+
+                function SayHello(name: string) -> string {
+                    client GPT4
+                    prompt #"Say hello to {{name}} in exactly 3 words."#
+                }
+                "##
+                .to_string(),
+            );
+
+            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+        }
+
+        #[test]
+        fn usage_has_cached_input_tokens_field() {
+            let api_key = require_env!("OPENAI_API_KEY");
+
+            let runtime = create_runtime_with_function();
+            let collector = runtime.new_collector("cached_test");
+
+            let args = FunctionArgs::new()
+                .arg("name", "Test")
+                .with_env("OPENAI_API_KEY", &api_key)
+                .with_collector(&collector);
+
+            let result: Result<String, _> = runtime.call_function("SayHello", &args);
+            assert!(result.is_ok());
+
+            let usage = collector.usage();
+            // cached_input_tokens may be None or Some(0) for non-cached calls
+            // The important thing is that the method exists and doesn't panic
+            let cached = usage.cached_input_tokens();
+            println!("Cached input tokens: {:?}", cached);
+        }
+    }
 }

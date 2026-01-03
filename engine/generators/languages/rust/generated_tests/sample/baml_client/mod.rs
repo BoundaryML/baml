@@ -9,17 +9,17 @@
 //! Do not edit manually.
 
 mod baml_source_map;
-mod functions;
 mod runtime;
+mod functions;
+pub mod types;
 pub mod stream_types;
 pub mod type_builder;
-pub mod types;
 
 use runtime::get_runtime;
 pub use runtime::FunctionOptions;
+use types::Types;
 use stream_types::StreamTypes;
 pub use type_builder::TypeBuilder;
-use types::Types;
 
 /// Re-export error type for convenience.
 pub type Error = baml::BamlError;
@@ -41,8 +41,10 @@ pub mod async_client {
 
 // Re-export media factory functions
 pub use runtime::{
-    new_audio_from_base64, new_audio_from_url, new_image_from_base64, new_image_from_url,
-    new_pdf_from_base64, new_pdf_from_url, new_video_from_base64, new_video_from_url,
+    new_image_from_url, new_image_from_base64,
+    new_audio_from_url, new_audio_from_base64,
+    new_pdf_from_url, new_pdf_from_base64,
+    new_video_from_url, new_video_from_base64,
 };
 
 // Re-export collector factory function
