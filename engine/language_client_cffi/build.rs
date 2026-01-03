@@ -324,11 +324,6 @@ mod protoc_lang_out {
 
 fn main() -> std::io::Result<()> {
     println!("running build for baml_cffi");
-
-    // Output metadata for the links = "baml_cffi" key in Cargo.toml
-    // This helps Cargo with build ordering for dependent crates
-    println!("cargo:rustc-link-lib=baml_cffi");
-
     // Re-run if any of the proto files change.
     println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_outbound.proto");
     println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_inbound.proto");
