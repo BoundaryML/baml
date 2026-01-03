@@ -340,6 +340,30 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 });
                 self.emit(Instruction::NotifyBlock(block_index));
             }
+            StatementKind::WatchOptions { local, filter } => {
+                // Emit Watch instruction with new filter
+                // This updates the watch settings for an already-watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    let local_decl = mir.local(*local);
+                    // Push channel name
+                    let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
+                    let channel_obj_idx = self.objects.len();
+                    self.objects.push(Object::String(channel.to_string()));
+                    let channel_const_idx =
+                        self.add_constant(Value::Object(ObjectIndex::from_raw(channel_obj_idx)));
+                    self.emit(Instruction::LoadConst(channel_const_idx));
+                    // Push filter value
+                    self.emit_operand_pull(filter, mir);
+                    // Re-emit Watch with new filter
+                    self.emit(Instruction::Watch(slot));
+                }
+            }
+            StatementKind::WatchNotify(local) => {
+                // Emit manual notify for a watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::Notify(slot));
+                }
+            }
             StatementKind::Nop => {}
         }
     }

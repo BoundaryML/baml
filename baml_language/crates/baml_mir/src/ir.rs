@@ -161,6 +161,19 @@ pub enum StatementKind<'db> {
         level: usize,
     },
 
+    /// Set watch options for a watched variable.
+    /// Emitted for `var.$watch.options(filter)`.
+    WatchOptions {
+        /// The watched local variable
+        local: Local,
+        /// The new filter (function, "manual", "never", etc.)
+        filter: Operand<'db>,
+    },
+
+    /// Manually trigger notification for a watched variable.
+    /// Emitted for `var.$watch.notify()`.
+    WatchNotify(Local),
+
     /// No-op (placeholder for removed statements).
     Nop,
 }

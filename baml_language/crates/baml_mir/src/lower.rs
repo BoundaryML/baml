@@ -1110,6 +1110,103 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     ) {
         let callee_expr = body.expr(callee);
 
+        // Check if this is a $watch method call (e.g., value.$watch.options(filter))
+        if let Expr::FieldAccess { base, field } = callee_expr {
+            let base_ty = body.ty(*base);
+            if let baml_vir::Ty::WatchAccessor(_) = base_ty {
+                // This is a $watch method call
+                // The base expression is var.$watch, so we need to get the var
+                let watch_accessor_expr = body.expr(*base);
+                if let Expr::FieldAccess {
+                    base: watched_var_base,
+                    field: watch_field,
+                } = watch_accessor_expr
+                {
+                    if watch_field.as_str() == "$watch" {
+                        match field.as_str() {
+                            "options" => {
+                                // $watch.options(filter) - emit WatchOptions statement
+                                // First, find the local variable for the watched variable
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
+
+                                    // Evaluate the filter argument
+                                    if !args.is_empty() {
+                                        let filter_arg = args[0];
+                                        // We need to extract the 'when' field if it's a struct
+                                        // For now, let's check if it's an Object with 'when' field
+                                        let filter_expr = body.expr(filter_arg);
+                                        if let Expr::Object { fields, .. } = filter_expr {
+                                            // Look for 'when' field
+                                            for (field_name, field_expr_id) in fields {
+                                                if field_name.as_str() == "when" {
+                                                    // Lower the filter expression
+                                                    let filter_ty = Self::lower_typed_ir_ty(
+                                                        body.ty(*field_expr_id),
+                                                    );
+                                                    let filter_local = self.builder.temp(filter_ty);
+                                                    self.lower_expr(
+                                                        *field_expr_id,
+                                                        Place::local(filter_local),
+                                                        body,
+                                                    );
+
+                                                    // Emit WatchOptions statement
+                                                    self.builder.watch_options(
+                                                        local,
+                                                        Operand::copy_local(filter_local),
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            // Direct filter value (function or string)
+                                            let filter_ty =
+                                                Self::lower_typed_ir_ty(body.ty(filter_arg));
+                                            let filter_local = self.builder.temp(filter_ty);
+                                            self.lower_expr(
+                                                filter_arg,
+                                                Place::local(filter_local),
+                                                body,
+                                            );
+
+                                            // Emit WatchOptions statement
+                                            self.builder.watch_options(
+                                                local,
+                                                Operand::copy_local(filter_local),
+                                            );
+                                        }
+                                    }
+                                    // Assign null to dest (options returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            "notify" => {
+                                // $watch.notify() - emit WatchNotify statement
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
+                                    self.builder.watch_notify(local);
+                                    // Assign null to dest (notify returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
         // Check if this is a method call (callee is FieldAccess)
         if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
@@ -1353,6 +1450,9 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             baml_vir::Ty::Error => Ty::Error,
             baml_vir::Ty::Unit => Ty::Void,
             baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_vir::Ty::WatchAccessor(inner) => {
+                Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
+            }
         }
     }
 }

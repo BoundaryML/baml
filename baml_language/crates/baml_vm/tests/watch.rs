@@ -292,7 +292,6 @@ fn cyclic_graph() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires $watch.options() syntax support"]
 fn run_user_filter() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -334,7 +333,6 @@ fn run_default_filter() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires $watch.options() and $watch.notify() syntax support"]
 fn manual_notify() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"

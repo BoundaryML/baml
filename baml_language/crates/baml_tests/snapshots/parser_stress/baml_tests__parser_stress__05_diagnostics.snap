@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-aa5d47d691073f9a/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -673,22 +673,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:21:6 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │      ┬  
-    │      ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:21:7 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │       ──┬─  
-    │         ╰─── Expected top-level declaration, found Word
+    │      ──┬──  
+    │        ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -723,22 +713,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:21:19 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │                   ┬  
-    │                   ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:21:20 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │                    ──┬─  
-    │                      ╰─── Expected top-level declaration, found Word
+    │                   ──┬──  
+    │                     ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -963,22 +943,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:23:20 ]
     │
  23 │         pub struct $name {
-    │                    ┬  
-    │                    ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:23:21 ]
-    │
- 23 │         pub struct $name {
-    │                     ──┬─  
-    │                       ╰─── Expected top-level declaration, found Word
+    │                    ──┬──  
+    │                      ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1073,22 +1043,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:27:30 ]
     │
  27 │         impl BamlAstNode for $name {}
-    │                              ┬  
-    │                              ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:27:31 ]
-    │
- 27 │         impl BamlAstNode for $name {}
-    │                               ──┬─  
-    │                                 ╰─── Expected top-level declaration, found Word
+    │                              ──┬──  
+    │                                ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1143,22 +1103,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:29:26 ]
     │
  29 │         impl AstNode for $name {
-    │                          ┬  
-    │                          ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:29:27 ]
-    │
- 29 │         impl AstNode for $name {
-    │                           ──┬─  
-    │                             ╰─── Expected top-level declaration, found Word
+    │                          ──┬──  
+    │                            ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1443,22 +1393,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Dollar
+  [parse] Error: Expected top-level declaration, found Word
     ╭─[ 3:33:37 ]
     │
  33 │                 kind == SyntaxKind::$kind.into()
-    │                                     ┬  
-    │                                     ╰── Expected top-level declaration, found Dollar
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found Word
-    ╭─[ 3:33:38 ]
-    │
- 33 │                 kind == SyntaxKind::$kind.into()
-    │                                      ──┬─  
-    │                                        ╰─── Expected top-level declaration, found Word
+    │                                     ──┬──  
+    │                                       ╰──── Expected top-level declaration, found Word
     │ 
     │ Note: Error code: E0010
 ────╯

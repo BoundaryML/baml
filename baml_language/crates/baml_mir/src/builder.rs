@@ -182,6 +182,16 @@ impl<'db> MirBuilder<'db> {
         self.push_statement(StatementKind::Unwatch(local), None);
     }
 
+    /// Emit a `watch_options` statement to update the filter for a watched local.
+    pub fn watch_options(&mut self, local: Local, filter: Operand<'db>) {
+        self.push_statement(StatementKind::WatchOptions { local, filter }, None);
+    }
+
+    /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
+    pub fn watch_notify(&mut self, local: Local) {
+        self.push_statement(StatementKind::WatchNotify(local), None);
+    }
+
     // ========================================================================
     // Terminator Emission
     // ========================================================================

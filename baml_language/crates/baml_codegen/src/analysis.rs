@@ -466,6 +466,37 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                 StatementKind::NotifyBlock { .. } => {
                     // NotifyBlock doesn't use any locals - it's a pure side effect
                 }
+                StatementKind::WatchOptions { local, filter } => {
+                    // WatchOptions uses the local and the filter operand
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                    collect_uses_in_operand(filter, block.id, stmt_idx, &mut def_use);
+                }
+                StatementKind::WatchNotify(local) => {
+                    // WatchNotify uses the local
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                }
                 StatementKind::Nop => {}
             }
         }
@@ -1251,6 +1282,8 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
         StatementKind::Drop(_) => true,
         StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
         StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
+        StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
+        StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::Nop => false,
     }
 }

@@ -759,6 +759,8 @@ impl<'db> LoweringContext<'db> {
                 baml_tir::LiteralValue::String(_) => Ty::String,
                 baml_tir::LiteralValue::Bool(_) => Ty::Bool,
             },
+            // WatchAccessor is a special type that wraps another type
+            baml_tir::Ty::WatchAccessor(inner) => Ty::WatchAccessor(Box::new(self.lower_ty(inner))),
         }
     }
 
