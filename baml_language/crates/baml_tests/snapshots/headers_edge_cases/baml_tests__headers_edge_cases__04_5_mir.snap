@@ -105,6 +105,7 @@ fn HeadersAroundExpressions() -> String {
         _3 = const null;
         notify_block(BeforeIf, level=3);
         _4 = const null;
+        viz_enter(0);
         _7 = copy _2;
         _8 = const 0_i64;
         _6 = copy _7 > copy _8;
@@ -130,6 +131,7 @@ fn HeadersAroundExpressions() -> String {
     }
 
     bb4: {
+        viz_exit(0);
         notify_block(AfterIf, level=3);
         _11 = const null;
         notify_block(BeforeFor, level=2);
@@ -144,6 +146,7 @@ fn HeadersAroundExpressions() -> String {
 
     bb5: {
         _20 = const 0_i64;
+        viz_enter(1);
         goto -> bb6;
     }
 
@@ -171,6 +174,7 @@ fn HeadersAroundExpressions() -> String {
     }
 
     bb8: {
+        viz_exit(1);
         _21 = const null;
         _13 = const null;
         notify_block(AfterFor, level=2);
@@ -204,6 +208,7 @@ fn HeadersInComplexNesting() -> String {
         _1 = const null;
         notify_block(InsideBlockExpression, level=2);
         _3 = const null;
+        viz_enter(0);
         _5 = const true;
         branch copy _5 -> [bb2, bb3];
     }
@@ -232,6 +237,7 @@ fn HeadersInComplexNesting() -> String {
     }
 
     bb4: {
+        viz_exit(0);
         notify_block(BacktoBlockLevel, level=2);
         _11 = const null;
         _2 = copy _4;

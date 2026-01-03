@@ -28,6 +28,8 @@ pub struct MirFunction<'db> {
     pub locals: Vec<LocalDecl<'db>>,
     /// Source span for error reporting.
     pub span: Option<TextRange>,
+    /// Visualization nodes for control flow visualization.
+    pub viz_nodes: Vec<VizNode>,
 }
 
 impl<'db> MirFunction<'db> {
@@ -173,6 +175,14 @@ pub enum StatementKind<'db> {
     /// Manually trigger notification for a watched variable.
     /// Emitted for `var.$watch.notify()`.
     WatchNotify(Local),
+
+    /// Enter a visualization node.
+    /// Emitted at the start of control flow structures (if, while, etc.).
+    VizEnter(usize),
+
+    /// Exit a visualization node.
+    /// Emitted at the end of control flow structures.
+    VizExit(usize),
 
     /// No-op (placeholder for removed statements).
     Nop,
@@ -561,4 +571,42 @@ impl fmt::Display for UnaryOp {
         };
         write!(f, "{s}")
     }
+}
+
+// ============================================================================
+// Visualization Nodes
+// ============================================================================
+
+/// Type of visualization node for control flow visualization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VizNodeType {
+    /// Root of a function's control flow.
+    FunctionRoot,
+    /// Header context from `//# header` annotation.
+    HeaderContextEnter,
+    /// Group of branches (if-else chain).
+    BranchGroup,
+    /// Single branch arm (if/else if/else).
+    BranchArm,
+    /// Loop construct (while/for).
+    Loop,
+    /// Other block scope.
+    OtherScope,
+}
+
+/// Visualization node metadata for control flow visualization.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VizNode {
+    /// Unique node ID within this function.
+    pub node_id: u32,
+    /// Encoded log filter key for this node.
+    pub log_filter_key: String,
+    /// Parent node's log filter key (None for root).
+    pub parent_log_filter_key: Option<String>,
+    /// Type of this visualization node.
+    pub node_type: VizNodeType,
+    /// Human-readable label for this node.
+    pub label: String,
+    /// Header level (only for `HeaderContextEnter`).
+    pub header_level: Option<u8>,
 }

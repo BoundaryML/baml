@@ -497,6 +497,9 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                             statement_idx: stmt_idx,
                         });
                 }
+                StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
+                    // VizEnter/VizExit don't use any locals
+                }
                 StatementKind::Nop => {}
             }
         }
@@ -1284,6 +1287,7 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
         StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
         StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
+        StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
     }
 }

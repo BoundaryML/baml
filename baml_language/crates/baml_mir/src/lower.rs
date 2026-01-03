@@ -23,7 +23,7 @@ use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Patte
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
-    Rvalue, StatementKind, UnaryOp as MirUnaryOp,
+    Rvalue, StatementKind, UnaryOp as MirUnaryOp, VizNode, VizNodeType,
 };
 
 /// Source of a field value in spread expansion.
@@ -61,6 +61,41 @@ struct LoweringContext<'db, 'ctx> {
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Stack of watched locals for tracking scope exit.
     watched_locals_stack: Vec<Local>,
+    /// Viz context for control flow visualization.
+    viz_context: VizContext,
+    /// Pending header for control flow visualization.
+    /// When a `//# header` is seen, this is set. When control flow (if/while) follows,
+    /// VizEnter/VizExit will be emitted for that control flow.
+    pending_header: Option<PendingHeader>,
+}
+
+/// A pending header waiting for control flow.
+#[derive(Clone)]
+struct PendingHeader {
+    name: String,
+}
+
+/// Context for control flow visualization.
+struct VizContext {
+    /// Function name for `log_filter_key` prefix.
+    function_name: String,
+    /// Counter for generating unique node IDs.
+    next_node_id: u32,
+    /// Stack of parent `log_filter_keys`.
+    parent_keys: Vec<String>,
+    /// Counter for ordinal within current scope (for unique paths).
+    ordinal_counters: Vec<u16>,
+}
+
+impl VizContext {
+    /// Get the current ordinal and increment for next use.
+    fn get_and_increment_ordinal(&mut self) -> u16 {
+        let ordinal = *self.ordinal_counters.last().unwrap_or(&0);
+        if let Some(last) = self.ordinal_counters.last_mut() {
+            *last += 1;
+        }
+        ordinal
+    }
 }
 
 /// Context for the current loop (for break/continue).
@@ -88,6 +123,13 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             loop_context: None,
             class_fields,
             watched_locals_stack: Vec::new(),
+            viz_context: VizContext {
+                function_name: String::new(),
+                next_node_id: 0,
+                parent_keys: Vec::new(),
+                ordinal_counters: vec![0],
+            },
+            pending_header: None,
         }
     }
 
@@ -95,9 +137,117 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.build()
     }
 
+    // ========================================================================
+    // Visualization Helpers
+    // ========================================================================
+
+    /// Create a new viz node and emit `VizEnter`.
+    /// Returns the node index for later `VizExit`.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_enter(&mut self, node_type: VizNodeType, label: &str) -> usize {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        // Build the segment key based on node type
+        let segment = match node_type {
+            VizNodeType::FunctionRoot => format!("fn:{ordinal}"),
+            VizNodeType::HeaderContextEnter => format!("hdr:{ordinal}"),
+            VizNodeType::BranchGroup => format!("bg:{ordinal}"),
+            VizNodeType::BranchArm => format!("ba:{ordinal}"),
+            VizNodeType::Loop => format!("loop:{ordinal}"),
+            VizNodeType::OtherScope => format!("scope:{ordinal}"),
+        };
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type,
+            label: label.to_string(),
+            header_level: None,
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+
+        node_idx
+    }
+
+    /// Emit `VizExit` for a previously entered node.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_exit(&mut self, node_idx: usize) {
+        self.builder.viz_exit(node_idx);
+        self.viz_context.parent_keys.pop();
+        self.viz_context.ordinal_counters.pop();
+    }
+
+    /// Create a new viz node and emit `VizEnter`, but don't track for `VizExit`.
+    /// Used for headers which are hierarchical scopes without explicit exit.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code, clippy::cast_possible_truncation)]
+    fn viz_enter_header(&mut self, label: &str, level: usize) {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        let segment = format!("hdr:{ordinal}");
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type: VizNodeType::HeaderContextEnter,
+            label: label.to_string(),
+            header_level: Some(level as u8),
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes (but no VizExit will be emitted)
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+    }
+
     /// Lower a complete function.
     fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
         self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
+        self.viz_context.function_name = signature.name.to_string();
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
@@ -722,6 +872,12 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::NotifyBlock { name, level } => {
+                // Set pending header for control flow visualization.
+                // If an if/while follows, it will emit VizEnter/VizExit.
+                self.pending_header = Some(PendingHeader {
+                    name: name.to_string(),
+                });
+
                 // Emit a block notification statement
                 self.builder.push_statement(
                     StatementKind::NotifyBlock {
@@ -1031,6 +1187,13 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
+        // Check if preceded by a header - if so, emit VizEnter for BranchGroup
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::BranchGroup, &header.name))
+        } else {
+            None
+        };
+
         let cond_local = self.builder.temp(Ty::Bool);
         self.lower_expr(condition, Place::local(cond_local), body);
 
@@ -1060,11 +1223,22 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             self.builder.goto(bb_join);
         }
 
+        // Join block - emit VizExit if we had a header
         self.builder.set_current_block(bb_join);
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
+        }
     }
 
     /// Lower a while loop.
     fn lower_while(&mut self, condition: ExprId, loop_body: ExprId, body: &ExprBody) {
+        // Check if preceded by a header - if so, emit VizEnter for Loop
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::Loop, &header.name))
+        } else {
+            None
+        };
+
         let bb_cond = self.builder.create_block();
         let bb_body = self.builder.create_block();
         let bb_exit = self.builder.create_block();
@@ -1096,7 +1270,11 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         // Restore loop context
         self.loop_context = old_loop_ctx;
 
+        // Exit block - emit VizExit if we had a header
         self.builder.set_current_block(bb_exit);
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
+        }
     }
 
     /// Lower a function call.

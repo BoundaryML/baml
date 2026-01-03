@@ -140,6 +140,12 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::WatchNotify(local) => {
             write!(f, "{local}.$watch.notify();")
         }
+        StatementKind::VizEnter(idx) => {
+            write!(f, "viz_enter({idx});")
+        }
+        StatementKind::VizExit(idx) => {
+            write!(f, "viz_exit({idx});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
         }

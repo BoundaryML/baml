@@ -231,6 +231,10 @@ pub enum VmExecState {
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
     Block(BlockNotification),
+    Viz {
+        function_name: String,
+        event: crate::bytecode::VizExecEvent,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -673,6 +677,34 @@ impl Vm {
                     return Ok(VmExecState::Notify(WatchNotification::Block(
                         full_notification,
                     )));
+                }
+                Instruction::VizEnter(index) | Instruction::VizExit(index) => {
+                    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+                    let delta = match instruction {
+                        Instruction::VizEnter(_) => crate::bytecode::VizExecDelta::Enter,
+                        Instruction::VizExit(_) => crate::bytecode::VizExecDelta::Exit,
+                        _ => unreachable!("matched on viz instruction"),
+                    };
+
+                    let node = function.viz_nodes.get(index).ok_or({
+                        InternalError::ArrayIndexOutOfBounds {
+                            index,
+                            length: function.viz_nodes.len(),
+                        }
+                    })?;
+
+                    let event = crate::bytecode::VizExecEvent {
+                        delta,
+                        node_id: node.node_id,
+                        node_type: node.node_type,
+                        label: node.label.clone(),
+                        header_level: node.header_level,
+                    };
+
+                    return Ok(VmExecState::Notify(WatchNotification::Viz {
+                        function_name: function.name.clone(),
+                        event,
+                    }));
                 }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];

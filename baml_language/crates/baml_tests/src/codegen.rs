@@ -136,6 +136,8 @@ fn convert_instruction(
         baml_vm::Instruction::Return => Instruction::Return,
         baml_vm::Instruction::Assert => Instruction::Assert,
         baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
+        baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
+        baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
     })
 }
 

@@ -306,6 +306,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         },
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
+        viz_nodes: Vec::new(),
     };
 
     let mut program = VmProgram::new();
