@@ -29,14 +29,6 @@ func TestAllNull(ctx context.Context, input string, opts ...CallOptionFunc) (typ
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -101,14 +93,6 @@ func TestAllOptionalOmitted(ctx context.Context, input string, opts ...CallOptio
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -177,14 +161,6 @@ func TestMixedOptionalNullable(ctx context.Context, input string, opts ...CallOp
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -251,14 +227,6 @@ func TestNullableTypes(ctx context.Context, input string, opts ...CallOptionFunc
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -323,14 +291,6 @@ func TestOptionalFields(ctx context.Context, input string, opts ...CallOptionFun
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{

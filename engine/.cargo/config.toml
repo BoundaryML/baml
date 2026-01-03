@@ -13,12 +13,3 @@ rustflags = ["-C", "target-feature=-crt-static", "--cfg", "tracing_unstable"]
 # [target.aarch64-unknown-linux-gnu]
 # linker = "aarch64-linux-gnu-gcc"
 # rustflags = ["-C", "target-feature=-crt-static", "--cfg", "tracing_unstable"]
-
-# # Rust 1.92.0+ uses LLD as the default linker on Linux. Opt out to use BFD instead
-# # to avoid potential "file too short" issues with shared library linking.
-# # See: https://blog.rust-lang.org/2025/02/20/Rust-1.92.0.html
-# [target.x86_64-unknown-linux-gnu]
-# rustflags = ["-Clinker-features=-lld", "--cfg", "tracing_unstable"]
-
-# [target.aarch64-unknown-linux-gnu]
-# rustflags = ["-Clinker-features=-lld", "--cfg", "tracing_unstable"]

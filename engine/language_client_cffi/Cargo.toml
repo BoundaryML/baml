@@ -7,11 +7,10 @@ description.workspace = true
 license-file.workspace = true
 
 [lib]
-# "cdylib" produces the shared library (.so/.dylib/.dll) for FFI
-# "lib" produces an rlib that ensures proper Cargo build ordering when
-# other crates depend on baml_cffi (needed for test-harness)
-# See https://doc.rust-lang.org/reference/linkage.html
-crate-type = ["cdylib", "lib"]
+# If you only wanted dynamic library, you'd use only "cdylib".
+# This demo shows both. See https://doc.rust-lang.org/reference/linkage.html
+# for more information.
+crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.2"

@@ -29,14 +29,6 @@ func TestEmptyCollections(ctx context.Context, input string, opts ...CallOptionF
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -101,14 +93,6 @@ func TestMixedPrimitives(ctx context.Context, input string, opts ...CallOptionFu
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -177,14 +161,6 @@ func TestPrimitiveArrays(ctx context.Context, input string, opts ...CallOptionFu
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -249,14 +225,6 @@ func TestPrimitiveMaps(ctx context.Context, input string, opts ...CallOptionFunc
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -325,14 +293,6 @@ func TestPrimitiveTypes(ctx context.Context, input string, opts ...CallOptionFun
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -397,14 +357,6 @@ func TestTopLevelBool(ctx context.Context, input string, opts ...CallOptionFunc)
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -473,14 +425,6 @@ func TestTopLevelFloat(ctx context.Context, input string, opts ...CallOptionFunc
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -545,14 +489,6 @@ func TestTopLevelInt(ctx context.Context, input string, opts ...CallOptionFunc) 
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -621,14 +557,6 @@ func TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc)
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -693,14 +621,6 @@ func TestTopLevelString(ctx context.Context, input string, opts ...CallOptionFun
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{

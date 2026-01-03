@@ -11,9 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
-import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -27,26 +25,26 @@ class LlmResponseParser:
     def TestComplexUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ComplexUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexUnions", llm_response=llm_response, mode="request")
-        return typing.cast(types.ComplexUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexUnions", llm_response=llm_response, mode="request")
+        return typing.cast(types.ComplexUnions, result)
 
     def TestDiscriminatedUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.DiscriminatedUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDiscriminatedUnions", llm_response=llm_response, mode="request")
-        return typing.cast(types.DiscriminatedUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDiscriminatedUnions", llm_response=llm_response, mode="request")
+        return typing.cast(types.DiscriminatedUnions, result)
 
     def TestPrimitiveUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.PrimitiveUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveUnions", llm_response=llm_response, mode="request")
-        return typing.cast(types.PrimitiveUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveUnions", llm_response=llm_response, mode="request")
+        return typing.cast(types.PrimitiveUnions, result)
 
     def TestUnionArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.UnionArrays:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestUnionArrays", llm_response=llm_response, mode="request")
-        return typing.cast(types.UnionArrays, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestUnionArrays", llm_response=llm_response, mode="request")
+        return typing.cast(types.UnionArrays, result)
 
     
 
@@ -59,25 +57,25 @@ class LlmStreamParser:
     def TestComplexUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.ComplexUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexUnions", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.ComplexUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexUnions", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.ComplexUnions, result)
 
     def TestDiscriminatedUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.DiscriminatedUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDiscriminatedUnions", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.DiscriminatedUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDiscriminatedUnions", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.DiscriminatedUnions, result)
 
     def TestPrimitiveUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.PrimitiveUnions:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveUnions", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.PrimitiveUnions, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestPrimitiveUnions", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PrimitiveUnions, result)
 
     def TestUnionArrays(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.UnionArrays:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestUnionArrays", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.UnionArrays, __result__)
+        result = self.__options.merge_options(baml_options).parse_response(function_name="TestUnionArrays", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.UnionArrays, result)
 
     

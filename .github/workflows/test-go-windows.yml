@@ -3,17 +3,16 @@ name: Test Go Client Windows Support
 permissions:
   contents: read
 
-# --
 on:
   pull_request:
-    branches: [canary, main]
+    branches: [ canary, main ]
     paths:
-      - "engine/language_client_go/**"
-      - "engine/language_client_cffi/**"
-      - "engine/baml-lib/**"
-      - ".github/workflows/test-go-windows.yml"
+      - 'engine/language_client_go/**'
+      - 'engine/language_client_cffi/**'
+      - 'engine/baml-lib/**'
+      - '.github/workflows/test-go-windows.yml'
   push:
-    branches: [hellovai/go-windows-support]
+    branches: [ hellovai/go-windows-support ]
   workflow_dispatch:
 
 jobs:
@@ -38,8 +37,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-          cache: false # Disable cache to avoid path issues
+          go-version: '1.22'
+          cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Windows)
         shell: bash
@@ -89,7 +88,7 @@ jobs:
   test-unix:
     name: Test Unix Go Client
     strategy:
-      fail-fast: false # Don't cancel other jobs if one fails
+      fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -111,8 +110,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-          cache: false # Disable cache to avoid path issues
+          go-version: '1.22'
+          cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Unix)
         run: |
@@ -176,8 +175,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-          cache: false # Disable cache to avoid path issues
+          go-version: '1.22'
+          cache: false  # Disable cache to avoid path issues
 
       - name: Test Cross-Compilation to Windows (CGO disabled)
         run: |

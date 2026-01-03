@@ -29,14 +29,6 @@ func TestComplexUnions(ctx context.Context, input string, opts ...CallOptionFunc
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -101,14 +93,6 @@ func TestDiscriminatedUnions(ctx context.Context, input string, opts ...CallOpti
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
@@ -177,14 +161,6 @@ func TestPrimitiveUnions(ctx context.Context, input string, opts ...CallOptionFu
 		opt(&callOpts)
 	}
 
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
-	}
-
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -249,14 +225,6 @@ func TestUnionArrays(ctx context.Context, input string, opts ...CallOptionFunc) 
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
-	}
-
-	// Resolve client option to clientRegistry (client takes precedence)
-	if callOpts.client != nil {
-		if callOpts.clientRegistry == nil {
-			callOpts.clientRegistry = baml.NewClientRegistry()
-		}
-		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{
