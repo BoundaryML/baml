@@ -30,7 +30,56 @@ fn get_dylib_path() -> Result<PathBuf, anyhow::Error> {
         } else {
             "libbaml_cffi.so"
         });
+
+    // Wait for the dylib to exist and be stable (not being written to)
+    // This prevents "file too short" errors when cargo is still linking the cdylib
+    wait_for_stable_file(&dylib_path)?;
+
     Ok(dylib_path)
+}
+
+/// Wait for a file to exist and have a stable size (not being written to)
+fn wait_for_stable_file(path: &std::path::Path) -> Result<(), anyhow::Error> {
+    use std::time::{Duration, Instant};
+
+    let timeout = Duration::from_secs(120);
+    let check_interval = Duration::from_millis(100);
+    let stability_duration = Duration::from_millis(500);
+
+    let start = Instant::now();
+
+    // First, wait for the file to exist
+    while !path.exists() {
+        if start.elapsed() > timeout {
+            anyhow::bail!("Timeout waiting for dylib to exist: {}", path.display());
+        }
+        std::thread::sleep(check_interval);
+    }
+
+    // Then wait for the file size to be stable (linker finished writing)
+    let mut last_size = std::fs::metadata(path)?.len();
+    let mut stable_since = Instant::now();
+
+    loop {
+        std::thread::sleep(check_interval);
+
+        let current_size = std::fs::metadata(path)?.len();
+
+        if current_size != last_size {
+            // Size changed, linker is still writing
+            last_size = current_size;
+            stable_since = Instant::now();
+        } else if stable_since.elapsed() >= stability_duration {
+            // Size has been stable for long enough, file is complete
+            break;
+        }
+
+        if start.elapsed() > timeout {
+            anyhow::bail!("Timeout waiting for dylib to stabilize: {}", path.display());
+        }
+    }
+
+    Ok(())
 }
 
 impl<L: TestLanguageFeatures> Drop for TestStructure<L> {
