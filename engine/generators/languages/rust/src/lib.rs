@@ -193,7 +193,10 @@ impl LanguageFeatures for RustLanguageFeatures {
             type_aliases: &type_aliases_rendered,
             pkg: &pkg,
         };
-        collector.add_file("stream_types/type_aliases.rs", stream_aliases_tmpl.render()?)?;
+        collector.add_file(
+            "stream_types/type_aliases.rs",
+            stream_aliases_tmpl.render()?,
+        )?;
 
         // Phase 6: Generate functions/ directory
         pkg.set("baml_client.functions");

@@ -65,10 +65,7 @@ pub(crate) fn stream_type_to_rust(
                 dynamic: *dynamic,
             };
             // Box if this class is in the same cycle as the containing class
-            if containing_cycle
-                .map(|c| c.contains(name))
-                .unwrap_or(false)
-            {
+            if containing_cycle.map(|c| c.contains(name)).unwrap_or(false) {
                 class_type.make_boxed()
             } else {
                 class_type
@@ -252,10 +249,7 @@ pub(crate) fn type_to_rust(
                 dynamic: *dynamic,
             };
             // Box if this class is in the same cycle as the containing class
-            if containing_cycle
-                .map(|c| c.contains(name))
-                .unwrap_or(false)
-            {
+            if containing_cycle.map(|c| c.contains(name)).unwrap_or(false) {
                 class_type.make_boxed()
             } else {
                 class_type
