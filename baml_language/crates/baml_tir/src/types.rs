@@ -87,6 +87,10 @@ pub enum Ty<'db> {
     Unknown,
     Error,
     Void,
+
+    /// Watch accessor type: represents `x.$watch` on a watched variable.
+    /// Contains the inner type being watched for method resolution.
+    WatchAccessor(Box<Ty<'db>>),
 }
 
 impl Ty<'_> {
@@ -274,6 +278,7 @@ impl fmt::Display for Ty<'_> {
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
+            Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
         }
     }
 }

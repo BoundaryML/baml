@@ -32,7 +32,7 @@ use text_size::TextRange;
 
 use crate::{
     BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place, Rvalue,
-    Statement, StatementKind, Terminator,
+    Statement, StatementKind, Terminator, VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -43,6 +43,7 @@ pub struct MirBuilder<'db> {
     locals: Vec<LocalDecl<'db>>,
     current_block: Option<BlockId>,
     span: Option<TextRange>,
+    viz_nodes: Vec<VizNode>,
 }
 
 impl<'db> MirBuilder<'db> {
@@ -55,6 +56,7 @@ impl<'db> MirBuilder<'db> {
             locals: Vec::new(),
             current_block: None,
             span: None,
+            viz_nodes: Vec::new(),
         }
     }
 
@@ -78,15 +80,21 @@ impl<'db> MirBuilder<'db> {
         name: Option<Name>,
         ty: Ty<'db>,
         span: Option<TextRange>,
+        is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
-        self.locals.push(LocalDecl { name, ty, span });
+        self.locals.push(LocalDecl {
+            name,
+            ty,
+            span,
+            is_watched,
+        });
         id
     }
 
     /// Allocate a temporary (unnamed local).
     pub fn temp(&mut self, ty: Ty<'db>) -> Local {
-        self.declare_local(None, ty, None)
+        self.declare_local(None, ty, None, false)
     }
 
     /// Get the number of locals declared so far.
@@ -169,6 +177,21 @@ impl<'db> MirBuilder<'db> {
     /// Emit a nop statement.
     pub fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
+    }
+
+    /// Emit an unwatch statement for a watched local going out of scope.
+    pub fn unwatch(&mut self, local: Local) {
+        self.push_statement(StatementKind::Unwatch(local), None);
+    }
+
+    /// Emit a `watch_options` statement to update the filter for a watched local.
+    pub fn watch_options(&mut self, local: Local, filter: Operand<'db>) {
+        self.push_statement(StatementKind::WatchOptions { local, filter }, None);
+    }
+
+    /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
+    pub fn watch_notify(&mut self, local: Local) {
+        self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
     // ========================================================================
@@ -322,6 +345,7 @@ impl<'db> MirBuilder<'db> {
             entry: BlockId(0),
             locals: self.locals,
             span: self.span,
+            viz_nodes: self.viz_nodes,
         }
     }
 
@@ -334,6 +358,28 @@ impl<'db> MirBuilder<'db> {
             entry: BlockId(0),
             locals: self.locals,
             span: self.span,
+            viz_nodes: self.viz_nodes,
         }
+    }
+
+    // ========================================================================
+    // Visualization Helpers
+    // ========================================================================
+
+    /// Add a visualization node and return its index.
+    pub fn add_viz_node(&mut self, node: VizNode) -> usize {
+        let idx = self.viz_nodes.len();
+        self.viz_nodes.push(node);
+        idx
+    }
+
+    /// Emit a `VizEnter` statement for the given node index.
+    pub fn viz_enter(&mut self, node_idx: usize) {
+        self.push_statement(StatementKind::VizEnter(node_idx), None);
+    }
+
+    /// Emit a `VizExit` statement for the given node index.
+    pub fn viz_exit(&mut self, node_idx: usize) {
+        self.push_statement(StatementKind::VizExit(node_idx), None);
     }
 }

@@ -126,6 +126,26 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
+        StatementKind::Unwatch(local) => {
+            write!(f, "unwatch({local});")
+        }
+        StatementKind::NotifyBlock { name, level } => {
+            write!(f, "notify_block({name}, level={level});")
+        }
+        StatementKind::WatchOptions { local, filter } => {
+            write!(f, "{local}.$watch.options(")?;
+            write_operand(f, filter)?;
+            write!(f, ");")
+        }
+        StatementKind::WatchNotify(local) => {
+            write!(f, "{local}.$watch.notify();")
+        }
+        StatementKind::VizEnter(idx) => {
+            write!(f, "viz_enter({idx});")
+        }
+        StatementKind::VizExit(idx) => {
+            write!(f, "viz_exit({idx});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
         }

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -8,81 +8,148 @@ Objects: 38
 Globals: 28
 
 Function ConsecutiveHeaders (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (multiple consecutive headers)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (FirstHeader)
+     1   NOTIFY_BLOCK 1   (SecondHeader)
+     2   NOTIFY_BLOCK 2   (ThirdHeader)
+     3   NOTIFY_BLOCK 3   (SubsectionA)
+     4   NOTIFY_BLOCK 4   (SubsectionB)
+     5   NOTIFY_BLOCK 5   (SubsectionC)
+     6   LOAD_CONST 0     (multiple consecutive headers)
+     7   RETURN           
 
 Function HeaderLevels (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (deep nesting)
-     1   RETURN         
+     0    NOTIFY_BLOCK 0   (Level1)
+     1    NOTIFY_BLOCK 1   (Level2)
+     2    NOTIFY_BLOCK 2   (Level3)
+     3    NOTIFY_BLOCK 3   (Level4)
+     4    NOTIFY_BLOCK 4   (Level5)
+     5    NOTIFY_BLOCK 5   (Level6)
+     6    NOTIFY_BLOCK 6   (Level7-Morethan6levels)
+     7    NOTIFY_BLOCK 7   (Level8)
+     8    NOTIFY_BLOCK 8   (Level9)
+     9    LOAD_CONST 0     (deep nesting)
+     10   RETURN           
 
 Function HeaderOnlyFunction (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (default)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (JustHeaders)
+     1   NOTIFY_BLOCK 1   (NoCode)
+     2   NOTIFY_BLOCK 2   (OnlyDocumentation)
+     3   NOTIFY_BLOCK 3   (PureAnnotation)
+     4   NOTIFY_BLOCK 4   (NoExpressions)
+     5   NOTIFY_BLOCK 5   (UntilTheEnd)
+     6   LOAD_CONST 0     (default)
+     7   RETURN           
 
 Function HeadersAndComments (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (test)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (HeaderBeforeComment)
+     1   NOTIFY_BLOCK 1   (HeaderAfterComment)
+     2   NOTIFY_BLOCK 2   (HeaderAfterDocComment)
+     3   LOAD_CONST 0     (test)
+     4   RETURN           
 
 Function HeadersAroundExpressions (arity: 0, kind: Exec):
      0    LOAD_CONST 0           (null)
      1    LOAD_CONST 0           (null)
      2    LOAD_CONST 0           (null)
      3    LOAD_CONST 0           (null)
-     4    LOAD_CONST 1           (5)
-     5    LOAD_CONST 2           (0)
-     6    CMP_OP >               
-     7    POP_JUMP_IF_FALSE +2   (to 9)
-     8    JUMP +2                (to 10)
-     9    JUMP +1                (to 10)
-     10   LOAD_CONST 3           (1)
-     11   LOAD_CONST 4           (2)
-     12   LOAD_CONST 5           (3)
-     13   ALLOC_ARRAY 3          
-     14   STORE_VAR 1            (_iter)
-     15   LOAD_GLOBAL 0          (<fn baml.Array.length>)
-     16   LOAD_VAR 1             (_iter)
-     17   CALL 1                 
-     18   STORE_VAR 2            (_len)
-     19   LOAD_CONST 2           (0)
-     20   STORE_VAR 3            (_i)
-     21   LOAD_VAR 3             (_i)
-     22   LOAD_VAR 2             (_len)
-     23   CMP_OP <               
-     24   POP_JUMP_IF_FALSE +2   (to 26)
-     25   JUMP +3                (to 28)
-     26   LOAD_CONST 1           (5)
-     27   RETURN                 
-     28   LOAD_VAR 1             (_iter)
-     29   LOAD_VAR 3             (_i)
-     30   LOAD_ARRAY_ELEMENT     
-     31   STORE_VAR 4            (i)
-     32   LOAD_VAR 3             (_i)
-     33   LOAD_CONST 3           (1)
-     34   BIN_OP +               
-     35   STORE_VAR 3            (_i)
-     36   JUMP -15               (to 21)
+     4    NOTIFY_BLOCK 0         (BeforeLet)
+     5    NOTIFY_BLOCK 1         (AfterLet)
+     6    NOTIFY_BLOCK 2         (BeforeIf)
+     7    VIZ_ENTER 0            (BeforeIf)
+     8    LOAD_CONST 1           (5)
+     9    LOAD_CONST 2           (0)
+     10   CMP_OP >               
+     11   POP_JUMP_IF_FALSE +2   (to 13)
+     12   JUMP +3                (to 15)
+     13   NOTIFY_BLOCK 3         (InsideElse)
+     14   JUMP +2                (to 16)
+     15   NOTIFY_BLOCK 4         (InsideIf)
+     16   VIZ_EXIT 0             (BeforeIf)
+     17   NOTIFY_BLOCK 5         (AfterIf)
+     18   NOTIFY_BLOCK 6         (BeforeFor)
+     19   LOAD_CONST 3           (1)
+     20   LOAD_CONST 4           (2)
+     21   LOAD_CONST 5           (3)
+     22   ALLOC_ARRAY 3          
+     23   STORE_VAR 1            (_iter)
+     24   LOAD_GLOBAL 0          (<fn baml.Array.length>)
+     25   LOAD_VAR 1             (_iter)
+     26   CALL 1                 
+     27   STORE_VAR 2            (_len)
+     28   LOAD_CONST 2           (0)
+     29   STORE_VAR 3            (_i)
+     30   VIZ_ENTER 1            (BeforeFor)
+     31   LOAD_VAR 3             (_i)
+     32   LOAD_VAR 2             (_len)
+     33   CMP_OP <               
+     34   POP_JUMP_IF_FALSE +2   (to 36)
+     35   JUMP +6                (to 41)
+     36   VIZ_EXIT 1             (BeforeFor)
+     37   NOTIFY_BLOCK 7         (AfterFor)
+     38   NOTIFY_BLOCK 8         (FinalSection)
+     39   LOAD_CONST 1           (5)
+     40   RETURN                 
+     41   LOAD_VAR 1             (_iter)
+     42   LOAD_VAR 3             (_i)
+     43   LOAD_ARRAY_ELEMENT     
+     44   STORE_VAR 4            (i)
+     45   LOAD_VAR 3             (_i)
+     46   LOAD_CONST 3           (1)
+     47   BIN_OP +               
+     48   STORE_VAR 3            (_i)
+     49   NOTIFY_BLOCK 9         (InsideFor)
+     50   JUMP -19               (to 31)
 
 Function HeadersInComplexNesting (arity: 0, kind: Exec):
-     0   LOAD_CONST 0           (true)
-     1   POP_JUMP_IF_FALSE +2   (to 3)
-     2   JUMP +3                (to 5)
-     3   LOAD_CONST 1           (else value)
-     4   JUMP +2                (to 6)
-     5   LOAD_CONST 2           (deep value)
-     6   RETURN                 
+     0    LOAD_CONST 0           (null)
+     1    NOTIFY_BLOCK 0         (MainFunction)
+     2    NOTIFY_BLOCK 1         (InsideBlockExpression)
+     3    VIZ_ENTER 0            (InsideBlockExpression)
+     4    LOAD_CONST 1           (true)
+     5    POP_JUMP_IF_FALSE +2   (to 7)
+     6    JUMP +4                (to 10)
+     7    NOTIFY_BLOCK 2         (InsideElse)
+     8    LOAD_CONST 2           (else value)
+     9    JUMP +5                (to 14)
+     10   NOTIFY_BLOCK 3         (InsideIfTrue)
+     11   NOTIFY_BLOCK 4         (VeryDeepBlock)
+     12   NOTIFY_BLOCK 5         (BacktoIfLevel)
+     13   LOAD_CONST 3           (deep value)
+     14   VIZ_EXIT 0             (InsideBlockExpression)
+     15   NOTIFY_BLOCK 6         (BacktoBlockLevel)
+     16   STORE_VAR 1            (result)
+     17   NOTIFY_BLOCK 7         (BacktoFunctionLevel)
+     18   LOAD_VAR 1             (result)
+     19   RETURN                 
 
 Function HeadersWithSpecialChars (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (special chars)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (Header-With-Dashes)
+     1   NOTIFY_BLOCK 1   (Header_With_Underscores)
+     2   NOTIFY_BLOCK 2   (Header.With.Dots)
+     3   NOTIFY_BLOCK 3   (HeaderWithSlashes)
+     4   NOTIFY_BLOCK 4   (Header\With\Backslashes)
+     5   NOTIFY_BLOCK 5   (Header|With|Pipes)
+     6   LOAD_CONST 0     (special chars)
+     7   RETURN           
 
 Function HeadersWithWhitespace (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (whitespace test)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (ExtraSpacesBeforeTitle)
+     1   NOTIFY_BLOCK 1   (MixedTabsAndSpaces)
+     2   NOTIFY_BLOCK 2   (AllTabs)
+     3   NOTIFY_BLOCK 3   (TrailingSpaces)
+     4   NOTIFY_BLOCK 4   (MultipleSpacesBetweenWords)
+     5   LOAD_CONST 0     (whitespace test)
+     6   RETURN           
 
 Function UnicodeHeaders (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (test)
-     1   RETURN         
+     0   NOTIFY_BLOCK 0   (你好世界)
+     1   NOTIFY_BLOCK 1   (Émojis🎉🎊)
+     2   NOTIFY_BLOCK 2   (Special«Characters»™)
+     3   LOAD_CONST 0     (test)
+     4   RETURN           
 
 Function VeryLongHeaderTitle (arity: 0, kind: Exec):
-     0   LOAD_CONST 0   (long headers)
-     1   RETURN
+     0   NOTIFY_BLOCK 0   (ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader)
+     1   NOTIFY_BLOCK 1   (AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890)
+     2   LOAD_CONST 0     (long headers)
+     3   RETURN

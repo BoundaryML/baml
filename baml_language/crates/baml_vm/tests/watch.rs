@@ -1,9 +1,11 @@
 //! VM tests for watch functionality.
 
-use baml_tests::bytecode::{Notification, WatchProgram, assert_vm_emits};
+use baml_tests::{
+    bytecode::{Notification, WatchProgram, assert_vm_emits},
+    vm::VizEvent,
+};
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn notify_primitive_on_change() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -21,7 +23,6 @@ fn notify_primitive_on_change() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -41,7 +42,6 @@ fn notify_primitive_on_nested_scope() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -68,7 +68,6 @@ fn stop_notifying_on_scope_exit() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn notify_on_function_call_modifications() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -99,7 +98,7 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
+#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -123,7 +122,7 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
+#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -148,7 +147,6 @@ fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -189,7 +187,6 @@ fn notify_when_nested_object_is_modified_after_addtion() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -229,7 +226,6 @@ fn dont_notify_when_nested_object_is_modified_after_removal() -> anyhow::Result<
 
 // Complicated case from the edge cases doc.
 #[test]
-#[ignore = "watch not yet implemented"]
 fn cyclic_graph() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -299,7 +295,6 @@ fn cyclic_graph() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn run_user_filter() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -323,7 +318,6 @@ fn run_user_filter() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn run_default_filter() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -342,7 +336,6 @@ fn run_default_filter() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn manual_notify() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -365,7 +358,6 @@ fn manual_notify() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn basic_block_notification() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
@@ -381,8 +373,8 @@ fn basic_block_notification() -> anyhow::Result<()> {
         "#,
         function: "test_blocks",
         expected: vec![vec![Notification::Block(BlockEvent {
-            function_name: "test_blocks".to_string(), // The actual function name
-            block_name: "entering_computation".to_string(), // The annotation text
+            function_name: "test_blocks".to_string(),
+            block_name: "entering_computation".to_string(),
             level: 1,
             block_type: BlockNotificationType::Statement,
             is_enter: true,
@@ -391,7 +383,6 @@ fn basic_block_notification() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "watch not yet implemented"]
 fn multiple_block_notifications() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
     use baml_vm::bytecode::BlockNotificationType;
@@ -411,19 +402,152 @@ fn multiple_block_notifications() -> anyhow::Result<()> {
         function: "test_multiple_blocks",
         expected: vec![
             vec![Notification::Block(BlockEvent {
-                function_name: "test_multiple_blocks".to_string(), // The actual function name
-                block_name: "first_block".to_string(),             // The annotation text
+                function_name: "test_multiple_blocks".to_string(),
+                block_name: "first_block".to_string(),
                 level: 1,
                 block_type: BlockNotificationType::Statement,
                 is_enter: true,
             })],
             vec![Notification::Block(BlockEvent {
-                function_name: "test_multiple_blocks".to_string(), // The actual function name
-                block_name: "second_block".to_string(),            // The annotation text
+                function_name: "test_multiple_blocks".to_string(),
+                block_name: "second_block".to_string(),
                 level: 1,
                 block_type: BlockNotificationType::Statement,
                 is_enter: true,
             })],
         ],
+    })
+}
+
+// ============================================================================
+// VizEnter/VizExit Tests
+// ============================================================================
+
+#[test]
+fn viz_header_before_if_emits_enter_and_exit() -> anyhow::Result<()> {
+    use baml_tests::bytecode::BlockEvent;
+    use baml_vm::bytecode::BlockNotificationType;
+
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function header_before_if() -> int {
+                //# MyHeader
+                if (true) {
+                    1
+                } else {
+                    2
+                }
+            }
+        "#,
+        function: "header_before_if",
+        expected: vec![
+            // NotifyBlock for the header
+            vec![Notification::Block(BlockEvent {
+                function_name: "header_before_if".to_string(),
+                block_name: "MyHeader".to_string(),
+                level: 1,
+                block_type: BlockNotificationType::Statement,
+                is_enter: true,
+            })],
+            // VizEnter for entering the if (because header precedes it)
+            vec![Notification::Viz(VizEvent {
+                function_name: "header_before_if".to_string(),
+                label: "MyHeader".to_string(),
+                is_enter: true,
+            })],
+            // VizExit when leaving the if
+            vec![Notification::Viz(VizEvent {
+                function_name: "header_before_if".to_string(),
+                label: "MyHeader".to_string(),
+                is_enter: false,
+            })],
+        ],
+    })
+}
+
+#[test]
+fn viz_header_before_while_emits_enter_and_exit() -> anyhow::Result<()> {
+    use baml_tests::bytecode::BlockEvent;
+    use baml_vm::bytecode::BlockNotificationType;
+
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function header_before_while() -> int {
+                let x = 0;
+                //# LoopHeader
+                while (x < 1) {
+                    x = x + 1;
+                }
+                x
+            }
+        "#,
+        function: "header_before_while",
+        expected: vec![
+            // NotifyBlock for the header
+            vec![Notification::Block(BlockEvent {
+                function_name: "header_before_while".to_string(),
+                block_name: "LoopHeader".to_string(),
+                level: 1,
+                block_type: BlockNotificationType::Statement,
+                is_enter: true,
+            })],
+            // VizEnter for entering the while (because header precedes it)
+            vec![Notification::Viz(VizEvent {
+                function_name: "header_before_while".to_string(),
+                label: "LoopHeader".to_string(),
+                is_enter: true,
+            })],
+            // VizExit when leaving the while
+            vec![Notification::Viz(VizEvent {
+                function_name: "header_before_while".to_string(),
+                label: "LoopHeader".to_string(),
+                is_enter: false,
+            })],
+        ],
+    })
+}
+
+#[test]
+fn viz_standalone_header_no_viz_events() -> anyhow::Result<()> {
+    use baml_tests::bytecode::BlockEvent;
+    use baml_vm::bytecode::BlockNotificationType;
+
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function standalone_header() -> int {
+                //# JustAHeader
+                let x = 5;
+                x
+            }
+        "#,
+        function: "standalone_header",
+        expected: vec![
+            // Only NotifyBlock, no VizEnter/VizExit
+            vec![Notification::Block(BlockEvent {
+                function_name: "standalone_header".to_string(),
+                block_name: "JustAHeader".to_string(),
+                level: 1,
+                block_type: BlockNotificationType::Statement,
+                is_enter: true,
+            })],
+        ],
+    })
+}
+
+#[test]
+fn viz_if_without_header_no_viz_events() -> anyhow::Result<()> {
+    assert_vm_emits(WatchProgram {
+        source: r#"
+            function if_no_header() -> int {
+                if (true) {
+                    1
+                } else {
+                    2
+                }
+            }
+        "#,
+        function: "if_no_header",
+        // No notifications at all - no header, no viz
+        expected: vec![],
     })
 }

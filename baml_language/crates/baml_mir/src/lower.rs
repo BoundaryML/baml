@@ -23,7 +23,7 @@ use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Patte
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
-    Rvalue, UnaryOp as MirUnaryOp,
+    Rvalue, StatementKind, UnaryOp as MirUnaryOp, VizNode, VizNodeType,
 };
 
 /// Source of a field value in spread expansion.
@@ -59,6 +59,43 @@ struct LoweringContext<'db, 'ctx> {
     loop_context: Option<LoopContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Stack of watched locals for tracking scope exit.
+    watched_locals_stack: Vec<Local>,
+    /// Viz context for control flow visualization.
+    viz_context: VizContext,
+    /// Pending header for control flow visualization.
+    /// When a `//# header` is seen, this is set. When control flow (if/while) follows,
+    /// VizEnter/VizExit will be emitted for that control flow.
+    pending_header: Option<PendingHeader>,
+}
+
+/// A pending header waiting for control flow.
+#[derive(Clone)]
+struct PendingHeader {
+    name: String,
+}
+
+/// Context for control flow visualization.
+struct VizContext {
+    /// Function name for `log_filter_key` prefix.
+    function_name: String,
+    /// Counter for generating unique node IDs.
+    next_node_id: u32,
+    /// Stack of parent `log_filter_keys`.
+    parent_keys: Vec<String>,
+    /// Counter for ordinal within current scope (for unique paths).
+    ordinal_counters: Vec<u16>,
+}
+
+impl VizContext {
+    /// Get the current ordinal and increment for next use.
+    fn get_and_increment_ordinal(&mut self) -> u16 {
+        let ordinal = *self.ordinal_counters.last().unwrap_or(&0);
+        if let Some(last) = self.ordinal_counters.last_mut() {
+            *last += 1;
+        }
+        ordinal
+    }
 }
 
 /// Context for the current loop (for break/continue).
@@ -68,6 +105,9 @@ struct LoopContext {
     break_target: BlockId,
     /// Block to jump to on `continue`.
     continue_target: BlockId,
+    /// Depth of `watched_locals_stack` at loop entry.
+    /// Used to emit Unwatch for watched locals on break/continue.
+    watched_locals_depth: usize,
 }
 
 impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
@@ -82,6 +122,14 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
+            watched_locals_stack: Vec::new(),
+            viz_context: VizContext {
+                function_name: String::new(),
+                next_node_id: 0,
+                parent_keys: Vec::new(),
+                ordinal_counters: vec![0],
+            },
+            pending_header: None,
         }
     }
 
@@ -89,14 +137,122 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.build()
     }
 
+    // ========================================================================
+    // Visualization Helpers
+    // ========================================================================
+
+    /// Create a new viz node and emit `VizEnter`.
+    /// Returns the node index for later `VizExit`.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_enter(&mut self, node_type: VizNodeType, label: &str) -> usize {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        // Build the segment key based on node type
+        let segment = match node_type {
+            VizNodeType::FunctionRoot => format!("fn:{ordinal}"),
+            VizNodeType::HeaderContextEnter => format!("hdr:{ordinal}"),
+            VizNodeType::BranchGroup => format!("bg:{ordinal}"),
+            VizNodeType::BranchArm => format!("ba:{ordinal}"),
+            VizNodeType::Loop => format!("loop:{ordinal}"),
+            VizNodeType::OtherScope => format!("scope:{ordinal}"),
+        };
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type,
+            label: label.to_string(),
+            header_level: None,
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+
+        node_idx
+    }
+
+    /// Emit `VizExit` for a previously entered node.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_exit(&mut self, node_idx: usize) {
+        self.builder.viz_exit(node_idx);
+        self.viz_context.parent_keys.pop();
+        self.viz_context.ordinal_counters.pop();
+    }
+
+    /// Create a new viz node and emit `VizEnter`, but don't track for `VizExit`.
+    /// Used for headers which are hierarchical scopes without explicit exit.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code, clippy::cast_possible_truncation)]
+    fn viz_enter_header(&mut self, label: &str, level: usize) {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        let segment = format!("hdr:{ordinal}");
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type: VizNodeType::HeaderContextEnter,
+            label: label.to_string(),
+            header_level: Some(level as u8),
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes (but no VizExit will be emitted)
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+    }
+
     /// Lower a complete function.
     fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
         self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
+        self.viz_context.function_name = signature.name.to_string();
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
         let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
-        let ret = self.builder.declare_local(None, ret_ty, None);
+        let ret = self.builder.declare_local(None, ret_ty, None, false);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
@@ -104,7 +260,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
             let local = self
                 .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
+                .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
         }
 
@@ -217,6 +373,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 ty: var_ty,
                 value,
                 body: let_body,
+                is_watched,
             } => {
                 // Extract the variable name from the pattern first
                 let pat = body.pattern(*pattern);
@@ -232,17 +389,31 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
                 // Lower the value with the actual variable name
                 let local_ty = Self::lower_typed_ir_ty(var_ty);
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), local_ty, None);
+                let local =
+                    self.builder
+                        .declare_local(Some(name.clone()), local_ty, None, *is_watched);
                 self.lower_expr(*value, Place::local(local), body);
 
                 // Bind the variable
                 self.locals.insert(name, local);
 
+                // Track watched local for scope exit
+                if *is_watched {
+                    self.watched_locals_stack.push(local);
+                }
+
                 // Lower the body - this IS the result
                 // No special "tail expression" handling needed!
                 self.lower_expr(*let_body, dest, body);
+
+                // Emit Unwatch when watched local goes out of scope
+                if *is_watched {
+                    self.watched_locals_stack.pop();
+                    // Only emit if body didn't diverge
+                    if !self.builder.is_current_terminated() {
+                        self.builder.unwatch(local);
+                    }
+                }
             }
 
             Expr::Seq { first, second } => {
@@ -292,6 +463,10 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Break => {
                 if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
                     let target = ctx.break_target;
                     self.builder.goto(target);
                 } else {
@@ -301,6 +476,10 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             Expr::Continue => {
                 if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
                     let target = ctx.continue_target;
                     self.builder.goto(target);
                 } else {
@@ -691,6 +870,26 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.goto(join_block);
                 self.builder.set_current_block(join_block);
             }
+
+            Expr::NotifyBlock { name, level } => {
+                // Set pending header for control flow visualization.
+                // If an if/while follows, it will emit VizEnter/VizExit.
+                self.pending_header = Some(PendingHeader {
+                    name: name.to_string(),
+                });
+
+                // Emit a block notification statement
+                self.builder.push_statement(
+                    StatementKind::NotifyBlock {
+                        name: name.clone(),
+                        level: *level,
+                    },
+                    None,
+                );
+                // NotifyBlock returns unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
         }
     }
 
@@ -709,9 +908,12 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         match pat {
             Pattern::Binding(name) => {
                 // Binding always matches - bind the variable and go to success
-                let local =
-                    self.builder
-                        .declare_local(Some(name.clone()), scrutinee_ty.clone(), None);
+                let local = self.builder.declare_local(
+                    Some(name.clone()),
+                    scrutinee_ty.clone(),
+                    None,
+                    false,
+                );
                 self.builder.assign(
                     Place::local(local),
                     Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -745,7 +947,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.set_current_block(bind_block);
                 let local = self
                     .builder
-                    .declare_local(Some(name.clone()), pattern_ty, None);
+                    .declare_local(Some(name.clone()), pattern_ty, None, false);
                 self.builder.assign(
                     Place::local(local),
                     Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -985,6 +1187,13 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
+        // Check if preceded by a header - if so, emit VizEnter for BranchGroup
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::BranchGroup, &header.name))
+        } else {
+            None
+        };
+
         let cond_local = self.builder.temp(Ty::Bool);
         self.lower_expr(condition, Place::local(cond_local), body);
 
@@ -1014,11 +1223,22 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             self.builder.goto(bb_join);
         }
 
+        // Join block - emit VizExit if we had a header
         self.builder.set_current_block(bb_join);
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
+        }
     }
 
     /// Lower a while loop.
     fn lower_while(&mut self, condition: ExprId, loop_body: ExprId, body: &ExprBody) {
+        // Check if preceded by a header - if so, emit VizEnter for Loop
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::Loop, &header.name))
+        } else {
+            None
+        };
+
         let bb_cond = self.builder.create_block();
         let bb_body = self.builder.create_block();
         let bb_exit = self.builder.create_block();
@@ -1036,6 +1256,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         let old_loop_ctx = self.loop_context.replace(LoopContext {
             break_target: bb_exit,
             continue_target: bb_cond,
+            watched_locals_depth: self.watched_locals_stack.len(),
         });
 
         // Body block
@@ -1049,7 +1270,11 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         // Restore loop context
         self.loop_context = old_loop_ctx;
 
+        // Exit block - emit VizExit if we had a header
         self.builder.set_current_block(bb_exit);
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
+        }
     }
 
     /// Lower a function call.
@@ -1062,6 +1287,103 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         _result_ty: &baml_vir::Ty,
     ) {
         let callee_expr = body.expr(callee);
+
+        // Check if this is a $watch method call (e.g., value.$watch.options(filter))
+        if let Expr::FieldAccess { base, field } = callee_expr {
+            let base_ty = body.ty(*base);
+            if let baml_vir::Ty::WatchAccessor(_) = base_ty {
+                // This is a $watch method call
+                // The base expression is var.$watch, so we need to get the var
+                let watch_accessor_expr = body.expr(*base);
+                if let Expr::FieldAccess {
+                    base: watched_var_base,
+                    field: watch_field,
+                } = watch_accessor_expr
+                {
+                    if watch_field.as_str() == "$watch" {
+                        match field.as_str() {
+                            "options" => {
+                                // $watch.options(filter) - emit WatchOptions statement
+                                // First, find the local variable for the watched variable
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
+
+                                    // Evaluate the filter argument
+                                    if !args.is_empty() {
+                                        let filter_arg = args[0];
+                                        // We need to extract the 'when' field if it's a struct
+                                        // For now, let's check if it's an Object with 'when' field
+                                        let filter_expr = body.expr(filter_arg);
+                                        if let Expr::Object { fields, .. } = filter_expr {
+                                            // Look for 'when' field
+                                            for (field_name, field_expr_id) in fields {
+                                                if field_name.as_str() == "when" {
+                                                    // Lower the filter expression
+                                                    let filter_ty = Self::lower_typed_ir_ty(
+                                                        body.ty(*field_expr_id),
+                                                    );
+                                                    let filter_local = self.builder.temp(filter_ty);
+                                                    self.lower_expr(
+                                                        *field_expr_id,
+                                                        Place::local(filter_local),
+                                                        body,
+                                                    );
+
+                                                    // Emit WatchOptions statement
+                                                    self.builder.watch_options(
+                                                        local,
+                                                        Operand::copy_local(filter_local),
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            // Direct filter value (function or string)
+                                            let filter_ty =
+                                                Self::lower_typed_ir_ty(body.ty(filter_arg));
+                                            let filter_local = self.builder.temp(filter_ty);
+                                            self.lower_expr(
+                                                filter_arg,
+                                                Place::local(filter_local),
+                                                body,
+                                            );
+
+                                            // Emit WatchOptions statement
+                                            self.builder.watch_options(
+                                                local,
+                                                Operand::copy_local(filter_local),
+                                            );
+                                        }
+                                    }
+                                    // Assign null to dest (options returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            "notify" => {
+                                // $watch.notify() - emit WatchNotify statement
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
+                                    self.builder.watch_notify(local);
+                                    // Assign null to dest (notify returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
 
         // Check if this is a method call (callee is FieldAccess)
         if let Expr::FieldAccess { base, field } = callee_expr {
@@ -1306,6 +1628,9 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             baml_vir::Ty::Error => Ty::Error,
             baml_vir::Ty::Unit => Ty::Void,
             baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_vir::Ty::WatchAccessor(inner) => {
+                Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
+            }
         }
     }
 }

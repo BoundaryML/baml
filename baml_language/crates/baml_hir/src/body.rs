@@ -217,11 +217,13 @@ pub enum Stmt {
     Expr(ExprId),
 
     /// Let binding: `let x = call_f3();`
+    /// If `is_watched` is true, this is a `watch let` that tracks variable changes.
     Let {
         pattern: PatId,
         type_annotation: Option<crate::type_ref::TypeRef>,
         type_span: Option<TextRange>,
         initializer: Option<ExprId>,
+        is_watched: bool,
     },
 
     /// While loop: `while (condition) { body }`
@@ -260,6 +262,15 @@ pub enum Stmt {
 
     /// Missing/error statement
     Missing,
+
+    /// Header comment notification: `//# name`
+    /// Emits a block notification when executed.
+    HeaderComment {
+        /// The name of the block annotation
+        name: Name,
+        /// The header level (number of # symbols)
+        level: usize,
+    },
 }
 
 /// Indicates where a loop construct originated from.
@@ -650,7 +661,8 @@ impl LoweringContext {
             match element {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
-                        SyntaxKind::LET_STMT => self.lower_let_stmt(node),
+                        SyntaxKind::LET_STMT => self.lower_let_stmt(node, false),
+                        SyntaxKind::WATCH_LET => self.lower_let_stmt(node, true),
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
                         SyntaxKind::FOR_EXPR => self.lower_for_stmt(node),
@@ -728,6 +740,10 @@ impl LoweringContext {
                     } else {
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
+                }
+                BlockElement::HeaderComment(node) => {
+                    let stmt_id = self.lower_header_comment(node);
+                    stmts.push(stmt_id);
                 }
             }
         }
@@ -2232,7 +2248,7 @@ impl LoweringContext {
         None
     }
 
-    fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+    fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode, is_watched: bool) -> StmtId {
         use baml_syntax::SyntaxKind;
 
         // Use the LetStmt AST wrapper for cleaner access
@@ -2321,6 +2337,7 @@ impl LoweringContext {
                 type_annotation,
                 type_span,
                 initializer,
+                is_watched,
             },
             node.text_range(),
         )
@@ -2466,7 +2483,7 @@ impl LoweringContext {
         // 1. Lower the initializer (if present)
         let initializer = for_expr
             .let_stmt()
-            .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax()));
+            .map(|let_stmt| self.lower_let_stmt(let_stmt.syntax(), false));
 
         // 2. Lower the condition, or default to `true` for infinite loop
         let condition = for_expr
@@ -2703,6 +2720,7 @@ impl LoweringContext {
             type_annotation: None,
             type_span: None,
             initializer: Some(iterator_expr),
+            is_watched: false,
         });
 
         // 2. let _len_N = _arr_N.length()
@@ -2723,6 +2741,7 @@ impl LoweringContext {
             type_annotation: None,
             type_span: None,
             initializer: Some(length_call),
+            is_watched: false,
         });
 
         // 3. let _i_N = 0
@@ -2733,6 +2752,7 @@ impl LoweringContext {
             type_annotation: None,
             type_span: None,
             initializer: Some(zero),
+            is_watched: false,
         });
 
         // 4. Condition: _i_N < _len_N
@@ -2771,6 +2791,7 @@ impl LoweringContext {
             type_annotation: None,
             type_span: None,
             initializer: Some(element_access),
+            is_watched: false,
         });
 
         // 6. Increment: _i_N += 1
@@ -2820,5 +2841,46 @@ impl LoweringContext {
         });
 
         self.stmts.alloc(Stmt::Expr(outer_block))
+    }
+
+    /// Lower a header comment (`//# name`) to a `HeaderComment` statement.
+    fn lower_header_comment(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+        use baml_syntax::SyntaxKind;
+
+        // Count the # tokens to determine level, and collect the title text
+        let mut level = 0;
+        let mut title_parts = Vec::new();
+        let mut in_title = false;
+
+        for child in node.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(token) = child {
+                match token.kind() {
+                    SyntaxKind::HASH => {
+                        if !in_title {
+                            level += 1;
+                        }
+                    }
+                    SyntaxKind::SLASH => {
+                        // Skip the // prefix
+                    }
+                    SyntaxKind::WHITESPACE => {
+                        // First whitespace after # marks start of title
+                        if level > 0 {
+                            in_title = true;
+                        }
+                    }
+                    _ => {
+                        // Any other token is part of the title
+                        in_title = true;
+                        title_parts.push(token.text().to_string());
+                    }
+                }
+            }
+        }
+
+        let name = title_parts.join("").trim().to_string();
+        let name = Name::new(&name);
+
+        self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
     }
 }

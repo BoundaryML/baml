@@ -448,6 +448,58 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_idx, &mut def_use);
                 }
+                StatementKind::Unwatch(local) => {
+                    // Unwatch uses the local (we need to read its value to unlink from watch graph)
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                }
+                StatementKind::NotifyBlock { .. } => {
+                    // NotifyBlock doesn't use any locals - it's a pure side effect
+                }
+                StatementKind::WatchOptions { local, filter } => {
+                    // WatchOptions uses the local and the filter operand
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                    collect_uses_in_operand(filter, block.id, stmt_idx, &mut def_use);
+                }
+                StatementKind::WatchNotify(local) => {
+                    // WatchNotify uses the local
+                    def_use
+                        .entry(*local)
+                        .or_insert_with(|| LocalDefUse {
+                            local: *local,
+                            def: None,
+                            uses: Vec::new(),
+                        })
+                        .uses
+                        .push(UseLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                        });
+                }
+                StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
+                    // VizEnter/VizExit don't use any locals
+                }
                 StatementKind::Nop => {}
             }
         }
@@ -678,7 +730,11 @@ fn classify_locals<'db>(
         // simple check handles the common pattern-matching wildcard case.
         let is_unused_wildcard = du.uses.is_empty() && local_decl.name.as_deref() == Some("_");
 
-        let classification = if idx > 0 && idx <= mir.arity {
+        let classification = if local_decl.is_watched {
+            // Watched variables must always be Real - no optimizations allowed.
+            // This ensures they have a stable stack slot for Watch/Unwatch instructions.
+            LocalClassification::Real
+        } else if idx > 0 && idx <= mir.arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if idx != 0
@@ -1216,18 +1272,32 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
 fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => {
-            // Check if this assignment modifies a variable that the rvalue reads
-            if let Place::Local(local) = destination {
-                if rvalue_reads.contains(local) {
-                    return true;
-                }
+            // Check if this assignment modifies a variable (or field/index of a variable)
+            // that the rvalue reads from.
+            let base_local = get_base_local(destination);
+            if rvalue_reads.contains(&base_local) {
+                return true;
             }
             // All other assignments (including loading constants) are pure
             _ = value;
             false
         }
         StatementKind::Drop(_) => true,
+        StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
+        StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
+        StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
+        StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
+        StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
+    }
+}
+
+/// Get the base local from a place, following field/index projections.
+fn get_base_local(place: &Place) -> Local {
+    match place {
+        Place::Local(local) => *local,
+        Place::Field { base, .. } => get_base_local(base),
+        Place::Index { base, .. } => get_base_local(base),
     }
 }
 

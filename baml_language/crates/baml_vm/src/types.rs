@@ -112,6 +112,11 @@ pub struct Function {
     /// Stores metadata about annotated blocks (//# annotations) in this function.
     /// Instructions reference these by index.
     pub block_notifications: Vec<crate::bytecode::BlockNotification>,
+
+    /// Control-flow visualization metadata indexed by VizEnter/VizExit instructions.
+    ///
+    /// Stores metadata about control flow structure (branches, loops, scopes).
+    pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
 }
 
 impl std::fmt::Display for Function {

@@ -1,13 +1,31 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn HeaderOnlyFunction() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
+    let _3: Void
+    let _4: Void
+    let _5: Void
+    let _6: Void
 
     bb0: {
+        notify_block(JustHeaders, level=1);
+        _1 = const null;
+        notify_block(NoCode, level=2);
+        _2 = const null;
+        notify_block(OnlyDocumentation, level=3);
+        _3 = const null;
+        notify_block(PureAnnotation, level=4);
+        _4 = const null;
+        notify_block(NoExpressions, level=5);
+        _5 = const null;
+        notify_block(UntilTheEnd, level=6);
+        _6 = const null;
         _0 = const "default";
         goto -> bb1;
     }
@@ -21,8 +39,14 @@ fn HeaderOnlyFunction() -> String {
 fn VeryLongHeaderTitle() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
 
     bb0: {
+        notify_block(ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader, level=1);
+        _1 = const null;
+        notify_block(AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890, level=2);
+        _2 = const null;
         _0 = const "long headers";
         goto -> bb1;
     }
@@ -36,39 +60,56 @@ fn VeryLongHeaderTitle() -> String {
 fn HeadersAroundExpressions() -> String {
     // Locals:
     let _0: String // return
-    let _1: Int // x
-    let _2: Int
-    let _3: Bool
-    let _4: Int
+    let _1: Void
+    let _2: Int // x
+    let _3: Void
+    let _4: Void
     let _5: Int
-    let _6: Void
-    let _7: List(Int) // _iter
+    let _6: Bool
+    let _7: Int
     let _8: Int
-    let _9: Int
-    let _10: Int
-    let _11: Int // _len
-    let _12: List(Int)
-    let _13: Int // _i
-    let _14: Void
-    let _15: Bool
+    let _9: Void
+    let _10: Void
+    let _11: Void
+    let _12: Void
+    let _13: Void
+    let _14: List(Int) // _iter
+    let _15: Int
     let _16: Int
     let _17: Int
-    let _18: Void
-    let _19: Int // i
-    let _20: List(Int)
-    let _21: Int
-    let _22: Void
+    let _18: Int // _len
+    let _19: List(Int)
+    let _20: Int // _i
+    let _21: Void
+    let _22: Bool
     let _23: Int
     let _24: Int
-    let _25: Int
-    let _26: Int
+    let _25: Void
+    let _26: Int // i
+    let _27: List(Int)
+    let _28: Int
+    let _29: Void
+    let _30: Int
+    let _31: Int
+    let _32: Int
+    let _33: Void
+    let _34: Int
+    let _35: Void
+    let _36: Void
 
     bb0: {
-        _1 = const 5_i64;
-        _4 = copy _1;
-        _5 = const 0_i64;
-        _3 = copy _4 > copy _5;
-        branch copy _3 -> [bb2, bb3];
+        notify_block(BeforeLet, level=1);
+        _1 = const null;
+        _2 = const 5_i64;
+        notify_block(AfterLet, level=2);
+        _3 = const null;
+        notify_block(BeforeIf, level=3);
+        _4 = const null;
+        viz_enter(0);
+        _7 = copy _2;
+        _8 = const 0_i64;
+        _6 = copy _7 > copy _8;
+        branch copy _6 -> [bb2, bb3];
     }
 
     bb1: {
@@ -76,54 +117,71 @@ fn HeadersAroundExpressions() -> String {
     }
 
     bb2: {
-        _2 = copy _1;
+        notify_block(InsideIf, level=4);
+        _9 = const null;
+        _5 = copy _2;
         goto -> bb4;
     }
 
     bb3: {
-        _2 = const 0_i64;
+        notify_block(InsideElse, level=4);
+        _10 = const null;
+        _5 = const 0_i64;
         goto -> bb4;
     }
 
     bb4: {
-        _8 = const 1_i64;
-        _9 = const 2_i64;
-        _10 = const 3_i64;
-        _7 = [copy _8, copy _9, copy _10];
-        _12 = copy _7;
-        _11 = call const fn baml.Array.length(copy _12) -> [bb5];
+        viz_exit(0);
+        notify_block(AfterIf, level=3);
+        _11 = const null;
+        notify_block(BeforeFor, level=2);
+        _12 = const null;
+        _15 = const 1_i64;
+        _16 = const 2_i64;
+        _17 = const 3_i64;
+        _14 = [copy _15, copy _16, copy _17];
+        _19 = copy _14;
+        _18 = call const fn baml.Array.length(copy _19) -> [bb5];
     }
 
     bb5: {
-        _13 = const 0_i64;
+        _20 = const 0_i64;
+        viz_enter(1);
         goto -> bb6;
     }
 
     bb6: {
-        _16 = copy _13;
-        _17 = copy _11;
-        _15 = copy _16 < copy _17;
-        branch copy _15 -> [bb7, bb8];
+        _23 = copy _20;
+        _24 = copy _18;
+        _22 = copy _23 < copy _24;
+        branch copy _22 -> [bb7, bb8];
     }
 
     bb7: {
-        _20 = copy _7;
-        _21 = copy _13;
-        _19 = copy _20[_21];
-        _23 = copy _13;
-        _24 = const 1_i64;
-        _25 = copy _23 + copy _24;
-        _13 = copy _25;
-        _22 = const null;
-        _26 = copy _19;
-        _18 = const null;
+        _27 = copy _14;
+        _28 = copy _20;
+        _26 = copy _27[_28];
+        _30 = copy _20;
+        _31 = const 1_i64;
+        _32 = copy _30 + copy _31;
+        _20 = copy _32;
+        _29 = const null;
+        notify_block(InsideFor, level=3);
+        _33 = const null;
+        _34 = copy _26;
+        _25 = const null;
         goto -> bb6;
     }
 
     bb8: {
-        _14 = const null;
-        _6 = const null;
-        _0 = copy _1;
+        viz_exit(1);
+        _21 = const null;
+        _13 = const null;
+        notify_block(AfterFor, level=2);
+        _35 = const null;
+        notify_block(FinalSection, level=1);
+        _36 = const null;
+        _0 = copy _2;
         goto -> bb1;
     }
 
@@ -132,14 +190,27 @@ fn HeadersAroundExpressions() -> String {
 fn HeadersInComplexNesting() -> String {
     // Locals:
     let _0: String // return
-    let _1: String // result
-    let _2: String // inner
-    let _3: Bool
-    let _4: String // deep
+    let _1: Void
+    let _2: String // result
+    let _3: Void
+    let _4: String // inner
+    let _5: Bool
+    let _6: Void
+    let _7: String // deep
+    let _8: Void
+    let _9: Void
+    let _10: Void
+    let _11: Void
+    let _12: Void
 
     bb0: {
-        _3 = const true;
-        branch copy _3 -> [bb2, bb3];
+        notify_block(MainFunction, level=1);
+        _1 = const null;
+        notify_block(InsideBlockExpression, level=2);
+        _3 = const null;
+        viz_enter(0);
+        _5 = const true;
+        branch copy _5 -> [bb2, bb3];
     }
 
     bb1: {
@@ -147,19 +218,32 @@ fn HeadersInComplexNesting() -> String {
     }
 
     bb2: {
-        _4 = const "deep value";
-        _2 = copy _4;
+        notify_block(InsideIfTrue, level=3);
+        _6 = const null;
+        notify_block(VeryDeepBlock, level=4);
+        _8 = const null;
+        _7 = const "deep value";
+        notify_block(BacktoIfLevel, level=3);
+        _9 = const null;
+        _4 = copy _7;
         goto -> bb4;
     }
 
     bb3: {
-        _2 = const "else value";
+        notify_block(InsideElse, level=3);
+        _10 = const null;
+        _4 = const "else value";
         goto -> bb4;
     }
 
     bb4: {
-        _1 = copy _2;
-        _0 = copy _1;
+        viz_exit(0);
+        notify_block(BacktoBlockLevel, level=2);
+        _11 = const null;
+        _2 = copy _4;
+        notify_block(BacktoFunctionLevel, level=1);
+        _12 = const null;
+        _0 = copy _2;
         goto -> bb1;
     }
 
@@ -168,11 +252,20 @@ fn HeadersInComplexNesting() -> String {
 fn HeadersAndComments() -> String {
     // Locals:
     let _0: String // return
-    let _1: String // x
+    let _1: Void
+    let _2: String // x
+    let _3: Void
+    let _4: Void
 
     bb0: {
-        _1 = const "test";
-        _0 = copy _1;
+        notify_block(HeaderBeforeComment, level=1);
+        _1 = const null;
+        _2 = const "test";
+        notify_block(HeaderAfterComment, level=2);
+        _3 = const null;
+        notify_block(HeaderAfterDocComment, level=3);
+        _4 = const null;
+        _0 = copy _2;
         goto -> bb1;
     }
 
@@ -185,8 +278,26 @@ fn HeadersAndComments() -> String {
 fn ConsecutiveHeaders() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
+    let _3: Void
+    let _4: Void
+    let _5: Void
+    let _6: Void
 
     bb0: {
+        notify_block(FirstHeader, level=1);
+        _1 = const null;
+        notify_block(SecondHeader, level=1);
+        _2 = const null;
+        notify_block(ThirdHeader, level=1);
+        _3 = const null;
+        notify_block(SubsectionA, level=2);
+        _4 = const null;
+        notify_block(SubsectionB, level=2);
+        _5 = const null;
+        notify_block(SubsectionC, level=2);
+        _6 = const null;
         _0 = const "multiple consecutive headers";
         goto -> bb1;
     }
@@ -200,8 +311,17 @@ fn ConsecutiveHeaders() -> String {
 fn UnicodeHeaders() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
+    let _3: Void
 
     bb0: {
+        notify_block(你好世界, level=1);
+        _1 = const null;
+        notify_block(Émojis🎉🎊, level=2);
+        _2 = const null;
+        notify_block(Special«Characters»™, level=3);
+        _3 = const null;
         _0 = const "test";
         goto -> bb1;
     }
@@ -215,8 +335,35 @@ fn UnicodeHeaders() -> String {
 fn HeaderLevels() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
+    let _3: Void
+    let _4: Void
+    let _5: Void
+    let _6: Void
+    let _7: Void
+    let _8: Void
+    let _9: Void
 
     bb0: {
+        notify_block(Level1, level=1);
+        _1 = const null;
+        notify_block(Level2, level=2);
+        _2 = const null;
+        notify_block(Level3, level=3);
+        _3 = const null;
+        notify_block(Level4, level=4);
+        _4 = const null;
+        notify_block(Level5, level=5);
+        _5 = const null;
+        notify_block(Level6, level=6);
+        _6 = const null;
+        notify_block(Level7-Morethan6levels, level=7);
+        _7 = const null;
+        notify_block(Level8, level=8);
+        _8 = const null;
+        notify_block(Level9, level=9);
+        _9 = const null;
         _0 = const "deep nesting";
         goto -> bb1;
     }
@@ -230,8 +377,26 @@ fn HeaderLevels() -> String {
 fn HeadersWithSpecialChars() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
+    let _2: Void
+    let _3: Void
+    let _4: Void
+    let _5: Void
+    let _6: Void
 
     bb0: {
+        notify_block(Header-With-Dashes, level=1);
+        _1 = const null;
+        notify_block(Header_With_Underscores, level=2);
+        _2 = const null;
+        notify_block(Header.With.Dots, level=3);
+        _3 = const null;
+        notify_block(HeaderWithSlashes, level=4);
+        _4 = const null;
+        notify_block(Header\With\Backslashes, level=5);
+        _5 = const null;
+        notify_block(Header|With|Pipes, level=6);
+        _6 = const null;
         _0 = const "special chars";
         goto -> bb1;
     }
@@ -245,11 +410,26 @@ fn HeadersWithSpecialChars() -> String {
 fn HeadersWithWhitespace() -> String {
     // Locals:
     let _0: String // return
-    let _1: String // x
+    let _1: Void
+    let _2: Void
+    let _3: Void
+    let _4: String // x
+    let _5: Void
+    let _6: Void
 
     bb0: {
-        _1 = const "whitespace test";
-        _0 = copy _1;
+        notify_block(ExtraSpacesBeforeTitle, level=1);
+        _1 = const null;
+        notify_block(MixedTabsAndSpaces, level=2);
+        _2 = const null;
+        notify_block(AllTabs, level=3);
+        _3 = const null;
+        _4 = const "whitespace test";
+        notify_block(TrailingSpaces, level=1);
+        _5 = const null;
+        notify_block(MultipleSpacesBetweenWords, level=2);
+        _6 = const null;
+        _0 = copy _4;
         goto -> bb1;
     }
 

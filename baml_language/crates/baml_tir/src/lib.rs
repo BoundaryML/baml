@@ -1524,6 +1524,43 @@ fn infer_field_access<'db>(
     field: &Name,
     span: Span,
 ) -> Ty<'db> {
+    // Special case: $watch accessor on any type
+    // The actual watched check happens at MIR lowering time
+    if field.as_str() == "$watch" {
+        return Ty::WatchAccessor(Box::new(base.clone()));
+    }
+
+    // Special case: methods on WatchAccessor type
+    if let Ty::WatchAccessor(inner_ty) = base {
+        match field.as_str() {
+            "options" => {
+                // $watch.options(filter) - filter can be a function, "manual", or "never"
+                // Returns null (void operation)
+                return Ty::Function {
+                    // First param is receiver (the watched value), second is filter
+                    params: vec![*inner_ty.clone(), Ty::Unknown], // Filter type is flexible
+                    ret: Box::new(Ty::Null),
+                };
+            }
+            "notify" => {
+                // $watch.notify() - manually trigger notification
+                // Returns null (void operation)
+                return Ty::Function {
+                    params: vec![*inner_ty.clone()], // Just the receiver
+                    ret: Box::new(Ty::Null),
+                };
+            }
+            _ => {
+                ctx.push_error(TypeError::NoSuchField {
+                    ty: base.clone(),
+                    field: field.to_string(),
+                    span,
+                });
+                return Ty::Unknown;
+            }
+        }
+    }
+
     // First, try class field lookup for named types
     let found_field = match base {
         Ty::Named(class_name) => ctx
@@ -1639,6 +1676,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             type_annotation,
             type_span,
             initializer,
+            ..
         } => {
             let ty = if let Some(init) = initializer {
                 let init_ty = infer_expr(ctx, *init, body);
@@ -1749,5 +1787,9 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         }
 
         Stmt::Missing => {}
+
+        Stmt::HeaderComment { .. } => {
+            // Header comments don't need type checking - they're just annotations
+        }
     }
 }

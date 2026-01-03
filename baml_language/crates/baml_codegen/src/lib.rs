@@ -191,6 +191,7 @@ pub fn compile_files(
             locals_in_scope: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
         };
         let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
         program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
@@ -223,6 +224,7 @@ pub fn compile_files(
                             ],
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
+                            viz_nodes: Vec::new(),
                         }
                     }
                     baml_hir::FunctionBody::Missing => {
@@ -242,6 +244,7 @@ pub fn compile_files(
                             ],
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
+                            viz_nodes: Vec::new(),
                         }
                     }
                     baml_hir::FunctionBody::Expr(_) => {

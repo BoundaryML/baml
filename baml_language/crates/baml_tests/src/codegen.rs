@@ -130,11 +130,14 @@ fn convert_instruction(
         baml_vm::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
         baml_vm::Instruction::Await => Instruction::Await,
         baml_vm::Instruction::Watch(idx) => Instruction::Watch(*idx),
+        baml_vm::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
         baml_vm::Instruction::Notify(idx) => Instruction::Notify(*idx),
         baml_vm::Instruction::Call(n) => Instruction::Call(*n),
         baml_vm::Instruction::Return => Instruction::Return,
         baml_vm::Instruction::Assert => Instruction::Assert,
         baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
+        baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
+        baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
     })
 }
 

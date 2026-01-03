@@ -75,10 +75,12 @@ impl<'a> PrettyPrinter<'a> {
                 ty: let_ty,
                 value,
                 body,
+                is_watched,
             } => {
                 self.indent(level);
                 let pat_name = self.format_pattern(*pattern);
-                writeln!(self.output, "let {pat_name}: {let_ty} =").unwrap();
+                let watch_prefix = if *is_watched { "watch " } else { "" };
+                writeln!(self.output, "{watch_prefix}let {pat_name}: {let_ty} =").unwrap();
                 self.print_expr(*value, level + 1);
                 self.output.push('\n');
                 self.indent(level);
@@ -304,6 +306,16 @@ impl<'a> PrettyPrinter<'a> {
                     self.output.push_str(" =>\n");
                     self.print_expr(arm.body, level + 2);
                 }
+            }
+            Expr::NotifyBlock { name, level: lvl } => {
+                self.indent(level);
+                self.output.push_str("//");
+                for _ in 0..*lvl {
+                    self.output.push('#');
+                }
+                self.output.push(' ');
+                self.output.push_str(name.as_ref());
+                self.output.push('\n');
             }
         }
     }

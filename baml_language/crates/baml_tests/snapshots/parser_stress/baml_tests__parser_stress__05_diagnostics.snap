@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -673,22 +673,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:21:6 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │      ┬  
-    │      ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:21:7 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │       ──┬─  
-    │         ╰─── Expected top-level declaration, found identifier
+    │      ──┬──  
+    │        ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -723,22 +713,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:21:19 ]
     │
  21 │     ($name:ident, $kind:ident) => {
-    │                   ┬  
-    │                   ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:21:20 ]
-    │
- 21 │     ($name:ident, $kind:ident) => {
-    │                    ──┬─  
-    │                      ╰─── Expected top-level declaration, found identifier
+    │                   ──┬──  
+    │                     ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -963,22 +943,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:23:20 ]
     │
  23 │         pub struct $name {
-    │                    ┬  
-    │                    ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:23:21 ]
-    │
- 23 │         pub struct $name {
-    │                     ──┬─  
-    │                       ╰─── Expected top-level declaration, found identifier
+    │                    ──┬──  
+    │                      ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1073,22 +1043,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:27:30 ]
     │
  27 │         impl BamlAstNode for $name {}
-    │                              ┬  
-    │                              ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:27:31 ]
-    │
- 27 │         impl BamlAstNode for $name {}
-    │                               ──┬─  
-    │                                 ╰─── Expected top-level declaration, found identifier
+    │                              ──┬──  
+    │                                ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1143,22 +1103,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:29:26 ]
     │
  29 │         impl AstNode for $name {
-    │                          ┬  
-    │                          ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:29:27 ]
-    │
- 29 │         impl AstNode for $name {
-    │                           ──┬─  
-    │                             ╰─── Expected top-level declaration, found identifier
+    │                          ──┬──  
+    │                            ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -1443,22 +1393,12 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found '$'
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 3:33:37 ]
     │
  33 │                 kind == SyntaxKind::$kind.into()
-    │                                     ┬  
-    │                                     ╰── Expected top-level declaration, found '$'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 3:33:38 ]
-    │
- 33 │                 kind == SyntaxKind::$kind.into()
-    │                                      ──┬─  
-    │                                        ╰─── Expected top-level declaration, found identifier
+    │                                     ──┬──  
+    │                                       ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯

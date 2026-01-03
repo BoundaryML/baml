@@ -454,6 +454,9 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
             Stmt::Missing => {
                 writeln!(self.output, "{prefix}<missing stmt>").ok();
             }
+            Stmt::HeaderComment { name, level } => {
+                writeln!(self.output, "{prefix}HeaderComment({name}, level={level})").ok();
+            }
         }
     }
 

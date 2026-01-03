@@ -90,6 +90,8 @@ pub enum TokenKind {
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
+    /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Word,
 

@@ -4,7 +4,7 @@
 //! results to emit optimized bytecode. Virtual locals are inlined at their
 //! use sites instead of being stored to stack slots.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_mir::{
     AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
@@ -14,6 +14,7 @@ use baml_tir::Ty;
 use baml_vm::{
     BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
+    bytecode::{BlockNotification, BlockNotificationType},
 };
 
 use crate::{
@@ -61,6 +62,13 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
 
     /// The next block in RPO order (for fall-through optimization).
     next_block: Option<BlockId>,
+
+    /// Watched locals that have already had Watch instruction emitted.
+    /// We only emit Watch once per watched local (at initialization).
+    watched_locals_initialized: HashSet<Local>,
+
+    /// Block notifications to be attached to the compiled function.
+    block_notifications: Vec<BlockNotification>,
 }
 
 impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
@@ -81,6 +89,8 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             bytecode: Bytecode::new(),
             current_source_line: 0,
             next_block: None,
+            watched_locals_initialized: HashSet::new(),
+            block_notifications: Vec::new(),
         }
     }
 
@@ -101,7 +111,21 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
         // 3. Patch all jump targets
         self.patch_jumps();
 
-        // 4. Build the Function
+        // 4. Convert MIR VizNodes to VM VizNodeMeta
+        let viz_nodes = mir
+            .viz_nodes
+            .iter()
+            .map(|node| baml_vm::VizNodeMeta {
+                node_id: node.node_id,
+                log_filter_key: node.log_filter_key.clone(),
+                parent_log_filter_key: node.parent_log_filter_key.clone(),
+                node_type: Self::convert_viz_node_type(node.node_type),
+                label: node.label.clone(),
+                header_level: node.header_level,
+            })
+            .collect();
+
+        // 5. Build the Function
         Function {
             name: mir.name.clone(),
             arity: mir.arity,
@@ -109,7 +133,20 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             kind: FunctionKind::Exec,
             locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
             span: baml_base::Span::fake(),
-            block_notifications: Vec::new(),
+            block_notifications: self.block_notifications,
+            viz_nodes,
+        }
+    }
+
+    /// Convert MIR `VizNodeType` to VM `VizNodeType`.
+    fn convert_viz_node_type(mir_type: baml_mir::VizNodeType) -> baml_vm::VizNodeType {
+        match mir_type {
+            baml_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
+            baml_mir::VizNodeType::HeaderContextEnter => baml_vm::VizNodeType::HeaderContextEnter,
+            baml_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
+            baml_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
+            baml_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,
+            baml_mir::VizNodeType::OtherScope => baml_vm::VizNodeType::OtherScope,
         }
     }
 
@@ -281,16 +318,84 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                             IndexKind::Map => self.emit(Instruction::StoreMapElement),
                         };
                     }
-                    Place::Local(_) => {
+                    Place::Local(local) => {
                         // Local assignment: emit rvalue then store
                         self.emit_rvalue_pull(value, mir);
                         self.emit_store_place(destination, mir);
+                        // Emit Watch only once for watched locals (at initialization)
+                        let local_decl = mir.local(*local);
+                        if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
+                        {
+                            self.watched_locals_initialized.insert(*local);
+                            if let Some(&slot) = self.local_slots.get(local) {
+                                // Push channel name (variable name) and filter (null for default)
+                                let channel =
+                                    local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
+                                let channel_obj_idx = self.objects.len();
+                                self.objects.push(Object::String(channel.to_string()));
+                                let channel_const_idx = self.add_constant(Value::Object(
+                                    ObjectIndex::from_raw(channel_obj_idx),
+                                ));
+                                self.emit(Instruction::LoadConst(channel_const_idx));
+                                let null_const_idx = self.add_constant(Value::Null);
+                                self.emit(Instruction::LoadConst(null_const_idx));
+                                self.emit(Instruction::Watch(slot));
+                            }
+                        }
                     }
                 }
             }
             StatementKind::Drop(place) => {
                 self.emit_place_value_pull(place, mir);
                 self.emit(Instruction::Pop(1));
+            }
+            StatementKind::Unwatch(local) => {
+                // Emit unwatch for a watched local going out of scope
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::Unwatch(slot));
+                }
+            }
+            StatementKind::NotifyBlock { name, level } => {
+                // Add block notification to the function's metadata
+                let block_index = self.block_notifications.len();
+                self.block_notifications.push(BlockNotification {
+                    function_name: String::new(), // Filled in by VM at runtime
+                    block_name: name.to_string(),
+                    level: *level,
+                    block_type: BlockNotificationType::Statement,
+                    is_enter: true,
+                });
+                self.emit(Instruction::NotifyBlock(block_index));
+            }
+            StatementKind::WatchOptions { local, filter } => {
+                // Emit Watch instruction with new filter
+                // This updates the watch settings for an already-watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    let local_decl = mir.local(*local);
+                    // Push channel name
+                    let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
+                    let channel_obj_idx = self.objects.len();
+                    self.objects.push(Object::String(channel.to_string()));
+                    let channel_const_idx =
+                        self.add_constant(Value::Object(ObjectIndex::from_raw(channel_obj_idx)));
+                    self.emit(Instruction::LoadConst(channel_const_idx));
+                    // Push filter value
+                    self.emit_operand_pull(filter, mir);
+                    // Re-emit Watch with new filter
+                    self.emit(Instruction::Watch(slot));
+                }
+            }
+            StatementKind::WatchNotify(local) => {
+                // Emit manual notify for a watched variable
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::Notify(slot));
+                }
+            }
+            StatementKind::VizEnter(node_idx) => {
+                self.emit(Instruction::VizEnter(*node_idx));
+            }
+            StatementKind::VizExit(node_idx) => {
+                self.emit(Instruction::VizExit(*node_idx));
             }
             StatementKind::Nop => {}
         }

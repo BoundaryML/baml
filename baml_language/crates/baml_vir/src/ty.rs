@@ -56,6 +56,9 @@ pub enum Ty {
     Unit,
     /// Never type - the type of diverging expressions (return, break, continue).
     Never,
+
+    /// Watch accessor type: represents `x.$watch` on a watched variable.
+    WatchAccessor(Box<Ty>),
 }
 
 impl Ty {
@@ -170,6 +173,7 @@ impl fmt::Display for Ty {
             Ty::Error => write!(f, "error"),
             Ty::Unit => write!(f, "unit"),
             Ty::Never => write!(f, "never"),
+            Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
         }
     }
 }
