@@ -5,6 +5,7 @@ pub(crate) mod commands;
 pub(crate) mod deploy;
 pub(crate) mod format;
 pub(crate) mod lsp;
+mod path_check;
 pub(crate) mod propelauth;
 pub(crate) mod tui;
 use anyhow::Result;
@@ -62,6 +63,11 @@ pub fn run_cli(
     argv: Vec<String>,
     caller_type: baml_runtime::RuntimeCliDefaults,
 ) -> Result<ExitCode> {
+    // Check for PATH mismatch (helps diagnose wrong version issues)
+    if let Some(argv0) = argv.first() {
+        path_check::check_path_mismatch(argv0);
+    }
+
     let mut cli = commands::RuntimeCli::parse_from_smart(argv);
     if !matches!(cli.command, commands::Commands::Test(_)) {
         // We only need to set the exit handlers if we're not running tests

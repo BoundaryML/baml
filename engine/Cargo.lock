@@ -1001,6 +1001,7 @@ dependencies = [
  "wasm-bindgen-test",
  "wasm-logger",
  "web-time",
+ "which 6.0.3",
 ]
 
 [[package]]
