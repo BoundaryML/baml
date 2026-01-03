@@ -83,7 +83,10 @@ macro_rules! media_type_tests {
             fn is_base64_returns_false_for_url_media() {
                 let runtime = create_test_runtime();
                 let media = runtime.$from_url("https://example.com/test.png", None);
-                assert!(!media.is_base64(), "is_base64 should return false for URL media");
+                assert!(
+                    !media.is_base64(),
+                    "is_base64 should return false for URL media"
+                );
             }
 
             #[test]
@@ -98,7 +101,11 @@ macro_rules! media_type_tests {
             fn as_base64_returns_none_for_url_media() {
                 let runtime = create_test_runtime();
                 let media = runtime.$from_url("https://example.com/test.png", None);
-                assert_eq!(media.as_base64(), None, "as_base64 should return None for URL media");
+                assert_eq!(
+                    media.as_base64(),
+                    None,
+                    "as_base64 should return None for URL media"
+                );
             }
 
             #[test]
@@ -123,21 +130,31 @@ macro_rules! media_type_tests {
             fn is_url_returns_false_for_base64_media() {
                 let runtime = create_test_runtime();
                 let media = runtime.$from_base64("SGVsbG8gV29ybGQ=", None);
-                assert!(!media.is_url(), "is_url should return false for base64 media");
+                assert!(
+                    !media.is_url(),
+                    "is_url should return false for base64 media"
+                );
             }
 
             #[test]
             fn is_base64_returns_true_for_base64_media() {
                 let runtime = create_test_runtime();
                 let media = runtime.$from_base64("SGVsbG8gV29ybGQ=", None);
-                assert!(media.is_base64(), "is_base64 should return true for base64 media");
+                assert!(
+                    media.is_base64(),
+                    "is_base64 should return true for base64 media"
+                );
             }
 
             #[test]
             fn as_url_returns_none_for_base64_media() {
                 let runtime = create_test_runtime();
                 let media = runtime.$from_base64("SGVsbG8gV29ybGQ=", None);
-                assert_eq!(media.as_url(), None, "as_url should return None for base64 media");
+                assert_eq!(
+                    media.as_url(),
+                    None,
+                    "as_url should return None for base64 media"
+                );
             }
 
             #[test]

@@ -6,7 +6,7 @@ use syn::{Data, DeriveInput, Fields, Result, Type};
 
 use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
 
-pub fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
+pub(crate) fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
     let type_name = &input.ident;
     let baml_name = container_attrs
@@ -154,7 +154,7 @@ fn derive_enum_decode(
     }
 }
 
-/// Generate BamlEnum impl for regular BAML enums (unit variants only)
+/// Generate `BamlEnum` impl for regular BAML enums (unit variants only)
 fn derive_baml_enum_decode(
     type_name: &syn::Ident,
     baml_name: &str,
@@ -250,7 +250,7 @@ fn derive_baml_enum_decode(
     })
 }
 
-/// Generate BamlDecode impl for BAML union types (single-field tuple variants)
+/// Generate `BamlDecode` impl for BAML union types (single-field tuple variants)
 fn derive_union_decode(
     type_name: &syn::Ident,
     data: &syn::DataEnum,

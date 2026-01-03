@@ -402,7 +402,9 @@ pub(crate) fn extract_ptr_from_handle(handle: &BamlObjectHandle) -> Result<i64, 
 }
 
 /// Get the object type from a `BamlObjectHandle`
-pub(crate) fn object_type_from_handle(handle: &BamlObjectHandle) -> Result<BamlObjectType, BamlError> {
+pub(crate) fn object_type_from_handle(
+    handle: &BamlObjectHandle,
+) -> Result<BamlObjectType, BamlError> {
     match &handle.object {
         Some(obj) => {
             let object_type = match obj {

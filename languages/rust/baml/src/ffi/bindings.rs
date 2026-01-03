@@ -1,7 +1,8 @@
 use libc::{c_char, c_int, c_void, size_t};
 
 /// Callback function type for results
-pub type CallbackFn = extern "C" fn(call_id: u32, is_done: c_int, content: *const i8, length: size_t);
+pub type CallbackFn =
+    extern "C" fn(call_id: u32, is_done: c_int, content: *const i8, length: size_t);
 
 /// Callback function type for streaming ticks
 pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
@@ -64,10 +65,7 @@ unsafe extern "C" {
     pub fn cancel_function_call(id: u32) -> *const c_void;
 
     // Object operations
-    pub fn call_object_constructor(
-        encoded_invocation: *const c_char,
-        length: size_t,
-    ) -> Buffer;
+    pub fn call_object_constructor(encoded_invocation: *const c_char, length: size_t) -> Buffer;
 
     pub fn call_object_method(
         runtime: *const c_void,

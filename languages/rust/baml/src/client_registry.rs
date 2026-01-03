@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::codec::BamlEncode;
 use crate::proto::baml_cffi_v1::{
-    host_map_entry, HostClientProperty, HostClientRegistry, HostMapEntry,
+    HostClientProperty, HostClientRegistry, HostMapEntry, host_map_entry,
 };
 
 /// A client property for runtime client configuration.

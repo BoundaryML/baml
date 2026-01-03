@@ -4,7 +4,7 @@ use crate::client_registry::ClientRegistry;
 use crate::codec::BamlEncode;
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
-    host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
+    BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry, host_map_entry,
 };
 use crate::raw_objects::{Collector, RawObjectTrait, TypeBuilder};
 

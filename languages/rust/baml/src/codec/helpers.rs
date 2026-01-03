@@ -2,8 +2,8 @@
 
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{
-    cffi_value_holder, host_map_entry, host_value, CffiMapEntry, CffiValueHolder,
-    HostClassValue, HostEnumValue, HostMapEntry, HostValue,
+    CffiMapEntry, CffiValueHolder, HostClassValue, HostEnumValue, HostMapEntry, HostValue,
+    cffi_value_holder, host_map_entry, host_value,
 };
 
 use super::traits::{BamlClass, BamlDecode, BamlEnum};

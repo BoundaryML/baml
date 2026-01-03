@@ -281,7 +281,10 @@ mod decode {
 
     mod unions {
         use super::*;
-        use crate::common::{make_bool_holder, make_class_holder, make_int_holder, make_string_holder, make_union_holder};
+        use crate::common::{
+            make_bool_holder, make_class_holder, make_int_holder, make_string_holder,
+            make_union_holder,
+        };
 
         /// A simple union of primitive types
         #[derive(Debug, Clone, PartialEq, BamlDecode)]
@@ -313,11 +316,7 @@ mod decode {
 
         #[test]
         fn decodes_string_variant_from_union() {
-            let holder = make_union_holder(
-                "PrimitiveUnion",
-                "string",
-                make_string_holder("hello"),
-            );
+            let holder = make_union_holder("PrimitiveUnion", "string", make_string_holder("hello"));
 
             let result = PrimitiveUnion::baml_decode(&holder).unwrap();
             assert_eq!(result, PrimitiveUnion::String("hello".to_string()));
@@ -325,11 +324,7 @@ mod decode {
 
         #[test]
         fn decodes_int_variant_from_union() {
-            let holder = make_union_holder(
-                "PrimitiveUnion",
-                "int",
-                make_int_holder(42),
-            );
+            let holder = make_union_holder("PrimitiveUnion", "int", make_int_holder(42));
 
             let result = PrimitiveUnion::baml_decode(&holder).unwrap();
             assert_eq!(result, PrimitiveUnion::Int(42));
@@ -337,11 +332,7 @@ mod decode {
 
         #[test]
         fn decodes_bool_variant_from_union() {
-            let holder = make_union_holder(
-                "PrimitiveUnion",
-                "bool",
-                make_bool_holder(true),
-            );
+            let holder = make_union_holder("PrimitiveUnion", "bool", make_bool_holder(true));
 
             let result = PrimitiveUnion::baml_decode(&holder).unwrap();
             assert_eq!(result, PrimitiveUnion::Bool(true));
@@ -352,17 +343,23 @@ mod decode {
             let holder = make_union_holder(
                 "PersonOrString",
                 "Person",
-                make_class_holder("Person", vec![
-                    ("name", make_string_holder("Alice")),
-                    ("age", make_int_holder(30)),
-                ]),
+                make_class_holder(
+                    "Person",
+                    vec![
+                        ("name", make_string_holder("Alice")),
+                        ("age", make_int_holder(30)),
+                    ],
+                ),
             );
 
             let result = PersonOrString::baml_decode(&holder).unwrap();
-            assert_eq!(result, PersonOrString::Person(Person {
-                name: "Alice".to_string(),
-                age: 30,
-            }));
+            assert_eq!(
+                result,
+                PersonOrString::Person(Person {
+                    name: "Alice".to_string(),
+                    age: 30,
+                })
+            );
         }
 
         #[test]
@@ -394,7 +391,9 @@ mod decode {
 
 mod combined {
     use super::*;
-    use crate::common::{make_class_holder, make_int_holder, make_string_holder, make_union_holder};
+    use crate::common::{
+        make_class_holder, make_int_holder, make_string_holder, make_union_holder,
+    };
 
     // Note: Encode and decode are NOT symmetric for unions:
     // - Encode: Union variant -> raw inner value (e.g., StringValue)
@@ -442,7 +441,10 @@ mod combined {
         // Verify encode works
         let original = StringOrInt::String("test".to_string());
         let encoded = original.baml_encode();
-        assert!(matches!(encoded.value, Some(host_value::Value::StringValue(_))));
+        assert!(matches!(
+            encoded.value,
+            Some(host_value::Value::StringValue(_))
+        ));
 
         // Verify decode works (with runtime-style UnionVariantValue wrapper)
         let holder = make_union_holder("StringOrInt", "string", make_string_holder("test"));
@@ -458,22 +460,31 @@ mod combined {
             age: 25,
         });
         let encoded = original.baml_encode();
-        assert!(matches!(encoded.value, Some(host_value::Value::ClassValue(_))));
+        assert!(matches!(
+            encoded.value,
+            Some(host_value::Value::ClassValue(_))
+        ));
 
         // Verify decode works
         let holder = make_union_holder(
             "UserOrString",
             "User",
-            make_class_holder("User", vec![
-                ("name", make_string_holder("Bob")),
-                ("age", make_int_holder(25)),
-            ]),
+            make_class_holder(
+                "User",
+                vec![
+                    ("name", make_string_holder("Bob")),
+                    ("age", make_int_holder(25)),
+                ],
+            ),
         );
         let decoded = UserOrString::baml_decode(&holder).unwrap();
-        assert_eq!(decoded, UserOrString::User(User {
-            name: "Bob".to_string(),
-            age: 25,
-        }));
+        assert_eq!(
+            decoded,
+            UserOrString::User(User {
+                name: "Bob".to_string(),
+                age: 25,
+            })
+        );
     }
 
     #[test]
@@ -484,21 +495,20 @@ mod combined {
 
         // The outer Node variant encodes the Box<RecursiveUnion>, which encodes the inner Leaf
         // Since it's a union, the inner value is encoded directly (string value)
-        assert!(matches!(encoded.value, Some(host_value::Value::StringValue(_))));
+        assert!(matches!(
+            encoded.value,
+            Some(host_value::Value::StringValue(_))
+        ));
 
         // Test decoding a nested structure
-        let inner_holder = make_union_holder(
-            "RecursiveUnion",
-            "string",
-            make_string_holder("inner"),
-        );
-        let outer_holder = make_union_holder(
-            "RecursiveUnion",
-            "RecursiveUnion",
-            inner_holder,
-        );
+        let inner_holder =
+            make_union_holder("RecursiveUnion", "string", make_string_holder("inner"));
+        let outer_holder = make_union_holder("RecursiveUnion", "RecursiveUnion", inner_holder);
 
         let decoded = RecursiveUnion::baml_decode(&outer_holder).unwrap();
-        assert_eq!(decoded, RecursiveUnion::Node(Box::new(RecursiveUnion::Leaf("inner".to_string()))));
+        assert_eq!(
+            decoded,
+            RecursiveUnion::Node(Box::new(RecursiveUnion::Leaf("inner".to_string())))
+        );
     }
 }

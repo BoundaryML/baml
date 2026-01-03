@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use crate::codec::{BamlDecode, BamlEncode};
 use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    cffi_value_holder, CffiStreamState, CffiValueHolder, HostValue,
-};
+use crate::proto::baml_cffi_v1::{CffiStreamState, CffiValueHolder, HostValue, cffi_value_holder};
 
 /// Result of a @check constraint
 #[derive(Debug, Clone)]
@@ -86,12 +84,16 @@ impl<T: BamlEncode> BamlEncode for Checked<T> {
 impl<T> Checked<T> {
     /// Returns true if all checks passed
     pub fn all_passed(&self) -> bool {
-        self.checks.values().all(|c| c.status == CheckStatus::Passed)
+        self.checks
+            .values()
+            .all(|c| c.status == CheckStatus::Passed)
     }
 
     /// Returns true if any check failed
     pub fn any_failed(&self) -> bool {
-        self.checks.values().any(|c| c.status == CheckStatus::Failed)
+        self.checks
+            .values()
+            .any(|c| c.status == CheckStatus::Failed)
     }
 
     /// Get a specific check by name

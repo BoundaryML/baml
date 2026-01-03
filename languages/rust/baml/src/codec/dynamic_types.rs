@@ -101,8 +101,8 @@ impl DynamicEnum {
 /// A dynamic union - wraps a value with union metadata
 #[derive(Debug, Clone)]
 pub struct DynamicUnion<T: KnownTypes, S: KnownTypes> {
-    pub name: String,             // Union type name (e.g., "FooOrBar")
-    pub variant_name: String,     // Which variant matched (e.g., "Foo")
+    pub name: String,                // Union type name (e.g., "FooOrBar")
+    pub variant_name: String,        // Which variant matched (e.g., "Foo")
     pub value: Box<BamlValue<T, S>>, // The actual value
 }
 

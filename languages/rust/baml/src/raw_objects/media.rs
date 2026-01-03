@@ -7,7 +7,7 @@ use std::ffi::c_void;
 use crate::baml_unreachable;
 use crate::proto::baml_cffi_v1::BamlObjectType;
 
-use super::{define_raw_object_wrapper, RawObject, RawObjectTrait};
+use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
 
 // =============================================================================
 // Media type macro - generates Image, Audio, Pdf, Video

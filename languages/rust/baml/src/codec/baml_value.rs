@@ -27,8 +27,8 @@ pub enum BamlValue<T: KnownTypes, S: KnownTypes> {
     Map(HashMap<String, BamlValue<T, S>>),
 
     // Project-specific known types
-    Known(T),        // Regular types (complete)
-    StreamKnown(S),  // Stream types (partial) - invariant in non-streaming
+    Known(T),       // Regular types (complete)
+    StreamKnown(S), // Stream types (partial) - invariant in non-streaming
 
     // Wrappers (contain BamlValue recursively)
     Checked(Checked<Box<BamlValue<T, S>>>),
@@ -86,8 +86,8 @@ impl<T: KnownTypes, S: KnownTypes> BamlValue<T, S> {
 
 use super::traits::{BamlDecode, BamlEncode};
 use crate::proto::baml_cffi_v1::{
-    host_map_entry, host_value, HostClassValue, HostEnumValue, HostListValue, HostMapEntry,
-    HostMapValue, HostValue,
+    HostClassValue, HostEnumValue, HostListValue, HostMapEntry, HostMapValue, HostValue,
+    host_map_entry, host_value,
 };
 
 impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
@@ -174,7 +174,7 @@ impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
 // =============================================================================
 
 use crate::proto::baml_cffi_v1::{
-    cffi_field_type_literal, cffi_value_holder, CffiStreamState, CffiValueHolder,
+    CffiStreamState, CffiValueHolder, cffi_field_type_literal, cffi_value_holder,
 };
 use crate::types::{Check, CheckStatus, StreamingState};
 

@@ -46,10 +46,11 @@ use std::ffi::CString;
 pub use args::FunctionArgs;
 pub use client_registry::ClientRegistry;
 pub use codec::{
-    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field,
-    encode_class, encode_class_dynamic, encode_enum,
+    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field, encode_class,
+    encode_class_dynamic, encode_enum,
 };
 // New dynamic type exports
+pub use async_stream::AsyncStreamingCall;
 pub use codec::{
     BamlValue, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
 };
@@ -86,7 +87,6 @@ pub use raw_objects::{
     Usage,
     Video,
 };
-pub use async_stream::AsyncStreamingCall;
 pub use runtime::{BamlRuntime, StaticRuntimeType};
 pub use stream::{StreamEvent, StreamingCall};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
@@ -136,8 +136,7 @@ pub mod __internal {
             }
             _ => Err(BamlError::internal(format!(
                 "expected union variant of type {}, got {:?}",
-                type_name,
-                holder
+                type_name, holder
             ))),
         }
     }
@@ -179,7 +178,9 @@ pub fn invoke_cli(args: &[&str]) -> i32 {
         .collect();
 
     #[allow(unsafe_code)]
-    unsafe { ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr()) }
+    unsafe {
+        ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr())
+    }
 }
 
 /// Get the BAML library version
@@ -190,5 +191,7 @@ pub fn version() -> String {
         return "unknown".to_string();
     }
     #[allow(unsafe_code)]
-    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
+    unsafe {
+        std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    }
 }

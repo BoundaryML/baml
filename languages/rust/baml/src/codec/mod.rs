@@ -22,24 +22,24 @@
 //! - [`FromBamlValueRef`] - Borrow concrete types from `BamlValue` (zero-copy)
 //! - [`KnownTypes`] - Marker trait for CodeGen'd type enums
 
-mod traits;
-mod primitives;
-mod containers;
-mod helpers;
-mod known_types;
 mod baml_value;
+mod containers;
 mod dynamic_types;
 mod from_baml_value;
 mod from_baml_value_ref;
+mod helpers;
+mod known_types;
+mod primitives;
+mod traits;
 
 // Re-export all public items
-pub use traits::{BamlDecode, BamlEncode, BamlClass, BamlEnum, IntoKwargs};
-pub use helpers::{decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum};
-pub use known_types::KnownTypes;
 pub use baml_value::BamlValue;
 pub use dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
 pub use from_baml_value::FromBamlValue;
 pub use from_baml_value_ref::FromBamlValueRef;
+pub use helpers::{decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum};
+pub use known_types::KnownTypes;
+pub use traits::{BamlClass, BamlDecode, BamlEncode, BamlEnum, IntoKwargs};
 
 // Re-export protobuf types needed by generated code
 pub use crate::proto::baml_cffi_v1::{

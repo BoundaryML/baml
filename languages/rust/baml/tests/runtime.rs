@@ -31,11 +31,15 @@ mod creation {
                 }
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -63,11 +67,15 @@ mod creation {
                 prompt #"Get user with id {{id}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -95,11 +103,15 @@ mod creation {
                 prompt #"What is the status?"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -116,7 +128,7 @@ mod creation {
                 }
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
         files.insert(
             "types.baml".to_string(),
@@ -126,7 +138,7 @@ mod creation {
                 age int
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
         files.insert(
             "functions.baml".to_string(),
@@ -136,11 +148,15 @@ mod creation {
                 prompt #"Extract person from: {{text}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -151,7 +167,7 @@ mod creation {
             r#####"
             this is not valid baml syntax {{{
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
@@ -169,11 +185,14 @@ mod creation {
                 prompt #"test"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_err(), "Expected error for missing client reference");
+        assert!(
+            result.is_err(),
+            "Expected error for missing client reference"
+        );
     }
 
     #[test]
@@ -302,11 +321,15 @@ mod complex_scenarios {
                 prompt #"Extract person from: {{text}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -335,11 +358,15 @@ mod complex_scenarios {
                 prompt #"Get profile for {{id}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -366,11 +393,15 @@ mod complex_scenarios {
                 prompt #"Extract items from: {{text}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -392,11 +423,15 @@ mod complex_scenarios {
                 prompt #"Extract key-value pairs from: {{text}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -428,11 +463,15 @@ mod complex_scenarios {
                 prompt #"Classify this pet: {{description}}"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -462,11 +501,15 @@ mod complex_scenarios {
                 prompt #"Hello"#
             }
             "#####
-            .to_string(),
+                .to_string(),
         );
 
         let result = BamlRuntime::new(".", files, env_vars());
-        assert!(result.is_ok(), "Runtime creation failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Runtime creation failed: {:?}",
+            result.err()
+        );
     }
 }
 
@@ -680,12 +723,18 @@ mod function_calls {
 
         // Should have exactly one check named "reasonable_age"
         assert_eq!(checked.checks.len(), 1, "Should have one check");
-        let check = checked.get_check("reasonable_age").expect("Should have 'reasonable_age' check");
+        let check = checked
+            .get_check("reasonable_age")
+            .expect("Should have 'reasonable_age' check");
         assert_eq!(check.name, "reasonable_age");
 
         // If the LLM returned a reasonable age (1-149), the check should pass
         if checked.value > 0 && checked.value < 150 {
-            assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+            assert_eq!(
+                check.status,
+                CheckStatus::Passed,
+                "Check should pass for reasonable age"
+            );
             assert!(checked.all_passed());
         }
     }
@@ -738,7 +787,9 @@ mod function_calls {
 
         // Should have exactly one check named "if_present_reasonable"
         assert_eq!(checked.checks.len(), 1, "Should have one check");
-        let check = checked.get_check("if_present_reasonable").expect("Should have 'if_present_reasonable' check");
+        let check = checked
+            .get_check("if_present_reasonable")
+            .expect("Should have 'if_present_reasonable' check");
         assert_eq!(check.name, "if_present_reasonable");
 
         // The check should pass whether it's Some(reasonable_age) or None
@@ -746,12 +797,20 @@ mod function_calls {
             Some(age) => {
                 println!("Got age: {}", age);
                 if age > 0 && age < 150 {
-                    assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+                    assert_eq!(
+                        check.status,
+                        CheckStatus::Passed,
+                        "Check should pass for reasonable age"
+                    );
                 }
             }
             None => {
                 println!("Got null (no age)");
-                assert_eq!(check.status, CheckStatus::Passed, "Check should pass for null");
+                assert_eq!(
+                    check.status,
+                    CheckStatus::Passed,
+                    "Check should pass for null"
+                );
             }
         }
     }
@@ -790,7 +849,8 @@ mod function_calls {
             .arg("name", "Bob")
             .with_env("OPENAI_API_KEY", &api_key);
 
-        let result: Result<Option<Checked<i64>>, _> = runtime.call_function("MaybeGetCheckedAge", &args);
+        let result: Result<Option<Checked<i64>>, _> =
+            runtime.call_function("MaybeGetCheckedAge", &args);
 
         assert!(
             result.is_ok(),
@@ -799,7 +859,10 @@ mod function_calls {
         );
 
         let maybe_checked = result.unwrap();
-        println!("Got Option<Checked<i64>>: {:?}", maybe_checked.as_ref().map(|c| c.value));
+        println!(
+            "Got Option<Checked<i64>>: {:?}",
+            maybe_checked.as_ref().map(|c| c.value)
+        );
 
         match maybe_checked {
             Some(checked) => {
@@ -808,12 +871,18 @@ mod function_calls {
 
                 // Should have exactly one check named "reasonable_age"
                 assert_eq!(checked.checks.len(), 1, "Should have one check");
-                let check = checked.get_check("reasonable_age").expect("Should have 'reasonable_age' check");
+                let check = checked
+                    .get_check("reasonable_age")
+                    .expect("Should have 'reasonable_age' check");
                 assert_eq!(check.name, "reasonable_age");
 
                 // If the LLM returned a reasonable age (1-149), the check should pass
                 if checked.value > 0 && checked.value < 150 {
-                    assert_eq!(check.status, CheckStatus::Passed, "Check should pass for reasonable age");
+                    assert_eq!(
+                        check.status,
+                        CheckStatus::Passed,
+                        "Check should pass for reasonable age"
+                    );
                     assert!(checked.all_passed());
                 }
             }
@@ -878,7 +947,10 @@ mod function_calls {
             .with_env("OPENAI_API_KEY", &api_key);
 
         let stream = runtime
-            .call_function_stream::<PartialMessageWithState, MessageWithState>("GenerateMessage", &args)
+            .call_function_stream::<PartialMessageWithState, MessageWithState>(
+                "GenerateMessage",
+                &args,
+            )
             .expect("stream creation failed");
 
         let mut saw_pending = false;
@@ -914,11 +986,17 @@ mod function_calls {
         assert!(partial_count > 0, "Expected at least one partial result");
 
         // Should have seen at least Started and Done states (Pending might be missed if streaming is fast)
-        assert!(saw_started || saw_done, "Expected to see Started or Done streaming state");
+        assert!(
+            saw_started || saw_done,
+            "Expected to see Started or Done streaming state"
+        );
 
         let msg = stream.get_final_response().expect("Expected final result");
         assert!(!msg.content.is_empty(), "Content should not be empty");
-        println!("Streaming with state test passed with {} partial updates", partial_count);
+        println!(
+            "Streaming with state test passed with {} partial updates",
+            partial_count
+        );
     }
 
     /// Test streaming function call with valid API key
@@ -998,7 +1076,10 @@ mod function_calls {
                     // are still being populated. This is expected behavior when
                     // the partial type has required fields that haven't arrived yet.
                     error_count += 1;
-                    println!("Stream decode error {} (expected for incomplete partials): {:?}", error_count, e);
+                    println!(
+                        "Stream decode error {} (expected for incomplete partials): {:?}",
+                        error_count, e
+                    );
                 }
             }
         }

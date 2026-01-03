@@ -306,7 +306,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let _value = enum_builder.add_value("Active").expect("Failed to add value");
+            let _value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
         }
 
         #[test]
@@ -314,7 +316,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Active").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
             assert_eq!(value.name().unwrap(), "Active");
         }
 
@@ -323,9 +327,15 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let _v1 = enum_builder.add_value("Active").expect("Failed to add Active");
-            let _v2 = enum_builder.add_value("Inactive").expect("Failed to add Inactive");
-            let _v3 = enum_builder.add_value("Pending").expect("Failed to add Pending");
+            let _v1 = enum_builder
+                .add_value("Active")
+                .expect("Failed to add Active");
+            let _v2 = enum_builder
+                .add_value("Inactive")
+                .expect("Failed to add Inactive");
+            let _v3 = enum_builder
+                .add_value("Pending")
+                .expect("Failed to add Pending");
         }
 
         #[test]
@@ -347,7 +357,9 @@ mod type_builder {
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
             enum_builder.add_value("Active").unwrap();
 
-            let found = enum_builder.get_value("Active").expect("Failed to get value");
+            let found = enum_builder
+                .get_value("Active")
+                .expect("Failed to get value");
             assert!(found.is_some());
             assert_eq!(found.unwrap().name().unwrap(), "Active");
         }
@@ -358,7 +370,9 @@ mod type_builder {
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
 
-            let found = enum_builder.get_value("NonExistent").expect("Failed to get value");
+            let found = enum_builder
+                .get_value("NonExistent")
+                .expect("Failed to get value");
             assert!(found.is_none());
         }
 
@@ -381,7 +395,9 @@ mod type_builder {
             enum_builder
                 .set_description("Status of a task")
                 .expect("Failed to set description");
-            let desc = enum_builder.description().expect("Failed to get description");
+            let desc = enum_builder
+                .description()
+                .expect("Failed to get description");
             assert_eq!(desc, Some("Status of a task".to_string()));
         }
 
@@ -411,7 +427,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Active").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
 
             value
                 .set_description("The item is active")
@@ -425,7 +443,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Active").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
 
             value.set_alias("ACTIVE").expect("Failed to set alias");
             let alias = value.alias().expect("Failed to get alias");
@@ -437,7 +457,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Deprecated").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Deprecated")
+                .expect("Failed to add value");
 
             value.set_skip(true).expect("Failed to set skip");
             let skip = value.skip().expect("Failed to get skip");
@@ -449,7 +471,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Active").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
 
             let skip = value.skip().expect("Failed to get skip");
             assert!(!skip);
@@ -460,7 +484,9 @@ mod type_builder {
             let runtime = create_test_runtime();
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
-            let value = enum_builder.add_value("Active").expect("Failed to add value");
+            let value = enum_builder
+                .add_value("Active")
+                .expect("Failed to add value");
 
             // Chain multiple configurations
             value.set_description("Active status").unwrap();
@@ -603,7 +629,9 @@ mod type_builder {
             class_builder
                 .set_description("Represents a person")
                 .expect("Failed to set description");
-            let desc = class_builder.description().expect("Failed to get description");
+            let desc = class_builder
+                .description()
+                .expect("Failed to get description");
             assert_eq!(desc, Some("Represents a person".to_string()));
         }
 
@@ -1678,9 +1706,7 @@ mod type_builder {
             let name_prop = class_builder
                 .add_property("name", &string_type)
                 .expect("Failed to add name");
-            name_prop
-                .set_description("The person's full name")
-                .unwrap();
+            name_prop.set_description("The person's full name").unwrap();
 
             let age_prop = class_builder
                 .add_property("age", &int_type)
@@ -1857,8 +1883,7 @@ mod type_builder {
             // Phone should be null or not present since it wasn't in the text
             if let Some(phone) = value.get("phone") {
                 assert!(
-                    phone.is_null()
-                        || phone.as_str().map(|s| s.is_empty()).unwrap_or(false),
+                    phone.is_null() || phone.as_str().map(|s| s.is_empty()).unwrap_or(false),
                     "Phone should be null or empty since not provided, got: {:?}",
                     phone
                 );
@@ -1903,7 +1928,9 @@ mod type_builder {
             );
 
             // Verify items is a list
-            let items = value.get("items").expect("Result should have 'items' field");
+            let items = value
+                .get("items")
+                .expect("Result should have 'items' field");
             assert!(
                 items.is_array(),
                 "Items should be an array, got: {:?}",
@@ -1981,7 +2008,9 @@ mod type_builder {
             let tb = runtime.new_type_builder();
 
             // Add properties to the Customer class
-            let customer_class = tb.get_class("Customer").expect("Customer class should exist");
+            let customer_class = tb
+                .get_class("Customer")
+                .expect("Customer class should exist");
             let string_type = tb.string();
             customer_class
                 .add_property("name", &string_type)

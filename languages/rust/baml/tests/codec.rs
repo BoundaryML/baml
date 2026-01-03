@@ -2,7 +2,7 @@
 
 mod common;
 
-use baml::__internal::{host_value, CffiStreamState};
+use baml::__internal::{CffiStreamState, host_value};
 use baml::{BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState};
 use common::{
     make_bool_holder, make_checked_holder, make_float_holder, make_int_holder, make_list_holder,
@@ -324,10 +324,7 @@ mod stream_state {
 
     #[test]
     fn decode_stream_state_with_list() {
-        let inner = make_list_holder(vec![
-            make_string_holder("a"),
-            make_string_holder("b"),
-        ]);
+        let inner = make_list_holder(vec![make_string_holder("a"), make_string_holder("b")]);
         let holder = make_stream_state_holder(inner, CffiStreamState::Started);
 
         let result: StreamState<Vec<String>> = BamlDecode::baml_decode(&holder).unwrap();

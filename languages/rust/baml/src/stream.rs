@@ -22,7 +22,6 @@ enum StreamState {
     Finished,
 }
 
-
 /// Result of a streaming function call
 pub struct StreamingCall<TStream, TFinal: Clone> {
     id: u32,
@@ -60,9 +59,7 @@ where
         }
 
         match self.receiver.recv() {
-            Ok(CallbackResult::Partial(bytes)) => {
-                decode_partial(&bytes).map(Internal::Partial)
-            }
+            Ok(CallbackResult::Partial(bytes)) => decode_partial(&bytes).map(Internal::Partial),
 
             Ok(CallbackResult::Final(bytes)) => {
                 self.state = StreamState::Finished;
@@ -85,7 +82,6 @@ where
     }
 }
 
-
 fn decode_partial<T: BamlDecode>(data: &[u8]) -> Result<T, BamlError> {
     let holder = CffiValueHolder::decode(data)
         .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
@@ -97,7 +93,6 @@ fn decode_final<T: BamlDecode>(data: &[u8]) -> Result<T, BamlError> {
         .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
     T::baml_decode(&holder)
 }
-
 
 pub struct Partials<'a, TPartial, TFinal: Clone> {
     call: &'a mut StreamingCall<TPartial, TFinal>,
@@ -118,7 +113,6 @@ where
         }
     }
 }
-
 
 /// Public interface for the streaming call
 impl<TPartial, TFinal: Clone> StreamingCall<TPartial, TFinal>
@@ -162,7 +156,7 @@ where
 }
 
 /// Support for owned for loops
-/// 
+///
 
 pub struct PartialsOwned<TPartial, TFinal: Clone> {
     call: StreamingCall<TPartial, TFinal>,

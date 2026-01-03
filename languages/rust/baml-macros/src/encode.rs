@@ -4,9 +4,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Result};
 
-use crate::shared::{baml_crate_path, ContainerAttrs, FieldAttrs, VariantAttrs};
+use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
 
-pub fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
+pub(crate) fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
     let type_name = &input.ident;
     let baml_name = container_attrs
@@ -19,9 +19,13 @@ pub fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
         Data::Struct(data) => {
             derive_struct_encode(type_name, &baml_name, &data.fields, &baml_crate)
         }
-        Data::Enum(data) => {
-            derive_enum_encode(type_name, &baml_name, data, &baml_crate, container_attrs.union)
-        }
+        Data::Enum(data) => derive_enum_encode(
+            type_name,
+            &baml_name,
+            data,
+            &baml_crate,
+            container_attrs.union,
+        ),
         Data::Union(_) => Err(syn::Error::new_spanned(
             &input,
             "BamlEncode cannot be derived for unions",
@@ -59,9 +63,7 @@ fn derive_struct_encode(
         }
 
         let field_name = field.ident.as_ref().unwrap();
-        let baml_field_name = field_attrs
-            .name
-            .unwrap_or_else(|| field_name.to_string());
+        let baml_field_name = field_attrs.name.unwrap_or_else(|| field_name.to_string());
 
         field_encodings.push(quote! {
             (#baml_field_name, #baml_crate::BamlEncode::baml_encode(&self.#field_name))

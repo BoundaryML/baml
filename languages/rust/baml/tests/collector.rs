@@ -97,7 +97,10 @@ mod collector {
         fn last_returns_none_initially() {
             let runtime = create_test_runtime();
             let collector = runtime.new_collector("test");
-            assert!(collector.last().is_none(), "last() should return None initially");
+            assert!(
+                collector.last().is_none(),
+                "last() should return None initially"
+            );
         }
 
         #[test]
@@ -132,8 +135,16 @@ mod collector {
             let collector = runtime.new_collector("test");
             let usage = collector.usage();
 
-            assert_eq!(usage.input_tokens(), 0, "input_tokens should be 0 initially");
-            assert_eq!(usage.output_tokens(), 0, "output_tokens should be 0 initially");
+            assert_eq!(
+                usage.input_tokens(),
+                0,
+                "input_tokens should be 0 initially"
+            );
+            assert_eq!(
+                usage.output_tokens(),
+                0,
+                "output_tokens should be 0 initially"
+            );
         }
     }
 
@@ -212,7 +223,10 @@ mod collector {
                 .with_collector(&c2);
 
             let encoded = args.encode();
-            assert!(encoded.is_ok(), "Failed to encode args with multiple collectors");
+            assert!(
+                encoded.is_ok(),
+                "Failed to encode args with multiple collectors"
+            );
         }
 
         #[test]
@@ -228,7 +242,10 @@ mod collector {
                 .with_collector(&collector);
 
             let encoded = args.encode();
-            assert!(encoded.is_ok(), "Failed to encode complex args with collector");
+            assert!(
+                encoded.is_ok(),
+                "Failed to encode complex args with collector"
+            );
         }
     }
 
@@ -328,8 +345,14 @@ mod collector {
             let collector = runtime.new_collector("test_collector");
 
             // Verify collector is empty before the call
-            assert!(collector.logs().is_empty(), "Collector should be empty before call");
-            assert!(collector.last().is_none(), "last() should be None before call");
+            assert!(
+                collector.logs().is_empty(),
+                "Collector should be empty before call"
+            );
+            assert!(
+                collector.last().is_none(),
+                "last() should be None before call"
+            );
 
             // Make a function call with the collector
             let args = FunctionArgs::new()
@@ -397,7 +420,10 @@ mod collector {
             let log = collector.last().expect("Should have a log");
             let log_usage = log.usage();
             assert!(log_usage.input_tokens() > 0, "Log should have input tokens");
-            assert!(log_usage.output_tokens() > 0, "Log should have output tokens");
+            assert!(
+                log_usage.output_tokens() > 0,
+                "Log should have output tokens"
+            );
         }
 
         #[test]
@@ -449,13 +475,27 @@ mod collector {
             // Clear and verify
             let cleared = collector.clear();
             assert_eq!(cleared, 1, "Should have cleared 1 log");
-            assert!(collector.logs().is_empty(), "Logs should be empty after clear");
-            assert!(collector.last().is_none(), "last() should be None after clear");
+            assert!(
+                collector.logs().is_empty(),
+                "Logs should be empty after clear"
+            );
+            assert!(
+                collector.last().is_none(),
+                "last() should be None after clear"
+            );
 
             // Usage should be reset too
             let usage = collector.usage();
-            assert_eq!(usage.input_tokens(), 0, "Input tokens should be 0 after clear");
-            assert_eq!(usage.output_tokens(), 0, "Output tokens should be 0 after clear");
+            assert_eq!(
+                usage.input_tokens(),
+                0,
+                "Input tokens should be 0 after clear"
+            );
+            assert_eq!(
+                usage.output_tokens(),
+                0,
+                "Output tokens should be 0 after clear"
+            );
         }
 
         #[test]
@@ -473,7 +513,12 @@ mod collector {
                     .with_collector(&collector);
 
                 let result: Result<String, _> = runtime.call_function("SayHello", &args);
-                assert!(result.is_ok(), "Call for {} failed: {:?}", name, result.err());
+                assert!(
+                    result.is_ok(),
+                    "Call for {} failed: {:?}",
+                    name,
+                    result.err()
+                );
             }
 
             // Verify all calls were logged
@@ -595,9 +640,15 @@ mod collector {
             let log = collector.last().expect("Should have a log");
             let timing = log.timing();
 
-            assert!(timing.start_time_utc_ms() > 0, "start_time should be positive");
+            assert!(
+                timing.start_time_utc_ms() > 0,
+                "start_time should be positive"
+            );
             assert!(timing.duration_ms().is_some(), "duration should be set");
-            assert!(timing.duration_ms().unwrap() > 0, "duration should be positive");
+            assert!(
+                timing.duration_ms().unwrap() > 0,
+                "duration should be positive"
+            );
         }
     }
 

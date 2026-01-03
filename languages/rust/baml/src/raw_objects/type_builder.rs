@@ -9,7 +9,7 @@ use crate::baml_unreachable;
 use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::BamlObjectType;
 
-use super::{define_raw_object_wrapper, RawObject, RawObjectTrait};
+use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
 
 // =============================================================================
 // TypeDef - A dynamically constructed BAML type
@@ -75,8 +75,9 @@ impl EnumValueBuilder {
         handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
         runtime: *const c_void,
     ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract EnumValueBuilder handle: {e}"));
+        let ptr = super::extract_ptr_from_handle(&handle).unwrap_or_else(|e| {
+            baml_unreachable!("Failed to extract EnumValueBuilder handle: {e}")
+        });
         Self {
             raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectEnumValueBuilder),
         }
@@ -312,10 +313,7 @@ impl ClassBuilder {
 
     /// Get a property by name (if it exists)
     pub fn get_property(&self, name: &str) -> Result<Option<ClassPropertyBuilder>, BamlError> {
-        match self
-            .raw
-            .call_method_for_object("property", ("name", name))
-        {
+        match self.raw.call_method_for_object("property", ("name", name)) {
             Ok(handle) => Ok(Some(ClassPropertyBuilder::from_handle(
                 handle,
                 self.raw.runtime(),

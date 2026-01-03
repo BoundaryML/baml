@@ -6,7 +6,7 @@ use syn::{Attribute, Result};
 
 /// Returns the path to the baml crate, handling the case where we're
 /// being used inside the baml crate itself.
-pub fn baml_crate_path() -> TokenStream {
+pub(crate) fn baml_crate_path() -> TokenStream {
     // Check if we're being used inside the baml crate's lib target.
     // CARGO_CRATE_NAME is "baml" only for the lib target, not for test targets
     // (test targets have names like "codec", "derive", "ffi", etc.)
@@ -19,7 +19,7 @@ pub fn baml_crate_path() -> TokenStream {
 
 /// Container-level attributes (on struct/enum)
 #[derive(Default)]
-pub struct ContainerAttrs {
+pub(crate) struct ContainerAttrs {
     /// The BAML type name (defaults to Rust type name)
     pub name: Option<String>,
     /// Whether this enum represents a BAML union type
@@ -30,18 +30,18 @@ pub struct ContainerAttrs {
 
 /// Field-level attributes
 #[derive(Default)]
-pub struct FieldAttrs {
+pub(crate) struct FieldAttrs {
     /// The BAML field name (defaults to Rust field name)
     pub name: Option<String>,
     /// Whether to skip this field during encoding
     pub skip: bool,
-    /// Whether this field holds dynamic properties (HashMap<String, BamlValue>)
+    /// Whether this field holds dynamic properties (`HashMap`<String, `BamlValue`>)
     pub dynamic_fields: bool,
 }
 
 /// Variant-level attributes (for enums)
 #[derive(Default)]
-pub struct VariantAttrs {
+pub(crate) struct VariantAttrs {
     /// The BAML variant name (defaults to Rust variant name)
     pub name: Option<String>,
     /// Whether this variant is the dynamic catch-all
@@ -50,7 +50,7 @@ pub struct VariantAttrs {
 
 impl ContainerAttrs {
     /// Parse container attributes from a list of attributes
-    pub fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
+    pub(crate) fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
         let mut result = Self::default();
 
         for attr in attrs {
@@ -81,7 +81,7 @@ impl ContainerAttrs {
 
 impl FieldAttrs {
     /// Parse field attributes from a list of attributes
-    pub fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
+    pub(crate) fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
         let mut result = Self::default();
 
         for attr in attrs {
@@ -112,7 +112,7 @@ impl FieldAttrs {
 
 impl VariantAttrs {
     /// Parse variant attributes from a list of attributes
-    pub fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
+    pub(crate) fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
         let mut result = Self::default();
 
         for attr in attrs {

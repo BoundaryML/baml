@@ -11,7 +11,7 @@ use crate::error::BamlError;
 use crate::proto::baml_cffi_v1::{BamlObjectType, CffiValueHolder};
 
 use super::llm_call::LLMCallKind;
-use super::{define_raw_object_wrapper, RawObject, RawObjectTrait};
+use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
 
 // =============================================================================
 // LogType Enum

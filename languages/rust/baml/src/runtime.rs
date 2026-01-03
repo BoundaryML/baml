@@ -262,12 +262,11 @@ impl BamlRuntime {
         llm_response: &str,
     ) -> Result<T, BamlError> {
         // Build args using FunctionArgs with parse-specific fields
-        let args = FunctionArgs::new()
-            .arg("llm_response", llm_response);
+        let args = FunctionArgs::new().arg("llm_response", llm_response);
 
         let encoded = args.encode()?;
-        let name_cstr =
-            CString::new(function_name).map_err(|_| BamlError::internal("invalid function name"))?;
+        let name_cstr = CString::new(function_name)
+            .map_err(|_| BamlError::internal("invalid function name"))?;
 
         let (id, receiver) = callbacks::create_callback();
 

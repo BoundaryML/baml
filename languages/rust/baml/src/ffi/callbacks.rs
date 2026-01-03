@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::c_int;
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, mpsc};
 
 use crate::error::BamlError;
 use crate::ffi::bindings;
