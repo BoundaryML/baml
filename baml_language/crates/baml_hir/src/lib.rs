@@ -1093,13 +1093,13 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                 "output_type" => {
                     if let Some(ref v) = value {
                         if !VALID_OUTPUT_TYPES.contains(&v.as_str()) {
-                            if let Some(value_token) = item.value_word() {
+                            if let Some(value_range) = item.value_text_range() {
                                 ctx.diagnostics.push(
                                     HirDiagnostic::InvalidGeneratorPropertyValue {
                                         generator_name: generator_name.clone(),
                                         property_name: key.to_string(),
                                         value: v.clone(),
-                                        span: ctx.span(value_token.text_range()),
+                                        span: ctx.span(value_range),
                                         valid_values: Some(
                                             VALID_OUTPUT_TYPES
                                                 .iter()
@@ -1123,13 +1123,13 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                 "default_client_mode" => {
                     if let Some(ref v) = value {
                         if !VALID_CLIENT_MODES.contains(&v.as_str()) {
-                            if let Some(value_token) = item.value_word() {
+                            if let Some(value_range) = item.value_text_range() {
                                 ctx.diagnostics.push(
                                     HirDiagnostic::InvalidGeneratorPropertyValue {
                                         generator_name: generator_name.clone(),
                                         property_name: key.to_string(),
                                         value: v.clone(),
-                                        span: ctx.span(value_token.text_range()),
+                                        span: ctx.span(value_range),
                                         valid_values: Some(
                                             VALID_CLIENT_MODES
                                                 .iter()
@@ -1156,13 +1156,13 @@ fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Gener
                 "module_format" => {
                     if let Some(ref v) = value {
                         if !VALID_MODULE_FORMATS.contains(&v.as_str()) {
-                            if let Some(value_token) = item.value_word() {
+                            if let Some(value_range) = item.value_text_range() {
                                 ctx.diagnostics.push(
                                     HirDiagnostic::InvalidGeneratorPropertyValue {
                                         generator_name: generator_name.clone(),
                                         property_name: key.to_string(),
                                         value: v.clone(),
-                                        span: ctx.span(value_token.text_range()),
+                                        span: ctx.span(value_range),
                                         valid_values: Some(
                                             VALID_MODULE_FORMATS
                                                 .iter()

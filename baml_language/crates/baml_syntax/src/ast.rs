@@ -383,6 +383,15 @@ impl ConfigItem {
             })
     }
 
+    /// Get the text range of the config value, regardless of whether it's a WORD or STRING_LITERAL.
+    /// This is useful for error reporting when the value type doesn't matter.
+    pub fn value_text_range(&self) -> Option<rowan::TextRange> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| config_value.text_range())
+    }
+
     /// Get the full config item value as a string.
     /// This handles compound values like "python/pydantic" that span multiple tokens.
     /// Returns the unquoted text of the value.
