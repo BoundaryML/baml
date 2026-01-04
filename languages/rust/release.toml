@@ -17,4 +17,4 @@ tag = true
 push = true
 
 # Number of crates we have
-rate-limit = 7
+rate-limit = { existing = 7 }
