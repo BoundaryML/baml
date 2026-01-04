@@ -15,7 +15,3 @@ tag = true
 
 # Push changes to remote
 push = true
-
-# Don't allow uncommitted changes
-allow-dirty = false
-
