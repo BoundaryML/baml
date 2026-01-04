@@ -9,6 +9,9 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 description = "Derive macros for BAML types"
+readme = "README.md"
+keywords = ["baml", "llm", "ai", "boundary", "macros", "derive", "proc-macro"]
+categories = ["development-tools", "no-std"]
 
 [lib]
 proc-macro = true

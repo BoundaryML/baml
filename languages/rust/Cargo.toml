@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "baml",
+    "baml-cli",
     "baml-macros",
     "baml-ffi-x86_64-unknown-linux-gnu",
     "baml-ffi-aarch64-unknown-linux-gnu",
@@ -19,11 +20,12 @@ authors = ["Boundary <contact@boundaryml.com>"]
 homepage = "https://github.com/BoundaryML/baml"
 documentation = "https://docs.boundaryml.com"
 repository = "https://github.com/BoundaryML/baml"
-license = "MIT"
-version = "0.1.0"
+license = "Apache-2.0"
+version = "0.215.0-beta"
 
 [workspace.dependencies]
 # external dependencies
+async-channel = "2"
 libc = "0.2"
 prost = "0.13"
 prost-build = "0.13"
@@ -36,7 +38,8 @@ once_cell = "1"
 futures-util = "0.3"
 
 # internal dependencies
-baml-macros = { version = "0.1.0", path = "baml-macros" }
+baml-macros = { version = "*", path = "baml-macros" }
+baml = { version = "*", path = "baml" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

@@ -50,6 +50,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-cli"
+version = "0.1.0"
+dependencies = [
+ "baml",
+]
+
+[[package]]
 name = "baml-ffi-aarch64-apple-darwin"
 version = "0.1.0"
 

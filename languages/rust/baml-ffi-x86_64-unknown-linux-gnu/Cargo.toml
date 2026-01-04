@@ -9,6 +9,7 @@ documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 description = "BAML FFI library for x86_64-unknown-linux-gnu"
+keywords = ["baml", "ffi", "linux", "x86_64"]
 
 [lib]
 doctest = false

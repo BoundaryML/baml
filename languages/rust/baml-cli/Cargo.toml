@@ -1,5 +1,5 @@
 [package]
-name = "baml-ffi-x86_64-pc-windows-msvc"
+name = "baml-cli"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -8,13 +8,16 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "BAML FFI library for x86_64-pc-windows-msvc"
-keywords = ["baml", "ffi", "windows", "x86_64"]
+description = "BAML CLI for Rust"
+readme = "README.md"
+keywords = ["baml", "llm", "cli", "ai", "boundary"]
+categories = ["command-line-utilities", "development-tools"]
 
-[lib]
-doctest = false
+[[bin]]
+name = "baml-cli"
+
+[dependencies]
+baml = { workspace = true }
 
 [lints]
 workspace = true
-
-# No dependencies - this is a pure artifact crate
