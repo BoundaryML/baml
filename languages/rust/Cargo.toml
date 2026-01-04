@@ -21,7 +21,7 @@ homepage = "https://github.com/BoundaryML/baml"
 documentation = "https://docs.boundaryml.com"
 repository = "https://github.com/BoundaryML/baml"
 license = "Apache-2.0"
-version = "0.215.0-beta"
+version = "0.1.0"
 
 [workspace.dependencies]
 # external dependencies
