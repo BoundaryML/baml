@@ -10,13 +10,12 @@ shared-version = true
 # Publish all packages after version bump
 publish = true
 
-# Verify packages by building them
-# Set to false if dependencies aren't published yet (first-time publish)
-verify = false
-
 # Create git tags for releases
 tag = true
 
 # Push changes to remote
 push = true
+
+# Don't allow uncommitted changes
+allow-dirty = false
 

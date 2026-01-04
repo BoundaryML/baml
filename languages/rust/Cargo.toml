@@ -88,3 +88,7 @@ codegen-units = 16
 
 [profile.dev]
 lto = false
+
+[workspace.metadata.release]
+# exact number of crates we have
+ratelimit = { existing = 7 }
