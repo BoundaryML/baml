@@ -489,10 +489,12 @@ impl InitArgs {
         let openapi_generator_path = infer_openapi_command();
 
         if let Err(e) = &openapi_generator_path {
-            baml_log::warn!(
-                "Failed to find openapi-generator-cli in your PATH, defaulting to using npx: {}",
-                e
-            );
+            if matches!(output_type, GeneratorOutputType::OpenApi) {
+                baml_log::warn!(
+                    "Failed to find openapi-generator-cli in your PATH, defaulting to using npx: {}",
+                    e
+                );
+            }
         }
 
         let main_baml_content = generate_main_baml_content(
@@ -547,12 +549,12 @@ fn generate_main_baml_content(
     let default_client_mode = match output_type {
         GeneratorOutputType::OpenApi
         | GeneratorOutputType::RubySorbet
-        | GeneratorOutputType::Go
-        | GeneratorOutputType::Rust => "".to_string(),
+        | GeneratorOutputType::Go => "".to_string(),
         GeneratorOutputType::PythonPydantic
         | GeneratorOutputType::PythonPydanticV1
         | GeneratorOutputType::Typescript
-        | GeneratorOutputType::TypescriptReact => format!(
+        | GeneratorOutputType::TypescriptReact
+        | GeneratorOutputType::Rust => format!(
             r#"
     // Valid values: "sync", "async"
     // This controls what `b.FunctionName()` will be (sync or async).
@@ -616,6 +618,14 @@ fn generate_main_baml_content(
     on_generate "gofmt -w . && goimports -w ."
     "#,
         )
+    } else if matches!(output_type, GeneratorOutputType::Rust) {
+        String::from(
+            r#"
+    // 'baml-cli generate' will run this after generating rust code
+    // This command will be run from within $output_dir/baml_client
+    on_generate "cargo fmt ."
+    "#,
+        )
     } else {
         "".to_string()
     };
@@ -657,7 +667,7 @@ fn generate_main_baml_content(
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "{output_type}"
 
     // Where the generated code will be saved (relative to baml_src/)

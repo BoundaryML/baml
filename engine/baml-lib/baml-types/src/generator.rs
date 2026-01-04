@@ -70,7 +70,7 @@ impl GeneratorOutputType {
             Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
             Self::Go => GeneratorDefaultClientMode::Sync,
-            Self::Rust => GeneratorDefaultClientMode::Sync,
+            Self::Rust => GeneratorDefaultClientMode::Async,
         }
     }
 }
