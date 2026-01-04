@@ -41,16 +41,16 @@ dev = []
 
 # Target-specific dependencies on vendored FFI crates
 [target.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.dependencies]
-baml-ffi-x86_64-unknown-linux-gnu = { version = "0.1.0", path = "../baml-ffi-x86_64-unknown-linux-gnu" }
+baml-ffi-x86_64-unknown-linux-gnu = { version = "*", path = "../baml-ffi-x86_64-unknown-linux-gnu" }
 
 [target.'cfg(all(target_arch = "aarch64", target_os = "linux"))'.dependencies]
-baml-ffi-aarch64-unknown-linux-gnu = { version = "0.1.0", path = "../baml-ffi-aarch64-unknown-linux-gnu" }
+baml-ffi-aarch64-unknown-linux-gnu = { version = "*", path = "../baml-ffi-aarch64-unknown-linux-gnu" }
 
 [target.'cfg(all(target_arch = "x86_64", target_os = "macos"))'.dependencies]
-baml-ffi-x86_64-apple-darwin = { version = "0.1.0", path = "../baml-ffi-x86_64-apple-darwin" }
+baml-ffi-x86_64-apple-darwin = { version = "*", path = "../baml-ffi-x86_64-apple-darwin" }
 
 [target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
-baml-ffi-aarch64-apple-darwin = { version = "0.1.0", path = "../baml-ffi-aarch64-apple-darwin" }
+baml-ffi-aarch64-apple-darwin = { version = "*", path = "../baml-ffi-aarch64-apple-darwin" }
 
 [target.'cfg(all(target_arch = "x86_64", target_os = "windows", target_env = "msvc"))'.dependencies]
-baml-ffi-x86_64-pc-windows-msvc = { version = "0.1.0", path = "../baml-ffi-x86_64-pc-windows-msvc" }
+baml-ffi-x86_64-pc-windows-msvc = { version = "*", path = "../baml-ffi-x86_64-pc-windows-msvc" }
