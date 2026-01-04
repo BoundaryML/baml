@@ -74,7 +74,7 @@ impl UsageWrapper {
 
     #[export_baml_fn]
     fn cached_input_tokens(&self) -> Option<i64> {
-        self.cached_input_tokens.clone()
+        self.cached_input_tokens
     }
 }
 

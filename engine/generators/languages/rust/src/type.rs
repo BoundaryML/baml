@@ -274,7 +274,7 @@ impl SerializeType for TypeRust {
             TypeRust::Int(..) => "i64".to_string(),
             TypeRust::Float => "f64".to_string(),
             TypeRust::Bool(..) => "bool".to_string(),
-            TypeRust::Boxed(inner) => format!("{}", inner.serialize_type_as_parameter(pkg)),
+            TypeRust::Boxed(inner) => inner.serialize_type_as_parameter(pkg).to_string(),
             TypeRust::Media(media) => media.serialize_type_as_parameter(pkg),
             TypeRust::Class { .. }
             | TypeRust::TypeAlias { .. }

@@ -2556,7 +2556,7 @@ pub fn typecheck_expression(
 
             // Typecheck else-branch (with potential narrowing for negated instanceof)
             let typed_else = else_branch.as_ref().map(|e| {
-                if let Some((var_name, excluded_type)) = else_narrowing {
+                if let Some((_var_name, _excluded_type)) = else_narrowing {
                     // For else branch after instanceof, we could implement
                     // exclusion narrowing (remove type from union)
                     // For now, just use original context

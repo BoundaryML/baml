@@ -73,7 +73,7 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
         T::Arrow(..) => TypeTS::Any {
             reason: "arrow types are not supported in TypeScript".to_string(),
         },
-        T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
+        T::Union(union_type_generic, _union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeTS::Any {
                 reason: "Null types are not supported in TypeScript".to_string(),
             },
@@ -163,7 +163,7 @@ pub(crate) fn type_to_ts(field: &TypeNonStreaming, _lookup: &impl TypeLookups) -
             package: type_pkg.clone(),
             name: name.clone(),
         },
-        T::Union(union_type_generic, union_meta) => match union_type_generic.view() {
+        T::Union(union_type_generic, _union_meta) => match union_type_generic.view() {
             baml_types::ir_type::UnionTypeViewGeneric::Null => TypeTS::Any {
                 reason: "Null types are not supported in TypeScript".to_string(),
             },

@@ -20,7 +20,7 @@ pub struct FieldRust {
 
 impl FieldRust {
     pub fn new(name: &str, docstring: Option<String>, r#type: TypeRust) -> Self {
-        let safe_name = crate::utils::escape_keyword(&name);
+        let safe_name = crate::utils::escape_keyword(name);
         Self {
             cffi_name: if name == safe_name {
                 None
