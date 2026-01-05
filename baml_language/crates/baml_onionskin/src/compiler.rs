@@ -793,6 +793,8 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -844,6 +846,7 @@ impl CompilerRunner {
                     // Use tree view for both modes - interactive mode parses this afterward
                     let tree_output = baml_tir::render_function_tree(
                         &self.db,
+                        &resolution_ctx,
                         &func_name,
                         &signature,
                         &body,
@@ -896,6 +899,8 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -945,7 +950,7 @@ impl CompilerRunner {
                     writeln!(output, "{}", header).ok();
                     output_annotated.push((header, status));
 
-                    match lower_from_hir(&self.db, &body, &inference_result) {
+                    match lower_from_hir(&self.db, &body, &inference_result, &resolution_ctx) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
                             let ir_output = pretty_print(&typed_ir);
@@ -1004,6 +1009,8 @@ impl CompilerRunner {
             }
         }
 
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -1038,16 +1045,26 @@ impl CompilerRunner {
                     );
 
                     // Lower HIR → VIR → MIR
-                    let mir_output =
-                        match baml_vir::lower_from_hir(&self.db, &body, &inference_result) {
-                            Ok(vir) => {
-                                let mir = baml_mir::lower(&signature, &vir, &self.db, &classes);
-                                baml_mir::pretty::display_function(&mir)
-                            }
-                            Err(err) => {
-                                format!("(no MIR due to errors: {:?})", err)
-                            }
-                        };
+                    let mir_output = match baml_vir::lower_from_hir(
+                        &self.db,
+                        &body,
+                        &inference_result,
+                        &resolution_ctx,
+                    ) {
+                        Ok(vir) => {
+                            let mir = baml_mir::lower(
+                                &signature,
+                                &vir,
+                                &self.db,
+                                &classes,
+                                &resolution_ctx,
+                            );
+                            baml_mir::pretty::display_function(&mir)
+                        }
+                        Err(err) => {
+                            format!("(no MIR due to errors: {:?})", err)
+                        }
+                    };
 
                     let status = if file_recomputed {
                         LineStatus::Recomputed

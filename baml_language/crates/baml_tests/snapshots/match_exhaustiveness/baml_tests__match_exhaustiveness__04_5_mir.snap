@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -99,10 +99,10 @@ fn NestedLiteralUnions(code: Int) -> String {
 
 }
 
-fn ExhaustiveEnumWithTypedPattern(s: Named("Status")) -> String {
+fn ExhaustiveEnumWithTypedPattern(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Named("Status") // x
@@ -180,10 +180,10 @@ fn ParenthesizedSingleLiteral(b: Bool) -> String {
 
 }
 
-fn DuplicateEnumVariant(s: Named("Status")) -> String {
+fn DuplicateEnumVariant(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -400,10 +400,10 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
 
 }
 
-fn ExhaustiveNullableEnum(s: Optional(Named("Status"))) -> String {
+fn ExhaustiveNullableEnum(s: Optional(Enum(EnumId(..), "Status"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Named("Status")) // s // param
+    let _1: Optional(Enum(EnumId(..), "Status")) // s // param
     let _2: Optional(Named("Status"))
     let _3: Bool
     let _4: Bool
@@ -497,10 +497,10 @@ fn NonExhaustiveBoolMissingTrue(b: Bool) -> String {
 
 }
 
-fn ExhaustiveEnumAllVariants(s: Named("Status")) -> String {
+fn ExhaustiveEnumAllVariants(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -610,10 +610,10 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
 
 }
 
-fn EnumVariantAfterTypedEnum(s: Named("Status")) -> String {
+fn EnumVariantAfterTypedEnum(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Named("Status") // x
@@ -1087,10 +1087,10 @@ fn ExhaustiveLiteralWithBaseType(x: Int) -> String {
 
 }
 
-fn NonExhaustiveNullableEnumMissingNull(s: Optional(Named("Status"))) -> String {
+fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum(EnumId(..), "Status"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Named("Status")) // s // param
+    let _1: Optional(Enum(EnumId(..), "Status")) // s // param
     let _2: Optional(Named("Status"))
     let _3: Bool
     let _4: Bool
@@ -1686,10 +1686,10 @@ fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
 
 }
 
-fn MultipleUnreachableSpans(s: Named("Status")) -> String {
+fn MultipleUnreachableSpans(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -2060,10 +2060,10 @@ fn NonExhaustiveOptionalMissingValue(code: Named("MaybeOk")) -> String {
 
 }
 
-fn EnumVariantUnion(s: Named("Status")) -> String {
+fn EnumVariantUnion(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -2328,13 +2328,13 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
     let _1: Named("Result") // r // param
     let _2: Named("Result")
     let _3: Bool
-    let _4: Union([Named("Success"), Named("(Failure)")]) // s
+    let _4: Union([Named("Success"), Error]) // s
     let _5: Bool
     let _6: Named("Failure") // f
 
     bb0: {
         _2 = copy _1;
-        _3 = is_type(copy _2, Union([Named("Success"), Named("(Failure)")]));
+        _3 = is_type(copy _2, Union([Named("Success"), Error]));
         branch copy _3 -> [bb5, bb4];
     }
 
@@ -2484,10 +2484,10 @@ fn WrongLiteralTypeIntWithString(x: Int) -> String {
 
 }
 
-fn ExhaustiveEnumWithCatchAll(s: Named("Status")) -> String {
+fn ExhaustiveEnumWithCatchAll(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Named("Status") // _
@@ -2590,10 +2590,10 @@ fn GuardedWithFallback(x: Int) -> Int {
 
 }
 
-fn HighLineNumberNonExhaustive(s: Named("Status")) -> String {
+fn HighLineNumberNonExhaustive(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
 
@@ -2622,10 +2622,10 @@ fn HighLineNumberNonExhaustive(s: Named("Status")) -> String {
 
 }
 
-fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Named("Status"))) -> String {
+fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum(EnumId(..), "Status"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Named("Status")) // s // param
+    let _1: Optional(Enum(EnumId(..), "Status")) // s // param
     let _2: Optional(Named("Status"))
     let _3: Bool
     let _4: Bool
@@ -2851,10 +2851,10 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> Stri
 
 }
 
-fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Named("Status"))) -> String {
+fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum(EnumId(..), "Status"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Named("Status")) // s // param
+    let _1: Optional(Enum(EnumId(..), "Status")) // s // param
     let _2: Optional(Named("Status"))
     let _3: Bool
     let _4: Named("Status") // x
@@ -2965,10 +2965,10 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
 
 }
 
-fn NonExhaustiveEnumMissingOne(s: Named("Status")) -> String {
+fn NonExhaustiveEnumMissingOne(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -3414,10 +3414,10 @@ fn StringLiteralAfterStringType(s: String) -> String {
 
 }
 
-fn NestedEnumVariantUnions(s: Named("Status")) -> String {
+fn NestedEnumVariantUnions(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool
@@ -3685,10 +3685,10 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
 
 }
 
-fn NonExhaustiveEnumMissingMultiple(s: Named("Status")) -> String {
+fn NonExhaustiveEnumMissingMultiple(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
 
@@ -3890,10 +3890,10 @@ fn LiteralAfterTypedPattern(x: Int) -> String {
 
 }
 
-fn EnumVariantUnionWithCatchAll(s: Named("Status")) -> String {
+fn EnumVariantUnionWithCatchAll(s: Enum(EnumId(..), "Status")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status") // s // param
+    let _1: Enum(EnumId(..), "Status") // s // param
     let _2: Named("Status")
     let _3: Bool
     let _4: Bool

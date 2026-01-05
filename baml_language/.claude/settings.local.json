@@ -12,7 +12,8 @@
       "Bash(jj log:*)",
       "Bash(jj cat:*)",
       "Bash(jj file show:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(nix develop:*)"
     ]
   }
 }

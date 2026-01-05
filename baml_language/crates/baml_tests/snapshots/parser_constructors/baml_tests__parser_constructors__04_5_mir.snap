@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -45,9 +45,9 @@ fn stringArray() -> List(String) {
 
 }
 
-fn pointArray() -> List(Named("Point")) {
+fn pointArray() -> List(Class(ClassId(..), "Point")) {
     // Locals:
-    let _0: List(Named("Point")) // return
+    let _0: List(Class(ClassId(..), "Point")) // return
     let _1: Named("Point")
     let _2: Int
     let _3: Int
@@ -120,9 +120,9 @@ fn intArray() -> List(Int) {
 
 }
 
-fn point() -> Named("Point") {
+fn point() -> Class(ClassId(..), "Point") {
     // Locals:
-    let _0: Named("Point") // return
+    let _0: Class(ClassId(..), "Point") // return
     let _1: Int
     let _2: Int
 
@@ -139,9 +139,9 @@ fn point() -> Named("Point") {
 
 }
 
-fn vec2d() -> Named("Vec2D") {
+fn vec2d() -> Class(ClassId(..), "Vec2D") {
     // Locals:
-    let _0: Named("Vec2D") // return
+    let _0: Class(ClassId(..), "Vec2D") // return
     let _1: Named("Point")
     let _2: Int
     let _3: Int

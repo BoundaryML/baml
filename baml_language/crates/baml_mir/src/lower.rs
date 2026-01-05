@@ -16,9 +16,9 @@
 
 use std::collections::HashMap;
 
-use baml_base::Name;
+use baml_base::{Name, Span};
 use baml_hir::FunctionSignature;
-use baml_tir::Ty;
+use baml_tir::{Ty, TypeResolutionContext};
 use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
@@ -37,13 +37,14 @@ enum FieldSource {
 /// Lower a function from VIR to MIR.
 ///
 /// This is the main entry point for VIR → MIR lowering.
-pub fn lower<'db>(
+pub fn lower<'db, 'ctx>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
     db: &'db dyn crate::Db,
-    class_fields: &HashMap<String, HashMap<String, usize>>,
+    class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    resolution_ctx: &'ctx TypeResolutionContext<'db>,
 ) -> MirFunction<'db> {
-    let mut ctx = LoweringContext::new(db, signature.params.len(), class_fields);
+    let mut ctx = LoweringContext::new(db, signature.params.len(), class_fields, resolution_ctx);
     ctx.lower_function(signature, typed_body);
     ctx.finish()
 }
@@ -59,6 +60,8 @@ struct LoweringContext<'db, 'ctx> {
     loop_context: Option<LoopContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Type resolution context for lowering type refs.
+    resolution_ctx: &'ctx TypeResolutionContext<'db>,
     /// Stack of watched locals for tracking scope exit.
     watched_locals_stack: Vec<Local>,
     /// Viz context for control flow visualization.
@@ -115,6 +118,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         db: &'db dyn crate::Db,
         arity: usize,
         class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+        resolution_ctx: &'ctx TypeResolutionContext<'db>,
     ) -> Self {
         Self {
             db,
@@ -122,6 +126,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
+            resolution_ctx,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext {
                 function_name: String::new(),
@@ -251,13 +256,17 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
-        let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
+        let (ret_ty, _) = self
+            .resolution_ctx
+            .lower_type_ref(&signature.return_type, Span::default());
         let ret = self.builder.declare_local(None, ret_ty, None, false);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
         for param in &signature.params {
-            let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
+            let (param_ty, _) = self
+                .resolution_ctx
+                .lower_type_ref(&param.type_ref, Span::default());
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);

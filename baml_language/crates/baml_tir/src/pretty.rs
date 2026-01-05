@@ -5,6 +5,7 @@
 
 use std::fmt::Write;
 
+use baml_base::Span;
 use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
@@ -12,7 +13,7 @@ use baml_hir::{
 };
 
 use super::Ty;
-use crate::{InferenceResult, lower_type_ref};
+use crate::{InferenceResult, TypeResolutionContext};
 
 /// Renders a function's TIR as a tree showing expression structure with types.
 ///
@@ -27,34 +28,38 @@ use crate::{InferenceResult, lower_type_ref};
 ///    │     └─ Path(x): int
 ///    └─ Path(y): int
 /// ```
-pub fn render_function_tree(
-    db: &dyn baml_hir::Db,
+pub fn render_function_tree<'db>(
+    db: &'db dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext<'db>,
     func_name: &str,
     signature: &FunctionSignature,
     body: &FunctionBody,
-    result: &InferenceResult<'_>,
+    result: &InferenceResult<'db>,
 ) -> String {
     let mut output = String::new();
-    let mut renderer = TreeRenderer::new(db, &mut output);
+    let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
     renderer.render_function(func_name, signature, body, result);
     output
 }
 
 /// Renders just a function body's TIR as a tree.
-pub fn render_body_tree(
-    db: &dyn baml_hir::Db,
+pub fn render_body_tree<'db>(
+    db: &'db dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext<'db>,
     body: &FunctionBody,
-    result: &InferenceResult<'_>,
+    result: &InferenceResult<'db>,
 ) -> String {
     let mut output = String::new();
-    let mut renderer = TreeRenderer::new(db, &mut output);
+    let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
     renderer.render_body(body, result);
     output
 }
 
 /// Internal tree renderer.
 struct TreeRenderer<'a, 'db> {
+    #[allow(dead_code)]
     db: &'db dyn baml_hir::Db,
+    resolution_ctx: &'a TypeResolutionContext<'db>,
     output: &'a mut String,
     /// Tracks whether each depth level has more siblings coming.
     /// `true` means there are more siblings (draw │), `false` means it was the last child (draw space).
@@ -62,9 +67,14 @@ struct TreeRenderer<'a, 'db> {
 }
 
 impl<'a, 'db> TreeRenderer<'a, 'db> {
-    fn new(db: &'db dyn baml_hir::Db, output: &'a mut String) -> Self {
+    fn new(
+        db: &'db dyn baml_hir::Db,
+        resolution_ctx: &'a TypeResolutionContext<'db>,
+        output: &'a mut String,
+    ) -> Self {
         Self {
             db,
+            resolution_ctx,
             output,
             continuation: Vec::new(),
         }
@@ -75,15 +85,21 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         func_name: &str,
         signature: &FunctionSignature,
         body: &FunctionBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult<'db>,
     ) {
         // Function header
-        let return_type = lower_type_ref(self.db, &signature.return_type);
+        let return_type = self
+            .resolution_ctx
+            .lower_type_ref(&signature.return_type, Span::default())
+            .0;
         let params: Vec<String> = signature
             .params
             .iter()
             .map(|p| {
-                let ty = lower_type_ref(self.db, &p.type_ref);
+                let ty = self
+                    .resolution_ctx
+                    .lower_type_ref(&p.type_ref, Span::default())
+                    .0;
                 format!("{}: {}", p.name, ty)
             })
             .collect();
@@ -100,7 +116,10 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         // Show parameters as tree nodes
         let param_count = signature.params.len();
         for (i, param) in signature.params.iter().enumerate() {
-            let param_ty = lower_type_ref(self.db, &param.type_ref);
+            let param_ty = self
+                .resolution_ctx
+                .lower_type_ref(&param.type_ref, Span::default())
+                .0;
             let is_last = i == param_count - 1 && matches!(body, FunctionBody::Missing);
             let prefix = if is_last { "└─" } else { "├─" };
             writeln!(self.output, "{} param {}: {}", prefix, param.name, param_ty).ok();
@@ -378,7 +397,10 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 };
 
                 let ty_str = if let Some(type_ref) = type_annotation {
-                    let ty = lower_type_ref(self.db, type_ref);
+                    let ty = self
+                        .resolution_ctx
+                        .lower_type_ref(type_ref, Span::default())
+                        .0;
                     format!(": {ty}")
                 } else if let Some(init) = initializer {
                     result

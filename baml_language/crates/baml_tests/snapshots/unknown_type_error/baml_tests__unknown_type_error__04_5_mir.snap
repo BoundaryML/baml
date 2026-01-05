@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Bar(x: Named("unknown_param_type")) -> Int {
+fn Bar(x: Error) -> Int {
     // Locals:
     let _0: Int // return
-    let _1: Named("unknown_param_type") // x // param
+    let _1: Error // x // param
 
     bb0: {
         _0 = const 1_i64;
@@ -19,9 +19,9 @@ fn Bar(x: Named("unknown_param_type")) -> Int {
 
 }
 
-fn Foo() -> Named("blah") {
+fn Foo() -> Error {
     // Locals:
-    let _0: Named("blah") // return
+    let _0: Error // return
 
     bb0: {
         _0 = const 1_i64;
@@ -34,9 +34,9 @@ fn Foo() -> Named("blah") {
 
 }
 
-fn Baz() -> Optional(Named("unknown_optional")) {
+fn Baz() -> Optional(Error) {
     // Locals:
-    let _0: Optional(Named("unknown_optional")) // return
+    let _0: Optional(Error) // return
 
     bb0: {
         _0 = const null;

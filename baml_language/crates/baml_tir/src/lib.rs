@@ -29,10 +29,7 @@ pub use builtins::{
     method_return_type, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::{
-    TypeLoweringContext, lower_type_ref, lower_type_ref_validated,
-    lower_type_ref_validated_resolved,
-};
+pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 use text_size::TextRange;
 pub use types::*;
@@ -173,6 +170,7 @@ pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
 /// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
 pub fn typing_context<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, Ty<'db>> {
     let files = baml_workspace::project_files(db, project);
+    let resolution_ctx = TypeResolutionContext::new(db, project);
     let mut context = HashMap::new();
 
     for file in files {
@@ -182,14 +180,17 @@ pub fn typing_context<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, T
         for item in items {
             if let baml_hir::ItemId::Function(func_loc) = item {
                 let signature = baml_hir::function_signature(db, *func_loc);
+                let span = Span::default(); // TODO: get proper span from signature
 
                 let param_types: Vec<Ty<'db>> = signature
                     .params
                     .iter()
-                    .map(|p| lower_type_ref(db, &p.type_ref))
+                    .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
                     .collect();
 
-                let return_type = lower_type_ref(db, &signature.return_type);
+                let return_type = resolution_ctx
+                    .lower_type_ref(&signature.return_type, span)
+                    .0;
 
                 let func_type = Ty::Function {
                     params: param_types,
@@ -210,6 +211,8 @@ pub fn typing_context<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, T
 /// `Baz` -> { `name` -> `String` }
 pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap<Name, Ty<'_>>> {
     let hir_fields = baml_hir::project_class_fields(db, project);
+    let resolution_ctx = TypeResolutionContext::new(db, project);
+    let span = Span::default(); // TODO: get proper span from fields
 
     hir_fields
         .classes(db)
@@ -217,7 +220,12 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap
         .map(|(class_name, fields)| {
             let lowered_fields = fields
                 .iter()
-                .map(|(field_name, type_ref)| (field_name.clone(), lower_type_ref(db, type_ref)))
+                .map(|(field_name, type_ref)| {
+                    (
+                        field_name.clone(),
+                        resolution_ctx.lower_type_ref(type_ref, span).0,
+                    )
+                })
                 .collect();
             (class_name.clone(), lowered_fields)
         })
@@ -230,6 +238,8 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap
 /// `Result` -> `Success | Failure`
 pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty<'_>> {
     let items = baml_hir::project_items(db, project);
+    let resolution_ctx = TypeResolutionContext::new(db, project);
+    let span = Span::default(); // TODO: get proper span from alias
     let mut aliases = HashMap::new();
 
     for item in items.items(db) {
@@ -238,7 +248,7 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty<'_>> {
             let item_tree = baml_hir::file_item_tree(db, file);
             let alias_data = &item_tree[alias_loc.id(db)];
 
-            let lowered_ty = lower_type_ref(db, &alias_data.type_ref);
+            let lowered_ty = resolution_ctx.lower_type_ref(&alias_data.type_ref, span).0;
             aliases.insert(alias_data.name.clone(), lowered_ty);
         }
     }
@@ -246,8 +256,8 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty<'_>> {
     aliases
 }
 
-/// Get class name to ClassId mapping for a project.
-pub fn class_ids<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, baml_hir::ClassId<'db>> {
+/// Get class name to `ClassId` mapping for a project.
+pub fn class_ids(db: &dyn Db, project: Project) -> HashMap<Name, baml_hir::ClassId<'_>> {
     let items = baml_hir::project_items(db, project);
     let mut ids = HashMap::new();
 
@@ -263,8 +273,8 @@ pub fn class_ids<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, baml_h
     ids
 }
 
-/// Get enum name to EnumId mapping for a project.
-pub fn enum_ids<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, baml_hir::EnumId<'db>> {
+/// Get enum name to `EnumId` mapping for a project.
+pub fn enum_ids(db: &dyn Db, project: Project) -> HashMap<Name, baml_hir::EnumId<'_>> {
     let items = baml_hir::project_items(db, project);
     let mut ids = HashMap::new();
 
@@ -278,6 +288,74 @@ pub fn enum_ids<'db>(db: &'db dyn Db, project: Project) -> HashMap<Name, baml_hi
     }
 
     ids
+}
+
+/// Get all known type names for a project (classes, enums, type aliases).
+pub fn known_types(db: &dyn Db, project: Project) -> HashSet<Name> {
+    let items = baml_hir::project_items(db, project);
+    let mut names = HashSet::new();
+
+    for item in items.items(db) {
+        match item {
+            baml_hir::ItemId::Class(class_loc) => {
+                let file = class_loc.file(db);
+                let item_tree = baml_hir::file_item_tree(db, file);
+                let class_data = &item_tree[class_loc.id(db)];
+                names.insert(class_data.name.clone());
+            }
+            baml_hir::ItemId::Enum(enum_loc) => {
+                let file = enum_loc.file(db);
+                let item_tree = baml_hir::file_item_tree(db, file);
+                let enum_data = &item_tree[enum_loc.id(db)];
+                names.insert(enum_data.name.clone());
+            }
+            baml_hir::ItemId::TypeAlias(alias_loc) => {
+                let file = alias_loc.file(db);
+                let item_tree = baml_hir::file_item_tree(db, file);
+                let alias_data = &item_tree[alias_loc.id(db)];
+                names.insert(alias_data.name.clone());
+            }
+            _ => {}
+        }
+    }
+
+    names
+}
+
+/// Context for type resolution across a project.
+///
+/// This bundles together all the maps needed for resolved type lowering.
+/// Create this once per project and reuse it for all type lowering operations.
+pub struct TypeResolutionContext<'db> {
+    pub class_ids: HashMap<Name, baml_hir::ClassId<'db>>,
+    pub enum_ids: HashMap<Name, baml_hir::EnumId<'db>>,
+    pub known_types: HashSet<Name>,
+}
+
+impl<'db> TypeResolutionContext<'db> {
+    /// Create a new type resolution context for a project.
+    pub fn new(db: &'db dyn Db, project: Project) -> Self {
+        Self {
+            class_ids: class_ids(db, project),
+            enum_ids: enum_ids(db, project),
+            known_types: known_types(db, project),
+        }
+    }
+
+    /// Lower a type reference with full resolution.
+    pub fn lower_type_ref(
+        &self,
+        type_ref: &baml_hir::TypeRef,
+        span: Span,
+    ) -> (Ty<'db>, Vec<TypeError<Ty<'db>>>) {
+        lower_type_ref_validated_resolved(
+            type_ref,
+            &self.known_types,
+            &self.class_ids,
+            &self.enum_ids,
+            span,
+        )
+    }
 }
 
 // ============================================================================
@@ -324,9 +402,9 @@ pub struct TypeContext<'db> {
     type_aliases: HashMap<Name, Ty<'db>>,
     /// Enum variant definitions: `enum_name` -> `Vec<variant_name>`
     enum_variants: HashMap<Name, Vec<Name>>,
-    /// Class name to ClassId mapping for type resolution
+    /// Class name to `ClassId` mapping for type resolution
     class_ids: HashMap<Name, baml_hir::ClassId<'db>>,
-    /// Enum name to EnumId mapping for type resolution
+    /// Enum name to `EnumId` mapping for type resolution
     enum_ids: HashMap<Name, baml_hir::EnumId<'db>>,
     /// Known type names for validation
     known_types: HashSet<Name>,
@@ -403,6 +481,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Create a new type context with full type resolution info.
+    #[allow(clippy::too_many_arguments)]
     pub fn with_type_info(
         db: &'db dyn Db,
         globals: HashMap<Name, Ty<'db>>,
@@ -490,12 +569,6 @@ impl<'db> TypeContext<'db> {
         self.expr_types.insert(expr, ty);
     }
 
-    /// Get the type of an expression.
-    #[allow(dead_code)]
-    pub fn get_expr_type(&self, expr: ExprId) -> Option<&Ty<'db>> {
-        self.expr_types.get(&expr)
-    }
-
     /// Add a type error.
     pub fn push_error(&mut self, error: TypeError<Ty<'db>>) {
         self.errors.push(error);
@@ -531,7 +604,7 @@ impl<'db> TypeContext<'db> {
         normalize::is_subtype_of(sub, sup, &self.type_aliases)
     }
 
-    /// Lower a TypeRef to a Ty with full resolution (classes/enums resolved to IDs).
+    /// Lower a `TypeRef` to a Ty with full resolution (classes/enums resolved to IDs).
     pub fn lower_type_resolved(&self, type_ref: &baml_hir::TypeRef, span: Span) -> Ty<'db> {
         let (ty, _errors) = lower_type_ref_validated_resolved(
             type_ref,
@@ -1384,7 +1457,7 @@ fn extract_pattern_binding<'db>(
     match pattern {
         // Typed binding: `s: Success` -> s has type Success
         Pattern::TypedBinding { name, ty } => {
-            let narrowed_ty = lower_type_ref(ctx.db(), ty);
+            let narrowed_ty = ctx.lower_type_resolved(ty, Span::default());
             (Some(name.clone()), narrowed_ty)
         }
 
@@ -1451,7 +1524,13 @@ fn check_match_exhaustiveness<'db>(
     }
 
     // Use the new value-based exhaustiveness checker
-    let checker = ExhaustivenessChecker::new(ctx.db(), &ctx.enum_variants, &ctx.type_aliases);
+    let checker = ExhaustivenessChecker::new(
+        &ctx.enum_variants,
+        &ctx.type_aliases,
+        &ctx.class_ids,
+        &ctx.enum_ids,
+        &ctx.known_types,
+    );
 
     let result = checker.check(scrutinee_ty, arms, body);
 
@@ -1742,7 +1821,7 @@ fn infer_field_access<'db>(
             fields
                 .iter()
                 .find(|(name, _)| name == field)
-                .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
+                .map(|(_, type_ref)| ctx.lower_type_resolved(type_ref, span))
                 // Also check the context's class_fields for this class name
                 .or_else(|| ctx.lookup_class_field(class_name, field).cloned())
         }
@@ -1858,7 +1937,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                     // turn it into one tuple.
                     // this unwrap is safe because if type_ann is populated, so is type_span
                     let span = ctx.build_span_default(type_span);
-                    let annot_ty = lower_type_ref(ctx.db(), annot);
+                    let annot_ty = ctx.lower_type_resolved(annot, span);
                     if !ctx.is_subtype_of(&init_ty, &annot_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: annot_ty.clone(),
@@ -1871,7 +1950,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                     init_ty
                 }
             } else if let Some(annot) = type_annotation {
-                lower_type_ref(ctx.db(), annot)
+                ctx.lower_type_resolved(annot, Span::default())
             } else {
                 Ty::Unknown
             };
@@ -1966,7 +2045,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         Stmt::Assert { condition } => {
             // Type-check the condition expression
             let cond_ty = infer_expr(ctx, *condition, body);
-            if !cond_ty.is_subtype_of(&Ty::Bool) {
+            if !ctx.is_subtype_of(&cond_ty, &Ty::Bool) {
                 let span = body.get_expr_span(*condition).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Bool,

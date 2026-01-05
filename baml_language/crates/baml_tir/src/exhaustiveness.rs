@@ -30,12 +30,12 @@
 //!
 //! Each arm covers a single value. Together they cover all values of type Status.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use baml_base::Name;
-use baml_hir::{ExprBody, Literal, MatchArm, Pattern};
+use baml_base::{Name, Span};
+use baml_hir::{ClassId, EnumId, ExprBody, Literal, MatchArm, Pattern};
 
-use crate::{Db, LiteralValue, Ty, lower_type_ref};
+use crate::{LiteralValue, Ty, lower_type_ref_validated_resolved};
 
 // ============================================================================
 // ValueSet: The Core Abstraction
@@ -154,14 +154,20 @@ impl std::fmt::Display for ValueSet {
 /// This struct holds the context needed to expand types into their
 /// constituent values and check coverage.
 pub struct ExhaustivenessChecker<'a, 'db> {
-    /// Database for type resolution
-    db: &'db dyn Db,
-
     /// Enum definitions: `enum_name` -> [`variant_names`]
     enum_variants: &'a HashMap<Name, Vec<Name>>,
 
     /// Type alias definitions: `alias_name` -> `underlying_type`
     type_aliases: &'a HashMap<Name, Ty<'db>>,
+
+    /// Class IDs for type resolution
+    class_ids: &'a HashMap<Name, ClassId<'db>>,
+
+    /// Enum IDs for type resolution
+    enum_ids: &'a HashMap<Name, EnumId<'db>>,
+
+    /// Known types for validation
+    known_types: &'a HashSet<Name>,
 }
 
 /// Result of exhaustiveness checking.
@@ -180,14 +186,18 @@ pub struct ExhaustivenessResult {
 impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     /// Create a new exhaustiveness checker.
     pub fn new(
-        db: &'db dyn Db,
         enum_variants: &'a HashMap<Name, Vec<Name>>,
         type_aliases: &'a HashMap<Name, Ty<'db>>,
+        class_ids: &'a HashMap<Name, ClassId<'db>>,
+        enum_ids: &'a HashMap<Name, EnumId<'db>>,
+        known_types: &'a HashSet<Name>,
     ) -> Self {
         Self {
-            db,
             enum_variants,
             type_aliases,
+            class_ids,
+            enum_ids,
+            known_types,
         }
     }
 
@@ -428,7 +438,13 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
 
             // Typed binding: matches all values of that type
             Pattern::TypedBinding { ty, .. } => {
-                let lowered_ty = lower_type_ref(self.db, ty);
+                let (lowered_ty, _) = lower_type_ref_validated_resolved(
+                    ty,
+                    self.known_types,
+                    self.class_ids,
+                    self.enum_ids,
+                    Span::default(),
+                );
                 Self::ty_to_value_set(&lowered_ty)
             }
 

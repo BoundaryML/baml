@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -55,10 +55,10 @@ fn Calculate() -> Int {
 
 }
 
-fn FieldAccess(user: Named("User")) -> String {
+fn FieldAccess(user: Class(ClassId(..), "User")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("User") // user // param
+    let _1: Class(ClassId(..), "User") // user // param
     let _2: String // name
     let _3: Named("User")
     let _4: String // bio
@@ -102,10 +102,10 @@ fn FieldAccess(user: Named("User")) -> String {
 
 }
 
-fn IndexAccess(users: List(Named("IndexUser"))) -> String {
+fn IndexAccess(users: List(Class(ClassId(..), "IndexUser"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: List(Named("IndexUser")) // users // param
+    let _1: List(Class(ClassId(..), "IndexUser")) // users // param
     let _2: Named("IndexUser") // first
     let _3: List(Named("IndexUser"))
     let _4: Int

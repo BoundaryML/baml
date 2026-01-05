@@ -21,8 +21,9 @@
 //!    - Otherwise, wrap with `Seq(current, result)`
 //! 4. If block has no tail expression, the final result is `Unit`
 
+use baml_base::Span;
 use baml_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
-use baml_tir::InferenceResult;
+use baml_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
@@ -81,10 +82,11 @@ pub fn lower_from_hir<'db>(
     db: &'db dyn baml_tir::Db,
     body: &FunctionBody,
     inference: &InferenceResult<'db>,
+    resolution_ctx: &TypeResolutionContext<'db>,
 ) -> Result<ExprBody, LoweringError> {
     match body {
         FunctionBody::Expr(hir_body) => {
-            let ctx = LoweringContext::new(db, inference);
+            let ctx = LoweringContext::new(db, inference, resolution_ctx);
             ctx.lower_expr_body(hir_body)
         }
         FunctionBody::Llm(_) => {
@@ -161,17 +163,24 @@ impl ExprBodyBuilder {
 }
 
 /// Context for lowering HIR to VIR.
-struct LoweringContext<'db> {
+struct LoweringContext<'a, 'db> {
+    #[allow(dead_code)]
     db: &'db dyn baml_tir::Db,
     inference: &'db InferenceResult<'db>,
+    resolution_ctx: &'a TypeResolutionContext<'db>,
     builder: ExprBodyBuilder,
 }
 
-impl<'db> LoweringContext<'db> {
-    fn new(db: &'db dyn baml_tir::Db, inference: &'db InferenceResult<'db>) -> Self {
+impl<'a, 'db> LoweringContext<'a, 'db> {
+    fn new(
+        db: &'db dyn baml_tir::Db,
+        inference: &'db InferenceResult<'db>,
+        resolution_ctx: &'a TypeResolutionContext<'db>,
+    ) -> Self {
         Self {
             db,
             inference,
+            resolution_ctx,
             builder: ExprBodyBuilder::new(),
         }
     }
@@ -780,7 +789,9 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower an HIR `TypeRef` to VIR type.
     fn lower_type_ref(&self, type_ref: &baml_hir::TypeRef) -> Ty {
-        let thir_ty = baml_tir::lower_type_ref(self.db, type_ref);
+        let (thir_ty, _) = self
+            .resolution_ctx
+            .lower_type_ref(type_ref, Span::default());
         self.lower_ty(&thir_ty)
     }
 

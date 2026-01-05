@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -9,10 +9,10 @@ fn AnotherLLM:
 fn Ambiguous:
   (no MIR due to errors: MissingBody)
 
-fn ProcessData(data: Named("JsonData")) -> String {
+fn ProcessData(data: Class(ClassId(..), "JsonData")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("JsonData") // data // param
+    let _1: Class(ClassId(..), "JsonData") // data // param
     let _2: Int // result
     let _3: Int
     let _4: Named("JsonData")
@@ -99,10 +99,10 @@ fn SimpleCalc(a: Int, b: Int) -> Int {
 
 }
 
-fn ProcessAnalysis(analysis: Named("Analysis")) -> String {
+fn ProcessAnalysis(analysis: Class(ClassId(..), "Analysis")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Analysis") // analysis // param
+    let _1: Class(ClassId(..), "Analysis") // analysis // param
     let _2: Float // score
     let _3: Named("Analysis")
     let _4: Bool
