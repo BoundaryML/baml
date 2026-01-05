@@ -4,11 +4,15 @@
 // for a library that downloads files and provides user feedback.
 #![allow(clippy::print_stderr)]
 
-use crate::error::{BamlSysError, Result};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+};
+
 use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
+
+use crate::error::{BamlSysError, Result};
 
 /// Download the library from GitHub releases.
 pub(crate) fn download_library(
@@ -17,9 +21,8 @@ pub(crate) fn download_library(
     version: &str,
     github_repo: &str,
 ) -> Result<()> {
-    let download_url = format!(
-        "https://github.com/{github_repo}/releases/download/{version}/{filename}"
-    );
+    let download_url =
+        format!("https://github.com/{github_repo}/releases/download/{version}/{filename}");
     let checksum_url = format!("{download_url}.sha256");
     let dest_path = dest_dir.join(filename);
 

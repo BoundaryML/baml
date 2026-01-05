@@ -1,7 +1,8 @@
 //! Integration tests for baml-sys library loading.
 
-use baml_sys::{ensure_library, version, BamlSysError, ENV_LIBRARY_PATH};
 use std::env;
+
+use baml_sys::{BamlSysError, ENV_LIBRARY_PATH, ensure_library, version};
 
 /// Test that version returns a non-empty string when library is available.
 /// This test is skipped if the library is not present.
@@ -41,7 +42,11 @@ fn test_ensure_library_returns_path() {
 
     match ensure_library() {
         Ok(path) => {
-            assert!(path.exists(), "Library path should exist: {}", path.display());
+            assert!(
+                path.exists(),
+                "Library path should exist: {}",
+                path.display()
+            );
         }
         Err(BamlSysError::LibraryNotFound { .. }) => {
             eprintln!("Library not found, skipping test");
@@ -58,30 +63,45 @@ fn test_error_display() {
     use std::path::PathBuf;
 
     let err = BamlSysError::LibraryNotFound {
-        searched_paths: vec![
-            PathBuf::from("/path/one"),
-            PathBuf::from("/path/two"),
-        ],
+        searched_paths: vec![PathBuf::from("/path/one"), PathBuf::from("/path/two")],
     };
     let msg = err.to_string();
-    assert!(msg.contains("not found"), "Error should mention 'not found': {msg}");
-    assert!(msg.contains("/path/one"), "Error should list searched paths: {msg}");
+    assert!(
+        msg.contains("not found"),
+        "Error should mention 'not found': {msg}"
+    );
+    assert!(
+        msg.contains("/path/one"),
+        "Error should list searched paths: {msg}"
+    );
 
     let err = BamlSysError::VersionMismatch {
         expected: "1.0.0".to_string(),
         actual: "2.0.0".to_string(),
     };
     let msg = err.to_string();
-    assert!(msg.contains("1.0.0"), "Error should show expected version: {msg}");
-    assert!(msg.contains("2.0.0"), "Error should show actual version: {msg}");
+    assert!(
+        msg.contains("1.0.0"),
+        "Error should show expected version: {msg}"
+    );
+    assert!(
+        msg.contains("2.0.0"),
+        "Error should show actual version: {msg}"
+    );
 
     let err = BamlSysError::ChecksumMismatch {
         expected: "abc123".to_string(),
         actual: "def456".to_string(),
     };
     let msg = err.to_string();
-    assert!(msg.contains("abc123"), "Error should show expected checksum: {msg}");
-    assert!(msg.contains("def456"), "Error should show actual checksum: {msg}");
+    assert!(
+        msg.contains("abc123"),
+        "Error should show expected checksum: {msg}"
+    );
+    assert!(
+        msg.contains("def456"),
+        "Error should show actual checksum: {msg}"
+    );
 }
 
 /// Test platform detection logic.
@@ -97,5 +117,8 @@ fn test_platform_constants() {
     // Verify environment variable names are set
     assert_eq!(baml_sys::ENV_LIBRARY_PATH, "BAML_LIBRARY_PATH");
     assert_eq!(baml_sys::ENV_CACHE_DIR, "BAML_CACHE_DIR");
-    assert_eq!(baml_sys::ENV_DISABLE_DOWNLOAD, "BAML_LIBRARY_DISABLE_DOWNLOAD");
+    assert_eq!(
+        baml_sys::ENV_DISABLE_DOWNLOAD,
+        "BAML_LIBRARY_DISABLE_DOWNLOAD"
+    );
 }

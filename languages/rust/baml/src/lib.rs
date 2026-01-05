@@ -44,15 +44,15 @@ use std::ffi::CString;
 
 // Public API - re-exported through baml_client
 pub use args::FunctionArgs;
-pub use client_registry::ClientRegistry;
-pub use codec::{
-    BamlClass, BamlDecode, BamlEncode, BamlEnum, decode_enum, decode_field, encode_class,
-    encode_class_dynamic, encode_enum,
-};
 // New dynamic type exports
 pub use async_stream::AsyncStreamingCall;
+// Re-export derive macros
+pub use baml_macros::{BamlDecode, BamlEncode};
+pub use client_registry::ClientRegistry;
 pub use codec::{
-    BamlValue, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
+    BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlValue, DynamicClass, DynamicEnum,
+    DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, decode_enum, decode_field,
+    encode_class, encode_class_dynamic, encode_enum,
 };
 pub use error::BamlError;
 pub use raw_objects::{
@@ -91,20 +91,14 @@ pub use runtime::{BamlRuntime, StaticRuntimeType};
 pub use stream::{StreamEvent, StreamingCall};
 pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
 
-// Re-export derive macros
-pub use baml_macros::{BamlDecode, BamlEncode};
-
 /// Internal module for derive macro support.
 ///
 /// This module exposes proto types needed by the generated derive macro code.
 /// Do not use directly - use the derive macros instead.
 #[doc(hidden)]
 pub mod __internal {
-    pub use crate::ffi::callbacks;
-    pub use crate::proto::baml_cffi_v1::*;
-
-    use crate::codec::BamlClass;
-    use crate::error::BamlError;
+    use crate::{codec::BamlClass, error::BamlError};
+    pub use crate::{ffi::callbacks, proto::baml_cffi_v1::*};
 
     /// Decode a class from a CffiValueHolder.
     /// Used by derive macros to implement BamlDecode for structs.

@@ -2,8 +2,10 @@
 
 mod common;
 
-use baml::__internal::{CffiStreamState, host_value};
-use baml::{BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState};
+use baml::{
+    __internal::{CffiStreamState, host_value},
+    BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState,
+};
 use common::{
     make_bool_holder, make_checked_holder, make_float_holder, make_int_holder, make_list_holder,
     make_null_holder, make_stream_state_holder, make_string_holder,
@@ -174,8 +176,9 @@ mod encode {
 // =============================================================================
 
 mod helpers {
-    use super::*;
     use baml::{encode_class, encode_enum};
+
+    use super::*;
 
     #[test]
     fn encode_class_creates_class_value() {

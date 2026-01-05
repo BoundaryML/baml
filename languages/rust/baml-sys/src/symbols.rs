@@ -1,11 +1,15 @@
 //! FFI symbol loading and storage.
 
-use crate::error::{BamlSysError, Result};
-use crate::loader::{get_library, LoadedLibrary, VERSION};
+use std::ffi::CStr;
+
 use libc::{c_char, c_int, c_void, size_t};
 use libloading::Symbol;
 use once_cell::sync::OnceCell;
-use std::ffi::CStr;
+
+use crate::{
+    error::{BamlSysError, Result},
+    loader::{LoadedLibrary, VERSION, get_library},
+};
 
 /// Callback function type for results.
 pub type CallbackFn =
@@ -113,6 +117,9 @@ unsafe fn load_symbol<T>(
     unsafe {
         library
             .get(name.as_bytes())
-            .map_err(|e| BamlSysError::SymbolNotFound { symbol: name, source: e })
+            .map_err(|e| BamlSysError::SymbolNotFound {
+                symbol: name,
+                source: e,
+            })
     }
 }

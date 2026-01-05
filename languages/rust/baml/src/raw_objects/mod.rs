@@ -55,27 +55,27 @@ mod media;
 mod type_builder;
 
 // Re-export all public types from submodules
+use std::{ffi::c_void, sync::Arc};
+
 pub use collector::{Collector, FunctionLog, LogType, StreamTiming, Timing, Usage};
 pub use http::{HTTPBody, HTTPRequest, HTTPResponse, SSEResponse};
 pub use llm_call::{LLMCall, LLMCallKind, LLMStreamCall};
 pub use media::{Audio, Image, Pdf, Video};
+use prost::Message;
 pub use type_builder::{
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
 };
 
-use std::ffi::c_void;
-use std::sync::Arc;
-
-use prost::Message;
-
-use crate::baml_unreachable;
-use crate::codec::{BamlDecode, IntoKwargs};
-use crate::error::BamlError;
-use crate::ffi;
-use crate::proto::baml_cffi_v1::{
-    BamlObjectConstructorInvocation, BamlObjectHandle, BamlObjectMethodInvocation, BamlObjectType,
-    BamlPointerType, CffiValueHolder, HostMapEntry, InvocationResponse, baml_object_handle,
-    invocation_response, invocation_response_success,
+use crate::{
+    baml_unreachable,
+    codec::{BamlDecode, IntoKwargs},
+    error::BamlError,
+    ffi,
+    proto::baml_cffi_v1::{
+        BamlObjectConstructorInvocation, BamlObjectHandle, BamlObjectMethodInvocation,
+        BamlObjectType, BamlPointerType, CffiValueHolder, HostMapEntry, InvocationResponse,
+        baml_object_handle, invocation_response, invocation_response_success,
+    },
 };
 
 /// Inner data for a FFI-backed BAML object.

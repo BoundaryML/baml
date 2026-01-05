@@ -50,15 +50,15 @@ mod error;
 mod loader;
 mod symbols;
 
-pub use error::{BamlSysError, Result};
-pub use loader::{
-    ensure_library, set_library_path, ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH,
-    VERSION,
-};
-pub use symbols::{get_symbols, Buffer, CallbackFn, OnTickCallbackFn, Symbols};
-
-use libc::{c_char, c_int, c_void, size_t};
 use std::ffi::CStr;
+
+pub use error::{BamlSysError, Result};
+use libc::{c_char, c_int, c_void, size_t};
+pub use loader::{
+    ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH, VERSION, ensure_library,
+    set_library_path,
+};
+pub use symbols::{Buffer, CallbackFn, OnTickCallbackFn, Symbols, get_symbols};
 
 // ============================================================================
 // Safe wrapper functions
@@ -103,9 +103,7 @@ pub unsafe fn create_baml_runtime(
     env_vars_json: *const c_char,
 ) -> Result<*const c_void> {
     let symbols = get_symbols()?;
-    Ok(unsafe {
-        (symbols.create_baml_runtime)(root_path, src_files_json, env_vars_json)
-    })
+    Ok(unsafe { (symbols.create_baml_runtime)(root_path, src_files_json, env_vars_json) })
 }
 
 /// Destroy a BAML runtime.
@@ -144,9 +142,7 @@ pub unsafe fn call_function_from_c(
     id: u32,
 ) -> Result<*const c_void> {
     let symbols = get_symbols()?;
-    Ok(unsafe {
-        (symbols.call_function_from_c)(runtime, function_name, encoded_args, length, id)
-    })
+    Ok(unsafe { (symbols.call_function_from_c)(runtime, function_name, encoded_args, length, id) })
 }
 
 /// Call a BAML function with streaming.

@@ -1,9 +1,10 @@
-use std::collections::HashMap;
-use std::ffi::c_int;
-use std::sync::{Mutex, OnceLock, mpsc};
+use std::{
+    collections::HashMap,
+    ffi::c_int,
+    sync::{Mutex, OnceLock, mpsc},
+};
 
-use crate::error::BamlError;
-use crate::ffi::bindings;
+use crate::{error::BamlError, ffi::bindings};
 
 /// Result sent via callback channel
 pub enum CallbackResult {

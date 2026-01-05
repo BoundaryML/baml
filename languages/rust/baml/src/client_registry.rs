@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::codec::BamlEncode;
-use crate::proto::baml_cffi_v1::{
-    HostClientProperty, HostClientRegistry, HostMapEntry, host_map_entry,
+use crate::{
+    codec::BamlEncode,
+    proto::baml_cffi_v1::{HostClientProperty, HostClientRegistry, HostMapEntry, host_map_entry},
 };
 
 /// A client property for runtime client configuration.

@@ -1,9 +1,7 @@
 //! Trait for zero-copy borrowing from BamlValue.
 
+use super::{baml_value::BamlValue, known_types::KnownTypes};
 use crate::error::BamlError;
-
-use super::baml_value::BamlValue;
-use super::known_types::KnownTypes;
 
 /// Trait for zero-copy borrowing from BamlValue.
 ///
@@ -122,8 +120,10 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a Dynami
 // Wrapper type FromBamlValueRef implementations
 // =============================================================================
 
-use crate::error::Unknown;
-use crate::types::{Checked, StreamState};
+use crate::{
+    error::Unknown,
+    types::{Checked, StreamState},
+};
 
 /// Checked ref - returns reference to the Checked wrapper containing BamlValue
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>

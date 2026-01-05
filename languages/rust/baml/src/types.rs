@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::codec::{BamlDecode, BamlEncode};
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{CffiStreamState, CffiValueHolder, HostValue, cffi_value_holder};
+use crate::{
+    codec::{BamlDecode, BamlEncode},
+    error::BamlError,
+    proto::baml_cffi_v1::{CffiStreamState, CffiValueHolder, HostValue, cffi_value_holder},
+};
 
 /// Result of a @check constraint
 #[derive(Debug, Clone)]

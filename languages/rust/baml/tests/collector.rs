@@ -254,9 +254,9 @@ mod collector {
     // =========================================================================
 
     mod thread_safety {
+        use std::{sync::Arc, thread};
+
         use super::*;
-        use std::sync::Arc;
-        use std::thread;
 
         #[test]
         fn collector_is_send() {

@@ -4,12 +4,13 @@
 
 use std::ffi::c_void;
 
-use crate::baml_unreachable;
-use crate::proto::baml_cffi_v1::BamlObjectType;
-
-use super::collector::{StreamTiming, Timing, Usage};
-use super::http::{HTTPRequest, HTTPResponse, SSEResponse};
-use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
+use super::{
+    RawObject, RawObjectTrait,
+    collector::{StreamTiming, Timing, Usage},
+    define_raw_object_wrapper,
+    http::{HTTPRequest, HTTPResponse, SSEResponse},
+};
+use crate::{baml_unreachable, proto::baml_cffi_v1::BamlObjectType};
 
 // =============================================================================
 // LLMCall

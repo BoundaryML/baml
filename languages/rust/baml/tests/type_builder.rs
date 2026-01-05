@@ -1124,9 +1124,9 @@ mod type_builder {
     // =========================================================================
 
     mod thread_safety {
+        use std::{sync::Arc, thread};
+
         use super::*;
-        use std::sync::Arc;
-        use std::thread;
 
         #[test]
         fn type_builder_is_send() {

@@ -2,10 +2,12 @@ use std::marker::PhantomData;
 
 use prost::Message;
 
-use crate::codec::BamlDecode;
-use crate::error::BamlError;
-use crate::ffi::{self, callbacks::CallbackResult};
-use crate::proto::baml_cffi_v1::CffiValueHolder;
+use crate::{
+    codec::BamlDecode,
+    error::BamlError,
+    ffi::{self, callbacks::CallbackResult},
+    proto::baml_cffi_v1::CffiValueHolder,
+};
 
 /// State of the async streaming call
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

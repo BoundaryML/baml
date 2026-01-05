@@ -3,12 +3,18 @@
 // Allow stderr output for download warning messages.
 #![allow(clippy::print_stderr)]
 
-use crate::download::download_library;
-use crate::error::{BamlSysError, Result};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
+
 use libloading::Library;
 use once_cell::sync::OnceCell;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+
+use crate::{
+    download::download_library,
+    error::{BamlSysError, Result},
+};
 
 /// Package version from Cargo.toml (workspace).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -264,7 +270,11 @@ fn get_system_paths(lib_filename: &str) -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         if let Ok(program_files) = std::env::var("ProgramFiles") {
-            paths.push(PathBuf::from(&program_files).join("baml").join(lib_filename));
+            paths.push(
+                PathBuf::from(&program_files)
+                    .join("baml")
+                    .join(lib_filename),
+            );
             paths.push(
                 PathBuf::from(&program_files)
                     .join("baml")

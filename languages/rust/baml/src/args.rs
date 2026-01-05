@@ -1,12 +1,14 @@
 use prost::Message;
 
-use crate::client_registry::ClientRegistry;
-use crate::codec::BamlEncode;
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry, host_map_entry,
+use crate::{
+    client_registry::ClientRegistry,
+    codec::BamlEncode,
+    error::BamlError,
+    proto::baml_cffi_v1::{
+        BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry, host_map_entry,
+    },
+    raw_objects::{Collector, RawObjectTrait, TypeBuilder},
 };
-use crate::raw_objects::{Collector, RawObjectTrait, TypeBuilder};
 
 /// Arguments for a BAML function call
 #[derive(Default)]

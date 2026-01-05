@@ -1,16 +1,18 @@
 //! Container type BamlDecode and BamlEncode implementations.
 
-use std::borrow::Cow;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
-    host_map_entry, host_value,
+use super::{
+    helpers::variant_name,
+    traits::{BamlDecode, BamlEncode},
 };
-
-use super::helpers::variant_name;
-use super::traits::{BamlDecode, BamlEncode};
+use crate::{
+    error::BamlError,
+    proto::baml_cffi_v1::{
+        CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
+        host_map_entry, host_value,
+    },
+};
 
 // =============================================================================
 // Union variant unwrapping helper

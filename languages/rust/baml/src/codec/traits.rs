@@ -1,8 +1,10 @@
 //! Core codec traits for encoding/decoding BAML values.
 
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    CffiValueClass, CffiValueHolder, HostMapEntry, HostValue, host_map_entry,
+use crate::{
+    error::BamlError,
+    proto::baml_cffi_v1::{
+        CffiValueClass, CffiValueHolder, HostMapEntry, HostValue, host_map_entry,
+    },
 };
 
 /// Trait for decoding from CFFI protobuf format (BAML -> Rust)

@@ -1,17 +1,21 @@
 #![allow(unsafe_code)]
-use std::collections::HashMap;
-use std::ffi::{CStr, CString, c_void};
+use std::{
+    collections::HashMap,
+    ffi::{CStr, CString, c_void},
+};
 
 use prost::Message;
 
-use crate::args::FunctionArgs;
-use crate::async_stream::AsyncStreamingCall;
-use crate::codec::BamlDecode;
-use crate::error::BamlError;
-use crate::ffi::{self, callbacks};
-use crate::proto::baml_cffi_v1::CffiValueHolder;
-use crate::raw_objects::{Audio, Collector, Image, Pdf, TypeBuilder, Video};
-use crate::stream::StreamingCall;
+use crate::{
+    args::FunctionArgs,
+    async_stream::AsyncStreamingCall,
+    codec::BamlDecode,
+    error::BamlError,
+    ffi::{self, callbacks},
+    proto::baml_cffi_v1::CffiValueHolder,
+    raw_objects::{Audio, Collector, Image, Pdf, TypeBuilder, Video},
+    stream::StreamingCall,
+};
 
 /// Handle to the BAML runtime
 pub struct BamlRuntime {

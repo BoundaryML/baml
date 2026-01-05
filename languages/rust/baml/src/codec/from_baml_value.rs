@@ -1,9 +1,7 @@
 //! Trait for extracting concrete types from BamlValue (owned).
 
+use super::{baml_value::BamlValue, known_types::KnownTypes};
 use crate::error::BamlError;
-
-use super::baml_value::BamlValue;
-use super::known_types::KnownTypes;
 
 /// Trait for extracting concrete types from BamlValue.
 ///

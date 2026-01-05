@@ -2,16 +2,15 @@
 //!
 //! These wrap FFI pointers to collector objects managed by the BAML runtime.
 
-use std::collections::HashMap;
-use std::ffi::c_void;
+use std::{collections::HashMap, ffi::c_void};
 
-use crate::baml_unreachable;
-use crate::codec::BamlDecode;
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{BamlObjectType, CffiValueHolder};
-
-use super::llm_call::LLMCallKind;
-use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
+use super::{RawObject, RawObjectTrait, define_raw_object_wrapper, llm_call::LLMCallKind};
+use crate::{
+    baml_unreachable,
+    codec::BamlDecode,
+    error::BamlError,
+    proto::baml_cffi_v1::{BamlObjectType, CffiValueHolder},
+};
 
 // =============================================================================
 // LogType Enum

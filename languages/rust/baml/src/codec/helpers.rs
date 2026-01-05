@@ -1,12 +1,13 @@
 //! Helper functions for encoding/decoding BAML values.
 
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    CffiMapEntry, CffiValueHolder, HostClassValue, HostEnumValue, HostMapEntry, HostValue,
-    cffi_value_holder, host_map_entry, host_value,
-};
-
 use super::traits::{BamlClass, BamlDecode, BamlEnum};
+use crate::{
+    error::BamlError,
+    proto::baml_cffi_v1::{
+        CffiMapEntry, CffiValueHolder, HostClassValue, HostEnumValue, HostMapEntry, HostValue,
+        cffi_value_holder, host_map_entry, host_value,
+    },
+};
 
 /// Helper to get variant name for error messages
 pub(crate) fn variant_name(v: &cffi_value_holder::Value) -> &'static str {

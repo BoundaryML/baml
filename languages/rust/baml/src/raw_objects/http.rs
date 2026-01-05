@@ -2,14 +2,10 @@
 //!
 //! These wrap FFI pointers to HTTP objects managed by the BAML runtime.
 
-use std::collections::HashMap;
-use std::ffi::c_void;
-
-use crate::baml_unreachable;
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::BamlObjectType;
+use std::{collections::HashMap, ffi::c_void};
 
 use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
+use crate::{baml_unreachable, error::BamlError, proto::baml_cffi_v1::BamlObjectType};
 
 // =============================================================================
 // HTTPBody

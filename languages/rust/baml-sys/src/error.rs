@@ -32,7 +32,10 @@ pub enum BamlSysError {
 
     /// Platform not supported.
     #[error("Platform not supported: {os}/{arch}")]
-    UnsupportedPlatform { os: &'static str, arch: &'static str },
+    UnsupportedPlatform {
+        os: &'static str,
+        arch: &'static str,
+    },
 
     /// Failed to determine cache directory.
     #[error("Failed to determine cache directory: {0}")]

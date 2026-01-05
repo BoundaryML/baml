@@ -2,10 +2,10 @@ use std::sync::mpsc;
 
 use prost::Message;
 
-use crate::codec::BamlDecode;
-use crate::error::BamlError;
-use crate::ffi::callbacks::CallbackResult;
-use crate::proto::baml_cffi_v1::CffiValueHolder;
+use crate::{
+    codec::BamlDecode, error::BamlError, ffi::callbacks::CallbackResult,
+    proto::baml_cffi_v1::CffiValueHolder,
+};
 
 /// Event from a streaming function call
 pub enum StreamEvent<TPartial, TFinal> {

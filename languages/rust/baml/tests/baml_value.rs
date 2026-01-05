@@ -2,10 +2,11 @@
 
 mod common;
 
-use baml::__internal::CffiStreamState;
+use std::collections::HashMap;
+
 use baml::{
-    BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum, DynamicUnion, FromBamlValue,
-    FromBamlValueRef, KnownTypes, StreamingState,
+    __internal::CffiStreamState, BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum,
+    DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, StreamingState,
 };
 use common::{
     make_bool_holder, make_checked_holder, make_class_holder, make_enum_holder, make_float_holder,
@@ -13,7 +14,6 @@ use common::{
     make_literal_string_holder, make_map_holder, make_null_holder, make_stream_state_holder,
     make_string_holder, make_union_holder,
 };
-use std::collections::HashMap;
 
 // =============================================================================
 // Mock KnownTypes for testing

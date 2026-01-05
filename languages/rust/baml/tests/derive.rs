@@ -2,8 +2,10 @@
 
 mod common;
 
-use baml::__internal::{host_map_entry, host_value};
-use baml::{BamlClass, BamlDecode, BamlEncode, BamlEnum};
+use baml::{
+    __internal::{host_map_entry, host_value},
+    BamlClass, BamlDecode, BamlEncode, BamlEnum,
+};
 
 // =============================================================================
 // BamlEncode derive tests

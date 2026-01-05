@@ -2,13 +2,16 @@
 
 use std::collections::HashMap;
 
-use crate::error::{BamlError, BamlTypeName, FullTypeName};
-use crate::types::{Checked, StreamState};
-
-use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
-use super::from_baml_value::FromBamlValue;
-use super::from_baml_value_ref::FromBamlValueRef;
-use super::known_types::KnownTypes;
+use super::{
+    dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion},
+    from_baml_value::FromBamlValue,
+    from_baml_value_ref::FromBamlValueRef,
+    known_types::KnownTypes,
+};
+use crate::{
+    error::{BamlError, BamlTypeName, FullTypeName},
+    types::{Checked, StreamState},
+};
 
 /// A dynamically-typed BAML value, parameterized by two type enums:
 /// - `T`: Regular known types (e.g., `types::Person`)
@@ -173,10 +176,12 @@ impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
 // BamlDecode implementation for BamlValue
 // =============================================================================
 
-use crate::proto::baml_cffi_v1::{
-    CffiStreamState, CffiValueHolder, cffi_field_type_literal, cffi_value_holder,
+use crate::{
+    proto::baml_cffi_v1::{
+        CffiStreamState, CffiValueHolder, cffi_field_type_literal, cffi_value_holder,
+    },
+    types::{Check, CheckStatus, StreamingState},
 };
-use crate::types::{Check, CheckStatus, StreamingState};
 
 impl<T: KnownTypes, S: KnownTypes> BamlDecode for BamlValue<T, S> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {

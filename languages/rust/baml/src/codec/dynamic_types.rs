@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use super::baml_value::BamlValue;
-use super::from_baml_value::FromBamlValue;
-use super::from_baml_value_ref::FromBamlValueRef;
-use super::known_types::KnownTypes;
+use super::{
+    baml_value::BamlValue, from_baml_value::FromBamlValue, from_baml_value_ref::FromBamlValueRef,
+    known_types::KnownTypes,
+};
 use crate::error::{BamlError, FullTypeName};
 
 /// A fully dynamic class - all fields accessed via .get()

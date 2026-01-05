@@ -1,15 +1,19 @@
 //! Primitive type BamlDecode and BamlEncode implementations.
 
-use crate::__internal::cffi_field_type_literal;
-use crate::error::BamlError;
-use crate::proto::baml_cffi_v1::{
-    CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
-    host_map_entry, host_value,
-};
 use serde_json::Value as JsonValue;
 
-use super::helpers::variant_name;
-use super::traits::{BamlDecode, BamlEncode};
+use super::{
+    helpers::variant_name,
+    traits::{BamlDecode, BamlEncode},
+};
+use crate::{
+    __internal::cffi_field_type_literal,
+    error::BamlError,
+    proto::baml_cffi_v1::{
+        CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
+        host_map_entry, host_value,
+    },
+};
 
 // =============================================================================
 // Primitive BamlDecode implementations
