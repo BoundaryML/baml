@@ -263,6 +263,10 @@ pub struct InferenceResult<'db> {
     /// Maps expression ID to (`enum_name`, `variant_name`).
     /// Used by codegen to emit enum variant construction.
     pub enum_variant_exprs: HashMap<ExprId, (Name, Name)>,
+    /// Match expressions that are exhaustive (all cases covered).
+    /// Used by codegen to emit `unreachable` for fallthrough paths,
+    /// enabling phi-like optimization for match results.
+    pub exhaustive_matches: HashSet<ExprId>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty<'db>>>,
 }
@@ -288,6 +292,8 @@ pub struct TypeContext<'db> {
     path_segment_types: HashMap<ExprId, Vec<Ty<'db>>>,
     /// Expressions that are enum variant values.
     enum_variant_exprs: HashMap<ExprId, (Name, Name)>,
+    /// Match expressions that are exhaustive (all cases covered).
+    exhaustive_matches: HashSet<ExprId>,
     /// Types of all return statements encountered during inference.
     /// Used to validate that all return paths match the declared return type.
     return_types: Vec<(Ty<'db>, Span)>,
@@ -314,6 +320,7 @@ impl<'db> TypeContext<'db> {
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
+            exhaustive_matches: HashSet::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -337,6 +344,7 @@ impl<'db> TypeContext<'db> {
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
+            exhaustive_matches: HashSet::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -362,6 +370,7 @@ impl<'db> TypeContext<'db> {
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
+            exhaustive_matches: HashSet::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -618,6 +627,7 @@ pub fn infer_function_body<'db>(
         expr_types: ctx.expr_types,
         path_segment_types: ctx.path_segment_types,
         enum_variant_exprs: ctx.enum_variant_exprs,
+        exhaustive_matches: ctx.exhaustive_matches,
         errors: ctx.errors,
     }
 }
@@ -1358,6 +1368,9 @@ fn check_match_exhaustiveness<'db>(
             missing_cases,
             span: match_span,
         });
+    } else {
+        // Record that this match is exhaustive for codegen optimization
+        ctx.exhaustive_matches.insert(match_expr_id);
     }
 }
 

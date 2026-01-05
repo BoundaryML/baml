@@ -105,7 +105,18 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             self.block_addresses.insert(block_id, self.current_pc());
             // Track the next block for fall-through optimization
             self.next_block = rpo.get(i + 1).copied();
-            self.emit_block(mir.block(block_id), mir);
+
+            // Skip emitting dead unreachable blocks - they're targets for impossible
+            // control flow paths (e.g., exhaustive match fallthrough). We record
+            // their address (current PC) so jumps to them resolve, but don't emit
+            // any instructions. If somehow reached, execution falls through to
+            // whatever comes next.
+            let block = mir.block(block_id);
+            if crate::analysis::is_dead_unreachable_block(block) {
+                continue;
+            }
+
+            self.emit_block(block, mir);
         }
 
         // 3. Patch all jump targets
@@ -791,6 +802,18 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
             }
 
             Terminator::Unreachable => {
+                // TODO(#UNREACHABLE): This code should NEVER be reached at runtime.
+                // Currently we emit a safety return of null, but this is a fallback
+                // that masks bugs. We should instead:
+                //
+                // 1. Add a `Panic` instruction to the VM that halts execution with
+                //    an error message like "reached unreachable code".
+                // 2. Emit `Instruction::Panic("unreachable")` here instead.
+                // 3. Consider adding dead code elimination to remove unreachable
+                //    blocks entirely during compilation.
+                //
+                // For now, we return null to avoid undefined behavior if this is
+                // somehow reached due to a compiler bug or type system unsoundness.
                 let idx = self.add_constant(Value::Null);
                 self.emit(Instruction::LoadConst(idx));
                 self.emit(Instruction::Return);

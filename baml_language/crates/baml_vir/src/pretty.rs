@@ -288,9 +288,14 @@ impl<'a> PrettyPrinter<'a> {
                 self.output.push(']');
             }
 
-            Expr::Match { scrutinee, arms } => {
+            Expr::Match {
+                scrutinee,
+                arms,
+                is_exhaustive,
+            } => {
                 self.indent(level);
-                writeln!(self.output, "match : {ty}").unwrap();
+                let exhaustive_marker = if *is_exhaustive { " [exhaustive]" } else { "" };
+                writeln!(self.output, "match{exhaustive_marker} : {ty}").unwrap();
                 self.print_expr(*scrutinee, level + 1);
                 for arm in arms {
                     self.output.push('\n');

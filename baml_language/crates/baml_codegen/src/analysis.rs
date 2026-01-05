@@ -251,6 +251,14 @@ fn compute_rpo(mir: &MirFunction<'_>) -> Vec<BlockId> {
     postorder
 }
 
+/// Check if a block is a "dead" unreachable block that can be skipped during emission.
+///
+/// A block is dead if it has no statements and terminates with `Unreachable`.
+/// Such blocks exist only as targets for impossible control flow paths.
+pub(crate) fn is_dead_unreachable_block(block: &baml_mir::BasicBlock<'_>) -> bool {
+    block.statements.is_empty() && matches!(block.terminator, Some(Terminator::Unreachable))
+}
+
 // ============================================================================
 // Jump Threading
 // ============================================================================

@@ -213,6 +213,10 @@ pub enum Expr {
     Match {
         scrutinee: ExprId,
         arms: Vec<MatchArm>,
+        /// Whether the match is exhaustive (all cases covered).
+        /// Computed during type checking. Used by codegen to emit `unreachable`
+        /// for the fallthrough path, enabling phi-like optimization.
+        is_exhaustive: bool,
     },
 
     // ========== Watch Notifications ==========
