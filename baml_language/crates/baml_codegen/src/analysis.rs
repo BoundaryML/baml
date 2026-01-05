@@ -910,10 +910,35 @@ fn is_phi_like(
     true
 }
 
+/// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
+///
+/// Stack-neutral statements can safely execute while a value meant for return sits on
+/// the stack, enabling optimizations like `ReturnPhi` even when there are statements
+/// between the assignment to `_0` and the `Return` terminator.
+fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
+    match kind {
+        // These don't touch the stack at all - just update external state
+        StatementKind::Unwatch(_) => true,
+        StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
+        StatementKind::NotifyBlock { .. } => true,
+        StatementKind::WatchNotify(_) => true,
+        StatementKind::Nop => true,
+
+        // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
+        // The return value stays at TOS throughout
+        StatementKind::WatchOptions { .. } => true,
+
+        // These modify the stack
+        StatementKind::Assign { .. } => false,
+        StatementKind::Drop(_) => false,
+    }
+}
+
 /// Check if `_0` (the return place) is a "return-phi" local.
 ///
-/// Return-phi applies when `_0` is assigned immediately before Return in each defining block.
-/// This allows us to:
+/// Return-phi applies when `_0` is assigned before Return in each defining block,
+/// with only stack-neutral statements (like Unwatch, `VizExit`) between the assignment
+/// and Return. This allows us to:
 /// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
 /// - At Return: skip `LoadVar` for _0 (value already on stack)
 ///
@@ -939,55 +964,76 @@ fn is_return_phi(
         return false;
     }
 
-    // Build a set of return-only blocks (empty statements + Return terminator)
-    let return_only_blocks: HashSet<BlockId> = mir
-        .blocks
-        .iter()
-        .filter(|b| b.statements.is_empty() && matches!(b.terminator, Some(Terminator::Return)))
-        .map(|b| b.id)
-        .collect();
+    // Helper: check if a block leads to Return through only stack-neutral statements.
+    // Follows Goto chains, ensuring all intermediate blocks have only stack-neutral statements.
+    let leads_to_return_safely = |start: BlockId| -> bool {
+        let mut current = start;
+        let mut visited = HashSet::new();
 
-    // Helper: resolve a target through the redirect chain
-    let resolve_target =
-        |target: BlockId| -> BlockId { redirect_targets.get(&target).copied().unwrap_or(target) };
+        loop {
+            // Avoid infinite loops
+            if !visited.insert(current) {
+                return false;
+            }
+
+            let block = mir.block(current);
+
+            // All statements in this block must be stack-neutral
+            if !block
+                .statements
+                .iter()
+                .all(|s| is_stack_neutral_statement(&s.kind))
+            {
+                return false;
+            }
+
+            match &block.terminator {
+                Some(Terminator::Return) => return true,
+                Some(Terminator::Goto { target }) => {
+                    // Follow the redirect chain
+                    current = redirect_targets.get(target).copied().unwrap_or(*target);
+                }
+                _ => return false,
+            }
+        }
+    };
 
     // Each definition block must:
-    // 1. Have the definition as the last statement (or be a terminator definition)
-    // 2. End with Return OR Goto/Call to a return-only block (after following redirects)
+    // 1. Have the definition followed only by stack-neutral statements (or be a terminator definition)
+    // 2. End with Return OR lead to Return through only stack-neutral blocks
     for &(block_id, stmt_idx) in defs {
         let block = mir.block(block_id);
 
         // Handle terminator definitions (Call, DispatchFuture, Await)
         if stmt_idx == TERMINATOR_IDX {
-            // For terminator definitions, check if the continuation is return-only
+            // For terminator definitions, check if the continuation leads to return safely
             let continuation = match &block.terminator {
                 Some(Terminator::Call { target, .. }) => Some(*target),
                 Some(Terminator::DispatchFuture { resume, .. }) => Some(*resume),
                 Some(Terminator::Await { target, .. }) => Some(*target),
                 _ => None,
             };
-            let valid = continuation.is_some_and(|target| {
-                let resolved = resolve_target(target);
-                return_only_blocks.contains(&resolved)
-            });
+            let valid = continuation.is_some_and(leads_to_return_safely);
             if !valid {
                 return false;
             }
             continue;
         }
 
-        // For regular Assign statements: definition must be the last statement
-        if stmt_idx + 1 != block.statements.len() {
+        // For regular Assign statements: all statements after the definition must be stack-neutral
+        let statements_after_def_are_neutral = block.statements[stmt_idx + 1..]
+            .iter()
+            .all(|s| is_stack_neutral_statement(&s.kind));
+        if !statements_after_def_are_neutral {
             return false;
         }
 
-        // Block must end with Return or Goto to return-only block
-        // Follow redirect chain for jump threading
+        // Block must end with Return or lead to Return through stack-neutral blocks
         let valid_terminator = match &block.terminator {
             Some(Terminator::Return) => true,
             Some(Terminator::Goto { target }) => {
-                let resolved = resolve_target(*target);
-                return_only_blocks.contains(&resolved)
+                let resolved = redirect_targets.get(target).copied().unwrap_or(*target);
+                leads_to_return_safely(resolved)
             }
             _ => false,
         };

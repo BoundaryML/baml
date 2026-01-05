@@ -21,8 +21,7 @@ fn watch_primitive() -> anyhow::Result<()> {
         expected: vec![(
             "primitive",
             vec![
-                // Initialize locals with null
-                Instruction::LoadConst(Value::Null),
+                // Initialize locals with null (only "value" needs a slot now, _0 is ReturnPhi)
                 Instruction::LoadConst(Value::Null),
                 // Initialize watched variable
                 Instruction::LoadConst(Value::Int(0)),
@@ -30,16 +29,15 @@ fn watch_primitive() -> anyhow::Result<()> {
                 // Register watch (only once, at initialization)
                 Instruction::LoadConst(Value::string("value")), // channel "value"
                 Instruction::LoadConst(Value::Null),            // filter null
-                Instruction::Watch(2),
+                Instruction::Watch(1),
                 // Assignment: value = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("value".to_string()),
-                // Return value
+                // Return value - _0 is ReturnPhi, so value stays on stack through Unwatch
                 Instruction::LoadVar("value".to_string()),
-                Instruction::StoreVar("_0".to_string()),
-                // Unwatch on scope exit
-                Instruction::Unwatch(2),
-                Instruction::LoadVar("_0".to_string()),
+                // Unwatch on scope exit (stack-neutral, doesn't disturb TOS)
+                Instruction::Unwatch(1),
+                // No StoreVar/LoadVar for _0 - value already on stack
                 Instruction::Return,
             ],
         )],
@@ -66,20 +64,17 @@ fn viz_header_before_if_emits_viz_enter_exit() -> anyhow::Result<()> {
         expected: vec![(
             "header_before_if",
             vec![
-                Instruction::LoadConst(Value::Null), // result temp init
-                Instruction::NotifyBlock(0),         // //# MyHeader
-                Instruction::VizEnter(0),            // VizEnter because header precedes if
+                // No result temp init - _0 is ReturnPhi (VizExit is stack-neutral)
+                Instruction::NotifyBlock(0), // //# MyHeader
+                Instruction::VizEnter(0),    // VizEnter because header precedes if
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Int(2)), // else branch
-                Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(3),
-                Instruction::LoadConst(Value::Int(1)), // then branch
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::VizExit(0), // VizExit at join
-                Instruction::LoadVar("_0".to_string()),
-                Instruction::Return,
+                Instruction::LoadConst(Value::Int(2)), // else branch - stays on stack
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(1)), // then branch - stays on stack
+                Instruction::VizExit(0),               // VizExit at join (stack-neutral)
+                Instruction::Return,                   // value already on stack
             ],
         )],
     })
@@ -165,7 +160,7 @@ fn viz_multiple_headers_only_one_before_if() -> anyhow::Result<()> {
         expected: vec![(
             "multiple_headers",
             vec![
-                Instruction::LoadConst(Value::Null),   // result temp
+                // No result temp - _0 is ReturnPhi (VizExit is stack-neutral)
                 Instruction::NotifyBlock(0), // //# FirstHeader - no VizEnter (not before control flow)
                 Instruction::NotifyBlock(1), // //# SecondHeader
                 Instruction::VizEnter(0),    // VizEnter because this header precedes if
@@ -173,15 +168,12 @@ fn viz_multiple_headers_only_one_before_if() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Int(3)), // else branch
-                Instruction::StoreVar("_0".to_string()),
                 Instruction::Jump(3),
-                Instruction::LoadConst(Value::Int(2)), // then branch
-                Instruction::StoreVar("_0".to_string()),
-                Instruction::VizExit(0), // VizExit at join
-                Instruction::LoadVar("_0".to_string()),
-                Instruction::Return,
+                Instruction::LoadConst(Value::Int(3)), // else branch - stays on stack
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(2)), // then branch - stays on stack
+                Instruction::VizExit(0),               // VizExit at join (stack-neutral)
+                Instruction::Return,                   // value already on stack
             ],
         )],
     })
