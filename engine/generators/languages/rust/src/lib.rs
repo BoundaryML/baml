@@ -1,9 +1,9 @@
+use std::{collections::HashSet, sync::Arc};
+
 use anyhow::Result;
 use askama::Template;
 use dir_writer::{FileCollector, GeneratorArgs, LanguageFeatures};
 use internal_baml_core::ir::repr::IntermediateRepr;
-use std::collections::HashSet;
-use std::sync::Arc;
 
 /// A collection of recursive cycles, where each cycle is a set of class names
 /// that reference each other (directly or indirectly).

@@ -7,7 +7,6 @@ use baml_types::{BamlValueWithMeta, Completion, Constraint, ResponseCheck, TypeI
 pub use baml_viz_events::{RuntimeNodeType, VizExecDelta, VizExecEvent};
 use baml_viz_events::{StateUpdate, VizStateReducer};
 
-
 /// Unique identifier for a streaming watch notification
 pub type StreamId = String;
 

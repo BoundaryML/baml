@@ -2,12 +2,12 @@
 
 use askama::Template;
 
-use crate::functions::FunctionRust;
-use crate::generated_types::{
-    ClassRustRendered, EnumRust, TypeAliasRustRendered, UnionRustRendered,
+use crate::{
+    functions::FunctionRust,
+    generated_types::{ClassRustRendered, EnumRust, TypeAliasRustRendered, UnionRustRendered},
+    package::CurrentRenderPackage,
+    r#type::SerializeType,
 };
-use crate::package::CurrentRenderPackage;
-use crate::r#type::SerializeType;
 
 /// Source map template - embeds BAML source files
 #[derive(Template)]

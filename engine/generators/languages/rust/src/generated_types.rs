@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypeRust};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypeRust},
+};
 
 #[derive(Debug)]
 pub struct ClassRust {
