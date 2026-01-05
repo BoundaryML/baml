@@ -1,4 +1,4 @@
-#[allow(unsafe_code)]
+#![allow(unsafe_code)]
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_void};
 
@@ -38,8 +38,9 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env: HashMap<String, String>,
     ) -> Result<Self, BamlError> {
-        // Initialize callbacks first
-        callbacks::initialize_callbacks();
+        // Initialize callbacks first - now returns Result
+        callbacks::initialize_callbacks()
+            .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?;
 
         // Encode files and env as JSON (matching CFFI format)
         let files_json = json_encode_map(&files)?;
@@ -55,6 +56,7 @@ impl BamlRuntime {
         #[allow(unsafe_code)]
         let ptr = unsafe {
             ffi::create_baml_runtime(dir_cstr.as_ptr(), files_cstr.as_ptr(), env_cstr.as_ptr())
+                .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?
         };
 
         if ptr.is_null() {
@@ -85,6 +87,10 @@ impl BamlRuntime {
                 encoded.len(),
                 id,
             )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
         };
 
         // Check for immediate error
@@ -138,6 +144,10 @@ impl BamlRuntime {
                 encoded.len(),
                 id,
             )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
         };
 
         if !error_ptr.is_null() {
@@ -174,6 +184,10 @@ impl BamlRuntime {
                 encoded.len(),
                 id,
             )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
         };
 
         // Check for immediate error
@@ -227,6 +241,10 @@ impl BamlRuntime {
                 encoded.len(),
                 id,
             )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
         };
 
         if !error_ptr.is_null() {
@@ -279,6 +297,10 @@ impl BamlRuntime {
                 encoded.len(),
                 id,
             )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
         };
 
         // Check for immediate error
@@ -373,9 +395,9 @@ impl BamlRuntime {
 impl Drop for BamlRuntime {
     fn drop(&mut self) {
         #[allow(unsafe_code)]
-        unsafe {
-            ffi::destroy_baml_runtime(self.ptr);
-        }
+        // Ignore errors during drop - the library should already be loaded at this point
+        // and we can't do much about errors during cleanup anyway
+        let _ = unsafe { ffi::destroy_baml_runtime(self.ptr) };
     }
 }
 

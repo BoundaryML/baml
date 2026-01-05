@@ -46,15 +46,29 @@ fn get_next_id() -> &'static Mutex<u32> {
 }
 
 /// Register callbacks with FFI layer. Must be called once at startup.
-pub fn initialize_callbacks() {
-    // Only register once
-    static INITIALIZED: OnceLock<()> = OnceLock::new();
-    INITIALIZED.get_or_init(|| {
+///
+/// Returns an error if the library cannot be loaded.
+pub fn initialize_callbacks() -> Result<(), baml_sys::BamlSysError> {
+    // Track initialization status - store Option<String> for error message
+    // since BamlSysError doesn't implement Clone
+    static INIT_ERROR: OnceLock<Option<String>> = OnceLock::new();
+
+    let error_msg = INIT_ERROR.get_or_init(|| {
         #[allow(unsafe_code)]
-        unsafe {
-            bindings::register_callbacks(result_callback, error_callback, on_tick_callback);
+        match unsafe {
+            bindings::register_callbacks(result_callback, error_callback, on_tick_callback)
+        } {
+            Ok(()) => None,
+            Err(e) => Some(e.to_string()),
         }
     });
+
+    match error_msg {
+        None => Ok(()),
+        Some(msg) => Err(baml_sys::BamlSysError::LibraryNotFound {
+            searched_paths: vec![std::path::PathBuf::from(msg.clone())],
+        }),
+    }
 }
 
 /// Allocate a unique callback ID, skipping 0 and any IDs still in use.

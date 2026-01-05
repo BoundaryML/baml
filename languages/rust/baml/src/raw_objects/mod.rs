@@ -143,8 +143,10 @@ impl RawObject {
             .map_err(|e| BamlError::internal(format!("failed to encode constructor: {e}")))?;
 
         // Call FFI
-        let response_buf =
-            unsafe { ffi::call_object_constructor(buf.as_ptr().cast::<i8>(), buf.len()) };
+        let response_buf = unsafe {
+            ffi::call_object_constructor(buf.as_ptr().cast::<i8>(), buf.len())
+                .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?
+        };
 
         // Decode response
         let response_bytes = unsafe {
@@ -157,8 +159,8 @@ impl RawObject {
         let response = InvocationResponse::decode(response_bytes)
             .map_err(|e| BamlError::internal(format!("failed to decode response: {e}")))?;
 
-        // Free the buffer
-        unsafe { ffi::free_buffer(response_buf) };
+        // Free the buffer - ignore errors during cleanup
+        let _ = unsafe { ffi::free_buffer(response_buf) };
 
         // Extract pointer from response
         match response.response {
@@ -315,6 +317,7 @@ impl RawObject {
 
         let response_buf = unsafe {
             ffi::call_object_method(self.inner.runtime, buf.as_ptr().cast::<i8>(), buf.len())
+                .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?
         };
 
         // Decode response
@@ -328,8 +331,8 @@ impl RawObject {
         let response = InvocationResponse::decode(response_bytes)
             .map_err(|e| BamlError::internal(format!("failed to decode response: {e}")))?;
 
-        // Free the buffer
-        unsafe { ffi::free_buffer(response_buf) };
+        // Free the buffer - ignore errors during cleanup
+        let _ = unsafe { ffi::free_buffer(response_buf) };
 
         Ok(response)
     }

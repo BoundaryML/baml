@@ -3,25 +3,21 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-
 //! Generated streaming union types.
 
-use baml::BamlDecode;
-use crate::baml_client::types;
 use super::*;
-
+use crate::baml_client::types;
+use baml::BamlDecode;
 
 /// Generated from: (Streaming.Example | Streaming.Example2)
 #[derive(Debug, Clone, BamlDecode)]
 #[baml(union)]
 pub enum Union2ExampleOrExample2 {
-
     #[baml(name = "Example")]
     Example(Example),
 
     #[baml(name = "Example2")]
     Example2(Example2),
-
 }
 
 impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
@@ -32,9 +28,6 @@ impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
 
 impl Default for Union2ExampleOrExample2 {
     fn default() -> Self {
-        
-            Self::Example(Default::default())
-        
+        Self::Example(Default::default())
     }
 }
-

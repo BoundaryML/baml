@@ -4,4 +4,3 @@
 // Learn more at https://docs.boundaryml.com
 
 //! Generated enum builder wrappers for type-safe value access.
-

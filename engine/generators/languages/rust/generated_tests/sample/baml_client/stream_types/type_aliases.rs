@@ -7,7 +7,6 @@
 //!
 //! Full implementation coming in Phase 6.
 
-use std::collections::HashMap;
 use crate::baml_client::types;
 use crate::baml_client::types::*;
-
+use std::collections::HashMap;

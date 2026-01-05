@@ -177,21 +177,23 @@ pub fn invoke_cli(args: &[&str]) -> i32 {
         .chain(std::iter::once(std::ptr::null())) // null terminator
         .collect();
 
-    #[allow(unsafe_code)]
+    #[allow(unsafe_code, clippy::print_stderr)]
     unsafe {
-        ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr())
+        match ffi::invoke_runtime_cli(c_arg_ptrs.as_ptr()) {
+            Ok(code) => code,
+            Err(e) => {
+                // CLI errors should be printed to stderr
+                eprintln!("Failed to load BAML library: {e}");
+                1
+            }
+        }
     }
 }
 
 /// Get the BAML library version
 pub fn version() -> String {
-    #[allow(unsafe_code)]
-    let ptr = unsafe { ffi::version() };
-    if ptr.is_null() {
-        return "unknown".to_string();
-    }
-    #[allow(unsafe_code)]
-    unsafe {
-        std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned()
+    match ffi::version() {
+        Ok(v) => v,
+        Err(_) => "unknown".to_string(),
     }
 }

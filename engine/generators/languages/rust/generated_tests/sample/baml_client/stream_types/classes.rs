@@ -3,42 +3,25 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-
 //! Generated streaming class types.
 //!
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
 
-use baml::BamlDecode;
-use crate::baml_client::types;
 use super::*;
-
-
-
-
+use crate::baml_client::types;
+use baml::BamlDecode;
 
 #[derive(Debug, Clone, Default, BamlDecode)]
 
 pub struct Example {
-
-
-
     #[baml(name = "type")]
-
     pub r#type: String,
-
-
 
     pub a: Option<types::Checked<i64>>,
 
-
-
     pub b: Option<String>,
-
-
 }
-
-
 
 impl AsRef<Example> for Example {
     fn as_ref(&self) -> &Example {
@@ -46,39 +29,21 @@ impl AsRef<Example> for Example {
     }
 }
 
-
-
-
 #[derive(Debug, Clone, Default, BamlDecode)]
 
 pub struct Example2 {
-
-
-
     #[baml(name = "type")]
-
     pub r#type: String,
-
-
 
     pub item: Option<Example>,
 
-
-
     pub element: Option<String>,
 
-
-
     pub element2: Option<String>,
-
-
 }
-
-
 
 impl AsRef<Example2> for Example2 {
     fn as_ref(&self) -> &Example2 {
         self
     }
 }
-

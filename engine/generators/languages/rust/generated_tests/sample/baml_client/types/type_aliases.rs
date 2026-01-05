@@ -3,5 +3,4 @@
 //
 // Learn more at https://docs.boundaryml.com
 
-
 // No type aliases defined

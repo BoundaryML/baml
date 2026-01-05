@@ -5,7 +5,10 @@
 
 //! Synchronous BAML client with function-object pattern.
 
-use crate::baml_client::{runtime::{get_runtime, FunctionOptions}, stream_types, types};
+use crate::baml_client::{
+    runtime::{get_runtime, FunctionOptions},
+    stream_types, types,
+};
 use baml::{BamlEncode, BamlError, StreamingCall};
 
 // =============================================================================
@@ -99,13 +102,9 @@ macro_rules! baml_function_sync {
 // Generate function structs
 // =============================================================================
 
-
-
 baml_function_sync!(Bar(x: i64, ) -> (stream_types::Union2ExampleOrExample2, types::Union2ExampleOrExample2));
 
-
 baml_function_sync!(Foo(x: i64, ) -> (stream_types::Union2ExampleOrExample2, types::Union2ExampleOrExample2));
-
 
 // =============================================================================
 // Client Struct
@@ -114,22 +113,20 @@ baml_function_sync!(Foo(x: i64, ) -> (stream_types::Union2ExampleOrExample2, typ
 #[derive(Clone)]
 pub struct BamlSyncClient {
     options: FunctionOptions,
-    
+
     pub Bar: Bar,
-    
+
     pub Foo: Foo,
-    
 }
 
 impl BamlSyncClient {
     pub const fn new() -> Self {
         Self {
             options: FunctionOptions::new(),
-            
+
             Bar: Bar::new(),
-            
+
             Foo: Foo::new(),
-            
         }
     }
 
@@ -137,11 +134,14 @@ impl BamlSyncClient {
     pub fn with_options(&self, options: FunctionOptions) -> Self {
         Self {
             options: options.clone(),
-            
-            Bar: Bar { options: options.clone() },
-            
-            Foo: Foo { options: options.clone() },
-            
+
+            Bar: Bar {
+                options: options.clone(),
+            },
+
+            Foo: Foo {
+                options: options.clone(),
+            },
         }
     }
 }

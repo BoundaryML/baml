@@ -1,0 +1,45 @@
+[package]
+name = "baml-sys"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "BAML FFI bindings with runtime dynamic library loading"
+readme = "README.md"
+keywords = ["baml", "ffi", "bindings"]
+categories = ["external-ffi-bindings"]
+
+# This crate provides the -sys bindings
+links = "baml_cffi"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+libloading = { workspace = true }
+once_cell = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+ureq = { workspace = true }
+hex = { workspace = true }
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_System_LibraryLoader"] }
+
+[build-dependencies]
+# None needed - no compile-time library search
+
+[features]
+default = ["download"]
+# Enable automatic download from GitHub releases
+download = []
+# Disable download (for air-gapped environments)
+no-download = []

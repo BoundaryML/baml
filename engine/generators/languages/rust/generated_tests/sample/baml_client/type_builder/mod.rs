@@ -50,29 +50,27 @@ impl TypeBuilder {
     // Schema Class Accessors (1:1 with schema class names)
     // =========================================================================
 
-
     /// Access the `Example` class builder.
     pub fn Example(&self) -> ExampleClassBuilder {
         ExampleClassBuilder::new(
-            self.inner.get_class("Example")
-                .expect("class Example is defined in schema")
+            self.inner
+                .get_class("Example")
+                .expect("class Example is defined in schema"),
         )
     }
-
 
     /// Access the `Example2` class builder.
     pub fn Example2(&self) -> Example2ClassBuilder {
         Example2ClassBuilder::new(
-            self.inner.get_class("Example2")
-                .expect("class Example2 is defined in schema")
+            self.inner
+                .get_class("Example2")
+                .expect("class Example2 is defined in schema"),
         )
     }
-
 
     // =========================================================================
     // Schema Enum Accessors (1:1 with schema enum names)
     // =========================================================================
-
 
     // =========================================================================
     // Primitive Types (all infallible)
