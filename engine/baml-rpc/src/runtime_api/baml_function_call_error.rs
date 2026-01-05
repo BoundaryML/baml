@@ -34,9 +34,8 @@ pub enum BamlFunctionCallError<'a> {
         raw_output: Cow<'a, str>,
     },
     Validation {
-        raw_output: Cow<'a, str>,
+        raw_output: Option<Cow<'a, str>>,
         message: Cow<'a, str>,
-        prompt: Cow<'a, str>,
-        //
+        prompt: Option<Cow<'a, str>>,
     },
 }
