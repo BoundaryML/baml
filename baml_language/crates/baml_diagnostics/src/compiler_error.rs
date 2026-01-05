@@ -90,6 +90,8 @@ const UNKNOWN_CLIENT_PROPERTY: ErrorCode = ErrorCode(27);
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);
+const WATCH_ON_NON_VARIABLE: ErrorCode = ErrorCode(65);
+const WATCH_ON_UNWATCHED_VARIABLE: ErrorCode = ErrorCode(66);
 
 /// Render an ariadne Report to a String.
 ///

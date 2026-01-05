@@ -10,7 +10,7 @@
 //!
 //! This follows patterns from rust-analyzer and ruff for incremental type checking.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{FileId, Name, Span};
 use baml_diagnostics::compiler_error::TypeError;
@@ -295,6 +295,8 @@ pub struct TypeContext<'db> {
     errors: Vec<TypeError<Ty<'db>>>,
     /// The current file being typechecked
     file_id: FileId,
+    /// Variables declared with `watch let` (tracked for $watch validation).
+    watched_vars: HashSet<Name>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -315,6 +317,7 @@ impl<'db> TypeContext<'db> {
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
+            watched_vars: HashSet::new(),
         }
     }
 
@@ -337,6 +340,7 @@ impl<'db> TypeContext<'db> {
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
+            watched_vars: HashSet::new(),
         }
     }
 
@@ -361,6 +365,7 @@ impl<'db> TypeContext<'db> {
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
+            watched_vars: HashSet::new(),
         }
     }
 
@@ -429,6 +434,16 @@ impl<'db> TypeContext<'db> {
     /// Add a type error.
     pub fn push_error(&mut self, error: TypeError<Ty<'db>>) {
         self.errors.push(error);
+    }
+
+    /// Mark a variable as watched (declared with `watch let`).
+    pub fn mark_watched(&mut self, name: Name) {
+        self.watched_vars.insert(name);
+    }
+
+    /// Check if a variable is watched (declared with `watch let`).
+    pub fn is_watched(&self, name: &Name) -> bool {
+        self.watched_vars.contains(name)
     }
 
     /// Get the database reference.
@@ -960,6 +975,28 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
         }
 
         Expr::FieldAccess { base, field } => {
+            // Special validation for $watch accessor
+            if field.as_str() == "$watch" {
+                // $watch can only be used on simple variable expressions
+                let base_expr = &body.exprs[*base];
+                match base_expr {
+                    Expr::Path(segments) if segments.len() == 1 => {
+                        // Simple variable - check if it's declared as watched
+                        let var_name = &segments[0];
+                        if !ctx.is_watched(var_name) {
+                            ctx.push_error(TypeError::WatchOnUnwatchedVariable {
+                                name: var_name.to_string(),
+                                span,
+                            });
+                        }
+                    }
+                    _ => {
+                        // Not a simple variable (e.g., arr[0].$watch, obj.field.$watch)
+                        ctx.push_error(TypeError::WatchOnNonVariable { span });
+                    }
+                }
+            }
+
             let base_ty = infer_expr(ctx, *base, body);
             infer_field_access(ctx, &base_ty, field, span)
         }
@@ -1676,7 +1713,7 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             type_annotation,
             type_span,
             initializer,
-            ..
+            is_watched,
         } => {
             let ty = if let Some(init) = initializer {
                 let init_ty = infer_expr(ctx, *init, body);
@@ -1705,15 +1742,21 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
                 Ty::Unknown
             };
 
-            // Extract variable name from pattern
+            // Extract variable name from pattern and track watched status
             let pat = &body.patterns[*pattern];
             match pat {
                 Pattern::Binding(name) => {
                     ctx.define(name.clone(), ty);
+                    if *is_watched {
+                        ctx.mark_watched(name.clone());
+                    }
                 }
                 Pattern::TypedBinding { name, ty: _ } => {
                     // TODO: Check declared type matches inferred type
                     ctx.define(name.clone(), ty);
+                    if *is_watched {
+                        ctx.mark_watched(name.clone());
+                    }
                 }
                 Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
                     // Literals/enum variants/unions don't introduce bindings in let statements

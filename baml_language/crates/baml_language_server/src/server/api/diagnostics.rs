@@ -492,6 +492,16 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             span,
             "E0064",
         ),
+        TypeError::WatchOnNonVariable { span } => (
+            "$watch can only be used on simple variable expressions".to_string(),
+            span,
+            "E0065",
+        ),
+        TypeError::WatchOnUnwatchedVariable { name, span } => (
+            format!("Cannot use $watch on `{name}`: variable must be declared with `watch let`"),
+            span,
+            "E0066",
+        ),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -535,6 +545,8 @@ fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
         TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
         TypeError::UnreachableArm { span, .. } => span.file_id,
         TypeError::UnknownEnumVariant { span, .. } => span.file_id,
+        TypeError::WatchOnNonVariable { span, .. } => span.file_id,
+        TypeError::WatchOnUnwatchedVariable { span, .. } => span.file_id,
     }
 }
 

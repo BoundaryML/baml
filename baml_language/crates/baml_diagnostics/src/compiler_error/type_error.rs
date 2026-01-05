@@ -48,6 +48,10 @@ pub enum TypeError<T> {
         variant_name: String,
         span: Span,
     },
+    /// Using $watch on a non-variable expression (e.g., `arr[0].$watch`).
+    WatchOnNonVariable { span: Span },
+    /// Using $watch on a variable not declared with `watch let`.
+    WatchOnUnwatchedVariable { name: String, span: Span },
 }
 
 impl<T> TypeError<T> {
@@ -123,6 +127,13 @@ impl<T> TypeError<T> {
                 variant_name: variant_name.clone(),
                 span: *span,
             },
+            TypeError::WatchOnNonVariable { span } => TypeError::WatchOnNonVariable { span: *span },
+            TypeError::WatchOnUnwatchedVariable { name, span } => {
+                TypeError::WatchOnUnwatchedVariable {
+                    name: name.clone(),
+                    span: *span,
+                }
+            }
         }
     }
 }

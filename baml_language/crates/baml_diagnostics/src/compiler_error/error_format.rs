@@ -10,7 +10,7 @@ use super::{
     NOT_INDEXABLE, NameError, ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH,
     TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY,
     UNKNOWN_ENUM_VARIANT, UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE,
-    UNKNOWN_VARIABLE, UNREACHABLE_ARM,
+    UNKNOWN_VARIABLE, UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
 };
 
 /// The message format and id of each compiler error variant.
@@ -119,6 +119,18 @@ where
                 format!("Enum '{enum_name}' has no variant '{variant_name}'"),
                 span,
                 UNKNOWN_ENUM_VARIANT,
+            ),
+            TypeError::WatchOnNonVariable { span } => simple_error(
+                "$watch can only be used on simple variable expressions".to_string(),
+                span,
+                WATCH_ON_NON_VARIABLE,
+            ),
+            TypeError::WatchOnUnwatchedVariable { name, span } => simple_error(
+                format!(
+                    "Cannot use $watch on '{name}': variable must be declared with `watch let`"
+                ),
+                span,
+                WATCH_ON_UNWATCHED_VARIABLE,
             ),
         },
         CompilerError::NameError(name_error) => match name_error {
