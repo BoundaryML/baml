@@ -815,7 +815,11 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 );
             }
 
-            Expr::Match { scrutinee, arms } => {
+            Expr::Match {
+                scrutinee,
+                arms,
+                is_exhaustive,
+            } => {
                 // Lower scrutinee to a temp
                 let scrutinee_ty = Self::lower_typed_ir_ty(body.ty(*scrutinee));
                 let scrutinee_local = self.builder.temp(scrutinee_ty.clone());
@@ -824,10 +828,33 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 // Create join block
                 let join_block = self.builder.create_block();
 
+                // For exhaustive matches, the last arm's failure path is unreachable.
+                // We create a single unreachable block to use as that target, avoiding
+                // the creation of an empty fallthrough block that would need to be emitted.
+                let unreachable_block = if *is_exhaustive {
+                    let saved_block = self.builder.current_block();
+                    let block = self.builder.create_block();
+                    self.builder.set_current_block(block);
+                    self.builder.unreachable();
+                    self.builder.set_current_block(saved_block);
+                    Some(block)
+                } else {
+                    None
+                };
+
                 // For each arm, create test and body blocks
-                for arm in arms {
+                let last_arm_idx = arms.len().saturating_sub(1);
+                for (i, arm) in arms.iter().enumerate() {
+                    let is_last_arm = i == last_arm_idx;
                     let arm_block = self.builder.create_block();
-                    let next_block = self.builder.create_block();
+
+                    // For the last arm of an exhaustive match, pattern failure goes
+                    // to the unreachable block. Otherwise, create a next_block.
+                    let next_block = if is_last_arm && *is_exhaustive {
+                        unreachable_block.expect("unreachable_block created for exhaustive match")
+                    } else {
+                        self.builder.create_block()
+                    };
 
                     // Generate pattern test
                     self.lower_pattern_test(
@@ -863,11 +890,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                     self.lower_expr(arm.body, dest.clone(), body);
                     self.builder.goto(join_block);
 
-                    self.builder.set_current_block(next_block);
+                    // Only set current block to next_block if it's not the unreachable block
+                    if !(is_last_arm && *is_exhaustive) {
+                        self.builder.set_current_block(next_block);
+                    }
                 }
 
-                // Fallthrough (should be unreachable with exhaustive matching)
-                self.builder.goto(join_block);
+                if !*is_exhaustive {
+                    // Non-exhaustive match: fallthrough could be reached.
+                    // This is typically a type error, but we generate valid MIR.
+                    // TODO: Consider emitting a runtime panic instruction instead.
+                    self.builder.goto(join_block);
+                }
                 self.builder.set_current_block(join_block);
             }
 

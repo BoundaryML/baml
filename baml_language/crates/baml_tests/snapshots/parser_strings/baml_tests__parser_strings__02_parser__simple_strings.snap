@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -83,9 +83,8 @@ SOURCE_FILE
             WORD "said"
             ERROR_TOKEN "\"
             QUOTE """
-    FIELD
+    FIELD "hello"
       WORD "hello"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     QUOTE """
@@ -126,62 +125,62 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RParen, found Word
+Error: Expected ')', found identifier
    ╭─[ 0:7:41 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                         ──┬──  
-   │                                           ╰──── Expected RParen, found Word
+   │                                           ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'hello' is missing a type annotation
+   ╭─[ 0:7:41 ]
+   │
+ 7 │   with_quotes string @alias("She said \"hello\"")
+   │                                         ──┬──  
+   │                                           ╰──── field 'hello' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:7:46 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
-   │                                              ╰── Expected type, found Error
+   │                                              ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:7:46 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                              ┬  
-   │                                              ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:7:47 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                               ┬  
-   │                                               ╰── Expected Unexpected token in class body, found Quote
+   │                                               ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:7:48 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                ┬  
-   │                                                ╰── Expected Unexpected token in class body, found Quote
+   │                                                ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found RParen
+Error: Expected Unexpected token in class body, found ')'
    ╭─[ 0:7:49 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                 ┬  
-   │                                                 ╰── Expected Unexpected token in class body, found RParen
+   │                                                 ╰── Expected Unexpected token in class body, found ')'
    │ 
    │ Note: Error code: E0010
 ───╯

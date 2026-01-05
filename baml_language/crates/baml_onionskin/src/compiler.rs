@@ -13,9 +13,10 @@ use baml_db::{
     baml_tir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
-    CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
+    CompilerError, HirDiagnostic, ParseError, TypeError, render_hir_diagnostic, render_parse_error,
+    render_type_error,
 };
-use baml_hir::{ItemId, function_body, function_signature};
+use baml_hir::{ItemId, file_lowering, function_body, function_signature};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
@@ -487,6 +488,13 @@ impl CompilerRunner {
                     .push(CompilerError::ParseError(error.clone()));
             }
 
+            // Collect HIR lowering diagnostics for this file
+            let lowering_result = file_lowering(&self.db, *source_file);
+            for diag in lowering_result.diagnostics(&self.db) {
+                self.diagnostic_errors
+                    .push(CompilerError::HirDiagnostic(diag.clone()));
+            }
+
             let (formatted_lines, cached_ids) =
                 format_syntax_tree_with_cache(&syntax_tree, self.parser_cached_elements.get(path));
             next_cached_elements.insert(path.clone(), cached_ids);
@@ -742,6 +750,19 @@ impl CompilerRunner {
                         ItemId::Test(test_loc) => {
                             let test = &item_tree[test_loc.id(&self.db)];
                             let line = format!("test {}", test.name);
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
+                        ItemId::Generator(gen_loc) => {
+                            let generator = &item_tree[gen_loc.id(&self.db)];
+                            let output_type =
+                                generator.output_type.as_deref().unwrap_or("<missing>");
+                            let line = format!(
+                                "generator {} (output_type: {})",
+                                generator.name, output_type
+                            );
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                             writeln!(output).ok();
@@ -1068,9 +1089,10 @@ impl CompilerRunner {
             sources.insert(file_id, text);
         }
 
-        // Group errors by file_id and error type (parse vs type)
+        // Group errors by file_id and error type (parse vs type vs hir)
         let mut parse_errors_by_file: HashMap<FileId, Vec<&ParseError>> = HashMap::new();
         let mut type_errors_by_file: HashMap<FileId, Vec<&TypeError<String>>> = HashMap::new();
+        let mut hir_errors_by_file: HashMap<FileId, Vec<&HirDiagnostic>> = HashMap::new();
 
         for error in &self.diagnostic_errors {
             let file_id = get_error_file_id(error);
@@ -1080,6 +1102,9 @@ impl CompilerRunner {
                 }
                 CompilerError::TypeError(e) => {
                     type_errors_by_file.entry(file_id).or_default().push(e);
+                }
+                CompilerError::HirDiagnostic(e) => {
+                    hir_errors_by_file.entry(file_id).or_default().push(e);
                 }
                 CompilerError::NameError(_) => {
                     // TODO: Handle name errors in diagnostics display
@@ -1092,6 +1117,7 @@ impl CompilerRunner {
         sorted_files.sort_by_key(|(path, _)| path.as_path());
 
         let mut total_parse_errors = 0;
+        let mut total_hir_errors = 0;
         let mut total_type_errors = 0;
 
         // Render parse errors grouped by file
@@ -1114,6 +1140,43 @@ impl CompilerRunner {
                 for error in errors {
                     total_parse_errors += 1;
                     let rendered = render_parse_error(error, &sources, false);
+                    for line in rendered.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((
+                            line.to_string(),
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+        }
+
+        // Render HIR errors grouped by file
+        for (path, source_file) in &sorted_files {
+            let file_id = source_file.file_id(&self.db);
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(*path);
+
+            if let Some(errors) = hir_errors_by_file.get(&file_id) {
+                writeln!(output, "── HIR Errors: {file_path} ──").ok();
+                output_annotated.push((
+                    format!("── HIR Errors: {file_path} ──"),
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Unknown
+                    },
+                ));
+
+                for error in errors {
+                    total_hir_errors += 1;
+                    let rendered = render_hir_diagnostic(error, &sources, false);
                     for line in rendered.lines() {
                         writeln!(output, "{}", line).ok();
                         output_annotated.push((
@@ -1168,7 +1231,7 @@ impl CompilerRunner {
             }
         }
 
-        let total_errors = total_parse_errors + total_type_errors;
+        let total_errors = total_parse_errors + total_hir_errors + total_type_errors;
 
         if total_errors == 0 {
             let no_errors = "✓ No errors found".to_string();
@@ -1185,6 +1248,13 @@ impl CompilerRunner {
                     "{} parse error{}",
                     total_parse_errors,
                     if total_parse_errors == 1 { "" } else { "s" }
+                ));
+            }
+            if total_hir_errors > 0 {
+                parts.push(format!(
+                    "{} HIR error{}",
+                    total_hir_errors,
+                    if total_hir_errors == 1 { "" } else { "s" }
                 ));
             }
             if total_type_errors > 0 {
@@ -2222,10 +2292,31 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
             TypeError::UnreachableArm { span, .. } => span.file_id,
             TypeError::UnknownEnumVariant { span, .. } => span.file_id,
+            TypeError::WatchOnNonVariable { span, .. } => span.file_id,
+            TypeError::WatchOnUnwatchedVariable { span, .. } => span.file_id,
         },
         CompilerError::NameError(e) => match e {
             baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
             baml_diagnostics::NameError::DuplicateTestForFunction { second, .. } => second.file_id,
+        },
+        CompilerError::HirDiagnostic(e) => match e {
+            HirDiagnostic::DuplicateField { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateVariant { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateBlockAttribute { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
+            HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
+            HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
+            HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
+            HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
+            HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
+            HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
+            HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
+            HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
+            HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
+            HirDiagnostic::MissingProvider { span, .. } => span.file_id,
+            HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
         },
     }
 }

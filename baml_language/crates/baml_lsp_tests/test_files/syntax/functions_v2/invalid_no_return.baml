@@ -13,12 +13,12 @@ function FooBar(arg: int) {
 
 //----
 //- diagnostics
-// Error: Expected return type (->), found LBrace
+// Error: Expected return type (->), found '{'
 //    ╭─[ 0:1:27 ]
 //    │
 //  1 │ function FooBar(arg: int) {
 //    │                           ┬  
-//    │                           ╰── Expected return type (->), found LBrace
+//    │                           ╰── Expected return type (->), found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

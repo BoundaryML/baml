@@ -100,18 +100,19 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             // Constant propagation: scrutinee true is inlined at each comparison
+            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
             vec![
                 Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, try next arm
-                Instruction::Jump(9),           // if true, skip to "yes"
+                Instruction::Jump(8),           // if true, skip to "yes"
                 Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(false)), // literal false
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(6), // if false (shouldn't happen)
-                Instruction::Jump(2),           // if true, skip to "no"
-                Instruction::Jump(4),           // unreachable fallthrough
+                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
+                Instruction::Jump(1),           // if true, skip to "no"
+                // Unreachable block eliminated - jump target points here
                 Instruction::LoadConst(Value::string("no")),
                 Instruction::Jump(2), // skip to return
                 Instruction::LoadConst(Value::string("yes")),
@@ -222,6 +223,7 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
             vec![
                 Instruction::LoadConst(Value::Null), // slot for _3 (scrutinee)
                 // let result = Success { data: "ok" }
@@ -235,14 +237,14 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2), // if false, try Failure
-                Instruction::Jump(10),          // if true, skip to s.data
+                Instruction::Jump(9),           // if true, skip to s.data
                 // f: Failure instanceof check
                 Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadConst(Value::class("Failure")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::PopJumpIfFalse(8), // if false (shouldn't happen)
-                Instruction::Jump(2),           // if true, skip to f.reason
-                Instruction::Jump(6),           // unreachable fallthrough
+                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
+                Instruction::Jump(1),           // if true, skip to f.reason
+                // Unreachable block eliminated - jump target points here
                 // f: Failure arm - access f.reason
                 Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadField(0),
@@ -317,25 +319,21 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             // Constant propagation: scrutinee 2 is inlined at each use
-            // _2 (match result) still needs slot (assigned in multiple branches)
+            // Phi-like optimization: match result stays on stack (no Store/Load)!
             // Wildcard elimination: _ binding is unused so eliminated
             vec![
-                Instruction::LoadConst(Value::Null), // slot for _2 (match result)
                 Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Int(2)), // literal 2
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
-                Instruction::Jump(4),           // if true, skip to 20
-                // Catch-all arm (no _ binding)
+                Instruction::Jump(3),           // if true, skip to first arm
+                // Catch-all arm: value stays on stack
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::StoreVar("_2".to_string()), // store match result
-                Instruction::Jump(3),                    // skip to addition
-                // First arm
+                Instruction::Jump(2), // skip to addition
+                // First arm: value stays on stack
                 Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreVar("_2".to_string()), // store match result
-                // Addition: 1 + match result
+                // Addition: 1 + match result (match result already on stack)
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::LoadVar("_2".to_string()),
                 Instruction::BinOp(baml_vm::BinOp::Add),
                 Instruction::Return,
             ],

@@ -173,507 +173,507 @@ function foo() -> int {
 
 //----
 //- diagnostics
-// Error: Expected block after if condition, found If
+// Error: Expected block after if condition, found if
 //    ╭─[ 0:9:4 ]
 //    │
 //  9 │    if true) { }
 //    │    ─┬  
-//    │     ╰── Expected block after if condition, found If
+//    │     ╰── Expected block after if condition, found if
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected block after if condition, found RParen
+// Error: Expected block after if condition, found ')'
 //    ╭─[ 0:9:11 ]
 //    │
 //  9 │    if true) { }
 //    │           ┬  
-//    │           ╰── Expected block after if condition, found RParen
+//    │           ╰── Expected block after if condition, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //    ╭─[ 0:9:11 ]
 //    │
 //  9 │    if true) { }
 //    │           ┬  
-//    │           ╰── Expected expression, found RParen
+//    │           ╰── Expected expression, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found While
+// Error: Expected ')', found while
 //     ╭─[ 0:15:4 ]
 //     │
 //  15 │    while true {}
 //     │    ──┬──  
-//     │      ╰──── Expected RParen, found While
+//     │      ╰──── Expected ')', found while
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after if condition, found While
+// Error: Expected block after if condition, found while
 //     ╭─[ 0:15:4 ]
 //     │
 //  15 │    while true {}
 //     │    ──┬──  
-//     │      ╰──── Expected block after if condition, found While
+//     │      ╰──── Expected block after if condition, found while
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after while condition, found While
+// Error: Expected block after while condition, found while
 //     ╭─[ 0:17:4 ]
 //     │
 //  17 │    while (true {}
 //     │    ──┬──  
-//     │      ╰──── Expected block after while condition, found While
+//     │      ╰──── Expected block after while condition, found while
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found While
+// Error: Expected ')', found while
 //     ╭─[ 0:19:4 ]
 //     │
 //  19 │    while true) {}
 //     │    ──┬──  
-//     │      ╰──── Expected RParen, found While
+//     │      ╰──── Expected ')', found while
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after while condition, found While
+// Error: Expected block after while condition, found while
 //     ╭─[ 0:19:4 ]
 //     │
 //  19 │    while true) {}
 //     │    ──┬──  
-//     │      ╰──── Expected block after while condition, found While
+//     │      ╰──── Expected block after while condition, found while
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after while condition, found RParen
+// Error: Expected block after while condition, found ')'
 //     ╭─[ 0:19:14 ]
 //     │
 //  19 │    while true) {}
 //     │              ┬  
-//     │              ╰── Expected block after while condition, found RParen
+//     │              ╰── Expected block after while condition, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //     ╭─[ 0:19:14 ]
 //     │
 //  19 │    while true) {}
 //     │              ┬  
-//     │              ╰── Expected expression, found RParen
+//     │              ╰── Expected expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:25:8 ]
 //     │
 //  25 │    for ;; { }
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:25:8 ]
 //     │
 //  25 │    for ;; { }
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:25:8 ]
 //     │
 //  25 │    for ;; { }
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:25:9 ]
 //     │
 //  25 │    for ;; { }
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found For
+// Error: Expected ')', found for
 //     ╭─[ 0:29:4 ]
 //     │
 //  29 │    for ;;) {}
 //     │    ─┬─  
-//     │     ╰─── Expected RParen, found For
+//     │     ╰─── Expected ')', found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found For
+// Error: Expected block after for expression, found for
 //     ╭─[ 0:29:4 ]
 //     │
 //  29 │    for ;;) {}
 //     │    ─┬─  
-//     │     ╰─── Expected block after for expression, found For
+//     │     ╰─── Expected block after for expression, found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:29:8 ]
 //     │
 //  29 │    for ;;) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:29:8 ]
 //     │
 //  29 │    for ;;) {}
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:29:8 ]
 //     │
 //  29 │    for ;;) {}
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:29:9 ]
 //     │
 //  29 │    for ;;) {}
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //     ╭─[ 0:29:10 ]
 //     │
 //  29 │    for ;;) {}
 //     │          ┬  
-//     │          ╰── Expected expression, found RParen
+//     │          ╰── Expected expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found For
+// Error: Expected ')', found for
 //     ╭─[ 0:39:4 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │    ─┬─  
-//     │     ╰─── Expected RParen, found For
+//     │     ╰─── Expected ')', found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found For
+// Error: Expected block after for expression, found for
 //     ╭─[ 0:39:4 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │    ─┬─  
-//     │     ╰─── Expected block after for expression, found For
+//     │     ╰─── Expected block after for expression, found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:39:8 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:39:8 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:39:8 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:39:9 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //     ╭─[ 0:39:16 ]
 //     │
 //  39 │    for ;;i += x) {}
 //     │                ┬  
-//     │                ╰── Expected expression, found RParen
+//     │                ╰── Expected expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:41:8 ]
 //     │
 //  41 │    for ;;i += x {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:41:8 ]
 //     │
 //  41 │    for ;;i += x {}
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:41:8 ]
 //     │
 //  41 │    for ;;i += x {}
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:41:9 ]
 //     │
 //  41 │    for ;;i += x {}
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found For
+// Error: Expected ')', found for
 //     ╭─[ 0:49:4 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │    ─┬─  
-//     │     ╰─── Expected RParen, found For
+//     │     ╰─── Expected ')', found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found For
+// Error: Expected block after for expression, found for
 //     ╭─[ 0:49:4 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │    ─┬─  
-//     │     ╰─── Expected block after for expression, found For
+//     │     ╰─── Expected block after for expression, found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:49:8 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:49:8 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:49:8 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:49:9 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //     ╭─[ 0:49:15 ]
 //     │
 //  49 │    for ;;i = x) {}
 //     │               ┬  
-//     │               ╰── Expected expression, found RParen
+//     │               ╰── Expected expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Semicolon
+// Error: Expected loop variable, found ';'
 //     ╭─[ 0:51:8 ]
 //     │
 //  51 │    for ;;i = x {}
 //     │        ┬  
-//     │        ╰── Expected loop variable, found Semicolon
+//     │        ╰── Expected loop variable, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Semicolon
+// Error: Expected in, found ';'
 //     ╭─[ 0:51:8 ]
 //     │
 //  51 │    for ;;i = x {}
 //     │        ┬  
-//     │        ╰── Expected In, found Semicolon
+//     │        ╰── Expected in, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Semicolon
+// Error: Expected expression, found ';'
 //     ╭─[ 0:51:8 ]
 //     │
 //  51 │    for ;;i = x {}
 //     │        ┬  
-//     │        ╰── Expected expression, found Semicolon
+//     │        ╰── Expected expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //     ╭─[ 0:51:9 ]
 //     │
 //  51 │    for ;;i = x {}
 //     │         ┬  
-//     │         ╰── Expected block after for expression, found Semicolon
+//     │         ╰── Expected block after for expression, found ';'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Let
+// Error: Expected loop variable, found let
 //     ╭─[ 0:55:8 ]
 //     │
 //  55 │    for let a in as {}
 //     │        ─┬─  
-//     │         ╰─── Expected loop variable, found Let
+//     │         ╰─── Expected loop variable, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Let
+// Error: Expected in, found let
 //     ╭─[ 0:55:8 ]
 //     │
 //  55 │    for let a in as {}
 //     │        ─┬─  
-//     │         ╰─── Expected In, found Let
+//     │         ╰─── Expected in, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Let
+// Error: Expected expression, found let
 //     ╭─[ 0:55:8 ]
 //     │
 //  55 │    for let a in as {}
 //     │        ─┬─  
-//     │         ╰─── Expected expression, found Let
+//     │         ╰─── Expected expression, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Word
+// Error: Expected block after for expression, found identifier
 //     ╭─[ 0:55:12 ]
 //     │
 //  55 │    for let a in as {}
 //     │            ┬  
-//     │            ╰── Expected block after for expression, found Word
+//     │            ╰── Expected block after for expression, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found In
+// Error: Expected expression, found in
 //     ╭─[ 0:55:14 ]
 //     │
 //  55 │    for let a in as {}
 //     │              ─┬  
-//     │               ╰── Expected expression, found In
+//     │               ╰── Expected expression, found in
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found For
+// Error: Expected ')', found for
 //     ╭─[ 0:59:4 ]
 //     │
 //  59 │    for let a in as) {}
 //     │    ─┬─  
-//     │     ╰─── Expected RParen, found For
+//     │     ╰─── Expected ')', found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found For
+// Error: Expected block after for expression, found for
 //     ╭─[ 0:59:4 ]
 //     │
 //  59 │    for let a in as) {}
 //     │    ─┬─  
-//     │     ╰─── Expected block after for expression, found For
+//     │     ╰─── Expected block after for expression, found for
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected loop variable, found Let
+// Error: Expected loop variable, found let
 //     ╭─[ 0:59:8 ]
 //     │
 //  59 │    for let a in as) {}
 //     │        ─┬─  
-//     │         ╰─── Expected loop variable, found Let
+//     │         ╰─── Expected loop variable, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected In, found Let
+// Error: Expected in, found let
 //     ╭─[ 0:59:8 ]
 //     │
 //  59 │    for let a in as) {}
 //     │        ─┬─  
-//     │         ╰─── Expected In, found Let
+//     │         ╰─── Expected in, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Let
+// Error: Expected expression, found let
 //     ╭─[ 0:59:8 ]
 //     │
 //  59 │    for let a in as) {}
 //     │        ─┬─  
-//     │         ╰─── Expected expression, found Let
+//     │         ╰─── Expected expression, found let
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected block after for expression, found Word
+// Error: Expected block after for expression, found identifier
 //     ╭─[ 0:59:12 ]
 //     │
 //  59 │    for let a in as) {}
 //     │            ┬  
-//     │            ╰── Expected block after for expression, found Word
+//     │            ╰── Expected block after for expression, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found In
+// Error: Expected expression, found in
 //     ╭─[ 0:59:14 ]
 //     │
 //  59 │    for let a in as) {}
 //     │              ─┬  
-//     │               ╰── Expected expression, found In
+//     │               ╰── Expected expression, found in
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //     ╭─[ 0:59:19 ]
 //     │
 //  59 │    for let a in as) {}
 //     │                   ┬  
-//     │                   ╰── Expected expression, found RParen
+//     │                   ╰── Expected expression, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

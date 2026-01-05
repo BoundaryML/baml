@@ -45,12 +45,12 @@ function UseMapTypecheck() -> int {
 
 //----
 //- diagnostics
-// Error: Expected expression, found Colon
+// Error: Expected expression, found ':'
 //    ╭─[ 0:3:14 ]
 //    │
 //  3 │     { (1 + 1): "2" }
 //    │              ┬  
-//    │              ╰── Expected expression, found Colon
+//    │              ╰── Expected expression, found ':'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

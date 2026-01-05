@@ -15,4 +15,12 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Unknown field `myExtraProp` in client. Only `provider` and `options` are supported.
+//    ╭─[ 0:3:3 ]
+//    │
+//  3 │   myExtraProp "hello"
+//    │   ─────┬─────  
+//    │        ╰─────── Unknown field `myExtraProp` in client. Only `provider` and `options` are supported.
+//    │ 
+//    │ Note: Error code: E0027
+// ───╯

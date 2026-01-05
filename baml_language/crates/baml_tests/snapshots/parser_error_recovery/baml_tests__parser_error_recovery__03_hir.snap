@@ -31,9 +31,11 @@ function NextFunction() -> string {
 
 class Partial {
   field1: str
-  field2: field3
+  field2: <unknown>
+  field3: string
   string: <unknown>
-  string: <unknown>
+  alias: (  // Unclosed attribute
+  field5
   string: <unknown>
 }
 

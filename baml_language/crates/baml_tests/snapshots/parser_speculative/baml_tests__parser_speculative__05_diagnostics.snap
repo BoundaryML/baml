@@ -1,44 +1,44 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected LLM function missing 'prompt' field, found RBrace
+  [parse] Error: Expected LLM function missing 'prompt' field, found '}'
    ╭─[ 0:5:1 ]
    │
  5 │ }
    │ ┬  
-   │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+   │ ╰── Expected LLM function missing 'prompt' field, found '}'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
    ╭─[ 0:9:3 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │   ──┬──  
-   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found Word
+   │     ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+  [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
    ╭─[ 0:9:9 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │         ──┬─  
-   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found Word
+   │           ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected LLM function missing 'client' field, found RBrace
+  [parse] Error: Expected LLM function missing 'client' field, found '}'
     ╭─[ 0:11:1 ]
     │
  11 │ }
     │ ┬  
-    │ ╰── Expected LLM function missing 'client' field, found RBrace
+    │ ╰── Expected LLM function missing 'client' field, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯

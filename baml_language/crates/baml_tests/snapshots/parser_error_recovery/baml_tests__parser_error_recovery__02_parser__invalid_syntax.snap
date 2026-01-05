@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -40,102 +40,102 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected class name, found IntegerLiteral
+Error: Expected class name, found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected class name, found IntegerLiteral
+   │        ╰─── Expected class name, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected LBrace, found IntegerLiteral
+Error: Expected '{', found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected LBrace, found IntegerLiteral
+   │        ╰─── Expected '{', found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found IntegerLiteral
+Error: Expected top-level declaration, found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected top-level declaration, found IntegerLiteral
+   │        ╰─── Expected top-level declaration, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
    ╭─[ 0:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
-   │             ╰───── Expected top-level declaration, found Word
+   │             ╰───── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
    ╭─[ 0:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
-   │                  ╰── Expected top-level declaration, found LBrace
+   │                  ╰── Expected top-level declaration, found '{'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
    ╭─[ 0:2:3 ]
    │
  2 │   field string
    │   ──┬──  
-   │     ╰──── Expected top-level declaration, found Word
+   │     ╰──── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
    ╭─[ 0:2:9 ]
    │
  2 │   field string
    │         ───┬──  
-   │            ╰──── Expected top-level declaration, found Word
+   │            ╰──── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
    ╭─[ 0:3:1 ]
    │
  3 │ }
    │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found '}'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found LBrace
+Error: Expected type, found '{'
     ╭─[ 0:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
-    │                   ╰── Expected type, found LBrace
+    │                   ╰── Expected type, found '{'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected LLM function missing 'prompt' field, found RBrace
+Error: Expected LLM function missing 'prompt' field, found '}'
     ╭─[ 0:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+    │ ╰── Expected LLM function missing 'prompt' field, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯

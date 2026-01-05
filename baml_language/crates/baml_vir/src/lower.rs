@@ -448,10 +448,13 @@ impl<'db> LoweringContext<'db> {
                         body,
                     });
                 }
+                // Check if this match was determined to be exhaustive during type checking
+                let is_exhaustive = self.inference.exhaustive_matches.contains(&hir_id);
                 Ok(self.builder.alloc(
                     Expr::Match {
                         scrutinee: scrutinee_id,
                         arms: lowered_arms,
+                        is_exhaustive,
                     },
                     ty,
                     span.map(|s| s.range),

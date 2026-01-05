@@ -1,0 +1,26 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function GetUser() -> MyClass {
+  prompt #"
+    Hello
+  "#
+}
+
+class MyClass {
+  name: string
+  age: int
+}
+
+generator lang_typescript {
+  output_type: typescript
+  output_dir: ../typescript
+}
+
+generator lang_python {
+  output_type: python/pydantic
+  output_dir: ../python
+  version: 0.68.0
+}

@@ -270,6 +270,17 @@ impl<'a> Parser<'a> {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
     }
 
+    /// Check if the current token can start a type expression.
+    /// Valid type starts: Word (type name), string literal, integer/float literal, `LParen` (tuple).
+    fn is_at_type_start(&self) -> bool {
+        self.at(TokenKind::Word)
+            || self.at(TokenKind::Quote) // string literal type
+            || self.at(TokenKind::Hash) // raw string literal type
+            || self.at(TokenKind::IntegerLiteral)
+            || self.at(TokenKind::FloatLiteral)
+            || self.at(TokenKind::LParen) // tuple/parenthesized type
+    }
+
     /// Check if a token kind is basic trivia (whitespace/newlines, not comments).
     /// Comments are also conceptually trivia, but they're assembled from token patterns (// and /*).
     #[allow(clippy::unused_self)]
@@ -277,10 +288,18 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
-    /// Check if there's a newline before the next non-trivia token
+    /// Check if there's a newline before the next non-trivia token.
+    /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
         let mut i = self.current;
         while i < self.tokens.len() {
+            // Skip comments (they're trivia for line termination purposes)
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
             let kind = self.tokens[i].kind;
             if kind == TokenKind::Newline {
                 return true;
@@ -627,7 +646,7 @@ impl<'a> Parser<'a> {
         } else {
             let found = self
                 .current()
-                .map(|t| format!("{:?}", t.kind))
+                .map(|t| format!("{}", t.kind))
                 .unwrap_or_else(|| "EOF".to_string());
 
             let span = self.current().map(|t| t.span).unwrap_or_else(|| {
@@ -638,7 +657,7 @@ impl<'a> Parser<'a> {
             });
 
             self.events.push(Event::UnexpectedToken {
-                expected: format!("{kind:?}"),
+                expected: format!("{kind}"),
                 found,
                 span,
             });
@@ -659,7 +678,7 @@ impl<'a> Parser<'a> {
     fn error_unexpected_token(&mut self, expected: String) {
         let found = self
             .current()
-            .map(|t| format!("{:?}", t.kind))
+            .map(|t| format!("{}", t.kind))
             .unwrap_or_else(|| "EOF".to_string());
 
         let span = self.current().map(|t| t.span).unwrap_or_else(|| {
@@ -1237,15 +1256,30 @@ impl<'a> Parser<'a> {
 
     fn parse_field(&mut self) {
         self.with_node(SyntaxKind::FIELD, |p| {
-            // Field name
+            // Field name - capture span and text before bumping
+            let field_name_span = p.current().map(|t| t.span);
+            let field_name_text = p.current().map(|t| t.text.clone());
             p.bump();
 
-            // Field type
-            p.parse_type();
+            // Check if there's a newline before the next token
+            // (newline means the type is on a different line - the field is incomplete)
+            let newline_before_type = p.has_newline_ahead();
 
-            // Optional field attributes (@alias, @description, @assert, etc.)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+            // Field type - check if we're at a valid type start AND no newline separates them
+            let has_type = p.is_at_type_start() && !newline_before_type;
+            if has_type {
+                p.parse_type();
+
+                // Optional field attributes (@alias, @description, @assert, etc.)
+                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                    p.parse_field_attribute();
+                }
+            } else {
+                // Field is incomplete - emit error and don't consume more tokens
+                if let Some(span) = field_name_span {
+                    let name = field_name_text.as_deref().unwrap_or("field");
+                    p.error(format!("field '{name}' is missing a type annotation"), span);
+                }
             }
         });
     }
@@ -2924,6 +2958,30 @@ impl<'a> Parser<'a> {
         });
     }
 
+    // ============ Generator Parsing ============
+
+    /// Parse a generator declaration
+    pub(crate) fn parse_generator(&mut self) {
+        self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
+            // 'generator' keyword
+            p.expect(TokenKind::Generator);
+
+            // Generator name
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("generator name".to_string());
+            }
+
+            // Config block
+            if p.at(TokenKind::LBrace) {
+                p.parse_config_block();
+            } else {
+                p.error_unexpected_token("generator body".to_string());
+            }
+        });
+    }
+
     // ============ Template String Parsing ============
 
     /// Parse a template string declaration
@@ -3000,6 +3058,8 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_function();
         } else if parser.at(TokenKind::Client) {
             parser.parse_client();
+        } else if parser.at(TokenKind::Generator) {
+            parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
             parser.parse_test();
         } else if parser.at(TokenKind::RetryPolicy) {

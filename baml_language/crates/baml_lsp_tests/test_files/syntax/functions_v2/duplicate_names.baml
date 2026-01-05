@@ -62,48 +62,48 @@ function Bar(a: string, b: int | bool) -> int {
 
 //----
 //- diagnostics
-// Error: Expected LParen, found LBrace
+// Error: Expected '(', found '{'
 //    ╭─[ 0:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected LParen, found LBrace
+//    │              ╰── Expected '(', found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found LBrace
+// Error: Expected parameter name, found '{'
 //    ╭─[ 0:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected parameter name, found LBrace
+//    │              ╰── Expected parameter name, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found LBrace
+// Error: Expected type annotation, found '{'
 //    ╭─[ 0:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected type annotation, found LBrace
+//    │              ╰── Expected type annotation, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found LBrace
+// Error: Expected ')', found '{'
 //    ╭─[ 0:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected RParen, found LBrace
+//    │              ╰── Expected ')', found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected return type (->), found LBrace
+// Error: Expected return type (->), found '{'
 //    ╭─[ 0:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected return type (->), found LBrace
+//    │              ╰── Expected return type (->), found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

@@ -3,7 +3,6 @@
 //! This module provides an LSP-friendly interface to the Salsa-based `baml_language`
 //! compiler, replacing the previous Pest-based `BamlRuntime` integration.
 
-pub mod diagnostics;
 pub mod position;
 pub mod symbols;
 

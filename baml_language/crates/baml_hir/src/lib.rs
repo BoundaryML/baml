@@ -17,20 +17,23 @@
 
 use std::sync::Arc;
 
-use baml_base::{Name, SourceFile, Span};
-use baml_diagnostics::NameError;
+use baml_base::{FileId, Name, SourceFile, Span};
+use baml_diagnostics::{HirDiagnostic, NameError};
 use baml_parser::syntax_tree;
 use baml_syntax::SyntaxNode;
 use rowan::{SyntaxToken, TextRange, ast::AstNode};
 
 // Module declarations
 mod body;
+mod client;
+mod generator;
 mod generics;
 mod ids;
 mod item_tree;
 mod loc;
 mod path;
 pub mod pretty;
+pub mod reserved_names;
 mod signature;
 mod type_ref;
 
@@ -42,6 +45,7 @@ pub use item_tree::*;
 pub use loc::*;
 pub use path::*;
 pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
+pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};
 pub use type_ref::*;
@@ -93,19 +97,88 @@ pub struct ProjectItems<'db> {
     pub items: Vec<ItemId<'db>>,
 }
 
+/// Tracked struct holding the result of lowering a file.
+///
+/// Contains both the ItemTree and any diagnostics discovered during lowering.
+/// This enables single-pass lowering with validation.
+///
+/// Note: `item_tree` is stored as `Arc<ItemTree>` so that `file_item_tree`
+/// can return a cheap clone (Arc clone = reference count increment, O(1))
+/// rather than cloning the entire ItemTree.
+#[salsa::tracked]
+pub struct LoweringResult<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub item_tree: Arc<ItemTree>,
+
+    #[tracked]
+    #[returns(ref)]
+    pub diagnostics: Vec<HirDiagnostic>,
+}
+
+//
+// ──────────────────────────────────────────────────── LOWERING CONTEXT ─────
+//
+
+/// Context for lowering CST to HIR, accumulating diagnostics.
+///
+/// This follows the rust-analyzer pattern of collecting errors during traversal
+/// rather than failing fast, allowing us to report all errors in one pass.
+struct LoweringContext {
+    /// File ID for creating spans.
+    file_id: FileId,
+
+    /// Accumulated diagnostics.
+    diagnostics: Vec<HirDiagnostic>,
+}
+
+impl LoweringContext {
+    fn new(file_id: FileId) -> Self {
+        Self {
+            file_id,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    /// Create a span for the given text range in this file.
+    fn span(&self, range: TextRange) -> Span {
+        Span::new(self.file_id, range)
+    }
+
+    /// Push a diagnostic to be reported.
+    fn push_diagnostic(&mut self, diagnostic: HirDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    /// Consume the context and return the collected diagnostics.
+    fn finish(self) -> Vec<HirDiagnostic> {
+        self.diagnostics
+    }
+}
+
 //
 // ────────────────────────────────────────────────────────── SALSA QUERIES ─────
 //
 
-/// Tracked: Extract `ItemTree` from a file's syntax tree.
+/// Tracked: Lower a file's syntax tree to HIR, collecting diagnostics.
 ///
-/// This query is the "invalidation barrier" - it only changes when
-/// item signatures change, not when whitespace/comments/bodies change.
+/// This is the primary lowering query that validates items during construction.
+/// It returns both the `ItemTree` and any diagnostics discovered.
 #[salsa::tracked]
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
     let tree = syntax_tree(db, file);
-    let item_tree = lower_file(&tree);
-    Arc::new(item_tree)
+    let file_id = file.file_id(db);
+    let (item_tree, diagnostics) = lower_file_with_ctx(&tree, file_id);
+    LoweringResult::new(db, Arc::new(item_tree), diagnostics)
+}
+
+/// Extract `ItemTree` from a file's syntax tree.
+///
+/// This is a convenience wrapper around `file_lowering` for callers that
+/// only need the `ItemTree`. Not tracked separately since `file_lowering`
+/// already caches the result - this just clones the Arc (O(1)).
+pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+    file_lowering(db, file).item_tree(db).clone()
 }
 
 // Future: When we add modules, we'll need a function like this:
@@ -518,6 +591,14 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
         items.push(ItemId::Test(loc));
     }
 
+    // Intern generators
+    let mut generators: Vec<_> = tree.generators.keys().copied().collect();
+    generators.sort_by_key(|id| id.as_u32());
+    for local_id in generators {
+        let loc = GeneratorLoc::new(db, file, local_id);
+        items.push(ItemId::Generator(loc));
+    }
+
     items
 }
 
@@ -535,30 +616,32 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
 // ──────────────────────────────────────────────────── CST → HIR LOWERING ─────
 //
 
-/// Lower a syntax tree into an `ItemTree`.
+/// Lower a syntax tree into an `ItemTree` with validation, collecting diagnostics.
 ///
 /// This is the main extraction logic that walks the CST and builds
-/// position-independent item representations.
-fn lower_file(root: &SyntaxNode) -> ItemTree {
+/// position-independent item representations while validating for errors
+/// like duplicate fields, duplicate attributes, etc.
+fn lower_file_with_ctx(root: &SyntaxNode, file_id: FileId) -> (ItemTree, Vec<HirDiagnostic>) {
     let mut tree = ItemTree::new();
+    let mut ctx = LoweringContext::new(file_id);
 
     // Walk only direct children of the root (top-level items)
     // Don't use descendants() because that would pick up nested items like
     // CLIENT_DEF nodes inside function bodies
     for child in root.children() {
-        lower_item(&mut tree, &child);
+        lower_item(&mut tree, &child, &mut ctx);
     }
 
-    tree
+    (tree, ctx.finish())
 }
 
 /// Lower a single item from the CST.
-fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
+fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext) {
     use baml_syntax::SyntaxKind;
 
     match node.kind() {
         SyntaxKind::CLASS_DEF => {
-            if let Some(class) = lower_class(node) {
+            if let Some(class) = lower_class(node, ctx) {
                 tree.alloc_class(class);
             }
             // Desugar methods into top-level functions
@@ -567,7 +650,7 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
             }
         }
         SyntaxKind::ENUM_DEF => {
-            if let Some(enum_def) = lower_enum(node) {
+            if let Some(enum_def) = lower_enum(node, ctx) {
                 tree.alloc_enum(enum_def);
             }
         }
@@ -582,13 +665,18 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
             }
         }
         SyntaxKind::CLIENT_DEF => {
-            if let Some(client) = lower_client(node) {
-                tree.alloc_client(client);
+            if let Some(c) = client::lower_client(node, ctx) {
+                tree.alloc_client(c);
             }
         }
         SyntaxKind::TEST_DEF => {
             if let Some(test) = lower_test(node) {
                 tree.alloc_test(test);
+            }
+        }
+        SyntaxKind::GENERATOR_DEF => {
+            if let Some(g) = generator::lower_generator(node, ctx) {
+                tree.alloc_generator(g);
             }
         }
         _ => {
@@ -597,33 +685,114 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode) {
     }
 }
 
-/// Extract class definition from CST.
-fn lower_class(node: &SyntaxNode) -> Option<Class> {
+/// Extract class definition from CST with validation.
+fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
     use baml_syntax::ast::ClassDef;
 
     let class = ClassDef::cast(node.clone())?;
-    let name = class.name()?.text().into();
+    let name_token = class.name()?;
+    let name: Name = name_token.text().into();
     let mut fields = Vec::new();
 
-    // Extract fields
+    // Track seen field names for duplicate detection
+    let mut seen_fields: FxHashMap<Name, Span> = FxHashMap::default();
+
+    // Extract fields with duplicate validation
     for field_node in class.fields() {
-        if let Some(field_name) = field_node.name() {
+        if let Some(field_name_token) = field_node.name() {
+            let field_name: Name = field_name_token.text().into();
+            let field_span = ctx.span(field_name_token.text_range());
+
+            // Check for duplicate field
+            if let Some(first_span) = seen_fields.get(&field_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateField {
+                    class_name: name.to_string(),
+                    field_name: field_name.to_string(),
+                    first_span: *first_span,
+                    second_span: field_span,
+                });
+            } else {
+                seen_fields.insert(field_name.clone(), field_span);
+            }
+
+            // Validate field attributes for duplicates
+            let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
+            for attr in field_node.attributes() {
+                // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+                if let Some(attr_name) = attr.full_name() {
+                    let attr_span =
+                        attr.full_name_range()
+                            .map(|r| ctx.span(r))
+                            .unwrap_or_else(|| {
+                                attr.name()
+                                    .map(|t| ctx.span(t.text_range()))
+                                    .unwrap_or_default()
+                            });
+
+                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "class",
+                            container_name: name.to_string(),
+                            field_name: field_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_field_attrs.insert(attr_name, attr_span);
+                    }
+                }
+            }
+
             let type_ref = field_node
                 .ty()
                 .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
-                name: field_name.text().into(),
+                name: field_name,
                 type_ref,
             });
         }
     }
 
-    // Check for @@dynamic attribute using AST accessor
-    let is_dynamic = class
-        .block_attributes()
-        .any(|attr| attr.name().map(|n| n.text() == "dynamic").unwrap_or(false));
+    // Track seen block attributes for duplicate detection
+    let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+    let mut is_dynamic = false;
+
+    // Validate block attributes
+    for attr in class.block_attributes() {
+        // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+        if let Some(attr_name) = attr.full_name() {
+            // Use the full attribute name range for precise error highlighting
+            let attr_span = attr
+                .full_name_range()
+                .map(|r| ctx.span(r))
+                .unwrap_or_else(|| {
+                    attr.name()
+                        .map(|t| ctx.span(t.text_range()))
+                        .unwrap_or_default()
+                });
+
+            // Check for duplicate attribute
+            if let Some(first_span) = seen_attrs.get(&attr_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateBlockAttribute {
+                    item_kind: "class",
+                    item_name: name.to_string(),
+                    attr_name: attr_name.clone(),
+                    first_span: *first_span,
+                    second_span: attr_span,
+                });
+            } else {
+                seen_attrs.insert(attr_name.clone(), attr_span);
+            }
+
+            // Track is_dynamic
+            if attr_name == "dynamic" {
+                is_dynamic = true;
+            }
+        }
+    }
 
     Some(Class {
         name,
@@ -655,8 +824,8 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
     functions
 }
 
-/// Extract enum definition from CST.
-fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
+/// Extract enum definition from CST with validation.
+fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
     use baml_syntax::ast::EnumDef;
 
     let enum_def = EnumDef::cast(node.clone())?;
@@ -673,15 +842,92 @@ fn lower_enum(node: &SyntaxNode) -> Option<Enum> {
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("UnnamedEnum"));
 
-    // Extract variants using AST accessor
-    let variants = enum_def
-        .variants()
-        .filter_map(|variant| {
-            variant.name().map(|name_token| crate::EnumVariant {
-                name: Name::new(name_token.text()),
-            })
-        })
-        .collect();
+    // Track seen variant names for duplicate detection
+    let mut seen_variants: FxHashMap<Name, Span> = FxHashMap::default();
+    let mut variants = Vec::new();
+
+    // Extract variants with duplicate validation
+    for variant in enum_def.variants() {
+        if let Some(name_token) = variant.name() {
+            let variant_name = Name::new(name_token.text());
+            let variant_span = ctx.span(name_token.text_range());
+
+            // Check for duplicate variant
+            if let Some(first_span) = seen_variants.get(&variant_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateVariant {
+                    enum_name: name.to_string(),
+                    variant_name: variant_name.to_string(),
+                    first_span: *first_span,
+                    second_span: variant_span,
+                });
+            } else {
+                seen_variants.insert(variant_name.clone(), variant_span);
+            }
+
+            // Validate variant attributes for duplicates
+            let mut seen_variant_attrs: FxHashMap<String, Span> = FxHashMap::default();
+            for attr in variant.attributes() {
+                // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+                if let Some(attr_name) = attr.full_name() {
+                    let attr_span =
+                        attr.full_name_range()
+                            .map(|r| ctx.span(r))
+                            .unwrap_or_else(|| {
+                                attr.name()
+                                    .map(|t| ctx.span(t.text_range()))
+                                    .unwrap_or_default()
+                            });
+
+                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "enum",
+                            container_name: name.to_string(),
+                            field_name: variant_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_variant_attrs.insert(attr_name, attr_span);
+                    }
+                }
+            }
+
+            variants.push(crate::EnumVariant { name: variant_name });
+        }
+    }
+
+    // Track seen block attributes for duplicate detection
+    let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+
+    // Validate block attributes
+    for attr in enum_def.block_attributes() {
+        // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
+        if let Some(attr_name) = attr.full_name() {
+            // Use the full attribute name range for precise error highlighting
+            let attr_span = attr
+                .full_name_range()
+                .map(|r| ctx.span(r))
+                .unwrap_or_else(|| {
+                    attr.name()
+                        .map(|t| ctx.span(t.text_range()))
+                        .unwrap_or_default()
+                });
+
+            // Check for duplicate attribute
+            if let Some(first_span) = seen_attrs.get(&attr_name) {
+                ctx.push_diagnostic(HirDiagnostic::DuplicateBlockAttribute {
+                    item_kind: "enum",
+                    item_name: name.to_string(),
+                    attr_name: attr_name.clone(),
+                    first_span: *first_span,
+                    second_span: attr_span,
+                });
+            } else {
+                seen_attrs.insert(attr_name, attr_span);
+            }
+        }
+    }
 
     Some(Enum { name, variants })
 }
@@ -716,33 +962,6 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
         .unwrap_or(TypeRef::Unknown);
 
     Some(TypeAlias { name, type_ref })
-}
-
-/// Extract client configuration from CST.
-fn lower_client(node: &SyntaxNode) -> Option<Client> {
-    use baml_syntax::ast::ClientDef;
-
-    let client_def = ClientDef::cast(node.clone())?;
-
-    // Extract name using AST accessor
-    let name = client_def
-        .name()
-        .map(|t| Name::new(t.text()))
-        .unwrap_or_else(|| Name::new("UnnamedClient"));
-
-    // Extract provider from config block using AST accessors
-    let provider = client_def
-        .config_block()
-        .and_then(|block| {
-            block
-                .items()
-                .find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
-                .and_then(|item| item.value_word())
-                .map(|t| Name::new(t.text()))
-        })
-        .unwrap_or_else(|| Name::new("unknown"));
-
-    Some(Client { name, provider })
 }
 
 /// Extract test definition from CST.
@@ -782,6 +1001,27 @@ struct ItemInfo {
     path: String,
 }
 
+/// Result of HIR validation.
+pub struct HirValidationResult {
+    /// HIR-level diagnostics (field duplicates, reserved names, etc.).
+    pub hir_diagnostics: Vec<HirDiagnostic>,
+    /// Name errors (duplicate top-level names, etc.).
+    pub name_errors: Vec<NameError>,
+}
+
+/// Run all HIR-level validations on a project.
+///
+/// This is the main entry point for HIR validation. It runs:
+/// - Duplicate name detection (classes, functions, etc.)
+/// - Reserved name validation (field names that are keywords in target languages)
+/// - Field name matches type name validation (Python-specific)
+pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
+    HirValidationResult {
+        hir_diagnostics: validate_reserved_names(db, root),
+        name_errors: validate_duplicate_names(db, root),
+    }
+}
+
 /// Validate that there are no duplicate names in the project.
 ///
 /// Top-level entities (classes, enums, functions, type aliases, clients)
@@ -789,7 +1029,7 @@ struct ItemInfo {
 ///
 /// Tests are validated separately: only tests with the same name AND
 /// targeting the same function are considered duplicates.
-pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
+fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
     let items = project_items(db, root);
     let mut seen: FxHashMap<Name, ItemInfo> = FxHashMap::default();
     // For tests: key is (test_name, function_name)
@@ -873,6 +1113,21 @@ pub fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> V
                     path,
                 );
             }
+            ItemId::Generator(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let generator = &item_tree[loc.id(db)];
+                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let path = file.path(db).display().to_string();
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    generator.name.clone(),
+                    "generator",
+                    span,
+                    path,
+                );
+            }
             ItemId::Test(loc) => {
                 // Tests are validated separately: only same name + same function is a duplicate
                 let file = loc.file(db);
@@ -931,4 +1186,294 @@ fn check_duplicate(
     } else {
         seen.insert(name, ItemInfo { span, path });
     }
+}
+
+/// Extract the base type name from a `TypeRef`, unwrapping Optional, List, etc.
+fn get_base_type_name(type_ref: &TypeRef) -> Option<String> {
+    match type_ref {
+        TypeRef::Path(path) => path.last_segment().map(std::string::ToString::to_string),
+        TypeRef::Optional(inner) => get_base_type_name(inner),
+        TypeRef::List(inner) => get_base_type_name(inner),
+        TypeRef::Generic { base, .. } => get_base_type_name(base),
+        _ => None,
+    }
+}
+
+/// Information about a class field or enum variant from the syntax tree.
+struct FieldInfo {
+    span: Span,
+    has_alias: bool,
+}
+
+/// Look up the span and attributes of a field in a class from the syntax tree.
+fn get_class_field_info(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    class_name: &str,
+    field_name: &str,
+) -> Option<FieldInfo> {
+    use baml_syntax::{SyntaxKind, ast::ClassDef};
+
+    let tree = baml_parser::syntax_tree(db, file);
+
+    // Find the class node
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::CLASS_DEF {
+            if let Some(class) = ClassDef::cast(node) {
+                if let Some(name_token) = class.name() {
+                    if name_token.text() == class_name {
+                        // Found the class, now find the field
+                        for field_node in class.fields() {
+                            if let Some(field_name_token) = field_node.name() {
+                                if field_name_token.text() == field_name {
+                                    // Check if field has @alias attribute
+                                    let has_alias = field_node.attributes().any(|attr| {
+                                        attr.name().map(|n| n.text() == "alias").unwrap_or(false)
+                                    });
+
+                                    return Some(FieldInfo {
+                                        span: Span::new(
+                                            file.file_id(db),
+                                            field_name_token.text_range(),
+                                        ),
+                                        has_alias,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Look up the span and attributes of a variant in an enum from the syntax tree.
+fn get_enum_variant_info(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    enum_name: &str,
+    variant_name: &str,
+) -> Option<FieldInfo> {
+    use baml_syntax::{SyntaxKind, ast::EnumDef};
+
+    let tree = baml_parser::syntax_tree(db, file);
+
+    // Find the enum node
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::ENUM_DEF {
+            if let Some(enum_def) = EnumDef::cast(node) {
+                if let Some(name_token) = enum_def.name() {
+                    if name_token.text() == enum_name {
+                        // Found the enum, now find the variant
+                        for variant_node in enum_def.variants() {
+                            if let Some(variant_name_token) = variant_node.name() {
+                                if variant_name_token.text() == variant_name {
+                                    // Check if variant has @alias attribute
+                                    let has_alias = variant_node.attributes().any(|attr| {
+                                        attr.name().map(|n| n.text() == "alias").unwrap_or(false)
+                                    });
+
+                                    return Some(FieldInfo {
+                                        span: Span::new(
+                                            file.file_id(db),
+                                            variant_name_token.text_range(),
+                                        ),
+                                        has_alias,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Validate that field names and function parameters don't use reserved keywords.
+///
+/// This checks:
+/// - Class field names against reserved keywords in target languages
+/// - Enum variant names against reserved keywords
+/// - Function parameter names against reserved keywords
+/// - Field names that match their type name (Python-specific issue)
+///
+/// The validation is based on which generators are configured in the project.
+fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<HirDiagnostic> {
+    use std::collections::HashSet;
+
+    let items = project_items(db, root);
+    let mut errors = Vec::new();
+
+    // First, collect all output types from generators
+    let mut output_types: HashSet<reserved_names::OutputType> = HashSet::new();
+    for item in items.items(db) {
+        if let ItemId::Generator(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let generator = &item_tree[loc.id(db)];
+
+            if let Some(ref output_type_str) = generator.output_type {
+                if let Some(output_type) = reserved_names::OutputType::parse(output_type_str) {
+                    output_types.insert(output_type);
+                }
+            }
+        }
+    }
+
+    // If no generators, nothing to check
+    if output_types.is_empty() {
+        return errors;
+    }
+
+    // Get reserved names for field names
+    let reserved_field_names =
+        reserved_names::reserved_names_for_outputs(&output_types, ReservedNamesMode::FieldNames);
+
+    // Get reserved names for function parameters
+    let reserved_param_names = reserved_names::reserved_names_for_outputs(
+        &output_types,
+        ReservedNamesMode::FunctionParameters,
+    );
+
+    // Check if Python is a target (for field name == type name check)
+    let has_python = output_types.contains(&reserved_names::OutputType::PythonPydantic);
+
+    // Check class fields
+    for item in items.items(db) {
+        if let ItemId::Class(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let class = &item_tree[loc.id(db)];
+            let class_name = class.name.as_str();
+
+            for field in &class.fields {
+                let field_name = field.name.as_str();
+
+                // Get field info from syntax tree
+                let field_info = get_class_field_info(db, file, class_name, field_name);
+                let field_span = field_info
+                    .as_ref()
+                    .map(|info| info.span)
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let has_alias = field_info
+                    .as_ref()
+                    .map(|info| info.has_alias)
+                    .unwrap_or(false);
+
+                // Check if field name is a reserved keyword
+                if let Some(languages) = reserved_field_names.get(field_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "class",
+                        item_name: class_name.to_string(),
+                        field_name: field_name.to_string(),
+                        span: field_span,
+                        target_languages,
+                    });
+                }
+
+                // Check if field name matches its type name (Python-specific)
+                // Skip if field has an @alias attribute
+                if has_python && !has_alias {
+                    if let Some(type_name) = get_base_type_name(&field.type_ref) {
+                        // Compare case-insensitively for Python
+                        if field_name.to_lowercase() == type_name.to_lowercase() {
+                            errors.push(HirDiagnostic::FieldNameMatchesTypeName {
+                                class_name: class_name.to_string(),
+                                field_name: field_name.to_string(),
+                                type_name: type_name.clone(),
+                                span: field_span,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check enum variants
+    for item in items.items(db) {
+        if let ItemId::Enum(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let enum_def = &item_tree[loc.id(db)];
+            let enum_name = enum_def.name.as_str();
+
+            for variant in &enum_def.variants {
+                let variant_name = variant.name.as_str();
+
+                // Get variant info from syntax tree
+                let variant_info = get_enum_variant_info(db, file, enum_name, variant_name);
+                let variant_span = variant_info
+                    .as_ref()
+                    .map(|info| info.span)
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let has_alias = variant_info
+                    .as_ref()
+                    .map(|info| info.has_alias)
+                    .unwrap_or(false);
+
+                // Skip if variant has an @alias attribute
+                if has_alias {
+                    continue;
+                }
+
+                // Check if variant name is a reserved keyword
+                if let Some(languages) = reserved_field_names.get(variant_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "enum",
+                        item_name: enum_name.to_string(),
+                        field_name: variant_name.to_string(),
+                        span: variant_span,
+                        target_languages,
+                    });
+                }
+            }
+        }
+    }
+
+    // Check function parameters
+    for item in items.items(db) {
+        if let ItemId::Function(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[loc.id(db)];
+            let sig = function_signature(db, *loc);
+
+            for param in &sig.params {
+                let param_name = param.name.as_str();
+
+                // Check if parameter name is a reserved keyword
+                if let Some(languages) = reserved_param_names.get(param_name) {
+                    let target_languages: Vec<String> = languages
+                        .iter()
+                        .map(|l| l.display_name().to_string())
+                        .collect();
+
+                    errors.push(HirDiagnostic::ReservedFieldName {
+                        item_kind: "function",
+                        item_name: func.name.to_string(),
+                        field_name: param_name.to_string(),
+                        span: Span::new(file.file_id(db), TextRange::empty(0.into())),
+                        target_languages,
+                    });
+                }
+            }
+        }
+    }
+
+    errors
 }

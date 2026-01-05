@@ -1,0 +1,92 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [hir] Error: Attribute '@@description' can only be defined once on class 'HasDuplicateDescription'
+   ╭─[ 0:7:5 ]
+   │
+ 7 │   @@description("Second description")
+   │     ─────┬─────  
+   │          ╰─────── duplicate attribute
+   │
+   ├─[ 0:7:5 ]
+   │
+ 5 │   @@description("First description")
+   │     ─────┬─────  
+   │          ╰─────── first definition here
+   │ 
+   │ Note: Error code: E0014
+───╯
+
+  [hir] Error: Duplicate field 'name' in class 'HasDuplicateField'
+    ╭─[ 0:13:3 ]
+    │
+ 13 │   name int
+    │   ──┬─  
+    │     ╰─── duplicate definition
+    │
+    ├─[ 0:13:3 ]
+    │
+ 11 │   name string
+    │   ──┬─  
+    │     ╰─── first definition here
+    │ 
+    │ Note: Error code: E0012
+────╯
+
+  [hir] Error: Attribute '@alias' can only be defined once on field 'name' in class 'HasDuplicateFieldAttr'
+    ╭─[ 0:17:49 ]
+    │
+ 17 │   name string @alias("n") @description("Name") @alias("nm")
+    │                ──┬──                            ──┬──  
+    │                  ╰───────────────────────────────────── first definition here
+    │                                                   │    
+    │                                                   ╰──── duplicate attribute
+    │ 
+    │ Note: Error code: E0014
+────╯
+
+  [hir] Error: Duplicate variant 'RED' in enum 'HasDuplicateVariant'
+    ╭─[ 0:23:3 ]
+    │
+ 23 │   RED
+    │   ─┬─  
+    │    ╰─── duplicate definition
+    │
+    ├─[ 0:23:3 ]
+    │
+ 21 │   RED
+    │   ─┬─  
+    │    ╰─── first definition here
+    │ 
+    │ Note: Error code: E0013
+────╯
+
+  [hir] Error: Attribute '@@description' can only be defined once on enum 'HasDuplicateEnumAttr'
+    ╭─[ 0:30:5 ]
+    │
+ 30 │   @@description("Second")
+    │     ─────┬─────  
+    │          ╰─────── duplicate attribute
+    │
+    ├─[ 0:30:5 ]
+    │
+ 29 │   @@description("First")
+    │     ─────┬─────  
+    │          ╰─────── first definition here
+    │ 
+    │ Note: Error code: E0014
+────╯
+
+  [hir] Error: Attribute '@alias' can only be defined once on field 'ACTIVE' in enum 'HasDuplicateVariantAttr'
+    ╭─[ 0:34:23 ]
+    │
+ 34 │   ACTIVE @alias("a") @alias("active")
+    │           ──┬──       ──┬──  
+    │             ╰──────────────── first definition here
+    │                         │    
+    │                         ╰──── duplicate attribute
+    │ 
+    │ Note: Error code: E0014
+────╯

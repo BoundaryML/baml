@@ -4,7 +4,7 @@ class TestClassAlias {
      This is a description for key
      af asdf
    "#)
-  key2 string @alias("key21")
+  key2 string @alias("key21") @alias("key22")
   key3 string @alias("key with space")
   key4 string @alias("key.with.punctuation/123")
 }
@@ -43,4 +43,29 @@ class HasThreeBlockAttributes {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Attribute '@alias' can only be defined once on field 'key2' in class 'TestClassAlias'
+//    ╭─[ 0:7:32 ]
+//    │
+//  7 │   key2 string @alias("key21") @alias("key22")
+//    │                ──┬──           ──┬──  
+//    │                  ╰──────────────────── first definition here
+//    │                                  │    
+//    │                                  ╰──── duplicate attribute
+//    │ 
+//    │ Note: Error code: E0014
+// ───╯
+// Error: Attribute '@@description' can only be defined once on class 'HasThreeBlockAttributes'
+//     ╭─[ 0:22:5 ]
+//     │
+//  22 │   @@description("A second description")
+//     │     ─────┬─────  
+//     │          ╰─────── duplicate attribute
+//     │
+//     ├─[ 0:22:5 ]
+//     │
+//  20 │   @@description("A test")
+//     │     ─────┬─────  
+//     │          ╰─────── first definition here
+//     │ 
+//     │ Note: Error code: E0014
+// ────╯

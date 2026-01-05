@@ -13,392 +13,402 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 
 //----
 //- diagnostics
-// Error: Expected RParen, found At
+// Error: Expected ')', found '@'
 //    ╭─[ 0:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
-//    │                                    ╰── Expected RParen, found At
+//    │                                    ╰── Expected ')', found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected return type (->), found At
+// Error: Expected return type (->), found '@'
 //    ╭─[ 0:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
-//    │                                    ╰── Expected return type (->), found At
+//    │                                    ╰── Expected return type (->), found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected function body, found At
+// Error: Expected function body, found '@'
 //    ╭─[ 0:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
-//    │                                    ╰── Expected function body, found At
+//    │                                    ╰── Expected function body, found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found At
+// Error: Expected top-level declaration, found '@'
 //    ╭─[ 0:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
-//    │                                    ╰── Expected top-level declaration, found At
+//    │                                    ╰── Expected top-level declaration, found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:37 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                     ───┬──  
-//    │                                        ╰──── Expected top-level declaration, found Word
+//    │                                        ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LParen
+// Error: Expected top-level declaration, found '('
 //    ╭─[ 0:9:43 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                           ┬  
-//    │                                           ╰── Expected top-level declaration, found LParen
+//    │                                           ╰── Expected top-level declaration, found '('
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:44 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                            ─────┬────  
-//    │                                                 ╰────── Expected top-level declaration, found Word
+//    │                                                 ╰────── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Comma
+// Error: Expected top-level declaration, found ','
 //    ╭─[ 0:9:54 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                      ┬  
-//    │                                                      ╰── Expected top-level declaration, found Comma
+//    │                                                      ╰── Expected top-level declaration, found ','
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:9:56 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                        ┬  
-//    │                                                        ╰── Expected top-level declaration, found LBrace
+//    │                                                        ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:9:57 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                         ┬  
-//    │                                                         ╰── Expected top-level declaration, found LBrace
+//    │                                                         ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:58 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                          ──┬─  
-//    │                                                            ╰─── Expected top-level declaration, found Word
+//    │                                                            ╰─── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Dot
+// Error: Expected top-level declaration, found '.'
 //    ╭─[ 0:9:62 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                              ┬  
-//    │                                                              ╰── Expected top-level declaration, found Dot
+//    │                                                              ╰── Expected top-level declaration, found '.'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:63 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                               ─┬─  
-//    │                                                                ╰─── Expected top-level declaration, found Word
+//    │                                                                ╰─── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Greater
+// Error: Expected top-level declaration, found '>'
 //    ╭─[ 0:9:67 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                   ┬  
-//    │                                                                   ╰── Expected top-level declaration, found Greater
+//    │                                                                   ╰── Expected top-level declaration, found '>'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found IntegerLiteral
+// Error: Expected top-level declaration, found integer
 //    ╭─[ 0:9:69 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                     ─┬  
-//    │                                                                      ╰── Expected top-level declaration, found IntegerLiteral
+//    │                                                                      ╰── Expected top-level declaration, found integer
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:71 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                       ┬  
-//    │                                                                       ╰── Expected top-level declaration, found RBrace
+//    │                                                                       ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:72 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                        ┬  
-//    │                                                                        ╰── Expected top-level declaration, found RBrace
+//    │                                                                        ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //    ╭─[ 0:9:73 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                         ┬  
-//    │                                                                         ╰── Expected top-level declaration, found RParen
+//    │                                                                         ╰── Expected top-level declaration, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //    ╭─[ 0:9:74 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                          ┬  
-//    │                                                                          ╰── Expected top-level declaration, found RParen
+//    │                                                                          ╰── Expected top-level declaration, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Arrow
+// Error: Expected top-level declaration, found '->'
 //    ╭─[ 0:9:76 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                            ─┬  
-//    │                                                                             ╰── Expected top-level declaration, found Arrow
+//    │                                                                             ╰── Expected top-level declaration, found '->'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:79 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                               ─┬─  
-//    │                                                                                ╰─── Expected top-level declaration, found Word
+//    │                                                                                ╰─── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found At
+// Error: Expected top-level declaration, found '@'
 //    ╭─[ 0:9:83 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                   ┬  
-//    │                                                                                   ╰── Expected top-level declaration, found At
+//    │                                                                                   ╰── Expected top-level declaration, found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:84 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                    ──┬──  
-//    │                                                                                      ╰──── Expected top-level declaration, found Word
+//    │                                                                                      ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LParen
+// Error: Expected top-level declaration, found '('
 //    ╭─[ 0:9:89 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                         ┬  
-//    │                                                                                         ╰── Expected top-level declaration, found LParen
+//    │                                                                                         ╰── Expected top-level declaration, found '('
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:90 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                          ────┬────  
-//    │                                                                                              ╰────── Expected top-level declaration, found Word
+//    │                                                                                              ╰────── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Comma
+// Error: Expected top-level declaration, found ','
 //    ╭─[ 0:9:99 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                   ┬  
-//    │                                                                                                   ╰── Expected top-level declaration, found Comma
+//    │                                                                                                   ╰── Expected top-level declaration, found ','
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:9:101 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                     ┬  
-//    │                                                                                                     ╰── Expected top-level declaration, found LBrace
+//    │                                                                                                     ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:9:102 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                      ┬  
-//    │                                                                                                      ╰── Expected top-level declaration, found LBrace
+//    │                                                                                                      ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:104 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                        ──┬─  
-//    │                                                                                                          ╰─── Expected top-level declaration, found Word
+//    │                                                                                                          ╰─── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Less
+// Error: Expected top-level declaration, found '<'
 //    ╭─[ 0:9:109 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                             ┬  
-//    │                                                                                                             ╰── Expected top-level declaration, found Less
+//    │                                                                                                             ╰── Expected top-level declaration, found '<'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found IntegerLiteral
+// Error: Expected top-level declaration, found integer
 //    ╭─[ 0:9:111 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                               ─┬  
-//    │                                                                                                                ╰── Expected top-level declaration, found IntegerLiteral
+//    │                                                                                                                ╰── Expected top-level declaration, found integer
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:114 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                  ┬  
-//    │                                                                                                                  ╰── Expected top-level declaration, found RBrace
+//    │                                                                                                                  ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:115 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                   ┬  
-//    │                                                                                                                   ╰── Expected top-level declaration, found RBrace
+//    │                                                                                                                   ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //    ╭─[ 0:9:116 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                    ┬  
-//    │                                                                                                                    ╰── Expected top-level declaration, found RParen
+//    │                                                                                                                    ╰── Expected top-level declaration, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:9:118 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                      ┬  
-//    │                                                                                                                      ╰── Expected top-level declaration, found LBrace
+//    │                                                                                                                      ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected config block, found Word
+// Error: Expected config block, found identifier
 //     ╭─[ 0:11:4 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │    ───┬──  
-//     │       ╰──── Expected config block, found Word
+//     │       ╰──── Expected config block, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:11:4 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │    ───┬──  
-//     │       ╰──── Expected top-level declaration, found Word
+//     │       ╰──── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Hash
+// Error: Expected top-level declaration, found '#'
 //     ╭─[ 0:11:11 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │           ┬  
-//     │           ╰── Expected top-level declaration, found Hash
+//     │           ╰── Expected top-level declaration, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:11:12 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │            ┬  
-//     │            ╰── Expected top-level declaration, found Quote
+//     │            ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:11:13 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │             ─┬  
-//     │              ╰── Expected top-level declaration, found Word
+//     │              ╰── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:11:15 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │               ┬  
-//     │               ╰── Expected top-level declaration, found Quote
+//     │               ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Hash
+// Error: Expected top-level declaration, found '#'
 //     ╭─[ 0:11:16 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │                ┬  
-//     │                ╰── Expected top-level declaration, found Hash
+//     │                ╰── Expected top-level declaration, found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:12:1 ]
 //     │
 //  12 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
+// ────╯
+// Error: Missing `provider` field in client. e.g. `provider openai`
+//     ╭─[ 0:9:119 ]
+//     │
+//   9 │ ╭─▶ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
+//  10 │ ├─▶    client Bar
+//     │ │                   
+//     │ ╰─────────────────── Missing `provider` field in client. e.g. `provider openai`
+//     │     
+//     │     Note: Error code: E0026
 // ────╯
 // Error: Duplicate client 'Bar'
 //    ╭─[ 0:1:1 ]

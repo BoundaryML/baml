@@ -11,7 +11,10 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ids::{ItemKind, LocalItemId, hash_name},
-    loc::{ClassMarker, ClientMarker, EnumMarker, FunctionMarker, TestMarker, TypeAliasMarker},
+    loc::{
+        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, TestMarker,
+        TypeAliasMarker,
+    },
     type_ref::TypeRef,
 };
 
@@ -33,6 +36,7 @@ pub struct ItemTree {
     pub(crate) enums: FxHashMap<LocalItemId<EnumMarker>, Enum>,
     pub(crate) type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub(crate) clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
+    pub(crate) generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub(crate) tests: FxHashMap<LocalItemId<TestMarker>, Test>,
 
     /// Collision tracker: (`ItemKind`, hash) -> next available index.
@@ -55,6 +59,7 @@ impl ItemTree {
             enums: FxHashMap::default(),
             type_aliases: FxHashMap::default(),
             clients: FxHashMap::default(),
+            generators: FxHashMap::default(),
             tests: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
@@ -109,6 +114,13 @@ impl ItemTree {
     pub fn alloc_test(&mut self, test: Test) -> LocalItemId<TestMarker> {
         let id = self.alloc_id(ItemKind::Test, &test.name);
         self.tests.insert(id, test);
+        id
+    }
+
+    /// Add a generator and return its local ID.
+    pub fn alloc_generator(&mut self, generator: Generator) -> LocalItemId<GeneratorMarker> {
+        let id = self.alloc_id(ItemKind::Generator, &generator.name);
+        self.generators.insert(id, generator);
         id
     }
 
@@ -184,6 +196,28 @@ pub struct Test {
     pub function_refs: Vec<Name>,
 }
 
+/// Generator configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Generator {
+    pub name: Name,
+    /// The output type (e.g., "python/pydantic", "typescript").
+    pub output_type: Option<String>,
+    /// The output directory (relative to `baml_src`).
+    pub output_dir: Option<String>,
+    /// The version string.
+    pub version: Option<String>,
+    /// Default client mode: "sync" or "async".
+    pub default_client_mode: Option<String>,
+    /// Command to run after code generation.
+    pub on_generate: Option<String>,
+    /// Project identifier for boundary-cloud.
+    pub project: Option<String>,
+    /// Go package name (required for Go generator).
+    pub client_package_name: Option<String>,
+    /// Module format for TypeScript: "cjs" or "esm".
+    pub module_format: Option<String>,
+}
+
 //
 // ──────────────────────────────────────────────────────── INDEX IMPLS ─────
 //
@@ -241,5 +275,15 @@ impl Index<LocalItemId<TestMarker>> for ItemTree {
     type Output = Test;
     fn index(&self, index: LocalItemId<TestMarker>) -> &Self::Output {
         self.tests.get(&index).expect("Test not found in ItemTree")
+    }
+}
+
+/// Index `ItemTree` by `GeneratorMarker` to get Generator data.
+impl Index<LocalItemId<GeneratorMarker>> for ItemTree {
+    type Output = Generator;
+    fn index(&self, index: LocalItemId<GeneratorMarker>) -> &Self::Output {
+        self.generators
+            .get(&index)
+            .expect("Generator not found in ItemTree")
     }
 }

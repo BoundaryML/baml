@@ -1610,7 +1610,7 @@ impl Vm {
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,
-                        (watched_var_name.to_string(), function.name.clone()),
+                        (watched_var_name.clone(), function.name.clone()),
                     );
 
                     // If it's an object, build the entire dependency graph

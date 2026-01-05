@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(ls:*)",
+      "Bash(RUST_BACKTRACE=1 cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(UPDATE_EXPECT=1 cargo test:*)",
+      "Bash(cargo insta:*)"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -12,31 +12,29 @@ SOURCE_FILE
       WORD "field1"
       TYPE_EXPR "str"
         WORD "str"
-    FIELD
+    FIELD "// Incomplete type name
+  field2"
       WORD "field2"
-      TYPE_EXPR "// Missing type entirely
-  field3"
-        WORD "field3"
     FIELD
-      WORD "string"
-      TYPE_EXPR
+      WORD "field3"
+      TYPE_EXPR "string"
+        WORD "string"
       ATTRIBUTE "@  // Incomplete attribute
   field4"
         AT "@"
         WORD "field4"
-    FIELD
+    FIELD "string"
       WORD "string"
+    AT "@"
+    FIELD
+      WORD "alias"
       TYPE_EXPR
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS "(  // Unclosed attribute
+        L_PAREN "("
+        TYPE_EXPR "// Unclosed attribute
   field5"
-          L_PAREN "("
           WORD "field5"
-    FIELD
+    FIELD "string"
       WORD "string"
-      TYPE_EXPR
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -84,102 +82,112 @@ SOURCE_FILE
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected type, found At
-   ╭─[ 0:5:17 ]
+Error: field 'field2' is missing a type annotation
+   ╭─[ 0:4:3 ]
    │
- 5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Expected type, found At
+ 4 │   field2  // Missing type entirely
+   │   ───┬──  
+   │      ╰──── field 'field2' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found At
+Error: field 'string' is missing a type annotation
+   ╭─[ 0:6:10 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found '@'
    ╭─[ 0:6:17 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
-   │                 ╰── Expected type, found At
+   │                 ╰── Expected Unexpected token in class body, found '@'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RParen, found Word
+Error: Expected ')', found identifier
    ╭─[ 0:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
-   │             ╰──── Expected RParen, found Word
+   │             ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found RBrace
-   ╭─[ 0:8:1 ]
+Error: field 'string' is missing a type annotation
+   ╭─[ 0:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected type, found RBrace
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RParen, found Function
+Error: Expected ')', found function
     ╭─[ 0:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected RParen, found Function
+    │     ╰───── Expected ')', found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected return type (->), found Function
+Error: Expected return type (->), found function
     ╭─[ 0:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected return type (->), found Function
+    │     ╰───── Expected return type (->), found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected function body, found Function
+Error: Expected function body, found function
     ╭─[ 0:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected function body, found Function
+    │     ╰───── Expected function body, found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected LBrace, found Word
+Error: Expected '{', found identifier
     ╭─[ 0:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
-    │      ╰──── Expected LBrace, found Word
+    │      ╰──── Expected '{', found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Word
+Error: Expected top-level declaration, found identifier
     ╭─[ 0:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
-    │      ╰──── Expected top-level declaration, found Word
+    │      ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
     ╭─[ 0:20:1 ]
     │
  20 │ }
     │ ┬  
-    │ ╰── Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯

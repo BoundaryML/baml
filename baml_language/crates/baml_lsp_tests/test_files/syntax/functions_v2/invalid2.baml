@@ -117,93 +117,93 @@ function Foo6(arg: int) -> float {
 
 //----
 //- diagnostics
-// Error: Expected LLM function missing 'prompt' field, found RBrace
+// Error: Expected LLM function missing 'prompt' field, found '}'
 //    ╭─[ 0:3:1 ]
 //    │
 //  3 │ }
 //    │ ┬  
-//    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+//    │ ╰── Expected LLM function missing 'prompt' field, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected LLM function missing 'client' field, found RBrace
+// Error: Expected LLM function missing 'client' field, found '}'
 //    ╭─[ 0:7:1 ]
 //    │
 //  7 │ }
 //    │ ┬  
-//    │ ╰── Expected LLM function missing 'client' field, found RBrace
+//    │ ╰── Expected LLM function missing 'client' field, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected prompt string, found RBrace
+// Error: Expected prompt string, found '}'
 //     ╭─[ 0:18:1 ]
 //     │
 //  18 │ }
 //     │ ┬  
-//     │ ╰── Expected prompt string, found RBrace
+//     │ ╰── Expected prompt string, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found Hash
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
 //     ╭─[ 0:23:10 ]
 //     │
 //  23 │   prompt #"..."#
 //     │          ┬  
-//     │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found Hash
+//     │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
 //     ╭─[ 0:23:11 ]
 //     │
 //  23 │   prompt #"..."#
 //     │           ┬  
-//     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
+//     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found DotDotDot
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found '...'
 //     ╭─[ 0:23:12 ]
 //     │
 //  23 │   prompt #"..."#
 //     │            ─┬─  
-//     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found DotDotDot
+//     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found '...'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
 //     ╭─[ 0:23:15 ]
 //     │
 //  23 │   prompt #"..."#
 //     │               ┬  
-//     │               ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
+//     │               ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found Hash
+// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
 //     ╭─[ 0:23:16 ]
 //     │
 //  23 │   prompt #"..."#
 //     │                ┬  
-//     │                ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found Hash
+//     │                ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected LLM function missing 'prompt' field, found RBrace
+// Error: Expected LLM function missing 'prompt' field, found '}'
 //     ╭─[ 0:24:1 ]
 //     │
 //  24 │ }
 //     │ ┬  
-//     │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+//     │ ╰── Expected LLM function missing 'prompt' field, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected LLM function missing 'prompt' field, found RBrace
+// Error: Expected LLM function missing 'prompt' field, found '}'
 //     ╭─[ 0:30:1 ]
 //     │
 //  30 │ }
 //     │ ┬  
-//     │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+//     │ ╰── Expected LLM function missing 'prompt' field, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

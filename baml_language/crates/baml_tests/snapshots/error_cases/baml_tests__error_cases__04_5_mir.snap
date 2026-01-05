@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -33,7 +33,7 @@ fn MixedLiteralAndTyped(x: Int) -> String {
     bb0: {
         _2 = copy _1;
         _3 = copy _2 == const 42_i64;
-        branch copy _3 -> [bb3, bb5];
+        branch copy _3 -> [bb4, bb5];
     }
 
     bb1: {
@@ -45,22 +45,22 @@ fn MixedLiteralAndTyped(x: Int) -> String {
     }
 
     bb3: {
-        _0 = const "mixed";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
+        _0 = const "mixed";
         goto -> bb2;
     }
 
     bb5: {
         _4 = is_type(copy _2, Int);
-        branch copy _4 -> [bb6, bb4];
+        branch copy _4 -> [bb6, bb3];
     }
 
     bb6: {
         _5 = copy _2;
-        goto -> bb3;
+        goto -> bb4;
     }
 
 }

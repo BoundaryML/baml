@@ -53,14 +53,16 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::BamlFunctionCallError<'a>>
                 prompt: Cow::Borrowed(prompt),
                 raw_output: Cow::Borrowed(raw_output),
             },
+            // prompt and raw_output are already available in the llm_response field
+            // in the database and the http request/response data
             baml_types::tracing::events::BamlError::Validation {
-                raw_output,
+                raw_output: _,
                 message,
-                prompt,
+                prompt: _,
             } => baml_rpc::runtime_api::BamlFunctionCallError::Validation {
-                raw_output: Cow::Borrowed(raw_output),
+                raw_output: None,
                 message: Cow::Borrowed(message),
-                prompt: Cow::Borrowed(prompt),
+                prompt: None,
             },
         }
     }

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -36,22 +36,22 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found Error
+Error: Expected expression, found error
    ╭─[ 0:6:11 ]
    │
  6 │   let x = ¿;
    │           ─┬  
-   │            ╰── Expected expression, found Error
+   │            ╰── Expected expression, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected expression, found Error
+Error: Expected expression, found error
    ╭─[ 0:8:10 ]
    │
  8 │   while \ {
    │          ┬  
-   │          ╰── Expected expression, found Error
+   │          ╰── Expected expression, found error
    │ 
    │ Note: Error code: E0010
 ───╯

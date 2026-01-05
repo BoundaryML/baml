@@ -58,21 +58,21 @@ function ModernFunction(x: int) -> int {
 
 //----
 //- diagnostics
-// Error: Expected expression, found Dot
+// Error: Expected expression, found '.'
 //     ╭─[ 0:21:3 ]
 //     │
 //  21 │   .let result = receipt.calculate();
 //     │   ┬  
-//     │   ╰── Expected expression, found Dot
+//     │   ╰── Expected expression, found '.'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected expression, found Caret
+// Error: Expected expression, found '^'
 //     ╭─[ 0:23:3 ]
 //     │
 //  23 │   ^if (true) {
 //     │   ┬  
-//     │   ╰── Expected expression, found Caret
+//     │   ╰── Expected expression, found '^'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

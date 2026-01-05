@@ -51,6 +51,7 @@ ast_node!(ClassDef, CLASS_DEF);
 ast_node!(EnumDef, ENUM_DEF);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
+ast_node!(GeneratorDef, GENERATOR_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
@@ -359,6 +360,24 @@ impl ClientDef {
     }
 }
 
+impl GeneratorDef {
+    /// Get the generator name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (generator keyword is KW_GENERATOR, not WORD)
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
 impl ConfigBlock {
     /// Get all config items.
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
@@ -390,6 +409,84 @@ impl ConfigItem {
                     .filter_map(rowan::NodeOrToken::into_token)
                     .find(|token| token.kind() == SyntaxKind::WORD)
             })
+    }
+
+    /// Get the text range of the config value, regardless of whether it's a WORD or `STRING_LITERAL`.
+    /// This is useful for error reporting when the value type doesn't matter.
+    pub fn value_text_range(&self) -> Option<rowan::TextRange> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| config_value.text_range())
+    }
+
+    /// Get the full config item value as a string.
+    /// This handles compound values like "python/pydantic" that span multiple tokens.
+    /// Returns the unquoted text of the value.
+    pub fn value_str(&self) -> Option<String> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                // Collect all non-whitespace, non-quote token text from nested tokens
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| {
+                        !matches!(
+                            token.kind(),
+                            SyntaxKind::WHITESPACE
+                                | SyntaxKind::NEWLINE
+                                | SyntaxKind::LINE_COMMENT
+                                | SyntaxKind::BLOCK_COMMENT
+                                | SyntaxKind::QUOTE
+                        )
+                    })
+                    .map(|token| token.text().to_string())
+                    .collect::<String>()
+            })
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Get a nested config block, if this item has one.
+    /// For items like `options { ... }` or `http { ... }`.
+    pub fn nested_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+
+    /// Check if this config item has a `CONFIG_VALUE` child (vs a nested `CONFIG_BLOCK`).
+    pub fn has_value(&self) -> bool {
+        self.syntax
+            .children()
+            .any(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+    }
+
+    /// Get the integer value if this is an integer literal.
+    pub fn value_int(&self) -> Option<i64> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .and_then(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
+                    .and_then(|token| token.text().parse().ok())
+            })
+    }
+
+    /// Check if the value starts with a minus sign (for negative numbers).
+    pub fn is_negative(&self) -> bool {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::MINUS)
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -459,22 +556,108 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
     }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::DOT
+                )
+            })
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
+    }
 }
 
 impl Attribute {
-    /// Get the attribute name (e.g., "alias" from @alias).
+    /// Get the first segment of the attribute name (e.g., "stream" from @stream.done).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @stream.done returns "stream.done", for @alias returns "alias".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    /// For @stream.done returns the range from "stream" to "done".
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
     }
 }
 

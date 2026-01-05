@@ -102,516 +102,516 @@ test IncompleteSyntax {
 
 //----
 //- diagnostics
-// Error: Expected RBrace, found TypeBuilder
+// Error: Expected '}', found type_builder
 //    ╭─[ 0:4:3 ]
 //    │
 //  4 │   type_builder {
 //    │   ──────┬─────  
-//    │         ╰─────── Expected RBrace, found TypeBuilder
+//    │         ╰─────── Expected '}', found type_builder
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found TypeBuilder
+// Error: Expected top-level declaration, found type_builder
 //    ╭─[ 0:4:3 ]
 //    │
 //  4 │   type_builder {
 //    │   ──────┬─────  
-//    │         ╰─────── Expected top-level declaration, found TypeBuilder
+//    │         ╰─────── Expected top-level declaration, found type_builder
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //    ╭─[ 0:4:16 ]
 //    │
 //  4 │   type_builder {
 //    │                ┬  
-//    │                ╰── Expected top-level declaration, found LBrace
+//    │                ╰── Expected top-level declaration, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Dynamic
+// Error: Expected top-level declaration, found dynamic
 //    ╭─[ 0:8:5 ]
 //    │
 //  8 │     dynamic class Bar {
 //    │     ───┬───  
-//    │        ╰───── Expected top-level declaration, found Dynamic
+//    │        ╰───── Expected top-level declaration, found dynamic
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:11:3 ]
 //     │
 //  11 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:12:1 ]
 //     │
 //  12 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RBrace, found TypeBuilder
+// Error: Expected '}', found type_builder
 //     ╭─[ 0:16:3 ]
 //     │
 //  16 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected RBrace, found TypeBuilder
+//     │         ╰─────── Expected '}', found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found TypeBuilder
+// Error: Expected top-level declaration, found type_builder
 //     ╭─[ 0:16:3 ]
 //     │
 //  16 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected top-level declaration, found TypeBuilder
+//     │         ╰─────── Expected top-level declaration, found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:16:16 ]
 //     │
 //  16 │   type_builder {
 //     │                ┬  
-//     │                ╰── Expected top-level declaration, found LBrace
+//     │                ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Dynamic
+// Error: Expected top-level declaration, found dynamic
 //     ╭─[ 0:20:5 ]
 //     │
 //  20 │     dynamic class Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected top-level declaration, found Dynamic
+//     │        ╰───── Expected top-level declaration, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:23:3 ]
 //     │
 //  23 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found TypeBuilder
+// Error: Expected top-level declaration, found type_builder
 //     ╭─[ 0:24:3 ]
 //     │
 //  24 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected top-level declaration, found TypeBuilder
+//     │         ╰─────── Expected top-level declaration, found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:24:16 ]
 //     │
 //  24 │   type_builder {
 //     │                ┬  
-//     │                ╰── Expected top-level declaration, found LBrace
+//     │                ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Dynamic
+// Error: Expected top-level declaration, found dynamic
 //     ╭─[ 0:28:5 ]
 //     │
 //  28 │     dynamic class B {
 //     │     ───┬───  
-//     │        ╰───── Expected top-level declaration, found Dynamic
+//     │        ╰───── Expected top-level declaration, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:31:3 ]
 //     │
 //  31 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:32:3 ]
 //     │
 //  32 │   args {
 //     │   ──┬─  
-//     │     ╰─── Expected top-level declaration, found Word
+//     │     ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:32:8 ]
 //     │
 //  32 │   args {
 //     │        ┬  
-//     │        ╰── Expected top-level declaration, found LBrace
+//     │        ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:33:5 ]
 //     │
 //  33 │     from_text "Test"
 //     │     ────┬────  
-//     │         ╰────── Expected top-level declaration, found Word
+//     │         ╰────── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:33:15 ]
 //     │
 //  33 │     from_text "Test"
 //     │               ┬  
-//     │               ╰── Expected top-level declaration, found Quote
+//     │               ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:33:16 ]
 //     │
 //  33 │     from_text "Test"
 //     │                ──┬─  
-//     │                  ╰─── Expected top-level declaration, found Word
+//     │                  ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:33:20 ]
 //     │
 //  33 │     from_text "Test"
 //     │                    ┬  
-//     │                    ╰── Expected top-level declaration, found Quote
+//     │                    ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:34:3 ]
 //     │
 //  34 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:35:1 ]
 //     │
 //  35 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RBrace, found TypeBuilder
+// Error: Expected '}', found type_builder
 //     ╭─[ 0:39:3 ]
 //     │
 //  39 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected RBrace, found TypeBuilder
+//     │         ╰─────── Expected '}', found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found TypeBuilder
+// Error: Expected top-level declaration, found type_builder
 //     ╭─[ 0:39:3 ]
 //     │
 //  39 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected top-level declaration, found TypeBuilder
+//     │         ╰─────── Expected top-level declaration, found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:39:16 ]
 //     │
 //  39 │   type_builder {
 //     │                ┬  
-//     │                ╰── Expected top-level declaration, found LBrace
+//     │                ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Dynamic
+// Error: Expected top-level declaration, found dynamic
 //     ╭─[ 0:40:5 ]
 //     │
 //  40 │     dynamic Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected top-level declaration, found Dynamic
+//     │        ╰───── Expected top-level declaration, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:40:13 ]
 //     │
 //  40 │     dynamic Bar {
 //     │             ─┬─  
-//     │              ╰─── Expected top-level declaration, found Word
+//     │              ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:40:17 ]
 //     │
 //  40 │     dynamic Bar {
 //     │                 ┬  
-//     │                 ╰── Expected top-level declaration, found LBrace
+//     │                 ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:41:7 ]
 //     │
 //  41 │       bar int
 //     │       ─┬─  
-//     │        ╰─── Expected top-level declaration, found Word
+//     │        ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:41:11 ]
 //     │
 //  41 │       bar int
 //     │           ─┬─  
-//     │            ╰─── Expected top-level declaration, found Word
+//     │            ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:42:5 ]
 //     │
 //  42 │     }
 //     │     ┬  
-//     │     ╰── Expected top-level declaration, found RBrace
+//     │     ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:43:3 ]
 //     │
 //  43 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:44:3 ]
 //     │
 //  44 │   args {
 //     │   ──┬─  
-//     │     ╰─── Expected top-level declaration, found Word
+//     │     ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:44:8 ]
 //     │
 //  44 │   args {
 //     │        ┬  
-//     │        ╰── Expected top-level declaration, found LBrace
+//     │        ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:45:5 ]
 //     │
 //  45 │     from_text "Test"
 //     │     ────┬────  
-//     │         ╰────── Expected top-level declaration, found Word
+//     │         ╰────── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:45:15 ]
 //     │
 //  45 │     from_text "Test"
 //     │               ┬  
-//     │               ╰── Expected top-level declaration, found Quote
+//     │               ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:45:16 ]
 //     │
 //  45 │     from_text "Test"
 //     │                ──┬─  
-//     │                  ╰─── Expected top-level declaration, found Word
+//     │                  ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:45:20 ]
 //     │
 //  45 │     from_text "Test"
 //     │                    ┬  
-//     │                    ╰── Expected top-level declaration, found Quote
+//     │                    ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:46:3 ]
 //     │
 //  46 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:47:1 ]
 //     │
 //  47 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RBrace, found TypeBuilder
+// Error: Expected '}', found type_builder
 //     ╭─[ 0:51:3 ]
 //     │
 //  51 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected RBrace, found TypeBuilder
+//     │         ╰─────── Expected '}', found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found TypeBuilder
+// Error: Expected top-level declaration, found type_builder
 //     ╭─[ 0:51:3 ]
 //     │
 //  51 │   type_builder {
 //     │   ──────┬─────  
-//     │         ╰─────── Expected top-level declaration, found TypeBuilder
+//     │         ╰─────── Expected top-level declaration, found type_builder
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:51:16 ]
 //     │
 //  51 │   type_builder {
 //     │                ┬  
-//     │                ╰── Expected top-level declaration, found LBrace
+//     │                ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type alias name, found Dynamic
+// Error: Expected type alias name, found dynamic
 //     ╭─[ 0:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected type alias name, found Dynamic
+//     │        ╰───── Expected type alias name, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Equals, found Dynamic
+// Error: Expected '=', found dynamic
 //     ╭─[ 0:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected Equals, found Dynamic
+//     │        ╰───── Expected '=', found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type, found Dynamic
+// Error: Expected type, found dynamic
 //     ╭─[ 0:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected type, found Dynamic
+//     │        ╰───── Expected type, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Dynamic
+// Error: Expected top-level declaration, found dynamic
 //     ╭─[ 0:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
-//     │        ╰───── Expected top-level declaration, found Dynamic
+//     │        ╰───── Expected top-level declaration, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:57:3 ]
 //     │
 //  57 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:58:3 ]
 //     │
 //  58 │   args {
 //     │   ──┬─  
-//     │     ╰─── Expected top-level declaration, found Word
+//     │     ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:58:8 ]
 //     │
 //  58 │   args {
 //     │        ┬  
-//     │        ╰── Expected top-level declaration, found LBrace
+//     │        ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:59:5 ]
 //     │
 //  59 │     from_text "Test"
 //     │     ────┬────  
-//     │         ╰────── Expected top-level declaration, found Word
+//     │         ╰────── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:59:15 ]
 //     │
 //  59 │     from_text "Test"
 //     │               ┬  
-//     │               ╰── Expected top-level declaration, found Quote
+//     │               ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:59:16 ]
 //     │
 //  59 │     from_text "Test"
 //     │                ──┬─  
-//     │                  ╰─── Expected top-level declaration, found Word
+//     │                  ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:59:20 ]
 //     │
 //  59 │     from_text "Test"
 //     │                    ┬  
-//     │                    ╰── Expected top-level declaration, found Quote
+//     │                    ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:60:3 ]
 //     │
 //  60 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:61:1 ]
 //     │
 //  61 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

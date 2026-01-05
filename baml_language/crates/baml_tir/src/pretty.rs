@@ -627,5 +627,11 @@ pub fn short_display(error: &TypeError<Ty<'_>>) -> String {
             variant_name,
             ..
         } => format!("Enum '{enum_name}' has no variant '{variant_name}'"),
+        TypeError::WatchOnNonVariable { .. } => {
+            "$watch can only be used on simple variable expressions".to_string()
+        }
+        TypeError::WatchOnUnwatchedVariable { name, .. } => {
+            format!("Cannot use $watch on '{name}': variable must be declared with `watch let`")
+        }
     }
 }
