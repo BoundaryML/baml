@@ -1842,6 +1842,19 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             // TODO: Check that the operation is valid for the types
         }
 
+        Stmt::Assert { condition } => {
+            // Type-check the condition expression
+            let cond_ty = infer_expr(ctx, *condition, body);
+            if !cond_ty.is_subtype_of(&Ty::Bool) {
+                let span = body.get_expr_span(*condition).unwrap_or_default();
+                ctx.push_error(TypeError::TypeMismatch {
+                    expected: Ty::Bool,
+                    found: cond_ty,
+                    span,
+                });
+            }
+        }
+
         Stmt::Missing => {}
 
         Stmt::HeaderComment { .. } => {

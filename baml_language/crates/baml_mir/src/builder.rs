@@ -194,6 +194,11 @@ impl<'db> MirBuilder<'db> {
         self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
+    /// Emit an assert statement.
+    pub fn assert(&mut self, condition: Operand<'db>) {
+        self.push_statement(StatementKind::Assert(condition), None);
+    }
+
     // ========================================================================
     // Terminator Emission
     // ========================================================================

@@ -159,6 +159,11 @@ pub enum Expr {
     /// Continue to next iteration. Diverges (type is Never).
     Continue,
 
+    /// Assert statement: `assert condition;`
+    ///
+    /// Evaluates `condition` and panics if false. Returns Unit.
+    Assert { condition: ExprId },
+
     // ========== Assignment ==========
     /// Simple assignment: `target = value`. Returns Unit.
     Assign { target: ExprId, value: ExprId },

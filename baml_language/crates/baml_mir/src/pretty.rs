@@ -149,6 +149,11 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Nop => {
             write!(f, "nop;")
         }
+        StatementKind::Assert(operand) => {
+            write!(f, "assert(")?;
+            write_operand(f, operand)?;
+            write!(f, ");")
+        }
     }
 }
 

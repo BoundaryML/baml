@@ -487,6 +487,21 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 }
             }
 
+            Expr::Assert { condition } => {
+                // Evaluate the condition
+                let cond_local = self
+                    .builder
+                    .temp(Self::lower_typed_ir_ty(body.ty(*condition)));
+                self.lower_expr(*condition, Place::local(cond_local), body);
+
+                // Emit assert statement
+                self.builder.assert(Operand::copy_local(cond_local));
+
+                // Return unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
             // ========== Assignment ==========
             Expr::Assign { target, value } => {
                 let value_ty = Self::lower_typed_ir_ty(body.ty(*value));

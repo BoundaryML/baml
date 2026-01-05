@@ -1035,7 +1035,8 @@ impl BlockExpr {
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
-                        | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::CONTINUE_STMT
+                        | SyntaxKind::ASSERT_STMT => Some(BlockElement::Stmt(n)),
                         // Header comment (//# name)
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes

@@ -451,6 +451,12 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 self.render_expr(*value, body, result, true);
                 self.pop_continuation();
             }
+            Stmt::Assert { condition } => {
+                writeln!(self.output, "{prefix}Assert").ok();
+                self.push_continuation(false);
+                self.render_expr(*condition, body, result, true);
+                self.pop_continuation();
+            }
             Stmt::Missing => {
                 writeln!(self.output, "{prefix}<missing stmt>").ok();
             }

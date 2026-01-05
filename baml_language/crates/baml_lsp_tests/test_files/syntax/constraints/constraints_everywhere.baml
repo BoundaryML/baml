@@ -49,12 +49,12 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found identifier
+// Error: Expected top-level declaration, found assert
 //    ╭─[ 0:9:37 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                     ───┬──  
-//    │                                        ╰──── Expected top-level declaration, found identifier
+//    │                                        ╰──── Expected top-level declaration, found assert
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

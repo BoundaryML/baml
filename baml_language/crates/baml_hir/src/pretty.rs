@@ -293,6 +293,11 @@ impl<'a> CodePrinter<'a> {
                 self.print_expr(*value);
                 self.output.push(';');
             }
+            Stmt::Assert { condition } => {
+                self.output.push_str("assert ");
+                self.print_expr(*condition);
+                self.output.push(';');
+            }
             Stmt::Missing => {
                 self.output.push_str("<missing>;");
             }

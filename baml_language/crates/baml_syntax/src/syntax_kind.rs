@@ -30,6 +30,7 @@ pub enum SyntaxKind {
     KW_CONTINUE,
     KW_RETURN,
     KW_MATCH,
+    KW_ASSERT,
 
     // Other keywords
     KW_WATCH,
@@ -225,6 +226,7 @@ pub enum SyntaxKind {
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
+    ASSERT_STMT,
 
     // Expression components
     CALL_ARGS,

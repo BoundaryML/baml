@@ -509,6 +509,10 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
                     // VizEnter/VizExit don't use any locals
                 }
                 StatementKind::Nop => {}
+                StatementKind::Assert(operand) => {
+                    // Assert uses the condition operand
+                    collect_uses_in_operand(operand, block.id, stmt_idx, &mut def_use);
+                }
             }
         }
 
@@ -939,6 +943,8 @@ fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
         // These modify the stack
         StatementKind::Assign { .. } => false,
         StatementKind::Drop(_) => false,
+        // Assert pushes condition then pops it
+        StatementKind::Assert(_) => false,
     }
 }
 
@@ -1343,6 +1349,7 @@ fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> b
         StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
+        StatementKind::Assert(_) => true, // Assert has side effects (can throw)
     }
 }
 

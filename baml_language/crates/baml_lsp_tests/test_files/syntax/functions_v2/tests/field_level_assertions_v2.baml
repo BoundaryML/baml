@@ -30,6 +30,24 @@ test MyTest {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
+// Error: Expected config key, found assert
+//    ╭─[ 0:9:29 ]
+//    │
+//  9 │   functions [TestFunction] @assert({{ true }})
+//    │                             ───┬──  
+//    │                                ╰──── Expected config key, found assert
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected config key, found '('
+//    ╭─[ 0:9:35 ]
+//    │
+//  9 │   functions [TestFunction] @assert({{ true }})
+//    │                                   ┬  
+//    │                                   ╰── Expected config key, found '('
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
 // Error: Expected config key, found '{'
 //    ╭─[ 0:9:36 ]
 //    │

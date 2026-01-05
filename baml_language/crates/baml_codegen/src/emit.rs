@@ -409,6 +409,10 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
                 self.emit(Instruction::VizExit(*node_idx));
             }
             StatementKind::Nop => {}
+            StatementKind::Assert(operand) => {
+                self.emit_operand_pull(operand, mir);
+                self.emit(Instruction::Assert);
+            }
         }
     }
 

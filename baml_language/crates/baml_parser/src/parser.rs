@@ -50,6 +50,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Env => SyntaxKind::KW_ENV,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
+        TokenKind::Assert => SyntaxKind::KW_ASSERT,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -956,12 +957,13 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::At);
 
             // Attribute name (can be dotted like stream.done)
-            if p.at(TokenKind::Word) {
+            // Allow keywords like 'assert' as attribute names (for @assert)
+            if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
                 p.bump();
                 // Handle dotted attribute names like @stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) {
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
                         p.bump(); // consume next segment
                     } else {
                         p.error_unexpected_token("attribute name segment after dot".to_string());
@@ -985,8 +987,8 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
-            // Attribute name (can be a Word or reserved keyword like Dynamic)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) {
+            // Attribute name (can be a Word or reserved keyword like Dynamic or Assert)
+            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert) {
                 p.bump();
             } else {
                 p.error_unexpected_token("attribute name".to_string());
@@ -1560,6 +1562,8 @@ impl<'a> Parser<'a> {
             self.parse_break_stmt();
         } else if self.at(TokenKind::Continue) {
             self.parse_continue_stmt();
+        } else if self.at(TokenKind::Assert) {
+            self.parse_assert_stmt();
         } else {
             // Expression statement
             self.parse_expr_stmt();
@@ -1633,6 +1637,18 @@ impl<'a> Parser<'a> {
             if !p.at(TokenKind::RBrace) && !p.at_end() {
                 p.parse_expr();
             }
+
+            // Consume trailing semicolon
+            p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    fn parse_assert_stmt(&mut self) {
+        self.with_node(SyntaxKind::ASSERT_STMT, |p| {
+            p.expect(TokenKind::Assert);
+
+            // Condition expression
+            p.parse_expr();
 
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);

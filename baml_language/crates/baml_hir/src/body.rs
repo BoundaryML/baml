@@ -260,6 +260,9 @@ pub enum Stmt {
         value: ExprId,
     },
 
+    /// Assert statement: `assert condition;`
+    Assert { condition: ExprId },
+
     /// Missing/error statement
     Missing,
 
@@ -670,6 +673,7 @@ impl LoweringContext {
                         SyntaxKind::CONTINUE_STMT => {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
+                        SyntaxKind::ASSERT_STMT => self.lower_assert_stmt(node),
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
                     stmts.push(stmt_id);
@@ -2413,6 +2417,33 @@ impl LoweringContext {
         };
 
         self.alloc_stmt(Stmt::Return(return_value), node.text_range())
+    }
+
+    fn lower_assert_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+        use baml_syntax::SyntaxKind;
+
+        // ASSERT_STMT structure: assert keyword, expression
+        let condition = node
+            .children()
+            .find(|n| {
+                matches!(
+                    n.kind(),
+                    SyntaxKind::EXPR
+                        | SyntaxKind::BINARY_EXPR
+                        | SyntaxKind::UNARY_EXPR
+                        | SyntaxKind::CALL_EXPR
+                        | SyntaxKind::PATH_EXPR
+                        | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::IF_EXPR
+                        | SyntaxKind::BLOCK_EXPR
+                        | SyntaxKind::PAREN_EXPR
+                )
+            })
+            .map(|n| self.lower_expr(&n))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        self.alloc_stmt(Stmt::Assert { condition }, node.text_range())
     }
 
     fn lower_while_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {

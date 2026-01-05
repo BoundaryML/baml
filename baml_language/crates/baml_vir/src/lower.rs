@@ -694,6 +694,17 @@ impl<'db> LoweringContext<'db> {
                 ))
             }
 
+            HirStmt::Assert { condition } => {
+                let condition_id = self.lower_expr(*condition, hir_body)?;
+                Ok(self.builder.alloc(
+                    Expr::Assert {
+                        condition: condition_id,
+                    },
+                    Ty::Unit,
+                    text_range,
+                ))
+            }
+
             HirStmt::HeaderComment { name, level } => Ok(self.builder.alloc(
                 Expr::NotifyBlock {
                     name: name.clone(),

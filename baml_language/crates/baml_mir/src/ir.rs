@@ -186,6 +186,10 @@ pub enum StatementKind<'db> {
 
     /// No-op (placeholder for removed statements).
     Nop,
+
+    /// Assert that a condition is true.
+    /// Evaluates the operand and panics if it's false.
+    Assert(Operand<'db>),
 }
 
 // ============================================================================
