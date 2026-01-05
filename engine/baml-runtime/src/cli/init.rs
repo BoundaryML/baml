@@ -710,7 +710,7 @@ mod tests {
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "python/pydantic"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -739,7 +739,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "typescript"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -768,7 +768,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "ruby/sorbet"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -793,7 +793,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -822,7 +822,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -851,7 +851,7 @@ generator target {{
 // your choice. You can have multiple generators if you use multiple languages.
 // Just ensure that the output_dir is different for each generator.
 generator target {{
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet", "rest/openapi"
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
     output_type "rest/openapi"
 
     // Where the generated code will be saved (relative to baml_src/)
@@ -866,6 +866,35 @@ generator target {{
     //
     // Uncomment this line to tell BAML to automatically generate an OpenAPI client for you.
     //on_generate "npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g OPENAPI_CLIENT_TYPE -o ."
+}}
+"#,
+                env!("CARGO_PKG_VERSION")
+            ).trim_start()
+        );
+    }
+
+    #[test]
+    fn test_generate_content_rust() {
+        assert_eq!(
+            generate_main_baml_content(GeneratorOutputType::Rust, None, None),
+            format!(r#"
+// This helps use auto generate libraries you can use in the language of
+// your choice. You can have multiple generators if you use multiple languages.
+// Just ensure that the output_dir is different for each generator.
+generator target {{
+    // Valid values: "python/pydantic", "typescript", "go", "rust", "ruby/sorbet", "rest/openapi"
+    output_type "rust"
+
+    // Where the generated code will be saved (relative to baml_src/)
+    output_dir "../"
+
+    // The version of the BAML package you have installed (e.g. same version as your baml-py or @boundaryml/baml).
+    // The BAML VSCode extension version should also match this version.
+    version "{}"
+
+    // Valid values: "sync", "async"
+    // This controls what `b.FunctionName()` will be (sync or async).
+    default_client_mode async
 }}
 "#,
                 env!("CARGO_PKG_VERSION")
