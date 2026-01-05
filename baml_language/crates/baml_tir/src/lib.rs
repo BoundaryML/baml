@@ -324,6 +324,12 @@ pub struct TypeContext<'db> {
     type_aliases: HashMap<Name, Ty<'db>>,
     /// Enum variant definitions: `enum_name` -> `Vec<variant_name>`
     enum_variants: HashMap<Name, Vec<Name>>,
+    /// Class name to ClassId mapping for type resolution
+    class_ids: HashMap<Name, baml_hir::ClassId<'db>>,
+    /// Enum name to EnumId mapping for type resolution
+    enum_ids: HashMap<Name, baml_hir::EnumId<'db>>,
+    /// Known type names for validation
+    known_types: HashSet<Name>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty<'db>>,
     /// For multi-segment paths, the type of each segment.
@@ -355,6 +361,9 @@ impl<'db> TypeContext<'db> {
             class_fields: HashMap::new(),
             type_aliases: HashMap::new(),
             enum_variants: HashMap::new(),
+            class_ids: HashMap::new(),
+            enum_ids: HashMap::new(),
+            known_types: HashSet::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
@@ -379,6 +388,9 @@ impl<'db> TypeContext<'db> {
             class_fields,
             type_aliases: HashMap::new(),
             enum_variants: HashMap::new(),
+            class_ids: HashMap::new(),
+            enum_ids: HashMap::new(),
+            known_types: HashSet::new(),
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
@@ -397,6 +409,9 @@ impl<'db> TypeContext<'db> {
         class_fields: HashMap<Name, HashMap<Name, Ty<'db>>>,
         type_aliases: HashMap<Name, Ty<'db>>,
         enum_variants: HashMap<Name, Vec<Name>>,
+        class_ids: HashMap<Name, baml_hir::ClassId<'db>>,
+        enum_ids: HashMap<Name, baml_hir::EnumId<'db>>,
+        known_types: HashSet<Name>,
         file_id: FileId,
     ) -> Self {
         TypeContext {
@@ -405,6 +420,9 @@ impl<'db> TypeContext<'db> {
             class_fields,
             type_aliases,
             enum_variants,
+            class_ids,
+            enum_ids,
+            known_types,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
@@ -513,6 +531,35 @@ impl<'db> TypeContext<'db> {
         normalize::is_subtype_of(sub, sup, &self.type_aliases)
     }
 
+    /// Lower a TypeRef to a Ty with full resolution (classes/enums resolved to IDs).
+    pub fn lower_type_resolved(&self, type_ref: &baml_hir::TypeRef, span: Span) -> Ty<'db> {
+        let (ty, _errors) = lower_type_ref_validated_resolved(
+            type_ref,
+            &self.known_types,
+            &self.class_ids,
+            &self.enum_ids,
+            span,
+        );
+        // Note: errors are not accumulated here since they should have been
+        // caught during earlier validation passes
+        ty
+    }
+
+    /// Resolve a named type to its proper Ty representation.
+    ///
+    /// This resolves class and enum names to `Ty::Class` and `Ty::Enum` with their IDs,
+    /// while type aliases and unknown types stay as `Ty::Named`.
+    pub fn resolve_named_type(&self, name: &Name) -> Ty<'db> {
+        if let Some(&class_id) = self.class_ids.get(name) {
+            Ty::Class(class_id, name.clone())
+        } else if let Some(&enum_id) = self.enum_ids.get(name) {
+            Ty::Enum(enum_id, name.clone())
+        } else {
+            // Type alias or unknown type - stays as Named, will be resolved during normalization
+            Ty::Named(name.clone())
+        }
+    }
+
     /// Resolve a path to determine what it refers to.
     ///
     /// This is the core path resolution logic that determines whether a path like
@@ -587,6 +634,9 @@ pub fn infer_function_body<'db>(
     class_fields: Option<HashMap<Name, HashMap<Name, Ty<'db>>>>,
     type_aliases: Option<HashMap<Name, Ty<'db>>>,
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
+    class_ids: Option<HashMap<Name, baml_hir::ClassId<'db>>>,
+    enum_ids: Option<HashMap<Name, baml_hir::EnumId<'db>>>,
+    known_types: Option<HashSet<Name>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult<'db> {
     let file_id = function_loc.file(db).file_id(db);
@@ -596,6 +646,9 @@ pub fn infer_function_body<'db>(
         class_fields.unwrap_or_default(),
         type_aliases.unwrap_or_default(),
         enum_variants.unwrap_or_default(),
+        class_ids.unwrap_or_default(),
+        enum_ids.unwrap_or_default(),
+        known_types.unwrap_or_default(),
         file_id,
     );
 
@@ -702,27 +755,41 @@ pub fn infer_function<'db>(
     let known_types: std::collections::HashSet<_> =
         known_type_names.names(db).iter().cloned().collect();
 
+    // Get class and enum ID mappings for type resolution
+    let class_id_map = class_ids(db, project);
+    let enum_id_map = enum_ids(db, project);
+
     let file_id = function_loc.file(db).file_id(db);
     // Use a placeholder span for now - ideally we'd have spans on TypeRef
     let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
 
     let mut type_errors: Vec<TypeError<Ty<'db>>> = Vec::new();
 
-    // Convert parameter TypeRefs to Tys with validation
+    // Convert parameter TypeRefs to Tys with validation and resolution
     let param_types: HashMap<Name, Ty<'db>> = signature
         .params
         .iter()
         .map(|param| {
-            let (ty, errors) =
-                lower_type_ref_validated(&param.type_ref, &known_types, placeholder_span);
+            let (ty, errors) = lower_type_ref_validated_resolved(
+                &param.type_ref,
+                &known_types,
+                &class_id_map,
+                &enum_id_map,
+                placeholder_span,
+            );
             type_errors.extend(errors);
             (param.name.clone(), ty)
         })
         .collect();
 
-    // Convert return type with validation
-    let (expected_return, errors) =
-        lower_type_ref_validated(&signature.return_type, &known_types, placeholder_span);
+    // Convert return type with validation and resolution
+    let (expected_return, errors) = lower_type_ref_validated_resolved(
+        &signature.return_type,
+        &known_types,
+        &class_id_map,
+        &enum_id_map,
+        placeholder_span,
+    );
     type_errors.extend(errors);
 
     // Delegate to the body inference function
@@ -735,6 +802,9 @@ pub fn infer_function<'db>(
         class_fields,
         type_aliases,
         enum_variants,
+        Some(class_id_map),
+        Some(enum_id_map),
+        Some(known_types),
         function_loc,
     );
 
@@ -1094,7 +1164,7 @@ fn infer_expr<'db>(ctx: &mut TypeContext<'db>, expr_id: ExprId, body: &ExprBody)
 
             // Determine the expected object type
             let obj_ty = if let Some(name) = type_name {
-                Ty::Named(name.clone())
+                ctx.resolve_named_type(name)
             } else {
                 Ty::Unknown
             };
@@ -1661,13 +1731,20 @@ fn infer_field_access<'db>(
             .lookup(field)
             .or(ctx.lookup_class_field(class_name, field))
             .cloned(),
-        Ty::Class(class_id, _) => {
+        Ty::Class(class_id, class_name) => {
+            // First try to find a method (global function lookup)
+            if let Some(method_ty) = ctx.lookup(field) {
+                return method_ty.clone();
+            }
+            // Then try class fields from HIR
             let class_fields_data = baml_hir::class_fields(ctx.db(), *class_id);
             let fields = class_fields_data.fields(ctx.db());
             fields
                 .iter()
                 .find(|(name, _)| name == field)
                 .map(|(_, type_ref)| lower_type_ref(ctx.db(), type_ref))
+                // Also check the context's class_fields for this class name
+                .or_else(|| ctx.lookup_class_field(class_name, field).cloned())
         }
         Ty::Unknown => return Ty::Unknown,
         _ => None,

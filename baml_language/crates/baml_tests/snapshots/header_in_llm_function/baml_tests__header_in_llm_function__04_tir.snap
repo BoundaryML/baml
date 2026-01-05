@@ -4,4 +4,4 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function FetchDatax:
-    Return: Named("Hi")
+    Return: Class(ClassId(..), "Hi")

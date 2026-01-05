@@ -1,0 +1,19 @@
+type foo = bar
+type bar = int
+
+// Should pass.
+function Foo() -> foo {
+  1
+}
+
+// Should fail.
+function Bar() -> foo {
+  true
+}
+
+type Json = int | float | string | Json[] | map<string, Json>
+
+// Should pass.
+function Baz() -> Json {
+  "hello"
+}

@@ -372,26 +372,24 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Video => vec![ValueSet::OfType(Name::new("video"))],
             Ty::Pdf => vec![ValueSet::OfType(Name::new("pdf"))],
 
-            // NOTE: Ty::Class and Ty::Enum branches are currently unreachable.
-            // All user-defined types flow through Ty::Named (see lower.rs), not these
-            // resolved ID variants. The ID variants exist for potential future use but
-            // aren't constructed during type inference. Generic names are safe here,
-            // but we add debug_assert to catch if this assumption ever changes.
-            Ty::Class(..) => {
-                debug_assert!(
-                    false,
-                    "Ty::Class reached in exhaustiveness checking - expected Ty::Named. \
-                    If this is intentional, extract the class name from ClassId."
-                );
-                vec![ValueSet::OfType(Name::new("<class>"))]
+            // User-defined class and enum types with resolved IDs.
+            Ty::Class(_, name) => {
+                // Class types are treated like named types for exhaustiveness
+                vec![ValueSet::OfType(name.clone())]
             }
-            Ty::Enum(..) => {
-                debug_assert!(
-                    false,
-                    "Ty::Enum reached in exhaustiveness checking - expected Ty::Named. \
-                    If this is intentional, extract the enum name from EnumId."
-                );
-                vec![ValueSet::OfType(Name::new("<enum>"))]
+            Ty::Enum(_, name) => {
+                // Enum types: look up variants for exhaustiveness checking
+                if let Some(variants) = self.enum_variants.get(name) {
+                    variants
+                        .iter()
+                        .map(|variant_name| ValueSet::EnumVariant {
+                            enum_name: name.clone(),
+                            variant_name: variant_name.clone(),
+                        })
+                        .collect()
+                } else {
+                    vec![ValueSet::OfType(name.clone())]
+                }
             }
 
             // List types: include element type for proper distinction between e.g. int[] vs string[]

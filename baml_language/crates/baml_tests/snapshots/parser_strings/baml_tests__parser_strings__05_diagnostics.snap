@@ -584,3 +584,13 @@ expression: output
   [parse] Error: Expected top-level declaration, found '}'
 
   [hir] Error: Missing `provider` field in client. e.g. `provider openai`
+
+  [type] Error: Expected "admin" | "user" | "guest", found string
+   ╭─[ 0:1:1 ]
+   │
+ 1 │ // Test nested quote handling in strings
+   │ │ 
+   │ ╰─ Expected "admin" | "user" | "guest", found string
+   │ 
+   │ Note: Error code: E0001
+───╯

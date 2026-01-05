@@ -11,7 +11,8 @@
       "Bash(jj show:*)",
       "Bash(jj log:*)",
       "Bash(jj cat:*)",
-      "Bash(jj file show:*)"
+      "Bash(jj file show:*)",
+      "Bash(cat:*)"
     ]
   }
 }

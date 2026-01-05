@@ -1,0 +1,36 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function Bar() -> foo {
+      true
+}
+
+function Foo() -> foo {
+      1
+}
+
+function Baz() -> Json {
+      "hello"
+}
+
+type bar = int
+
+type Json = int | float | string | Json[] | Map<string, Json>
+
+type foo = bar
+
+function EchoJSON(i: JSON) -> JSON {
+      NotJSON { inner: "Whoops" }
+}
+
+function MakeJSON(i: NotJSON) -> JSON {
+      i.inner
+}
+
+class NotJSON {
+  inner: name
+}
+
+type JSON = int | float | string | bool | JSON[] | Map<string, json>

@@ -4,4 +4,4 @@ expression: output
 ---
 === TYPE INFERENCE ===
   Function GetUser:
-    Return: Named("MyClass")
+    Return: Class(ClassId(..), "MyClass")

@@ -1,0 +1,32 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== BYTECODE ===
+Functions: 5
+Objects: 26
+Globals: 23
+
+Function Bar (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (true)
+     1   RETURN         
+
+Function Baz (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (hello)
+     1   RETURN         
+
+Function EchoJSON (arity: 1, kind: Exec):
+     0   ALLOC_INSTANCE 0   (<class NotJSON>)
+     1   COPY 0             
+     2   LOAD_CONST 0       (Whoops)
+     3   STORE_FIELD 0      
+     4   RETURN             
+
+Function Foo (arity: 0, kind: Exec):
+     0   LOAD_CONST 0   (1)
+     1   RETURN         
+
+Function MakeJSON (arity: 1, kind: Exec):
+     0   LOAD_VAR 1     (i)
+     1   LOAD_FIELD 0   
+     2   RETURN
