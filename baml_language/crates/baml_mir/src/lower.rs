@@ -1637,7 +1637,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     fn class_name_from_ty(&self, ty: &Ty<'db>) -> Option<String> {
         match ty {
             Ty::Named(name) => Some(name.to_string()),
-            Ty::Class(class_id) => {
+            Ty::Class(class_id, _) => {
                 let file = class_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let class_data = &item_tree[class_id.id(self.db)];

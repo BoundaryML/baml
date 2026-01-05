@@ -731,14 +731,14 @@ impl<'db> LoweringContext<'db> {
 
             baml_tir::Ty::Named(name) => Ty::Class(name.clone()),
 
-            baml_tir::Ty::Class(class_id) => {
+            baml_tir::Ty::Class(class_id, _) => {
                 let file = class_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let class_data = &item_tree[class_id.id(self.db)];
                 Ty::Class(class_data.name.clone())
             }
 
-            baml_tir::Ty::Enum(enum_id) => {
+            baml_tir::Ty::Enum(enum_id, _) => {
                 let file = enum_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let enum_data = &item_tree[enum_id.id(self.db)];

@@ -377,7 +377,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             // resolved ID variants. The ID variants exist for potential future use but
             // aren't constructed during type inference. Generic names are safe here,
             // but we add debug_assert to catch if this assumption ever changes.
-            Ty::Class(_) => {
+            Ty::Class(..) => {
                 debug_assert!(
                     false,
                     "Ty::Class reached in exhaustiveness checking - expected Ty::Named. \
@@ -385,7 +385,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 );
                 vec![ValueSet::OfType(Name::new("<class>"))]
             }
-            Ty::Enum(_) => {
+            Ty::Enum(..) => {
                 debug_assert!(
                     false,
                     "Ty::Enum reached in exhaustiveness checking - expected Ty::Named. \

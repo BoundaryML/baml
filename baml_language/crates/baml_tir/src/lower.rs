@@ -7,11 +7,11 @@
 //! - Handling primitive type names
 //! - Validating that named types exist (when `known_types` is provided)
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
 use baml_diagnostics::compiler_error::TypeError;
-use baml_hir::TypeRef;
+use baml_hir::{ClassId, EnumId, TypeRef};
 
 use crate::{LiteralValue, Ty};
 
@@ -196,6 +196,195 @@ pub fn lower_type_ref_validated<'db>(
     let mut ctx = TypeLoweringContext::with_validation(known_types, span);
     let ty = lower_type_ref_with_ctx(&mut ctx, type_ref);
     (ty, ctx.errors)
+}
+
+/// Lower a `TypeRef` to a Ty with validation AND resolution of class/enum types.
+///
+/// This combines validation (checking types exist) with resolution (converting
+/// Named types to Class/Enum with their IDs). This is the preferred function
+/// for type checking contexts where you need fully resolved types.
+///
+/// Returns the lowered type and any errors encountered.
+pub fn lower_type_ref_validated_resolved<'db>(
+    type_ref: &TypeRef,
+    known_types: &HashSet<Name>,
+    class_ids: &HashMap<Name, ClassId<'db>>,
+    enum_ids: &HashMap<Name, EnumId<'db>>,
+    span: Span,
+) -> (Ty<'db>, Vec<TypeError<Ty<'db>>>) {
+    let mut ctx = TypeLoweringContextResolved::new(known_types, class_ids, enum_ids, span);
+    let ty = lower_type_ref_resolved_with_ctx(&mut ctx, type_ref);
+    (ty, ctx.errors)
+}
+
+/// Context for type lowering with validation and resolution.
+struct TypeLoweringContextResolved<'a, 'db> {
+    known_types: &'a HashSet<Name>,
+    class_ids: &'a HashMap<Name, ClassId<'db>>,
+    enum_ids: &'a HashMap<Name, EnumId<'db>>,
+    span: Span,
+    errors: Vec<TypeError<Ty<'db>>>,
+}
+
+impl<'a, 'db> TypeLoweringContextResolved<'a, 'db> {
+    fn new(
+        known_types: &'a HashSet<Name>,
+        class_ids: &'a HashMap<Name, ClassId<'db>>,
+        enum_ids: &'a HashMap<Name, EnumId<'db>>,
+        span: Span,
+    ) -> Self {
+        Self {
+            known_types,
+            class_ids,
+            enum_ids,
+            span,
+            errors: Vec::new(),
+        }
+    }
+
+    fn is_known_type(&self, name: &Name) -> bool {
+        self.known_types.contains(name)
+    }
+
+    fn unknown_type_error(&mut self, name: &Name) -> Ty<'db> {
+        self.errors.push(TypeError::UnknownType {
+            name: name.to_string(),
+            span: self.span,
+        });
+        Ty::Error
+    }
+
+    fn resolve_name(&self, name: &Name) -> Option<Ty<'db>> {
+        if let Some(&class_id) = self.class_ids.get(name) {
+            Some(Ty::Class(class_id, name.clone()))
+        } else if let Some(&enum_id) = self.enum_ids.get(name) {
+            Some(Ty::Enum(enum_id, name.clone()))
+        } else {
+            None
+        }
+    }
+}
+
+/// Lower a TypeRef with validation and resolution context.
+fn lower_type_ref_resolved_with_ctx<'db>(
+    ctx: &mut TypeLoweringContextResolved<'_, 'db>,
+    type_ref: &TypeRef,
+) -> Ty<'db> {
+    match type_ref {
+        // Primitives
+        TypeRef::Int => Ty::Int,
+        TypeRef::Float => Ty::Float,
+        TypeRef::String => Ty::String,
+        TypeRef::Bool => Ty::Bool,
+        TypeRef::Null => Ty::Null,
+
+        // Media types
+        TypeRef::Image => Ty::Image,
+        TypeRef::Audio => Ty::Audio,
+        TypeRef::Video => Ty::Video,
+        TypeRef::Pdf => Ty::Pdf,
+
+        // Named type via path
+        TypeRef::Path(path) => lower_path_type_resolved_with_ctx(ctx, path),
+
+        // Type constructors
+        TypeRef::Optional(inner) => {
+            let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
+            Ty::Optional(Box::new(inner_ty))
+        }
+
+        TypeRef::List(inner) => {
+            let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
+            Ty::List(Box::new(inner_ty))
+        }
+
+        TypeRef::Map { key, value } => {
+            let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
+            let value_ty = lower_type_ref_resolved_with_ctx(ctx, value);
+            Ty::Map {
+                key: Box::new(key_ty),
+                value: Box::new(value_ty),
+            }
+        }
+
+        TypeRef::Union(types) => {
+            let tys: Vec<Ty<'db>> = types
+                .iter()
+                .map(|t| lower_type_ref_resolved_with_ctx(ctx, t))
+                .collect();
+            normalize_union(tys)
+        }
+
+        TypeRef::StringLiteral(s) => Ty::Literal(LiteralValue::String(s.clone())),
+        TypeRef::IntLiteral(i) => Ty::Literal(LiteralValue::Int(*i)),
+        TypeRef::FloatLiteral(f) => Ty::Literal(LiteralValue::Float(f.clone())),
+        TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b)),
+
+        // Generics - not yet supported
+        TypeRef::Generic { .. } => Ty::Unknown,
+        TypeRef::TypeParam(_) => Ty::Unknown,
+
+        // Error/Unknown
+        TypeRef::Error => Ty::Error,
+        TypeRef::Unknown => Ty::Unknown,
+    }
+}
+
+/// Lower a path-based type with validation and resolution.
+fn lower_path_type_resolved_with_ctx<'db>(
+    ctx: &mut TypeLoweringContextResolved<'_, 'db>,
+    path: &baml_hir::Path,
+) -> Ty<'db> {
+    match path.segments.len() {
+        1 => {
+            let name = &path.segments[0];
+            match name.as_str() {
+                // Primitive type names
+                "int" => Ty::Int,
+                "float" => Ty::Float,
+                "string" => Ty::String,
+                "bool" => Ty::Bool,
+                "null" => Ty::Null,
+                "image" => Ty::Image,
+                "audio" => Ty::Audio,
+                "video" => Ty::Video,
+                "pdf" => Ty::Pdf,
+                // User-defined type - resolve to Class/Enum or validate
+                _ => {
+                    // Skip validation for complex type expressions
+                    if !is_simple_type_name(name.as_str()) {
+                        return Ty::Named(name.clone());
+                    }
+
+                    // Try to resolve to Class/Enum
+                    if let Some(resolved) = ctx.resolve_name(name) {
+                        return resolved;
+                    }
+
+                    // Check if it's a known type (could be a type alias)
+                    if ctx.is_known_type(name) {
+                        Ty::Named(name.clone())
+                    } else {
+                        ctx.unknown_type_error(name)
+                    }
+                }
+            }
+        }
+        _ => {
+            let full_path = path
+                .segments
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            let name = Name::new(&full_path);
+            if !is_simple_type_name(&full_path) || ctx.is_known_type(&name) {
+                Ty::Named(name)
+            } else {
+                ctx.unknown_type_error(&name)
+            }
+        }
+    }
 }
 
 /// Lower a `TypeRef` to a Ty using the provided context.
