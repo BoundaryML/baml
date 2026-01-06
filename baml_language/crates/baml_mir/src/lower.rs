@@ -844,10 +844,24 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 arms,
                 is_exhaustive,
             } => {
-                // Lower scrutinee to a temp
+                // Lower scrutinee - optimize for simple variable references
                 let scrutinee_ty = Self::lower_typed_ir_ty(body.ty(*scrutinee));
-                let scrutinee_local = self.builder.temp(scrutinee_ty.clone());
-                self.lower_expr(*scrutinee, Place::local(scrutinee_local), body);
+                let scrutinee_local = if let Expr::Var(name) = body.expr(*scrutinee) {
+                    // If scrutinee is a simple variable reference, reuse it directly
+                    if let Some(&local) = self.locals.get(name) {
+                        local
+                    } else {
+                        // Not a local variable (could be a function reference), use temp
+                        let temp = self.builder.temp(scrutinee_ty.clone());
+                        self.lower_expr(*scrutinee, Place::local(temp), body);
+                        temp
+                    }
+                } else {
+                    // Complex expression, lower to temp
+                    let temp = self.builder.temp(scrutinee_ty.clone());
+                    self.lower_expr(*scrutinee, Place::local(temp), body);
+                    temp
+                };
 
                 // Create join block
                 let join_block = self.builder.create_block();

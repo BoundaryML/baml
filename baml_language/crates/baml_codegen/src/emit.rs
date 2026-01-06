@@ -832,14 +832,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 then_block,
                 else_block,
             } => {
-                self.emit_operand_pull(condition, mir);
-                // PopJumpIfFalse to else_block (pops condition from stack)
-                // Apply jump threading to resolve through empty blocks
-                let resolved_else = self.analysis.resolve_jump_target(*else_block);
-                let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
-                self.pending_jumps.push((else_jump, resolved_else));
-                // Jump to then_block (may be elided if it's next)
-                self.emit_jump_unless_fallthrough(*then_block);
+                // Optimization: If else_block is unreachable (last arm of exhaustive match),
+                // we know the condition must be true, so skip the comparison entirely.
+                if self.analysis.is_block_unreachable(*else_block, mir) {
+                    // Don't evaluate condition - just go directly to then_block
+                    self.emit_jump_unless_fallthrough(*then_block);
+                } else {
+                    self.emit_operand_pull(condition, mir);
+                    // PopJumpIfFalse to else_block (pops condition from stack)
+                    // Apply jump threading to resolve through empty blocks
+                    let resolved_else = self.analysis.resolve_jump_target(*else_block);
+                    let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
+                    self.pending_jumps.push((else_jump, resolved_else));
+                    // Jump to then_block (may be elided if it's next)
+                    self.emit_jump_unless_fallthrough(*then_block);
+                }
             }
 
             Terminator::Switch {

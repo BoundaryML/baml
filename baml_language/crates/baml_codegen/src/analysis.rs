@@ -191,6 +191,16 @@ impl AnalysisResult {
         }
         current
     }
+
+    /// Check if a block (after resolving redirects) has an Unreachable terminator.
+    /// Used to optimize branches where the else path is unreachable (exhaustive matches).
+    pub(crate) fn is_block_unreachable(&self, target: BlockId, mir: &MirFunction) -> bool {
+        let resolved = self.resolve_jump_target(target);
+        matches!(
+            mir.block(resolved).terminator,
+            Some(Terminator::Unreachable)
+        )
+    }
 }
 
 // ============================================================================

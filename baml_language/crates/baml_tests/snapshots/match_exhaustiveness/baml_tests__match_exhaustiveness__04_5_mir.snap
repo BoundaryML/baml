@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -7,11 +7,9 @@ fn NestedLiteralUnions(code: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // code // param
-    let _2: Int
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb3, 202: bb3, 204: bb3, 400: bb4, 404: bb4, 405: bb4, 406: bb4, 409: bb4, otherwise: bb5];
+        switch copy _1 [200: bb3, 201: bb3, 202: bb3, 204: bb3, 400: bb4, 404: bb4, 405: bb4, 406: bb4, 409: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -43,14 +41,12 @@ fn ExhaustiveEnumWithTypedPattern(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
-    let _3: Bool
-    let _4: Named("Status") // x
+    let _2: Bool
+    let _3: Named("Status") // x
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Status"));
-        branch copy _3 -> [bb5, bb3];
+        _2 = is_type(copy _1, Named("Status"));
+        branch copy _2 -> [bb5, bb3];
     }
 
     bb1: {
@@ -71,7 +67,7 @@ fn ExhaustiveEnumWithTypedPattern(s: Enum("Status")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -83,12 +79,10 @@ fn ParenthesizedSingleLiteral(b: Bool) -> String {
     let _1: Bool // b // param
     let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -109,8 +103,8 @@ fn ParenthesizedSingleLiteral(b: Bool) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const false;
-        branch copy _4 -> [bb6, bb3];
+        _3 = copy _1 == const false;
+        branch copy _3 -> [bb6, bb3];
     }
 
     bb6: {
@@ -124,16 +118,14 @@ fn DuplicateEnumVariant(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
     let _5: Bool
-    let _6: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -150,8 +142,8 @@ fn DuplicateEnumVariant(s: Enum("Status")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Active;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Active;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -160,8 +152,8 @@ fn DuplicateEnumVariant(s: Enum("Status")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Inactive;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const Status.Inactive;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -170,8 +162,8 @@ fn DuplicateEnumVariant(s: Enum("Status")) -> String {
     }
 
     bb8: {
-        _6 = copy _2 == const Status.Pending;
-        branch copy _6 -> [bb9, bb10];
+        _5 = copy _1 == const Status.Pending;
+        branch copy _5 -> [bb9, bb10];
     }
 
     bb9: {
@@ -189,11 +181,9 @@ fn WrongLiteralTypeBoolWithInt(b: Bool) -> String {
     // Locals:
     let _0: String // return
     let _1: Bool // b // param
-    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [42: bb3, otherwise: bb4];
+        switch copy _1 [42: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -219,16 +209,14 @@ fn UnreachableMultiple(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Int // _
-    let _4: Bool
-    let _5: Int // n
-    let _6: Bool
-    let _7: Int // m
+    let _2: Int // _
+    let _3: Bool
+    let _4: Int // n
+    let _5: Bool
+    let _6: Int // m
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
         goto -> bb4;
     }
 
@@ -250,8 +238,8 @@ fn UnreachableMultiple(x: Int) -> String {
     }
 
     bb5: {
-        _4 = is_type(copy _2, Int);
-        branch copy _4 -> [bb8, bb7];
+        _3 = is_type(copy _1, Int);
+        branch copy _3 -> [bb8, bb7];
     }
 
     bb6: {
@@ -260,12 +248,12 @@ fn UnreachableMultiple(x: Int) -> String {
     }
 
     bb7: {
-        _6 = is_type(copy _2, Int);
-        branch copy _6 -> [bb10, bb3];
+        _5 = is_type(copy _1, Int);
+        branch copy _5 -> [bb10, bb3];
     }
 
     bb8: {
-        _5 = copy _2;
+        _4 = copy _1;
         goto -> bb6;
     }
 
@@ -275,7 +263,7 @@ fn UnreachableMultiple(x: Int) -> String {
     }
 
     bb10: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb9;
     }
 
@@ -285,17 +273,15 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Union([Named("Success"), Named("Failure")]) // x
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Union([Named("Success"), Named("Failure")]) // x
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -307,18 +293,18 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Union([Named("Success"), Named("Failure")]));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -332,7 +318,7 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -342,16 +328,14 @@ fn ExhaustiveNullableEnum(s: Optional(Enum("Status"))) -> String {
     // Locals:
     let _0: String // return
     let _1: Optional(Enum("Status")) // s // param
-    let _2: Optional(Named("Status"))
+    let _2: Bool
     let _3: Bool
     let _4: Bool
     let _5: Bool
-    let _6: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -368,8 +352,8 @@ fn ExhaustiveNullableEnum(s: Optional(Enum("Status"))) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Inactive;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Inactive;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -378,8 +362,8 @@ fn ExhaustiveNullableEnum(s: Optional(Enum("Status"))) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Pending;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const Status.Pending;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -388,8 +372,8 @@ fn ExhaustiveNullableEnum(s: Optional(Enum("Status"))) -> String {
     }
 
     bb8: {
-        _6 = copy _2 == const null;
-        branch copy _6 -> [bb9, bb10];
+        _5 = copy _1 == const null;
+        branch copy _5 -> [bb9, bb10];
     }
 
     bb9: {
@@ -408,12 +392,10 @@ fn NonExhaustiveBoolMissingTrue(b: Bool) -> String {
     let _0: String // return
     let _1: Bool // b // param
     let _2: Bool
-    let _3: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const false;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const false;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -439,15 +421,13 @@ fn ExhaustiveEnumAllVariants(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -464,8 +444,8 @@ fn ExhaustiveEnumAllVariants(s: Enum("Status")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Inactive;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Inactive;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -474,8 +454,8 @@ fn ExhaustiveEnumAllVariants(s: Enum("Status")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Pending;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const Status.Pending;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -493,18 +473,16 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Named("Failure") // f
-    let _8: Named("Failure")
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Named("Failure") // f
+    let _7: Named("Failure")
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -516,24 +494,24 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Named("Failure"));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Named("Failure"));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _7;
-        _0 = copy _8.0;
+        _7 = copy _6;
+        _0 = copy _7.0;
         goto -> bb2;
     }
 
@@ -542,7 +520,7 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -552,15 +530,13 @@ fn EnumVariantAfterTypedEnum(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
-    let _3: Bool
-    let _4: Named("Status") // x
-    let _5: Bool
+    let _2: Bool
+    let _3: Named("Status") // x
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Status"));
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Named("Status"));
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -581,12 +557,12 @@ fn EnumVariantAfterTypedEnum(s: Enum("Status")) -> String {
     }
 
     bb5: {
-        _5 = copy _2 == const Status.Active;
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const Status.Active;
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -602,14 +578,12 @@ fn BoolLiteralAfterTypedBool(b: Bool) -> String {
     let _0: String // return
     let _1: Bool // b // param
     let _2: Bool
-    let _3: Bool
-    let _4: Bool // x
-    let _5: Bool
+    let _3: Bool // x
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Bool);
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Bool);
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -630,12 +604,12 @@ fn BoolLiteralAfterTypedBool(b: Bool) -> String {
     }
 
     bb5: {
-        _5 = copy _2 == const true;
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const true;
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -650,11 +624,9 @@ fn LiteralUnionWithCatchAll(code: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // code // param
-    let _2: Int
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb3, 400: bb4, 404: bb4, otherwise: bb5];
+        switch copy _1 [200: bb3, 201: bb3, 400: bb4, 404: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -686,11 +658,9 @@ fn ExhaustiveIntLiterals(code: Named("SuccessCode")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
-    let _2: Named("SuccessCode")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb4, 204: bb5, otherwise: bb6];
+        switch copy _1 [200: bb3, 201: bb4, 204: bb5, otherwise: bb6];
     }
 
     bb1: {
@@ -726,15 +696,13 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Role") // role // param
-    let _2: Named("Role")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "user";
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const "user";
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -751,8 +719,8 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const "assistant";
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const "assistant";
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -761,8 +729,8 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const "system";
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const "system";
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -780,16 +748,14 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Named("Result") // _
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Named("Result") // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -805,18 +771,18 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Named("Result")) -> String {
     }
 
     bb4: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb5: {
-        _6 = copy _2;
+        _5 = copy _1;
         goto -> bb7;
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -831,11 +797,9 @@ fn DuplicateIntLiteral(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [1: bb3, 1: bb4, otherwise: bb5];
+        switch copy _1 [1: bb3, 1: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -867,16 +831,14 @@ fn ExhaustiveClassPlusLiteral(x: Named("SuccessOr200")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("SuccessOr200") // x // param
-    let _2: Named("SuccessOr200")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -888,18 +850,18 @@ fn ExhaustiveClassPlusLiteral(x: Named("SuccessOr200")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = copy _2 == const 200_i64;
-        branch copy _6 -> [bb6, bb7];
+        _5 = copy _1 == const 200_i64;
+        branch copy _5 -> [bb6, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -918,15 +880,13 @@ fn ExhaustiveLiteralWithBaseType(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
-    let _5: Int // n
+    let _4: Int // n
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const 200_i64;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -947,8 +907,8 @@ fn ExhaustiveLiteralWithBaseType(x: Int) -> String {
     }
 
     bb5: {
-        _4 = is_type(copy _2, Int);
-        branch copy _4 -> [bb7, bb3];
+        _3 = is_type(copy _1, Int);
+        branch copy _3 -> [bb7, bb3];
     }
 
     bb6: {
@@ -957,7 +917,7 @@ fn ExhaustiveLiteralWithBaseType(x: Int) -> String {
     }
 
     bb7: {
-        _5 = copy _2;
+        _4 = copy _1;
         goto -> bb6;
     }
 
@@ -967,15 +927,13 @@ fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum("Status"))) -> String {
     // Locals:
     let _0: String // return
     let _1: Optional(Enum("Status")) // s // param
-    let _2: Optional(Named("Status"))
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -992,8 +950,8 @@ fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum("Status"))) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Inactive;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Inactive;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -1002,8 +960,8 @@ fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum("Status"))) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Pending;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const Status.Pending;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -1021,15 +979,13 @@ fn NonExhaustiveTypeAliasMissingOne(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1041,8 +997,8 @@ fn NonExhaustiveTypeAliasMissingOne(r: Named("Result")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
@@ -1051,7 +1007,7 @@ fn NonExhaustiveTypeAliasMissingOne(r: Named("Result")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -1063,12 +1019,10 @@ fn BoolUnionPattern(b: Bool) -> String {
     let _1: Bool // b // param
     let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -1089,8 +1043,8 @@ fn BoolUnionPattern(b: Bool) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const false;
-        branch copy _4 -> [bb4, bb3];
+        _3 = copy _1 == const false;
+        branch copy _3 -> [bb4, bb3];
     }
 
 }
@@ -1099,15 +1053,13 @@ fn StringLiteralUnionPattern(role: Named("Role")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Role") // role // param
-    let _2: Named("Role")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "user";
-        branch copy _3 -> [bb3, bb5];
+        _2 = copy _1 == const "user";
+        branch copy _2 -> [bb3, bb5];
     }
 
     bb1: {
@@ -1124,13 +1076,13 @@ fn StringLiteralUnionPattern(role: Named("Role")) -> String {
     }
 
     bb4: {
-        _5 = copy _2 == const "system";
-        branch copy _5 -> [bb6, bb7];
+        _4 = copy _1 == const "system";
+        branch copy _4 -> [bb6, bb7];
     }
 
     bb5: {
-        _4 = copy _2 == const "assistant";
-        branch copy _4 -> [bb3, bb4];
+        _3 = copy _1 == const "assistant";
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb6: {
@@ -1150,12 +1102,10 @@ fn ExhaustiveBool(b: Bool) -> String {
     let _1: Bool // b // param
     let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -1176,8 +1126,8 @@ fn ExhaustiveBool(b: Bool) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const false;
-        branch copy _4 -> [bb6, bb3];
+        _3 = copy _1 == const false;
+        branch copy _3 -> [bb6, bb3];
     }
 
     bb6: {
@@ -1191,18 +1141,16 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("DoubleMaybe") // dm // param
-    let _2: Named("DoubleMaybe")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Named("Failure") // f
-    let _8: Named("Failure")
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Named("Failure") // f
+    let _7: Named("Failure")
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1214,24 +1162,24 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Named("Failure"));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Named("Failure"));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _7;
-        _0 = copy _8.0;
+        _7 = copy _6;
+        _0 = copy _7.0;
         goto -> bb2;
     }
 
@@ -1240,7 +1188,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -1250,19 +1198,17 @@ fn ExhaustiveDoubleMaybe(dm: Named("DoubleMaybe")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("DoubleMaybe") // dm // param
-    let _2: Named("DoubleMaybe")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Named("Failure") // f
-    let _8: Named("Failure")
-    let _9: Bool
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Named("Failure") // f
+    let _7: Named("Failure")
+    let _8: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1274,34 +1220,34 @@ fn ExhaustiveDoubleMaybe(dm: Named("DoubleMaybe")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Named("Failure"));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Named("Failure"));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _7;
-        _0 = copy _8.0;
+        _7 = copy _6;
+        _0 = copy _7.0;
         goto -> bb2;
     }
 
     bb7: {
-        _9 = copy _2 == const null;
-        branch copy _9 -> [bb9, bb10];
+        _8 = copy _1 == const null;
+        branch copy _8 -> [bb9, bb10];
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -1320,14 +1266,12 @@ fn ExhaustiveOptionalSingleton(code: Named("MaybeOk")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MaybeOk") // code // param
-    let _2: Named("MaybeOk")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const 200_i64;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1344,8 +1288,8 @@ fn ExhaustiveOptionalSingleton(code: Named("MaybeOk")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const null;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const null;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -1364,13 +1308,11 @@ fn BoolWithCatchAll(b: Bool) -> String {
     let _0: String // return
     let _1: Bool // b // param
     let _2: Bool
-    let _3: Bool
-    let _4: Bool // _
+    let _3: Bool // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -1391,7 +1333,7 @@ fn BoolWithCatchAll(b: Bool) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -1406,27 +1348,25 @@ fn GuardedOnlyNonExhaustive(x: Int) -> Int {
     // Locals:
     let _0: Int // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Bool
-    let _4: Int // n
-    let _5: Bool
+    let _2: Bool
+    let _3: Int // n
+    let _4: Bool
+    let _5: Int
     let _6: Int
     let _7: Int
     let _8: Int
-    let _9: Int
-    let _10: Bool
-    let _11: Int // n
-    let _12: Bool
+    let _9: Bool
+    let _10: Int // n
+    let _11: Bool
+    let _12: Int
     let _13: Int
     let _14: Int
     let _15: Int
     let _16: Int
-    let _17: Int
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Int);
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1438,34 +1378,34 @@ fn GuardedOnlyNonExhaustive(x: Int) -> Int {
     }
 
     bb3: {
-        _6 = copy _4;
-        _7 = const 0_i64;
-        _5 = copy _6 > copy _7;
-        branch copy _5 -> [bb6, bb4];
+        _5 = copy _3;
+        _6 = const 0_i64;
+        _4 = copy _5 > copy _6;
+        branch copy _4 -> [bb6, bb4];
     }
 
     bb4: {
-        _10 = is_type(copy _2, Int);
-        branch copy _10 -> [bb9, bb8];
+        _9 = is_type(copy _1, Int);
+        branch copy _9 -> [bb9, bb8];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _4;
-        _9 = const 2_i64;
-        _0 = copy _8 * copy _9;
+        _7 = copy _3;
+        _8 = const 2_i64;
+        _0 = copy _7 * copy _8;
         goto -> bb2;
     }
 
     bb7: {
-        _13 = copy _11;
-        _14 = const 0_i64;
-        _12 = copy _13 < copy _14;
-        branch copy _12 -> [bb10, bb8];
+        _12 = copy _10;
+        _13 = const 0_i64;
+        _11 = copy _12 < copy _13;
+        branch copy _11 -> [bb10, bb8];
     }
 
     bb8: {
@@ -1473,15 +1413,15 @@ fn GuardedOnlyNonExhaustive(x: Int) -> Int {
     }
 
     bb9: {
-        _11 = copy _2;
+        _10 = copy _1;
         goto -> bb7;
     }
 
     bb10: {
-        _15 = copy _11;
-        _17 = const 1_i64;
-        _16 = -copy _17;
-        _0 = copy _15 * copy _16;
+        _14 = copy _10;
+        _16 = const 1_i64;
+        _15 = -copy _16;
+        _0 = copy _14 * copy _15;
         goto -> bb2;
     }
 
@@ -1492,12 +1432,10 @@ fn NonExhaustiveBoolMissingFalse(b: Bool) -> String {
     let _0: String // return
     let _1: Bool // b // param
     let _2: Bool
-    let _3: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1523,11 +1461,9 @@ fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
-    let _2: Named("SuccessCode")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb3, 204: bb4, otherwise: bb5];
+        switch copy _1 [200: bb3, 201: bb3, 204: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -1558,17 +1494,15 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
     let _5: Bool
     let _6: Bool
-    let _7: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1585,8 +1519,8 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Active;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Active;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -1595,8 +1529,8 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Inactive;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const Status.Inactive;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -1605,8 +1539,8 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     }
 
     bb8: {
-        _6 = copy _2 == const Status.Active;
-        branch copy _6 -> [bb9, bb10];
+        _5 = copy _1 == const Status.Active;
+        branch copy _5 -> [bb9, bb10];
     }
 
     bb9: {
@@ -1615,8 +1549,8 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     }
 
     bb10: {
-        _7 = copy _2 == const Status.Pending;
-        branch copy _7 -> [bb11, bb12];
+        _6 = copy _1 == const Status.Pending;
+        branch copy _6 -> [bb11, bb12];
     }
 
     bb11: {
@@ -1634,14 +1568,12 @@ fn ExhaustiveCustomBool(b: Named("CustomBool")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("CustomBool") // b // param
-    let _2: Named("CustomBool")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1658,8 +1590,8 @@ fn ExhaustiveCustomBool(b: Named("CustomBool")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const false;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const false;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -1677,15 +1609,13 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MixedLiterals") // x // param
-    let _2: Named("MixedLiterals")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const 200_i64;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1702,8 +1632,8 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const "success";
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const "success";
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -1712,8 +1642,8 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const true;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const true;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -1731,16 +1661,14 @@ fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("FullResult") // r // param
-    let _2: Named("FullResult")
-    let _3: Bool
-    let _4: Union([Named("Success"), Named("Failure")]) // x
-    let _5: Bool
-    let _6: Named("Pending") // _
+    let _2: Bool
+    let _3: Union([Named("Success"), Named("Failure")]) // x
+    let _4: Bool
+    let _5: Named("Pending") // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Union([Named("Success"), Named("Failure")]));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1757,12 +1685,12 @@ fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _2, Named("Pending"));
-        branch copy _5 -> [bb8, bb7];
+        _4 = is_type(copy _1, Named("Pending"));
+        branch copy _4 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -1776,7 +1704,7 @@ fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
     }
 
     bb8: {
-        _6 = copy _2;
+        _5 = copy _1;
         goto -> bb6;
     }
 
@@ -1786,13 +1714,11 @@ fn ExhaustiveTrueType(t: Named("AlwaysTrue")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("AlwaysTrue") // t // param
-    let _2: Named("AlwaysTrue")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1819,15 +1745,12 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     let _0: String // return
     let _1: Int // x // param
     let _2: Bool // y // param
-    let _3: Int
+    let _3: Bool
     let _4: Bool
     let _5: Bool
-    let _6: Bool
-    let _7: Bool
 
     bb0: {
-        _3 = copy _1;
-        switch copy _3 [0: bb3, otherwise: bb4];
+        switch copy _1 [0: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -1839,9 +1762,8 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     }
 
     bb3: {
-        _4 = copy _2;
-        _5 = copy _4 == const true;
-        branch copy _5 -> [bb7, bb8];
+        _3 = copy _2 == const true;
+        branch copy _3 -> [bb7, bb8];
     }
 
     bb4: {
@@ -1863,8 +1785,8 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     }
 
     bb8: {
-        _6 = copy _4 == const false;
-        branch copy _6 -> [bb9, bb10];
+        _4 = copy _2 == const false;
+        branch copy _4 -> [bb9, bb10];
     }
 
     bb9: {
@@ -1873,8 +1795,8 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     }
 
     bb10: {
-        _7 = copy _4 == const true;
-        branch copy _7 -> [bb11, bb6];
+        _5 = copy _2 == const true;
+        branch copy _5 -> [bb11, bb6];
     }
 
     bb11: {
@@ -1888,13 +1810,11 @@ fn NonExhaustiveOptionalMissingValue(code: Named("MaybeOk")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MaybeOk") // code // param
-    let _2: Named("MaybeOk")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const null;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1920,15 +1840,13 @@ fn EnumVariantUnion(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb5];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb5];
     }
 
     bb1: {
@@ -1945,13 +1863,13 @@ fn EnumVariantUnion(s: Enum("Status")) -> String {
     }
 
     bb4: {
-        _5 = copy _2 == const Status.Inactive;
-        branch copy _5 -> [bb6, bb7];
+        _4 = copy _1 == const Status.Inactive;
+        branch copy _4 -> [bb6, bb7];
     }
 
     bb5: {
-        _4 = copy _2 == const Status.Pending;
-        branch copy _4 -> [bb3, bb4];
+        _3 = copy _1 == const Status.Pending;
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb6: {
@@ -1969,19 +1887,17 @@ fn NestedTypeAlias(mr: Named("MaybeResult")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MaybeResult") // mr // param
-    let _2: Named("MaybeResult")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Named("Failure") // f
-    let _8: Named("Failure")
-    let _9: Bool
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Named("Failure") // f
+    let _7: Named("Failure")
+    let _8: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -1993,34 +1909,34 @@ fn NestedTypeAlias(mr: Named("MaybeResult")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Named("Failure"));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Named("Failure"));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _7;
-        _0 = copy _8.0;
+        _7 = copy _6;
+        _0 = copy _7.0;
         goto -> bb2;
     }
 
     bb7: {
-        _9 = copy _2 == const null;
-        branch copy _9 -> [bb9, bb10];
+        _8 = copy _1 == const null;
+        branch copy _8 -> [bb9, bb10];
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -2039,13 +1955,11 @@ fn ExhaustiveFalseType(f: Named("AlwaysFalse")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("AlwaysFalse") // f // param
-    let _2: Named("AlwaysFalse")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const false;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const false;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2071,11 +1985,9 @@ fn NonExhaustiveOptionalMissingNull(code: Named("MaybeOk")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MaybeOk") // code // param
-    let _2: Named("MaybeOk")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, otherwise: bb4];
+        switch copy _1 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2101,13 +2013,11 @@ fn NonExhaustiveTrueTypeWrongLiteral(t: Named("AlwaysTrue")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("AlwaysTrue") // t // param
-    let _2: Named("AlwaysTrue")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const false;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const false;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2133,14 +2043,12 @@ fn ExhaustiveWithNamedCatchAll(x: Int) -> Int {
     // Locals:
     let _0: Int // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Int // other
+    let _2: Int // other
+    let _3: Int
     let _4: Int
-    let _5: Int
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [1: bb3, otherwise: bb4];
+        switch copy _1 [1: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2157,10 +2065,10 @@ fn ExhaustiveWithNamedCatchAll(x: Int) -> Int {
     }
 
     bb4: {
+        _2 = copy _1;
         _3 = copy _2;
-        _4 = copy _3;
-        _5 = const 1_i64;
-        _0 = copy _4 + copy _5;
+        _4 = const 1_i64;
+        _0 = copy _3 + copy _4;
         goto -> bb2;
     }
 
@@ -2170,16 +2078,14 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
     // Locals:
     let _0: Int // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Union([Named("Success"), Error]) // s
-    let _5: Bool
-    let _6: Named("Failure") // f
+    let _2: Bool
+    let _3: Union([Named("Success"), Error]) // s
+    let _4: Bool
+    let _5: Named("Failure") // f
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Union([Named("Success"), Error]));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Union([Named("Success"), Error]));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -2196,12 +2102,12 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
     }
 
     bb4: {
-        _5 = is_type(copy _2, Named("Failure"));
-        branch copy _5 -> [bb8, bb7];
+        _4 = is_type(copy _1, Named("Failure"));
+        branch copy _4 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -2215,7 +2121,7 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
     }
 
     bb8: {
-        _6 = copy _2;
+        _5 = copy _1;
         goto -> bb6;
     }
 
@@ -2225,11 +2131,9 @@ fn NonExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("OkOrCreated") // code // param
-    let _2: Named("OkOrCreated")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, otherwise: bb4];
+        switch copy _1 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2255,11 +2159,9 @@ fn ExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("OkOrCreated") // code // param
-    let _2: Named("OkOrCreated")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb4, otherwise: bb5];
+        switch copy _1 [200: bb3, 201: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -2290,13 +2192,11 @@ fn WrongLiteralTypeIntWithString(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "hello";
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const "hello";
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2322,14 +2222,12 @@ fn ExhaustiveEnumWithCatchAll(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
-    let _3: Bool
-    let _4: Named("Status") // _
+    let _2: Bool
+    let _3: Named("Status") // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -2350,7 +2248,7 @@ fn ExhaustiveEnumWithCatchAll(s: Enum("Status")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -2365,20 +2263,18 @@ fn GuardedWithFallback(x: Int) -> Int {
     // Locals:
     let _0: Int // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Bool
-    let _4: Int // n
-    let _5: Bool
+    let _2: Bool
+    let _3: Int // n
+    let _4: Bool
+    let _5: Int
     let _6: Int
     let _7: Int
     let _8: Int
-    let _9: Int
-    let _10: Int // _
+    let _9: Int // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Int);
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -2394,26 +2290,26 @@ fn GuardedWithFallback(x: Int) -> Int {
     }
 
     bb4: {
-        _6 = copy _4;
-        _7 = const 0_i64;
-        _5 = copy _6 > copy _7;
-        branch copy _5 -> [bb7, bb5];
+        _5 = copy _3;
+        _6 = const 0_i64;
+        _4 = copy _5 > copy _6;
+        branch copy _4 -> [bb7, bb5];
     }
 
     bb5: {
-        _10 = copy _2;
+        _9 = copy _1;
         goto -> bb8;
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
     bb7: {
-        _8 = copy _4;
-        _9 = const 2_i64;
-        _0 = copy _8 * copy _9;
+        _7 = copy _3;
+        _8 = const 2_i64;
+        _0 = copy _7 * copy _8;
         goto -> bb2;
     }
 
@@ -2428,13 +2324,11 @@ fn HighLineNumberNonExhaustive(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2460,15 +2354,13 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum("Status"))) -> Strin
     // Locals:
     let _0: String // return
     let _1: Optional(Enum("Status")) // s // param
-    let _2: Optional(Named("Status"))
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2485,8 +2377,8 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum("Status"))) -> Strin
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Inactive;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Inactive;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -2495,8 +2387,8 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum("Status"))) -> Strin
     }
 
     bb6: {
-        _5 = copy _2 == const null;
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const null;
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -2514,11 +2406,9 @@ fn DeeplyNestedLiterals(x: Named("SuccessCode")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("SuccessCode") // x // param
-    let _2: Named("SuccessCode")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb3, 204: bb3, otherwise: bb4];
+        switch copy _1 [200: bb3, 201: bb3, 204: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2544,18 +2434,16 @@ fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("FullResult") // r // param
-    let _2: Named("FullResult")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
-    let _6: Bool
-    let _7: Named("Failure") // f
-    let _8: Named("Failure")
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
+    let _5: Bool
+    let _6: Named("Failure") // f
+    let _7: Named("Failure")
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -2567,24 +2455,24 @@ fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _6 = is_type(copy _2, Named("Failure"));
-        branch copy _6 -> [bb8, bb7];
+        _5 = is_type(copy _1, Named("Failure"));
+        branch copy _5 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
     bb6: {
-        _8 = copy _7;
-        _0 = copy _8.0;
+        _7 = copy _6;
+        _0 = copy _7.0;
         goto -> bb2;
     }
 
@@ -2593,7 +2481,7 @@ fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
     }
 
     bb8: {
-        _7 = copy _2;
+        _6 = copy _1;
         goto -> bb6;
     }
 
@@ -2603,11 +2491,9 @@ fn ExhaustiveSingletonInt(code: Named("HttpOk")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("HttpOk") // code // param
-    let _2: Named("HttpOk")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, otherwise: bb4];
+        switch copy _1 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2633,15 +2519,13 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> Stri
     // Locals:
     let _0: String // return
     let _1: Named("SuccessOr200") // x // param
-    let _2: Named("SuccessOr200")
-    let _3: Bool
-    let _4: Named("Success") // s
-    let _5: Named("Success")
+    let _2: Bool
+    let _3: Named("Success") // s
+    let _4: Named("Success")
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -2653,8 +2537,8 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> Stri
     }
 
     bb3: {
-        _5 = copy _4;
-        _0 = copy _5.0;
+        _4 = copy _3;
+        _0 = copy _4.0;
         goto -> bb2;
     }
 
@@ -2663,7 +2547,7 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> Stri
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -2673,15 +2557,13 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum("Status"))) -> String
     // Locals:
     let _0: String // return
     let _1: Optional(Enum("Status")) // s // param
-    let _2: Optional(Named("Status"))
-    let _3: Bool
-    let _4: Named("Status") // x
-    let _5: Bool
+    let _2: Bool
+    let _3: Named("Status") // x
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Status"));
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Named("Status"));
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -2702,12 +2584,12 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum("Status"))) -> String
     }
 
     bb5: {
-        _5 = copy _2 == const null;
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const null;
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -2722,16 +2604,14 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Role") // role // param
-    let _2: Named("Role")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
     let _5: Bool
-    let _6: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "user";
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const "user";
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2748,8 +2628,8 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const "user";
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const "user";
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -2758,8 +2638,8 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     }
 
     bb6: {
-        _5 = copy _2 == const "assistant";
-        branch copy _5 -> [bb7, bb8];
+        _4 = copy _1 == const "assistant";
+        branch copy _4 -> [bb7, bb8];
     }
 
     bb7: {
@@ -2768,8 +2648,8 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     }
 
     bb8: {
-        _6 = copy _2 == const "system";
-        branch copy _6 -> [bb9, bb10];
+        _5 = copy _1 == const "system";
+        branch copy _5 -> [bb9, bb10];
     }
 
     bb9: {
@@ -2787,14 +2667,12 @@ fn NonExhaustiveEnumMissingOne(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2811,8 +2689,8 @@ fn NonExhaustiveEnumMissingOne(s: Enum("Status")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const Status.Inactive;
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const Status.Inactive;
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -2830,15 +2708,13 @@ fn ExhaustiveOptional(x: Optional(Int)) -> String {
     // Locals:
     let _0: String // return
     let _1: Optional(Int) // x // param
-    let _2: Optional(Int)
-    let _3: Bool
-    let _4: Int // n
-    let _5: Bool
+    let _2: Bool
+    let _3: Int // n
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Int);
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -2859,12 +2735,12 @@ fn ExhaustiveOptional(x: Optional(Int)) -> String {
     }
 
     bb5: {
-        _5 = copy _2 == const null;
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const null;
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -2879,13 +2755,11 @@ fn NonExhaustiveCustomBoolMissing(b: Named("CustomBool")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("CustomBool") // b // param
-    let _2: Named("CustomBool")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2911,14 +2785,12 @@ fn NonExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("MixedLiterals") // x // param
-    let _2: Named("MixedLiterals")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const 200_i64;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2935,8 +2807,8 @@ fn NonExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const "success";
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const "success";
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -2954,11 +2826,9 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: Named("SuccessOr200")) -> String
     // Locals:
     let _0: String // return
     let _1: Named("SuccessOr200") // x // param
-    let _2: Named("SuccessOr200")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, otherwise: bb4];
+        switch copy _1 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2984,14 +2854,12 @@ fn UnreachableAfterCatchAll(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Int // _
-    let _4: Bool
-    let _5: Int // n
+    let _2: Int // _
+    let _3: Bool
+    let _4: Int // n
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
         goto -> bb4;
     }
 
@@ -3013,8 +2881,8 @@ fn UnreachableAfterCatchAll(x: Int) -> String {
     }
 
     bb5: {
-        _4 = is_type(copy _2, Int);
-        branch copy _4 -> [bb7, bb3];
+        _3 = is_type(copy _1, Int);
+        branch copy _3 -> [bb7, bb3];
     }
 
     bb6: {
@@ -3023,7 +2891,7 @@ fn UnreachableAfterCatchAll(x: Int) -> String {
     }
 
     bb7: {
-        _5 = copy _2;
+        _4 = copy _1;
         goto -> bb6;
     }
 
@@ -3033,14 +2901,12 @@ fn OptionalWithCatchAll(x: Optional(Int)) -> String {
     // Locals:
     let _0: String // return
     let _1: Optional(Int) // x // param
-    let _2: Optional(Int)
-    let _3: Bool
-    let _4: Optional(Int) // _
+    let _2: Bool
+    let _3: Optional(Int) // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const null;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const null;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -3061,7 +2927,7 @@ fn OptionalWithCatchAll(x: Optional(Int)) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -3079,12 +2945,10 @@ fn DuplicateBoolLiteral(b: Bool) -> String {
     let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const true;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const true;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -3105,8 +2969,8 @@ fn DuplicateBoolLiteral(b: Bool) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const true;
-        branch copy _4 -> [bb6, bb7];
+        _3 = copy _1 == const true;
+        branch copy _3 -> [bb6, bb7];
     }
 
     bb6: {
@@ -3115,8 +2979,8 @@ fn DuplicateBoolLiteral(b: Bool) -> String {
     }
 
     bb7: {
-        _5 = copy _2 == const false;
-        branch copy _5 -> [bb8, bb3];
+        _4 = copy _1 == const false;
+        branch copy _4 -> [bb8, bb3];
     }
 
     bb8: {
@@ -3130,16 +2994,14 @@ fn OverlappingTypedPatterns(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Named("Success") // _
-    let _5: Bool
-    let _6: Union([Named("Success"), Named("Failure")]) // _
+    let _2: Bool
+    let _3: Named("Success") // _
+    let _4: Bool
+    let _5: Union([Named("Success"), Named("Failure")]) // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Named("Success"));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Named("Success"));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -3156,12 +3018,12 @@ fn OverlappingTypedPatterns(r: Named("Result")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _2, Union([Named("Success"), Named("Failure")]));
-        branch copy _5 -> [bb8, bb7];
+        _4 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        branch copy _4 -> [bb8, bb7];
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -3175,7 +3037,7 @@ fn OverlappingTypedPatterns(r: Named("Result")) -> String {
     }
 
     bb8: {
-        _6 = copy _2;
+        _5 = copy _1;
         goto -> bb6;
     }
 
@@ -3185,15 +3047,13 @@ fn StringLiteralAfterStringType(s: String) -> String {
     // Locals:
     let _0: String // return
     let _1: String // s // param
-    let _2: String
-    let _3: Bool
-    let _4: String // x
-    let _5: Bool
+    let _2: Bool
+    let _3: String // x
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, String);
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, String);
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -3214,12 +3074,12 @@ fn StringLiteralAfterStringType(s: String) -> String {
     }
 
     bb5: {
-        _5 = copy _2 == const "hello";
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const "hello";
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -3234,15 +3094,13 @@ fn NestedEnumVariantUnions(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb5];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb5];
     }
 
     bb1: {
@@ -3263,13 +3121,13 @@ fn NestedEnumVariantUnions(s: Enum("Status")) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const Status.Pending;
-        branch copy _4 -> [bb3, bb6];
+        _3 = copy _1 == const Status.Pending;
+        branch copy _3 -> [bb3, bb6];
     }
 
     bb6: {
-        _5 = copy _2 == const Status.Inactive;
-        branch copy _5 -> [bb3, bb4];
+        _4 = copy _1 == const Status.Inactive;
+        branch copy _4 -> [bb3, bb4];
     }
 
 }
@@ -3278,14 +3136,12 @@ fn UnionPatternCoversAll(r: Named("Result")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Result") // r // param
-    let _2: Named("Result")
-    let _3: Bool
-    let _4: Union([Named("Success"), Named("Failure")]) // x
+    let _2: Bool
+    let _3: Union([Named("Success"), Named("Failure")]) // x
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Union([Named("Success"), Named("Failure")]));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -3306,7 +3162,7 @@ fn UnionPatternCoversAll(r: Named("Result")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -3316,11 +3172,9 @@ fn ExhaustiveWithUnderscore(x: Int) -> Int {
     // Locals:
     let _0: Int // return
     let _1: Int // x // param
-    let _2: Int
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [1: bb3, 2: bb4, otherwise: bb5];
+        switch copy _1 [1: bb3, 2: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -3352,14 +3206,12 @@ fn PartialUnionPatternCoverage(r: Named("FullResult")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("FullResult") // r // param
-    let _2: Named("FullResult")
-    let _3: Bool
-    let _4: Union([Named("Success"), Named("Failure")]) // x
+    let _2: Bool
+    let _3: Union([Named("Success"), Named("Failure")]) // x
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Union([Named("Success"), Named("Failure")]));
-        branch copy _3 -> [bb5, bb4];
+        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -3380,7 +3232,7 @@ fn PartialUnionPatternCoverage(r: Named("FullResult")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb3;
     }
 
@@ -3390,14 +3242,12 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Role") // role // param
-    let _2: Named("Role")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "user";
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const "user";
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -3414,8 +3264,8 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const "assistant";
-        branch copy _4 -> [bb5, bb6];
+        _3 = copy _1 == const "assistant";
+        branch copy _3 -> [bb5, bb6];
     }
 
     bb5: {
@@ -3433,15 +3283,13 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("Role") // role // param
-    let _2: Named("Role")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
-    let _5: Named("Role") // _
+    let _4: Named("Role") // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const "user";
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const "user";
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -3462,8 +3310,8 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const "assistant";
-        branch copy _4 -> [bb6, bb7];
+        _3 = copy _1 == const "assistant";
+        branch copy _3 -> [bb6, bb7];
     }
 
     bb6: {
@@ -3472,7 +3320,7 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
     }
 
     bb7: {
-        _5 = copy _2;
+        _4 = copy _1;
         goto -> bb8;
     }
 
@@ -3487,13 +3335,11 @@ fn NonExhaustiveEnumMissingMultiple(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
-    let _3: Bool
+    let _2: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -3519,20 +3365,18 @@ fn MixedPatterns(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
+    let _2: Bool
     let _3: Bool
     let _4: Bool
-    let _5: Bool
-    let _6: Int // n
-    let _7: Bool
+    let _5: Int // n
+    let _6: Bool
+    let _7: Int
     let _8: Int
-    let _9: Int
-    let _10: Int // _
+    let _9: Int // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 0_i64;
-        branch copy _3 -> [bb4, bb5];
+        _2 = copy _1 == const 0_i64;
+        branch copy _2 -> [bb4, bb5];
     }
 
     bb1: {
@@ -3553,8 +3397,8 @@ fn MixedPatterns(x: Int) -> String {
     }
 
     bb5: {
-        _4 = copy _2 == const 1_i64;
-        branch copy _4 -> [bb6, bb7];
+        _3 = copy _1 == const 1_i64;
+        branch copy _3 -> [bb6, bb7];
     }
 
     bb6: {
@@ -3563,24 +3407,24 @@ fn MixedPatterns(x: Int) -> String {
     }
 
     bb7: {
-        _5 = is_type(copy _2, Int);
-        branch copy _5 -> [bb10, bb9];
+        _4 = is_type(copy _1, Int);
+        branch copy _4 -> [bb10, bb9];
     }
 
     bb8: {
-        _8 = copy _6;
-        _9 = const 0_i64;
-        _7 = copy _8 > copy _9;
-        branch copy _7 -> [bb11, bb9];
+        _7 = copy _5;
+        _8 = const 0_i64;
+        _6 = copy _7 > copy _8;
+        branch copy _6 -> [bb11, bb9];
     }
 
     bb9: {
-        _10 = copy _2;
+        _9 = copy _1;
         goto -> bb12;
     }
 
     bb10: {
-        _6 = copy _2;
+        _5 = copy _1;
         goto -> bb8;
     }
 
@@ -3600,11 +3444,9 @@ fn NonExhaustiveIntLiteral(code: Named("SuccessCode")) -> String {
     // Locals:
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
-    let _2: Named("SuccessCode")
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2 [200: bb3, 201: bb4, otherwise: bb5];
+        switch copy _1 [200: bb3, 201: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -3635,15 +3477,13 @@ fn LiteralAfterTypedPattern(x: Int) -> String {
     // Locals:
     let _0: String // return
     let _1: Int // x // param
-    let _2: Int
-    let _3: Bool
-    let _4: Int // n
-    let _5: Bool
+    let _2: Bool
+    let _3: Int // n
+    let _4: Bool
 
     bb0: {
-        _2 = copy _1;
-        _3 = is_type(copy _2, Int);
-        branch copy _3 -> [bb6, bb5];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb6, bb5];
     }
 
     bb1: {
@@ -3664,12 +3504,12 @@ fn LiteralAfterTypedPattern(x: Int) -> String {
     }
 
     bb5: {
-        _5 = copy _2 == const 42_i64;
-        branch copy _5 -> [bb7, bb3];
+        _4 = copy _1 == const 42_i64;
+        branch copy _4 -> [bb7, bb3];
     }
 
     bb6: {
-        _4 = copy _2;
+        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -3684,15 +3524,13 @@ fn EnumVariantUnionWithCatchAll(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
     let _1: Enum("Status") // s // param
-    let _2: Named("Status")
+    let _2: Bool
     let _3: Bool
-    let _4: Bool
-    let _5: Named("Status") // _
+    let _4: Named("Status") // _
 
     bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const Status.Active;
-        branch copy _3 -> [bb4, bb6];
+        _2 = copy _1 == const Status.Active;
+        branch copy _2 -> [bb4, bb6];
     }
 
     bb1: {
@@ -3713,13 +3551,13 @@ fn EnumVariantUnionWithCatchAll(s: Enum("Status")) -> String {
     }
 
     bb5: {
-        _5 = copy _2;
+        _4 = copy _1;
         goto -> bb7;
     }
 
     bb6: {
-        _4 = copy _2 == const Status.Pending;
-        branch copy _4 -> [bb4, bb5];
+        _3 = copy _1 == const Status.Pending;
+        branch copy _3 -> [bb4, bb5];
     }
 
     bb7: {

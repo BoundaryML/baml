@@ -105,20 +105,17 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // Constant propagation: scrutinee true is inlined at each comparison
-            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
+            // Constant propagation: scrutinee true is inlined at comparison
+            // Exhaustive match optimization: second arm's comparison is skipped
+            // because else_block is unreachable (we know it must be false)
             vec![
                 Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, try next arm
-                Instruction::Jump(8),           // if true, skip to "yes"
-                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Bool(false)), // literal false
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
-                Instruction::Jump(1),           // if true, skip to "no"
-                // Unreachable block eliminated - jump target points here
+                Instruction::PopJumpIfFalse(2), // if false, skip to second arm body
+                Instruction::Jump(4),           // if true, skip to "yes"
+                // Second arm: no comparison needed (exhaustive match optimization)
+                Instruction::Jump(1), // go directly to "no" body
                 Instruction::LoadConst(Value::string("no")),
                 Instruction::Jump(2), // skip to return
                 Instruction::LoadConst(Value::string("yes")),
@@ -181,16 +178,17 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             // Wildcard elimination: _ binding is unused so eliminated
+            // Scrutinee optimization: result is reused directly (no temp created)
             vec![
-                Instruction::LoadConst(Value::Null), // slot for _3 (scrutinee)
+                Instruction::LoadConst(Value::Null), // slot for result
                 // let result = Success { data: "hello" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::string("hello")),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("_3".to_string()),
+                Instruction::StoreVar("result".to_string()),
                 // instanceof check
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
@@ -198,8 +196,8 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
                 // catch-all arm (no _ binding)
                 Instruction::LoadConst(Value::string("unknown")),
                 Instruction::Jump(3), // skip to return
-                // s: Success arm - access s.data (s is virtual, so use _3 directly)
-                Instruction::LoadVar("_3".to_string()),
+                // s: Success arm - access s.data (s is virtual, uses result directly)
+                Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
                 Instruction::Return,
             ],
@@ -229,34 +227,30 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
+            // Exhaustive match optimization: second arm's instanceof check is skipped
+            // because else_block is unreachable (we know it must be Failure)
+            // Scrutinee optimization: result is reused directly (no temp created)
             vec![
-                Instruction::LoadConst(Value::Null), // slot for _3 (scrutinee)
+                Instruction::LoadConst(Value::Null), // slot for result
                 // let result = Success { data: "ok" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::string("ok")),
                 Instruction::StoreField(0),
-                Instruction::StoreVar("_3".to_string()),
+                Instruction::StoreVar("result".to_string()),
                 // s: Success instanceof check
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::PopJumpIfFalse(2), // if false, try Failure
-                Instruction::Jump(9),           // if true, skip to s.data
-                // f: Failure instanceof check
-                Instruction::LoadVar("_3".to_string()),
-                Instruction::LoadConst(Value::class("Failure")),
-                Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
-                Instruction::Jump(1),           // if true, skip to f.reason
-                // Unreachable block eliminated - jump target points here
-                // f: Failure arm - access f.reason
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::PopJumpIfFalse(2), // if false, skip to Failure arm body
+                Instruction::Jump(5),           // if true, skip to s.data
+                // f: Failure arm - no instanceof check needed (exhaustive match optimization)
+                Instruction::Jump(1), // go directly to f.reason body
+                Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
                 Instruction::Jump(3), // skip to return
                 // s: Success arm - access s.data
-                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
                 Instruction::Return,
             ],
@@ -897,6 +891,7 @@ fn match_catch_all_binding_with_int_patterns() -> anyhow::Result<()> {
 // ============================================================================
 
 /// Negative integer patterns are parsed correctly and generate proper bytecode.
+/// Uses if-else chain because there are only 3 integer patterns (< 4 threshold).
 #[test]
 fn match_negative_int_pattern() -> anyhow::Result<()> {
     assert_compiles(Program {
@@ -912,7 +907,6 @@ fn match_negative_int_pattern() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "classify",
-            // Negative patterns use if-else chain (no jump table optimization)
             vec![
                 // Scrutinee
                 Instruction::LoadVar("x".to_string()),
@@ -956,6 +950,7 @@ fn match_negative_int_pattern() -> anyhow::Result<()> {
 }
 
 /// Multiple negative patterns in a match expression.
+/// Uses if-else chain because there are only 2 integer patterns (< 4 threshold).
 #[test]
 fn match_multiple_negative_patterns() -> anyhow::Result<()> {
     assert_compiles(Program {
