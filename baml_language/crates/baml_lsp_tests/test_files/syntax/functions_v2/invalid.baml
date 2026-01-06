@@ -49,12 +49,12 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Unknown type bar
+// Error: Unknown type `bar`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function Foo() -> {
 //    │ │ 
-//    │ ╰─ Unknown type bar
+//    │ ╰─ Unknown type `bar`
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

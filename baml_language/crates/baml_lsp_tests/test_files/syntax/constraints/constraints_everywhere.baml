@@ -410,14 +410,14 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │     
 //     │     Note: Error code: E0026
 // ────╯
-// Error: Duplicate client 'Bar'
+// Error: Duplicate client `Bar`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
-//    │ ╰─ client 'Bar' defined in constraints_constraints_everywhere.baml
+//    │ ╰─ client `Bar` redefined here
 //    │ │ 
-//    │ ╰─ 'Bar' previously defined in constraints_constraints_everywhere.baml
+//    │ ╰─ `Bar` first defined in constraints_constraints_everywhere.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

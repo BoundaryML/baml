@@ -3,9 +3,8 @@
 //! This module provides conversions between `baml_base::Span` (byte offsets)
 //! and LSP positions/ranges (line/column based).
 
-use baml_db::{FileId, SourceFile, Span};
+use baml_db::Span;
 use lsp_types::{Position, Range};
-use text_size::TextSize;
 
 /// A line index for efficient offset-to-position conversion.
 ///
@@ -27,13 +26,13 @@ impl LineIndex {
         for (offset, c) in text.char_indices() {
             if c == '\n' {
                 // The next line starts after the newline character
-                line_starts.push((offset + 1) as u32);
+                line_starts.push(to_u32_saturating(offset + 1));
             }
         }
 
         Self {
             line_starts,
-            len: text.len() as u32,
+            len: to_u32_saturating(text.len()),
         }
     }
 
@@ -55,7 +54,7 @@ impl LineIndex {
         let column = offset - line_start;
 
         Some(Position {
-            line: line as u32,
+            line: to_u32_saturating(line),
             character: column,
         })
     }
@@ -138,7 +137,7 @@ pub fn lsp_position_to_offset(text: &str, pos: &Position) -> usize {
 pub fn offset_to_lsp_position(text: &str, offset: usize) -> Position {
     let line_index = LineIndex::new(text);
     line_index
-        .offset_to_position(offset as u32)
+        .offset_to_position(to_u32_saturating(offset))
         .unwrap_or(Position {
             line: 0,
             character: 0,
@@ -209,6 +208,10 @@ pub fn get_word_at_position(
 /// Check if a character is valid in an identifier.
 fn is_identifier_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
+}
+
+fn to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

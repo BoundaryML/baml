@@ -46,12 +46,12 @@ class Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Error validating field `ETA` in class `Foo`: When using the python/pydantic generator, a field name must not be exactly equal to the type name (`ETA`). Consider changing the field name or using an @alias.
+// Error: Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
 //     ╭─[ 0:13:5 ]
 //     │
 //  13 │     ETA ETA?
 //     │     ─┬─  
-//     │      ╰─── Error validating field `ETA` in class `Foo`: When using the python/pydantic generator, a field name must not be exactly equal to the type name (`ETA`). Consider changing the field name or using an @alias.
+//     │      ╰─── Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
 //     │ 
 //     │ Note: Error code: E0021
 // ────╯

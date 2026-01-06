@@ -956,102 +956,102 @@ args {
 //      │ 
 //      │ Note: Error code: E0010
 // ─────╯
-// Error: Duplicate class 'NonDynamic'
+// Error: Duplicate class `NonDynamic`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'NonDynamic' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `NonDynamic` redefined here
 //    │ │ 
-//    │ ╰─ 'NonDynamic' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `NonDynamic` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'NonDynamic'
+// Error: Duplicate class `NonDynamic`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'NonDynamic' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `NonDynamic` redefined here
 //    │ │ 
-//    │ ╰─ 'NonDynamic' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `NonDynamic` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate enum 'DynamicEnum'
+// Error: Duplicate enum `DynamicEnum`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ enum 'DynamicEnum' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ enum `DynamicEnum` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicEnum' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicEnum` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate enum 'DynamicClass'
+// Error: Duplicate enum `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ enum 'DynamicClass' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ enum `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate type alias 'SomeAlias'
+// Error: Duplicate type alias `SomeAlias`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ type alias 'SomeAlias' defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ type alias `SomeAlias` redefined here
 //    │ │ 
-//    │ ╰─ 'SomeAlias' previously defined in misc_dynamic_types_validation_errors.baml
+//    │ ╰─ `SomeAlias` first defined in misc_dynamic_types_validation_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

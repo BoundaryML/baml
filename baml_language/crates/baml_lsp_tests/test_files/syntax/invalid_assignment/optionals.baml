@@ -43,30 +43,30 @@ function OptionalAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected int?, found string
+// Error: Expected `int?`, found `string`
 //     ╭─[ 0:31:5 ]
 //     │
 //  31 │     c = "not an int";
 //     │        ──────┬──────  
-//     │              ╰──────── Expected int?, found string
+//     │              ╰──────── Expected `int?`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected string?, found int
+// Error: Expected `string?`, found `int`
 //     ╭─[ 0:35:6 ]
 //     │
 //  35 │     d = 42;
 //     │         ─┬  
-//     │          ╰── Expected string?, found int
+//     │          ╰── Expected `string?`, found `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected Person?, found Animal
+// Error: Expected `Person?`, found `Animal`
 //     ╭─[ 0:39:6 ]
 //     │
 //  39 │     e = Animal { species: "Cat", legs: 4 };
 //     │         ─────────────────┬────────────────  
-//     │                          ╰────────────────── Expected Person?, found Animal
+//     │                          ╰────────────────── Expected `Person?`, found `Animal`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

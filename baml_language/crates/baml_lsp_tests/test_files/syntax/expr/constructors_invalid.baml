@@ -71,30 +71,30 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
-// Error: Unknown variable a
+// Error: Unknown variable `a`
 //     ╭─[ 0:11:21 ]
 //     │
 //  11 │     query_params: { a 10 },
 //     │                     ┬  
-//     │                     ╰── Unknown variable a
+//     │                     ╰── Unknown variable `a`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Unknown variable Authorization
+// Error: Unknown variable `Authorization`
 //     ╭─[ 0:15:16 ]
 //     │
 //  15 │     headers: { Authorization "Bearer mytoken" },
 //     │                ──────┬──────  
-//     │                      ╰──────── Unknown variable Authorization
+//     │                      ╰──────── Unknown variable `Authorization`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Unknown variable foo
+// Error: Unknown variable `foo`
 //     ╭─[ 0:16:21 ]
 //     │
 //  16 │     query_params: { foo "bar" },
 //     │                     ─┬─  
-//     │                      ╰─── Unknown variable foo
+//     │                      ╰─── Unknown variable `foo`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯

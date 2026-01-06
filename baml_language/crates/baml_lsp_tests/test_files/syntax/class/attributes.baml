@@ -43,7 +43,7 @@ class HasThreeBlockAttributes {
 
 //----
 //- diagnostics
-// Error: Attribute '@alias' can only be defined once on field 'key2' in class 'TestClassAlias'
+// Error: Attribute `@alias` can only be defined once on field `key2` in class `TestClassAlias`
 //    ╭─[ 0:7:32 ]
 //    │
 //  7 │   key2 string @alias("key21") @alias("key22")
@@ -54,7 +54,7 @@ class HasThreeBlockAttributes {
 //    │ 
 //    │ Note: Error code: E0014
 // ───╯
-// Error: Attribute '@@description' can only be defined once on class 'HasThreeBlockAttributes'
+// Error: Attribute `@@description` can only be defined once on class `HasThreeBlockAttributes`
 //     ╭─[ 0:22:5 ]
 //     │
 //  22 │   @@description("A second description")

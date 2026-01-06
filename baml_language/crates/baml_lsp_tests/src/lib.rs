@@ -3,11 +3,10 @@
 //! This crate provides infrastructure for testing BAML compiler behavior
 //! using inline assertions in `.baml` files, including:
 //! - Diagnostics (parse errors, type errors, name errors)
-//! - Hover information
+//! - Hover information (cursor-based)
 //!
 //! Tests are auto-discovered from the `test_files/` directory.
 
-pub mod hover;
 pub mod parser;
 pub mod runner;
 pub mod updater;

@@ -107,86 +107,86 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Duplicate function 'Bar'
+// Error: Duplicate function `Bar`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function Bar {
 //    │ │ 
-//    │ ╰─ function 'Bar' defined in functions_v2_duplicate_names.baml
+//    │ ╰─ function `Bar` redefined here
 //    │ │ 
-//    │ ╰─ 'Bar' previously defined in functions_v2_duplicate_names.baml
+//    │ ╰─ `Bar` first defined in functions_v2_duplicate_names.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Unknown variable input
+// Error: Unknown variable `input`
 //    ╭─[ 0:2:3 ]
 //    │
 //  2 │   input string
 //    │   ──┬──  
-//    │     ╰──── Unknown variable input
+//    │     ╰──── Unknown variable `input`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable string
+// Error: Unknown variable `string`
 //    ╭─[ 0:2:9 ]
 //    │
 //  2 │   input string
 //    │         ───┬──  
-//    │            ╰──── Unknown variable string
+//    │            ╰──── Unknown variable `string`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable output
+// Error: Unknown variable `output`
 //    ╭─[ 0:3:3 ]
 //    │
 //  3 │   output string
 //    │   ───┬──  
-//    │      ╰──── Unknown variable output
+//    │      ╰──── Unknown variable `output`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable string
+// Error: Unknown variable `string`
 //    ╭─[ 0:3:10 ]
 //    │
 //  3 │   output string
 //    │          ───┬──  
-//    │             ╰──── Unknown variable string
+//    │             ╰──── Unknown variable `string`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable input
+// Error: Unknown variable `input`
 //    ╭─[ 0:2:3 ]
 //    │
 //  2 │   input string
 //    │   ──┬──  
-//    │     ╰──── Unknown variable input
+//    │     ╰──── Unknown variable `input`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable string
+// Error: Unknown variable `string`
 //    ╭─[ 0:2:9 ]
 //    │
 //  2 │   input string
 //    │         ───┬──  
-//    │            ╰──── Unknown variable string
+//    │            ╰──── Unknown variable `string`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable output
+// Error: Unknown variable `output`
 //    ╭─[ 0:3:3 ]
 //    │
 //  3 │   output string
 //    │   ───┬──  
-//    │      ╰──── Unknown variable output
+//    │      ╰──── Unknown variable `output`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Unknown variable string
+// Error: Unknown variable `string`
 //    ╭─[ 0:3:10 ]
 //    │
 //  3 │   output string
 //    │          ───┬──  
-//    │             ╰──── Unknown variable string
+//    │             ╰──── Unknown variable `string`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯

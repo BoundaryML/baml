@@ -48,48 +48,48 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected map<string, int>, found map<string, string>
+// Error: Expected `map<string, int>`, found `map<string, string>`
 //     ╭─[ 0:28:5 ]
 //     │
 //  28 │     d = {"y": "wrong"};
 //     │        ───────┬───────  
-//     │               ╰───────── Expected map<string, int>, found map<string, string>
+//     │               ╰───────── Expected `map<string, int>`, found `map<string, string>`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected map<string, Person>, found map<string, Animal>
+// Error: Expected `map<string, Person>`, found `map<string, Animal>`
 //     ╭─[ 0:32:5 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
 //     │        ─────────────────────┬────────────────────  
-//     │                             ╰────────────────────── Expected map<string, Person>, found map<string, Animal>
+//     │                             ╰────────────────────── Expected `map<string, Person>`, found `map<string, Animal>`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected map<string, int>, found string
+// Error: Expected `map<string, int>`, found `string`
 //     ╭─[ 0:36:5 ]
 //     │
 //  36 │     f = "not a map";
 //     │        ──────┬─────  
-//     │              ╰─────── Expected map<string, int>, found string
+//     │              ╰─────── Expected `map<string, int>`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected map<string, int>, found int
+// Error: Expected `map<string, int>`, found `int`
 //     ╭─[ 0:40:6 ]
 //     │
 //  40 │     g = 123;
 //     │         ─┬─  
-//     │          ╰─── Expected map<string, int>, found int
+//     │          ╰─── Expected `map<string, int>`, found `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected string, found map<string, int>
+// Error: Expected `string`, found `map<string, int>`
 //     ╭─[ 0:44:5 ]
 //     │
 //  44 │     h = {"k": 7};
 //     │        ────┬────  
-//     │            ╰────── Expected string, found map<string, int>
+//     │            ╰────── Expected `string`, found `map<string, int>`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

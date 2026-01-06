@@ -1,3 +1,4 @@
+use baml_project::position::span_to_lsp_range;
 use lsp_types::{CodeLensParams, request};
 
 use crate::{
@@ -32,32 +33,42 @@ impl SyncRequestHandler for CodeLens {
             .internal_error_msg("Could not convert URL to path")?;
 
         // Get the project to access the LspDatabase
-        let Ok(project) = session.get_or_create_project(&path) else {
+        let Ok(project_handle) = session.get_or_create_project(&path) else {
             return Ok(None);
         };
 
-        let guard = project.lock();
+        let guard = project_handle.lock();
         let lsp_db = guard.lsp_db();
         let project_id = guard.root_path().to_string_lossy().to_string();
 
-        // Get all functions and filter to current file
-        let functions = lsp_db.list_functions();
+        // Get the project for symbol lookup
+        let Some(project) = lsp_db.project() else {
+            return Ok(None);
+        };
+
+        // Get all functions using baml_project
+        let functions = baml_project::list_functions(lsp_db.db(), project);
 
         let lenses: Vec<lsp_types::CodeLens> = functions
             .into_iter()
             .filter(|func| func.file_path == path)
-            .map(|func| {
+            .filter_map(|func| {
+                // Get the source file to convert span to range
+                let source_file = lsp_db.get_file(&func.file_path)?;
+                let text = source_file.text(lsp_db.db());
+                let range = span_to_lsp_range(text, &func.span);
+
                 let command = OpenBamlPanel {
                     project_id: project_id.clone(),
                     function_name: func.name,
                     show_tests: true,
                 };
 
-                lsp_types::CodeLens {
-                    range: func.range,
+                Some(lsp_types::CodeLens {
+                    range,
                     command: command.to_lsp_command(),
                     data: None,
-                }
+                })
             })
             .collect();
 

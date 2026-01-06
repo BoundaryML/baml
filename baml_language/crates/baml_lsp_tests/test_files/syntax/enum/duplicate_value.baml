@@ -14,7 +14,7 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Duplicate variant 'ONE' in enum 'Test'
+// Error: Duplicate variant `ONE` in enum `Test`
 //    ╭─[ 0:4:5 ]
 //    │
 //  4 │     ONE

@@ -12,7 +12,7 @@ cargo test -p baml_lsp_tests test_files
 cargo test -p baml_lsp_tests test_files::type_errors
 
 # Run a specific test
-cargo test -p baml_lsp_tests test_files::hover::test_hover_function_output
+cargo test -p baml_lsp_tests test_files::hover::test_class
 ```
 
 ## Updating Expectations
@@ -66,52 +66,25 @@ function GetPerson() -> Person {
 // (no errors expected)
 ```
 
-### Inline Hover Assertions
+### Cursor Hover Assertions
 
-Add inline hover assertions in the source section to verify hover information. These assertions are placed as comments and are verified against the actual hover output:
+Use cursor markers in the source section to verify hover information. The hover expectations are listed under `//- on_hover expressions` and must match the cursor positions:
 
 ```baml
-class Person {
+class Person<[CURSOR] {
   name string
   age int
-}
-
-function GetPerson() -> Person {
-// on_hover `Person`: class Person {
-//   name string
-//   age int
-// }
-  Person { name: "Alice", age: 30 }
 }
 //----
 //- diagnostics
 // <no-diagnostics-expected>
 //
 //- on_hover expressions
-// `Person` at test.baml:6
+// hover at test.baml:1:13
 // class Person {
 //   name string
 //   age int
 // }
-```
-
-Two syntaxes are supported for inline hover assertions:
-- `// on_hover `symbol`: expected text`
-- `// expect on_hover `symbol`: expected text`
-
-Both support multi-line expected values:
-```
-// expect on_hover `symbol`: first line of expected text
-//   continuation line (indented with spaces after //)
-//   more lines
-// }
-```
-
-The test will fail if the actual hover text doesn't match the expected text in the inline assertion.
-
-For single-line hover expectations, you can use `\n` for newlines:
-```
-// expect on_hover `symbol`: class Foo {\n  field int\n}
 ```
 
 ### Preserved Comments
@@ -142,7 +115,8 @@ test_files/
 │   ├── unknown_variable.baml
 │   └── assign_wrong_type.baml
 ├── hover/                 # Hover information tests
-│   └── hover_function_output.baml
+│   ├── class.baml
+│   └── function.baml
 ├── parse_errors/          # Syntax/parse errors (future)
 └── name_errors/           # Duplicate name errors (future)
 ```

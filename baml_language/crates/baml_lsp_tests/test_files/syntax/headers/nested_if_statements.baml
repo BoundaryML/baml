@@ -60,12 +60,12 @@ function NestedIfStatements() -> string {
 
 //----
 //- diagnostics
-// Error: Expected string, found int
+// Error: Expected `string`, found `int`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ //# Main Function
 //    │ │ 
-//    │ ╰─ Expected string, found int
+//    │ ╰─ Expected `string`, found `int`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

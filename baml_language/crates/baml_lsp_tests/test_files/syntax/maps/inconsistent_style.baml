@@ -30,12 +30,12 @@ function InconsistentStyleUse() -> int{
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Unknown variable name
+// Error: Unknown variable `name`
 //    ╭─[ 0:8:9 ]
 //    │
 //  8 │         name "Hello"
 //    │         ──┬─  
-//    │           ╰─── Unknown variable name
+//    │           ╰─── Unknown variable `name`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯

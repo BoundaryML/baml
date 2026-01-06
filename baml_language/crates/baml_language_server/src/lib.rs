@@ -36,7 +36,6 @@ mod tests;
 mod baml_project;
 mod baml_source_file;
 mod baml_text_size;
-pub mod lsp_db;
 
 pub(crate) const SERVER_NAME: &str = "baml-lsp";
 pub(crate) const DIAGNOSTIC_NAME: &str = "BAML";

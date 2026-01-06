@@ -59,25 +59,25 @@ type A = int
 
 //----
 //- diagnostics
-// Error: Duplicate class 'A'
+// Error: Duplicate class `A`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ class A {
 //    │ │ 
-//    │ ╰─ class 'A' defined in class_duplicate_definitions.baml
+//    │ ╰─ class `A` redefined here
 //    │ │ 
-//    │ ╰─ 'A' previously defined in class_duplicate_definitions.baml
+//    │ ╰─ `A` first defined in class_duplicate_definitions.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate type alias 'A'
+// Error: Duplicate type alias `A`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ class A {
 //    │ │ 
-//    │ ╰─ type alias 'A' defined in class_duplicate_definitions.baml
+//    │ ╰─ type alias `A` redefined here
 //    │ │ 
-//    │ ╰─ 'A' previously defined in class_duplicate_definitions.baml
+//    │ ╰─ `A` first defined in class_duplicate_definitions.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

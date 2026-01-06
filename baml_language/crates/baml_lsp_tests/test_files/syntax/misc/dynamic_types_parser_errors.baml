@@ -615,45 +615,36 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Duplicate class 'Bar'
+// Error: Duplicate class `Bar`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
-//    │ ╰─ class 'Bar' defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ class `Bar` redefined here
 //    │ │ 
-//    │ ╰─ 'Bar' previously defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ `Bar` first defined in misc_dynamic_types_parser_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'Bar'
+// Error: Duplicate class `Bar`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
-//    │ ╰─ class 'Bar' defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ class `Bar` redefined here
 //    │ │ 
-//    │ ╰─ 'Bar' previously defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ `Bar` first defined in misc_dynamic_types_parser_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'Foo'
+// Error: Duplicate class `Foo`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
-//    │ ╰─ class 'Foo' defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ class `Foo` redefined here
 //    │ │ 
-//    │ ╰─ 'Foo' previously defined in misc_dynamic_types_parser_errors.baml
+//    │ ╰─ `Foo` first defined in misc_dynamic_types_parser_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
-// ───╯
-// Error: Unknown type Resume
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
-//    │ │ 
-//    │ ╰─ Unknown type Resume
-//    │ 
-//    │ Note: Error code: E0002
 // ───╯

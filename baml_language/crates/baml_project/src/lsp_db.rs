@@ -1,10 +1,7 @@
-//! LSP Database wrapper for the new baml_language compiler infrastructure.
+//! LSP Database wrapper for the new `baml_language` compiler infrastructure.
 //!
 //! This module provides an LSP-friendly interface to the Salsa-based `baml_language`
 //! compiler, replacing the previous Pest-based `BamlRuntime` integration.
-
-pub mod position;
-pub mod symbols;
 
 use std::{
     collections::HashMap,
@@ -24,9 +21,9 @@ use baml_db::{FileId, RootDatabase, Setter, SourceFile, baml_workspace::Project}
 pub struct LspDatabase {
     /// The underlying Salsa database (includes the project).
     db: RootDatabase,
-    /// Maps file paths to their SourceFile handles.
+    /// Maps file paths to their `SourceFile` handles.
     file_map: HashMap<PathBuf, SourceFile>,
-    /// Maps FileId to file path for reverse lookup.
+    /// Maps `FileId` to file path for reverse lookup.
     file_id_to_path: HashMap<FileId, PathBuf>,
 }
 
@@ -58,9 +55,9 @@ impl LspDatabase {
     /// Add or update a file in the database.
     ///
     /// If the file already exists, its content is updated using Salsa's `set_text` method.
-    /// Otherwise, a new SourceFile is created.
+    /// Otherwise, a new `SourceFile` is created.
     ///
-    /// Returns the SourceFile handle.
+    /// Returns the `SourceFile` handle.
     pub fn add_or_update_file(&mut self, path: &Path, content: &str) -> SourceFile {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
@@ -136,18 +133,18 @@ impl LspDatabase {
         self.file_map.values().copied()
     }
 
-    /// Get a SourceFile by its path.
+    /// Get a `SourceFile` by its path.
     pub fn get_file(&self, path: &Path) -> Option<SourceFile> {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         self.file_map.get(&canonical_path).copied()
     }
 
-    /// Get the file path for a FileId.
+    /// Get the file path for a `FileId`.
     pub fn get_path(&self, file_id: FileId) -> Option<&Path> {
-        self.file_id_to_path.get(&file_id).map(|p| p.as_path())
+        self.file_id_to_path.get(&file_id).map(PathBuf::as_path)
     }
 
-    /// Get a SourceFile by its FileId.
+    /// Get a `SourceFile` by its `FileId`.
     pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
         self.file_id_to_path
             .get(&file_id)

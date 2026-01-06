@@ -34,7 +34,7 @@ syn = { workspace = true }
 
 [dev-dependencies]
 # For benchmarks
-divan = { package = "codspeed-divan-compat", workspace = true }
+divan = { workspace = true }
 
 [[bench]]
 name = "compiler_benchmark"

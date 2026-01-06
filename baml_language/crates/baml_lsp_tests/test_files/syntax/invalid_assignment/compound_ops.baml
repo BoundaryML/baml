@@ -35,48 +35,48 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected int, found string
+// Error: Expected `int`, found `string`
 //     ╭─[ 0:15:6 ]
 //     │
 //  15 │     c += "five";
 //     │         ───┬───  
-//     │            ╰───── Expected int, found string
+//     │            ╰───── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected string, found int
+// Error: Expected `string`, found `int`
 //     ╭─[ 0:19:7 ]
 //     │
 //  19 │     d += 100;
 //     │          ─┬─  
-//     │           ╰─── Expected string, found int
+//     │           ╰─── Expected `string`, found `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected int, found bool
+// Error: Expected `int`, found `bool`
 //     ╭─[ 0:23:7 ]
 //     │
 //  23 │     e += true;
 //     │          ──┬─  
-//     │            ╰─── Expected int, found bool
+//     │            ╰─── Expected `int`, found `bool`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected bool, found int
+// Error: Expected `bool`, found `int`
 //     ╭─[ 0:27:7 ]
 //     │
 //  27 │     f += 1;
 //     │          ┬  
-//     │          ╰── Expected bool, found int
+//     │          ╰── Expected `bool`, found `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected float, found string
+// Error: Expected `float`, found `string`
 //     ╭─[ 0:31:6 ]
 //     │
 //  31 │     g += "add";
 //     │         ───┬──  
-//     │            ╰──── Expected float, found string
+//     │            ╰──── Expected `float`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

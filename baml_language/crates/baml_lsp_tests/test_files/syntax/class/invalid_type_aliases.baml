@@ -93,14 +93,14 @@ type Four = int | string | b
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Duplicate type alias 'One'
+// Error: Duplicate type alias `One`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ class One {
 //    │ │ 
-//    │ ╰─ type alias 'One' defined in class_invalid_type_aliases.baml
+//    │ ╰─ type alias `One` redefined here
 //    │ │ 
-//    │ ╰─ 'One' previously defined in class_invalid_type_aliases.baml
+//    │ ╰─ `One` first defined in class_invalid_type_aliases.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

@@ -42,57 +42,57 @@ function ArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected int[], found string[]
+// Error: Expected `int[]`, found `string[]`
 //     ╭─[ 0:18:5 ]
 //     │
 //  18 │     d = ["a", "b"];
 //     │        ─────┬─────  
-//     │             ╰─────── Expected int[], found string[]
+//     │             ╰─────── Expected `int[]`, found `string[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected string[], found int[]
+// Error: Expected `string[]`, found `int[]`
 //     ╭─[ 0:22:5 ]
 //     │
 //  22 │     e = [1, 2];
 //     │        ───┬───  
-//     │           ╰───── Expected string[], found int[]
+//     │           ╰───── Expected `string[]`, found `int[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected int, found int[]
+// Error: Expected `int`, found `int[]`
 //     ╭─[ 0:26:5 ]
 //     │
 //  26 │     f = [1, 2, 3];
 //     │        ─────┬────  
-//     │             ╰────── Expected int, found int[]
+//     │             ╰────── Expected `int`, found `int[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected int[], found int
+// Error: Expected `int[]`, found `int`
 //     ╭─[ 0:30:6 ]
 //     │
 //  30 │     g = 42;
 //     │         ─┬  
-//     │          ╰── Expected int[], found int
+//     │          ╰── Expected `int[]`, found `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected int[], found string
+// Error: Expected `int[]`, found `string`
 //     ╭─[ 0:34:5 ]
 //     │
 //  34 │     h = "array";
 //     │        ────┬───  
-//     │            ╰───── Expected int[], found string
+//     │            ╰───── Expected `int[]`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected string, found int[]
+// Error: Expected `string`, found `int[]`
 //     ╭─[ 0:38:5 ]
 //     │
 //  38 │     i = [4, 5, 6];
 //     │        ─────┬────  
-//     │             ╰────── Expected string, found int[]
+//     │             ╰────── Expected `string`, found `int[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

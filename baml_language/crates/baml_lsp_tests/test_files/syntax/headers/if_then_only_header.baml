@@ -48,41 +48,41 @@ function IfThenOnlyHeader2() -> int {
 
 //----
 //- diagnostics
-// Error: Duplicate function 'IfThenOnlyHeader2'
+// Error: Duplicate function `IfThenOnlyHeader2`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ //# Case 1
 //    │ │ 
-//    │ ╰─ function 'IfThenOnlyHeader2' defined in headers_if_then_only_header.baml
+//    │ ╰─ function `IfThenOnlyHeader2` redefined here
 //    │ │ 
-//    │ ╰─ 'IfThenOnlyHeader2' previously defined in headers_if_then_only_header.baml
+//    │ ╰─ `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Expected int, found int | null
+// Error: Expected `int`, found `int | null`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ //# Case 1
 //    │ │ 
-//    │ ╰─ Expected int, found int | null
+//    │ ╰─ Expected `int`, found `int | null`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Expected int, found int | null
+// Error: Expected `int`, found `int | null`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ //# Case 1
 //    │ │ 
-//    │ ╰─ Expected int, found int | null
+//    │ ╰─ Expected `int`, found `int | null`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Expected int, found int | null
+// Error: Expected `int`, found `int | null`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ //# Case 1
 //    │ │ 
-//    │ ╰─ Expected int, found int | null
+//    │ ╰─ Expected `int`, found `int | null`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

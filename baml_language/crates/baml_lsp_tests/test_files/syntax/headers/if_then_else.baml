@@ -49,12 +49,12 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
-// Error: Unknown variable y
+// Error: Unknown variable `y`
 //     ╭─[ 0:17:5 ]
 //     │
 //  17 │     y
 //     │     ┬  
-//     │     ╰── Unknown variable y
+//     │     ╰── Unknown variable `y`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯

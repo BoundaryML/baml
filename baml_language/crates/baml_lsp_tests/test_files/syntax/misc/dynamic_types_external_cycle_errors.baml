@@ -288,25 +288,25 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_external_cycle_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_external_cycle_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_external_cycle_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate class 'DynamicClass'
+// Error: Duplicate class `DynamicClass`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
-//    │ ╰─ class 'DynamicClass' defined in misc_dynamic_types_external_cycle_errors.baml
+//    │ ╰─ class `DynamicClass` redefined here
 //    │ │ 
-//    │ ╰─ 'DynamicClass' previously defined in misc_dynamic_types_external_cycle_errors.baml
+//    │ ╰─ `DynamicClass` first defined in misc_dynamic_types_external_cycle_errors.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

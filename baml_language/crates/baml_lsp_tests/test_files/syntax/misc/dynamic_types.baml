@@ -530,25 +530,25 @@ test ReturnDynamicClassTest {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Duplicate class 'Resume'
+// Error: Duplicate class `Resume`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ class Resume {
 //    │ │ 
-//    │ ╰─ class 'Resume' defined in misc_dynamic_types.baml
+//    │ ╰─ class `Resume` redefined here
 //    │ │ 
-//    │ ╰─ 'Resume' previously defined in misc_dynamic_types.baml
+//    │ ╰─ `Resume` first defined in misc_dynamic_types.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate enum 'Job'
+// Error: Duplicate enum `Job`
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ class Resume {
 //    │ │ 
-//    │ ╰─ enum 'Job' defined in misc_dynamic_types.baml
+//    │ ╰─ enum `Job` redefined here
 //    │ │ 
-//    │ ╰─ 'Job' previously defined in misc_dynamic_types.baml
+//    │ ╰─ `Job` first defined in misc_dynamic_types.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

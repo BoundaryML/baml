@@ -1,12 +1,10 @@
-use std::path::PathBuf;
-
 use lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, Command, request,
 };
 use serde_json::Value;
 
 use crate::{
-    DocumentKey, Session,
+    Session,
     server::{
         Result,
         api::{
@@ -36,20 +34,22 @@ impl SyncRequestHandler for CodeActionHandler {
         let path = uri
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let Ok(project) = session.get_or_create_project(&path) else {
+        let Ok(project_handle) = session.get_or_create_project(&path) else {
             return Ok(None);
         };
 
-        let document_key =
-            DocumentKey::from_url(project.lock().root_path(), &uri).internal_error()?;
+        let guard = project_handle.lock();
+        let lsp_db = guard.lsp_db();
+
+        // Get the project for symbol lookup
+        let Some(project) = lsp_db.project() else {
+            return Ok(None);
+        };
 
         // Get the first function from the current file if available
-        let function_name = project
-            .lock()
-            .list_functions()
-            .unwrap_or_default()
+        let function_name = baml_project::list_functions(lsp_db.db(), project)
             .into_iter()
-            .find(|f| f.span.file_path == document_key.path().to_string_lossy())
+            .find(|f| f.file_path == path)
             .map(|f| f.name);
 
         let action = CodeActionOrCommand::CodeAction(CodeAction {

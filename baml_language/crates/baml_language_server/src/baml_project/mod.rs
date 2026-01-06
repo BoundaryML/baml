@@ -8,10 +8,11 @@ use std::{
 };
 
 use baml_lsp_types::{BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlSpan};
+use baml_project::LspDatabase;
 use file_utils::gather_files;
 use lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, TextDocumentItem};
 
-use crate::{DocumentKey, TextDocument, lsp_db::LspDatabase, server::client::Notifier, version};
+use crate::{DocumentKey, TextDocument, server::client::Notifier, version};
 
 pub mod file_utils;
 pub mod position_utils;
