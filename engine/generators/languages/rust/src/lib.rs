@@ -2,6 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
 use askama::Template;
+use baml_types::{ir_type::TypeGeneric, TypeValue};
 use dir_writer::{FileCollector, GeneratorArgs, LanguageFeatures};
 use internal_baml_core::ir::repr::IntermediateRepr;
 
@@ -97,10 +98,60 @@ impl LanguageFeatures for RustLanguageFeatures {
         stream_unions.sort_by_key(|u| u.name.clone());
         stream_unions.dedup_by_key(|u| u.name.clone());
 
-        let type_aliases: Vec<_> = ir
-            .walk_type_aliases()
-            .map(|c| ir_to_rust::type_aliases::ir_type_alias_to_rust(c.item, &pkg, None))
+        // key-value pair of what type to drop from the cycle for any given type
+        let invalid_cycles = ir
+            .structural_recursive_alias_cycles()
+            .iter()
+            .filter(|&cycle| {
+                // find all cycles considered_invalid in go
+                cycle.iter().all(|(_, field_type)| {
+                    // must have at least one non-recursive type
+                    field_type
+                        .find_if(
+                            &|t| match t {
+                                TypeGeneric::Class { .. } => true,
+                                TypeGeneric::Enum { .. } => true,
+                                TypeGeneric::Literal(..) => true,
+                                TypeGeneric::Primitive(TypeValue::Null, ..) => false,
+                                TypeGeneric::Primitive(..) => true,
+                                _ => false,
+                            },
+                            true,
+                        )
+                        .is_empty()
+                })
+            })
+            .flat_map(|cycle| {
+                let keys = cycle.keys().cloned().collect::<Vec<_>>();
+                let first_key = keys[0].clone();
+                keys.into_iter().map(move |k| (k, first_key.clone()))
+            })
+            .collect::<baml_types::BamlMap<_, _>>();
+
+        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
+        let mut type_aliases_rust: Vec<_> = type_aliases
+            .iter()
+            .map(|c| {
+                ir_to_rust::type_aliases::ir_type_alias_to_rust(
+                    c.item,
+                    &pkg,
+                    invalid_cycles.get(&c.elem().name),
+                )
+            })
             .collect();
+        type_aliases_rust.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut type_aliases_rust_stream: Vec<_> = type_aliases
+            .iter()
+            .map(|c| {
+                ir_to_rust::type_aliases::ir_type_alias_to_rust_stream(
+                    c.item,
+                    &pkg,
+                    invalid_cycles.get(&c.elem().name),
+                )
+            })
+            .collect();
+        type_aliases_rust_stream.sort_by(|a, b| a.name.cmp(&b.name));
 
         // Get functions
         let functions: Vec<_> = ir
@@ -120,7 +171,7 @@ impl LanguageFeatures for RustLanguageFeatures {
             .iter()
             .map(|u| UnionRustRendered::from_union(u, &pkg))
             .collect();
-        let type_aliases_rendered: Vec<_> = type_aliases
+        let type_aliases_rendered: Vec<_> = type_aliases_rust
             .iter()
             .map(|a| TypeAliasRustRendered::from_alias(a, &pkg))
             .collect();
@@ -189,8 +240,12 @@ impl LanguageFeatures for RustLanguageFeatures {
         };
         collector.add_file("stream_types/unions.rs", stream_unions_tmpl.render()?)?;
 
+        let stream_aliases_rendered: Vec<_> = type_aliases_rust_stream
+            .iter()
+            .map(|a| TypeAliasRustRendered::from_alias(a, &pkg))
+            .collect();
         let stream_aliases_tmpl = templates::StreamTypeAliasesTemplate {
-            type_aliases: &type_aliases_rendered,
+            type_aliases: &stream_aliases_rendered,
             pkg: &pkg,
         };
         collector.add_file(
@@ -243,7 +298,11 @@ impl LanguageFeatures for RustLanguageFeatures {
 
         // Phase 8: Generate root mod.rs
         pkg.set("baml_client");
-        let mod_tmpl = templates::ModTemplate { pkg: &pkg };
+
+        let mod_tmpl = templates::ModTemplate {
+            pkg: &pkg,
+            prefer_async: args.default_client_mode == baml_types::GeneratorDefaultClientMode::Async,
+        };
         collector.add_file("mod.rs", mod_tmpl.render()?)?;
 
         Ok(())

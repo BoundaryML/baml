@@ -31,7 +31,13 @@ pub enum {{ enum_.name }} {
 
 impl Default for {{ enum_.name }} {
     fn default() -> Self {
+        {% if enum_.values.is_empty() %}
+        // Eventually, we will remove the default trait for enums with no values
+        // But as a temporary solution, we will panic if the enum has no values
+        panic!("{{ enum_.name }} has no values")
+        {% else %}
         Self::{{ enum_.first_value() }}
+        {% endif %}
     }
 }
 

@@ -282,10 +282,15 @@ impl BamlRuntime {
         &self,
         function_name: &str,
         llm_response: &str,
+        stream: bool,
     ) -> Result<T, BamlError> {
         // Build args using FunctionArgs with parse-specific fields
-        let args = FunctionArgs::new().arg("llm_response", llm_response);
-
+        let args = FunctionArgs::new().arg("text", llm_response);
+        let args = if stream {
+            args.arg("stream", "true")
+        } else {
+            args
+        };
         let encoded = args.encode()?;
         let name_cstr = CString::new(function_name)
             .map_err(|_| BamlError::internal("invalid function name"))?;

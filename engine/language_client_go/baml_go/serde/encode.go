@@ -203,10 +203,27 @@ func encodeMap(mapValue reflect.Value) (*cffi.HostMapValue, error) {
 		if err != nil {
 			return nil, fmt.Errorf("encoding map value: %w", err)
 		}
-		entries = append(entries, &cffi.HostMapEntry{
-			Key:   &cffi.HostMapEntry_StringKey{StringKey: key.String()},
-			Value: valueHolder,
-		})
+
+		switch key.Kind() {
+		case reflect.String:
+			// Go doesn't have enums, so we can't detect them here
+			entries = append(entries, &cffi.HostMapEntry{
+				Key:   &cffi.HostMapEntry_StringKey{StringKey: key.String()},
+				Value: valueHolder,
+			})
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			entries = append(entries, &cffi.HostMapEntry{
+				Key:   &cffi.HostMapEntry_IntKey{IntKey: key.Int()},
+				Value: valueHolder,
+			})
+		case reflect.Bool:
+			entries = append(entries, &cffi.HostMapEntry{
+				Key:   &cffi.HostMapEntry_BoolKey{BoolKey: key.Bool()},
+				Value: valueHolder,
+			})
+		default:
+			return nil, fmt.Errorf("unsupported map key type: %s", key.Kind())
+		}
 	}
 
 	return &cffi.HostMapValue{

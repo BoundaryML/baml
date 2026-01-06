@@ -28,6 +28,7 @@ pub struct RuntimeTemplate<'a> {
 #[template(path = "mod.rs.j2", escape = "none")]
 pub struct ModTemplate<'a> {
     pub pkg: &'a CurrentRenderPackage,
+    pub prefer_async: bool,
 }
 
 /// Functions module template

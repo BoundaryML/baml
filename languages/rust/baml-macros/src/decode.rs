@@ -264,6 +264,7 @@ fn derive_union_decode(
 
         // Get the BAML union variant name from #[baml(name = "...")] attribute
         // This is required for unions - the code generator must provide it
+        let is_literal = variant_attrs.is_literal();
         let baml_variant_name = variant_attrs.name.ok_or_else(|| {
             syn::Error::new_spanned(
                 variant,
@@ -279,6 +280,11 @@ fn derive_union_decode(
                         let v = <#field_type as #baml_crate::BamlDecode>::baml_decode(inner)?;
                         Ok(Self::#variant_name(v))
                     }
+                });
+            }
+            Fields::Unit if is_literal => {
+                variant_arms.push(quote! {
+                    #baml_variant_name => Ok(Self::#variant_name)
                 });
             }
             _ => {

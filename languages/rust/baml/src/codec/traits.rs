@@ -19,6 +19,11 @@ pub trait BamlEncode {
     fn baml_encode(&self) -> HostValue;
 }
 
+pub trait BamlSerializeMapKey: Sized + std::hash::Hash + Eq {
+    fn baml_encode_map_key(&self) -> host_map_entry::Key;
+    fn baml_decode_map_key(key: &str) -> Result<Self, BamlError>;
+}
+
 /// Helper trait for decoding BAML classes
 pub trait BamlClass: Sized {
     /// Expected BAML type name

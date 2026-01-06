@@ -2,7 +2,7 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Attribute, Result};
+use syn::{Attribute, LitBool, LitInt, Result};
 
 /// Returns the path to the baml crate, handling the case where we're
 /// being used inside the baml crate itself.
@@ -37,6 +37,8 @@ pub(crate) struct FieldAttrs {
     pub skip: bool,
     /// Whether this field holds dynamic properties (`HashMap`<String, `BamlValue`>)
     pub dynamic_fields: bool,
+    /// If the field is a union variant, but coming from a literal
+    pub literal_repr: Option<String>,
 }
 
 /// Variant-level attributes (for enums)
@@ -46,6 +48,12 @@ pub(crate) struct VariantAttrs {
     pub name: Option<String>,
     /// Whether this variant is the dynamic catch-all
     pub dynamic_variant: bool,
+    /// If the variant is a literal
+    pub literal_string: Option<String>,
+    /// If the variant is a literal int
+    pub literal_int: Option<i64>,
+    /// If the variant is a literal bool
+    pub literal_bool: Option<bool>,
 }
 
 impl ContainerAttrs {
@@ -70,7 +78,7 @@ impl ContainerAttrs {
                     result.dynamic = true;
                     Ok(())
                 } else {
-                    Err(meta.error("unrecognized baml attribute"))
+                    Err(meta.error("unrecognized baml attribute on container"))
                 }
             })?;
         }
@@ -101,7 +109,7 @@ impl FieldAttrs {
                     result.dynamic_fields = true;
                     Ok(())
                 } else {
-                    Err(meta.error("unrecognized baml attribute"))
+                    Err(meta.error("unrecognized baml attribute on field"))
                 }
             })?;
         }
@@ -111,6 +119,10 @@ impl FieldAttrs {
 }
 
 impl VariantAttrs {
+    pub(crate) fn is_literal(&self) -> bool {
+        self.literal_string.is_some() || self.literal_int.is_some() || self.literal_bool.is_some()
+    }
+
     /// Parse variant attributes from a list of attributes
     pub(crate) fn from_attrs(attrs: &[Attribute]) -> Result<Self> {
         let mut result = Self::default();
@@ -128,8 +140,20 @@ impl VariantAttrs {
                 } else if meta.path.is_ident("dynamic_variant") {
                     result.dynamic_variant = true;
                     Ok(())
+                } else if meta.path.is_ident("literal_string") {
+                    let value: LitStr = meta.value()?.parse()?;
+                    result.literal_string = Some(value.value());
+                    Ok(())
+                } else if meta.path.is_ident("literal_int") {
+                    let value: LitInt = meta.value()?.parse()?;
+                    result.literal_int = Some(value.base10_parse()?);
+                    Ok(())
+                } else if meta.path.is_ident("literal_bool") {
+                    let value: LitBool = meta.value()?.parse()?;
+                    result.literal_bool = Some(value.value());
+                    Ok(())
                 } else {
-                    Err(meta.error("unrecognized baml attribute"))
+                    Err(meta.error("unrecognized baml attribute on enum variant"))
                 }
             })?;
         }

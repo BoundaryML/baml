@@ -1,6 +1,6 @@
 //! Helper functions for encoding/decoding BAML values.
 
-use super::traits::{BamlClass, BamlDecode, BamlEnum};
+use super::traits::{BamlDecode, BamlEnum};
 use crate::{
     error::BamlError,
     proto::baml_cffi_v1::{

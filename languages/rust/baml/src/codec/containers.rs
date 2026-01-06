@@ -1,44 +1,17 @@
 //! Container type BamlDecode and BamlEncode implementations.
 
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use super::{
     helpers::variant_name,
     traits::{BamlDecode, BamlEncode},
 };
 use crate::{
-    error::BamlError,
-    proto::baml_cffi_v1::{
+    codec::traits::BamlSerializeMapKey, error::BamlError, proto::baml_cffi_v1::{
         CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
         host_map_entry, host_value,
-    },
-};
-
-// =============================================================================
-// Union variant unwrapping helper
-// =============================================================================
-
-/// Unwrap single-pattern union variants (e.g., optional fields during streaming).
-///
-/// BAML wraps values in UnionVariantValue with is_single_pattern=true for optional types.
-/// This function recursively unwraps these wrappers to get to the actual value.
-fn unwrap_single_pattern_union(holder: &CffiValueHolder) -> Cow<'_, CffiValueHolder> {
-    match &holder.value {
-        Some(cffi_value_holder::Value::UnionVariantValue(union)) if union.is_single_pattern => {
-            match &union.value {
-                Some(inner) => {
-                    // Recursively unwrap in case of nested wrappers
-                    match unwrap_single_pattern_union(inner) {
-                        Cow::Borrowed(h) => Cow::Borrowed(h),
-                        Cow::Owned(h) => Cow::Owned(h),
-                    }
-                }
-                None => Cow::Borrowed(holder),
-            }
-        }
-        _ => Cow::Borrowed(holder),
     }
-}
+};
 
 // =============================================================================
 // Container BamlDecode implementations
@@ -112,7 +85,7 @@ impl<T: BamlDecode> BamlDecode for Box<T> {
     }
 }
 
-impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
+impl<K: BamlSerializeMapKey, V: BamlDecode> BamlDecode for HashMap<K, V> {
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
         match &holder.value {
             Some(cffi_value_holder::Value::MapValue(map)) => {
@@ -122,7 +95,7 @@ impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
                         .value
                         .as_ref()
                         .ok_or_else(|| BamlError::internal("map entry missing value"))?;
-                    result.insert(entry.key.clone(), V::baml_decode(value)?);
+                    result.insert(K::baml_decode_map_key(&entry.key)?, V::baml_decode(value)?);
                 }
                 Ok(result)
             }
@@ -140,11 +113,7 @@ impl<V: BamlDecode> BamlDecode for HashMap<String, V> {
 
 impl<T: BamlEncode> BamlEncode for Vec<T> {
     fn baml_encode(&self) -> HostValue {
-        HostValue {
-            value: Some(host_value::Value::ListValue(HostListValue {
-                values: self.iter().map(BamlEncode::baml_encode).collect(),
-            })),
-        }
+        self.as_slice().baml_encode()
     }
 }
 
@@ -163,18 +132,45 @@ impl<T: BamlEncode> BamlEncode for Box<T> {
     }
 }
 
-impl<V: BamlEncode> BamlEncode for HashMap<String, V> {
+impl<K: BamlSerializeMapKey, V: BamlEncode> BamlEncode for HashMap<K, V> {
     fn baml_encode(&self) -> HostValue {
         let entries: Vec<HostMapEntry> = self
             .iter()
             .map(|(k, v)| HostMapEntry {
-                key: Some(host_map_entry::Key::StringKey(k.clone())),
+                key: Some(k.baml_encode_map_key()),
                 value: Some(v.baml_encode()),
             })
             .collect();
         HostValue {
             value: Some(host_value::Value::MapValue(HostMapValue { entries })),
         }
+    }
+}
+
+impl BamlSerializeMapKey for String {
+    fn baml_encode_map_key(&self) -> host_map_entry::Key {
+        host_map_entry::Key::StringKey(self.clone())
+    }
+    fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
+        Ok(key.to_string())
+    }
+}
+
+impl BamlSerializeMapKey for i64 {
+    fn baml_encode_map_key(&self) -> host_map_entry::Key {
+        host_map_entry::Key::IntKey(*self)
+    }
+    fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
+        Ok(key.parse::<i64>().map_err(|e| BamlError::internal(format!("failed to parse int map key: {}", e)))?) 
+    }
+}
+
+impl BamlSerializeMapKey for bool {
+    fn baml_encode_map_key(&self) -> host_map_entry::Key {
+        host_map_entry::Key::BoolKey(*self)
+    }
+    fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
+        Ok(key.parse::<bool>().map_err(|e| BamlError::internal(format!("failed to parse bool map key: {}", e)))?)
     }
 }
 

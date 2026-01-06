@@ -159,6 +159,10 @@ impl UnionRustRendered {
             .map(|v| v.name.as_str())
             .unwrap_or("Unknown")
     }
+
+    pub fn is_all_literals(&self) -> bool {
+        self.variants.iter().all(|v| v.literal_repr.is_some())
+    }
 }
 
 #[derive(Debug)]

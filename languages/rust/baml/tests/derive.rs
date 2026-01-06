@@ -84,14 +84,14 @@ mod encode {
     mod enums {
         use super::*;
 
-        #[derive(BamlEncode)]
+        #[derive(BamlEncode, Eq, PartialEq, Hash)]
         enum SimpleEnum {
             Red,
             Green,
             Blue,
         }
 
-        #[derive(BamlEncode)]
+        #[derive(BamlEncode, Eq, PartialEq, Hash)]
         #[baml(name = "ColorChoice")]
         enum RenamedEnum {
             #[baml(name = "RED")]
@@ -100,6 +100,30 @@ mod encode {
             Green,
             #[baml(name = "BLUE")]
             Blue,
+        }
+
+        impl std::str::FromStr for SimpleEnum {
+            type Err = ();
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    "Red" => Ok(SimpleEnum::Red),
+                    "Green" => Ok(SimpleEnum::Green),
+                    "Blue" => Ok(SimpleEnum::Blue),
+                    _ => Err(()),
+                }
+            }
+        }
+
+        impl std::str::FromStr for RenamedEnum {
+            type Err = ();
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    "RED" => Ok(RenamedEnum::Red),
+                    "GREEN" => Ok(RenamedEnum::Green),
+                    "BLUE" => Ok(RenamedEnum::Blue),
+                    _ => Err(()),
+                }
+            }
         }
 
         #[test]

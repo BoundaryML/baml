@@ -1,5 +1,7 @@
 //! Primitive type BamlDecode and BamlEncode implementations.
 
+use std::collections::HashMap;
+
 use serde_json::Value as JsonValue;
 
 use super::{
@@ -7,12 +9,10 @@ use super::{
     traits::{BamlDecode, BamlEncode},
 };
 use crate::{
-    __internal::cffi_field_type_literal,
-    error::BamlError,
-    proto::baml_cffi_v1::{
+    __internal::cffi_field_type_literal, BamlValue, error::BamlError, proto::baml_cffi_v1::{
         CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
         host_map_entry, host_value,
-    },
+    }
 };
 
 // =============================================================================
@@ -207,5 +207,131 @@ impl BamlEncode for JsonValue {
         };
 
         HostValue { value: inner }
+    }
+}
+
+impl BamlDecode for JsonValue {
+    fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError> {
+        match &holder.value {
+            Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(JsonValue::Null),
+            Some(cffi_value_holder::Value::StringValue(s)) => Ok(JsonValue::String(s.clone())),
+            Some(cffi_value_holder::Value::IntValue(i)) => Ok(JsonValue::Number(i64::from(*i).into())),
+            Some(cffi_value_holder::Value::FloatValue(f)) => {
+                if let Some(number) = serde_json::Number::from_f64(*f) {
+                    Ok(JsonValue::Number(number))
+                } else {
+                    Err(BamlError::internal(format!("failed to convert float to json number: {}", *f)))
+                }
+            }
+            Some(cffi_value_holder::Value::BoolValue(b)) => Ok(JsonValue::Bool(*b)),
+            Some(cffi_value_holder::Value::ListValue(list)) => {
+                let items = list
+                    .items
+                    .iter()
+                    .map(Self::baml_decode)
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(JsonValue::Array(items))
+            }
+            Some(cffi_value_holder::Value::MapValue(map)) => {
+                let mut result = serde_json::Map::new();
+                for entry in &map.entries {
+                    let value = entry
+                        .value
+                        .as_ref()
+                        .ok_or_else(|| BamlError::internal("map entry missing value"))?;
+                    result.insert(entry.key.clone(), Self::baml_decode(value)?);
+                }
+                Ok(JsonValue::Object(result))
+            }
+            Some(cffi_value_holder::Value::ClassValue(class)) => {
+                // We explicitly drop class names here. Its json! no types!
+                // let name = class
+                //     .name
+                //     .as_ref()
+                //     .map(|n| n.name.clone())
+                //     .unwrap_or_default();
+
+                let mut fields = serde_json::Map::new();
+                for entry in &class.fields {
+                    if let Some(value) = &entry.value {
+                        fields.insert(entry.key.clone(), Self::baml_decode(value)?);
+                    }
+                }
+                Ok(JsonValue::Object(fields))
+            }
+            Some(cffi_value_holder::Value::EnumValue(e)) => {
+                // We explicitly drop enum names here. Its json! no types!
+                // let name = e.name.as_ref().map(|n| n.name.clone()).unwrap_or_default();
+                Ok(JsonValue::String(e.value.clone()))
+            }
+            Some(cffi_value_holder::Value::UnionVariantValue(union)) => {
+                let inner = union
+                    .value
+                    .as_ref()
+                    .ok_or_else(|| BamlError::internal("union variant missing value"))?;
+                let decoded_value = Self::baml_decode(inner)?;
+                // We drop union-ness here! its json! no types!
+                Ok(decoded_value)
+            }
+            Some(cffi_value_holder::Value::CheckedValue(checked)) => {
+                let inner = checked
+                    .value
+                    .as_ref()
+                    .ok_or_else(|| BamlError::internal("checked value missing inner"))?;
+                let value = Box::new(Self::baml_decode(inner)?);
+                let checks = checked
+                    .checks
+                    .iter()
+                    .map(|c| {
+                        (
+                            c.name.clone(),
+                            crate::Check {
+                                name: c.name.clone(),
+                                expression: c.expression.clone(),
+                                status: match c.status.as_str() {
+                                    "passed" | "PASSED" => crate::CheckStatus::Passed,
+                                    _ => crate::CheckStatus::Failed,
+                                },
+                            },
+                        )
+                    })
+                    .collect::<HashMap<String, crate::Check>>();
+                Ok(serde_json::json!({ "value": value, "checks": checks }))
+            }
+            Some(cffi_value_holder::Value::StreamingStateValue(ss)) => {
+                let inner = ss
+                    .value
+                    .as_ref()
+                    .ok_or_else(|| BamlError::internal("stream state missing value"))?;
+                let value = Box::new(Self::baml_decode(inner)?);
+                let state = match ss.state() {
+                    crate::__internal::CffiStreamState::Pending => crate::StreamingState::Pending,
+                    crate::__internal::CffiStreamState::Started => crate::StreamingState::Started,
+                    crate::__internal::CffiStreamState::Done => crate::StreamingState::Done,
+                };
+                Ok(serde_json::json!({ "value": value, "state": state }))
+            }
+            Some(cffi_value_holder::Value::LiteralValue(lit)) => {
+                // Literals decode to their underlying primitive
+                match &lit.literal {
+                    Some(cffi_field_type_literal::Literal::StringLiteral(s)) => {
+                        Ok(JsonValue::String(s.value.clone()))
+                    }
+                    Some(cffi_field_type_literal::Literal::IntLiteral(i)) => {
+                        Ok(JsonValue::Number(i64::from(i.value).into()))
+                    }
+                    Some(cffi_field_type_literal::Literal::BoolLiteral(b)) => {
+                        Ok(JsonValue::Bool(b.value))
+                    }
+                    None => Ok(JsonValue::Null),
+                }
+            }
+            Some(cffi_value_holder::Value::ObjectValue(_)) => {
+                // ObjectValue is for FFI handles (Media, TypeBuilder), not decodable
+                Err(BamlError::internal(
+                    "ObjectValue cannot be decoded to BamlValue",
+                ))
+            }
+        }
     }
 }

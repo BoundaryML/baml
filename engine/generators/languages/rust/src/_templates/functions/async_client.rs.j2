@@ -74,13 +74,12 @@ macro_rules! baml_function_async {
                 get_runtime().call_function_stream_async(stringify!($name), &args)
             }
 
-            // Parse methods are sync (no I/O)
             pub fn parse(&self, response: &str) -> Result<$final_ret, BamlError> {
-                todo!("parse not yet implemented")
+                get_runtime().parse(stringify!($name), response, false)
             }
 
             pub fn parse_stream(&self, response: &str) -> Result<$stream_ret, BamlError> {
-                todo!("parse_stream not yet implemented")
+                get_runtime().parse(stringify!($name), response, true)
             }
         }
 

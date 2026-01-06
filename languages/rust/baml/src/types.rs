@@ -23,7 +23,8 @@ impl<T: Default> Default for Checked<T> {
 }
 
 /// Individual check result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Check {
     pub name: String,
     pub expression: String,
@@ -31,7 +32,8 @@ pub struct Check {
 }
 
 /// Status of a check constraint
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Passed,
     Failed,
@@ -112,7 +114,8 @@ pub struct StreamState<T> {
 }
 
 /// Current streaming state
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StreamingState {
     Pending,
     Started,
