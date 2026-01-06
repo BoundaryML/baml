@@ -50,9 +50,9 @@ pub use async_stream::AsyncStreamingCall;
 pub use baml_macros::{BamlDecode, BamlEncode};
 pub use client_registry::ClientRegistry;
 pub use codec::{
-    BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey, BamlValue, DynamicClass, DynamicEnum,
-    DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, decode_enum, decode_field,
-    encode_class, encode_class_dynamic, encode_enum,
+    BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey, BamlValue, DynamicClass,
+    DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, decode_enum,
+    decode_field, encode_class, encode_class_dynamic, encode_enum,
 };
 pub use error::BamlError;
 pub use raw_objects::{
@@ -114,7 +114,8 @@ pub mod __internal {
     }
 
     /// Extract the inner value and variant name from a UnionVariantValue.
-    /// Returns (variant_name, inner_value) or an error if the holder is not a UnionVariantValue.
+    /// Returns (variant_name, inner_value) or an error if the holder is not a
+    /// UnionVariantValue.
     pub fn extract_union_variant_with_name<'a>(
         type_name: &str,
         holder: &'a CffiValueHolder,

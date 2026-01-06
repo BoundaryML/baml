@@ -19,5 +19,6 @@ fn main() {
 
     // The baml-sys crate handles dynamic library loading at runtime.
     // #[cfg(feature = "auto-download")]
-    // baml_sys::ensure_library().expect("Failed to find/download BAML library");
+    // baml_sys::ensure_library().expect("Failed to find/download BAML
+    // library");
 }

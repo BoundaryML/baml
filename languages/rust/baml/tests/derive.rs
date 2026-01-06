@@ -104,6 +104,7 @@ mod encode {
 
         impl std::str::FromStr for SimpleEnum {
             type Err = ();
+
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
                     "Red" => Ok(SimpleEnum::Red),
@@ -116,6 +117,7 @@ mod encode {
 
         impl std::str::FromStr for RenamedEnum {
             type Err = ();
+
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 match s {
                     "RED" => Ok(RenamedEnum::Red),
@@ -519,8 +521,9 @@ mod combined {
         let nested = RecursiveUnion::Node(Box::new(RecursiveUnion::Leaf("inner".to_string())));
         let encoded = nested.baml_encode();
 
-        // The outer Node variant encodes the Box<RecursiveUnion>, which encodes the inner Leaf
-        // Since it's a union, the inner value is encoded directly (string value)
+        // The outer Node variant encodes the Box<RecursiveUnion>, which encodes the
+        // inner Leaf Since it's a union, the inner value is encoded directly
+        // (string value)
         assert!(matches!(
             encoded.value,
             Some(host_value::Value::StringValue(_))

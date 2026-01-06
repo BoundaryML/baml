@@ -534,7 +534,8 @@ mod function_calls {
         };
     }
 
-    /// Test that we can attempt to call a function (will fail without valid API key)
+    /// Test that we can attempt to call a function (will fail without valid API
+    /// key)
     #[test]
     fn call_function_returns_error_without_api_key() {
         let mut files = HashMap::new();
@@ -560,14 +561,16 @@ mod function_calls {
         let runtime = BamlRuntime::new(".", files, env_vars()).expect("runtime creation failed");
         let args = FunctionArgs::new().arg("name", "World");
 
-        // This should fail because the API key is invalid, but it proves the call path works
+        // This should fail because the API key is invalid, but it proves the call path
+        // works
         let result: Result<String, _> = runtime.call_function("SayHello", &args);
 
         // We expect an error (invalid API key), not a panic
         assert!(result.is_err(), "Expected error with invalid API key");
     }
 
-    /// Test successful function call with valid API key (requires OPENAI_API_KEY env var)
+    /// Test successful function call with valid API key (requires
+    /// OPENAI_API_KEY env var)
     #[test]
     fn call_function_succeeds_with_valid_api_key() {
         let api_key = require_env!("OPENAI_API_KEY");
@@ -739,7 +742,8 @@ mod function_calls {
         }
     }
 
-    /// Test function call that returns Checked<Option<T>> with @check constraints on optional type
+    /// Test function call that returns Checked<Option<T>> with @check
+    /// constraints on optional type
     #[test]
     fn call_function_with_checked_optional_type_succeeds() {
         use baml::{CheckStatus, Checked};
@@ -893,16 +897,18 @@ mod function_calls {
         }
     }
 
-    /// Test streaming function call that returns StreamState<T> with @stream.with_state
+    /// Test streaming function call that returns StreamState<T> with
+    /// @stream.with_state
     #[test]
     fn call_function_stream_with_state_succeeds() {
         use baml::BamlDecode;
 
         let api_key = require_env!("OPENAI_API_KEY");
 
-        // Partial type with StreamState field - only needs BamlDecode since it's only received
-        // For `string @stream.with_state`, the streaming type is `StreamState<Option<String>>`
-        // The outer Option is because the field might not exist yet during streaming
+        // Partial type with StreamState field - only needs BamlDecode since it's only
+        // received For `string @stream.with_state`, the streaming type is
+        // `StreamState<Option<String>>` The outer Option is because the field
+        // might not exist yet during streaming
         #[derive(Debug, Clone, BamlDecode)]
         #[baml(name = "MessageWithState")]
         struct PartialMessageWithState {
@@ -985,7 +991,8 @@ mod function_calls {
         // We should get at least some partial updates
         assert!(partial_count > 0, "Expected at least one partial result");
 
-        // Should have seen at least Started and Done states (Pending might be missed if streaming is fast)
+        // Should have seen at least Started and Done states (Pending might be missed if
+        // streaming is fast)
         assert!(
             saw_started || saw_done,
             "Expected to see Started or Done streaming state"
@@ -1014,7 +1021,8 @@ mod function_calls {
             age: i64,
         }
 
-        // Partial type - BAML auto-constructs this with optional fields during streaming
+        // Partial type - BAML auto-constructs this with optional fields during
+        // streaming
         #[derive(Debug, Clone, BamlEncode, BamlDecode)]
         #[baml(name = "Person")]
         struct PartialPerson {

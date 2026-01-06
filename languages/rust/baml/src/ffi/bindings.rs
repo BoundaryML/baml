@@ -6,10 +6,9 @@
 // Re-export types from baml-sys
 // Re-export library management functions
 pub use baml_sys::{
-    BamlSysError, ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH, VERSION, ensure_library,
-    library_path, set_library_path,
+    BamlSysError, Buffer, CallbackFn, ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH,
+    OnTickCallbackFn, VERSION, ensure_library, library_path, set_library_path,
 };
-pub use baml_sys::{Buffer, CallbackFn, OnTickCallbackFn};
 // Re-export the raw FFI functions
 // These return Result to handle library loading errors
 pub use baml_sys::{

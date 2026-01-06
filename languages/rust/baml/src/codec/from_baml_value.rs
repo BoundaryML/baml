@@ -112,8 +112,9 @@ use std::collections::HashMap;
 use crate::error::BamlTypeName;
 
 /// Option<V> - handles nullable fields (string?, int?, etc.)
-/// Note: BamlTypeName bound is for consistency with Vec/HashMap, even though Option
-/// never produces type errors itself (it delegates to V or returns None for Null).
+/// Note: BamlTypeName bound is for consistency with Vec/HashMap, even though
+/// Option never produces type errors itself (it delegates to V or returns None
+/// for Null).
 impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBamlValue<T, S>
     for Option<V>
 {

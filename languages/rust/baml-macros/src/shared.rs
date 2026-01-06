@@ -35,10 +35,9 @@ pub(crate) struct FieldAttrs {
     pub name: Option<String>,
     /// Whether to skip this field during encoding
     pub skip: bool,
-    /// Whether this field holds dynamic properties (`HashMap`<String, `BamlValue`>)
+    /// Whether this field holds dynamic properties (`HashMap`<String,
+    /// `BamlValue`>)
     pub dynamic_fields: bool,
-    /// If the field is a union variant, but coming from a literal
-    pub literal_repr: Option<String>,
 }
 
 /// Variant-level attributes (for enums)

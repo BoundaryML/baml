@@ -2,11 +2,11 @@
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Result, Type};
+use syn::{Data, DeriveInput, Fields, Result};
 
 use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
 
-pub(crate) fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
+pub(crate) fn derive_decode(input: &DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
     let type_name = &input.ident;
     let baml_name = container_attrs
@@ -32,7 +32,7 @@ pub(crate) fn derive_decode(input: DeriveInput) -> Result<TokenStream> {
             container_attrs.dynamic,
         ),
         Data::Union(_) => Err(syn::Error::new_spanned(
-            &input,
+            input,
             "BamlDecode cannot be derived for unions",
         )),
     }
@@ -68,9 +68,6 @@ fn derive_struct_decode(
 
         let baml_field_name = field_attrs.name.unwrap_or_else(|| field_name.to_string());
         known_field_names.push(baml_field_name.clone());
-
-        // Check if this is an Option type
-        let is_optional = is_option_type(&field.ty);
 
         let decode_expr = quote! {
             #baml_crate::decode_field(&class.fields, #baml_field_name)?
@@ -250,7 +247,8 @@ fn derive_baml_enum_decode(
     })
 }
 
-/// Generate `BamlDecode` impl for BAML union types (single-field tuple variants)
+/// Generate `BamlDecode` impl for BAML union types (single-field tuple
+/// variants)
 fn derive_union_decode(
     type_name: &syn::Ident,
     data: &syn::DataEnum,
@@ -316,14 +314,4 @@ fn derive_union_decode(
             }
         }
     })
-}
-
-/// Check if a type is `Option<T>`
-fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Option";
-        }
-    }
-    false
 }

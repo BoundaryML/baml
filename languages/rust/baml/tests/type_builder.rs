@@ -1,4 +1,5 @@
-//! Tests for TypeBuilder, TypeDef, EnumBuilder, EnumValueBuilder, ClassBuilder, ClassPropertyBuilder
+//! Tests for TypeBuilder, TypeDef, EnumBuilder, EnumValueBuilder, ClassBuilder,
+//! ClassPropertyBuilder
 
 mod type_builder {
     use std::collections::HashMap;
@@ -1817,7 +1818,8 @@ mod type_builder {
             let status = result.unwrap();
             eprintln!("Extracted status: {}", status);
 
-            // The LLM should return "Completed" since the text indicates the project is finished
+            // The LLM should return "Completed" since the text indicates the project is
+            // finished
             assert!(
                 status.to_lowercase().contains("completed")
                     || status.to_lowercase().contains("complete"),

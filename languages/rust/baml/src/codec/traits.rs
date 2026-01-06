@@ -44,7 +44,8 @@ pub trait BamlEnum: Sized {
 
 /// Trait for types that can be converted to method kwargs.
 ///
-/// This allows ergonomic method calls without manually constructing `HostMapEntry` vectors.
+/// This allows ergonomic method calls without manually constructing
+/// `HostMapEntry` vectors.
 pub trait IntoKwargs {
     fn into_kwargs(self) -> Vec<HostMapEntry>;
 }

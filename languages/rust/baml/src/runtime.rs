@@ -270,7 +270,8 @@ impl BamlRuntime {
     /// this method parses the response according to the function's output type.
     ///
     /// # Arguments
-    /// * `function_name` - Name of the BAML function that defines the output type
+    /// * `function_name` - Name of the BAML function that defines the output
+    ///   type
     /// * `llm_response` - Raw text response from the LLM
     ///
     /// # Example
@@ -413,8 +414,8 @@ impl Drop for BamlRuntime {
 /// Simple JSON encoding for maps
 ///
 /// This is a minimal implementation to avoid adding serde_json as a dependency.
-/// For simplicity, we assume keys and values don't contain problematic characters
-/// that would require complex escaping beyond basic escapes.
+/// For simplicity, we assume keys and values don't contain problematic
+/// characters that would require complex escaping beyond basic escapes.
 fn json_encode_map(map: &HashMap<String, String>) -> Result<String, BamlError> {
     let mut parts = Vec::with_capacity(map.len());
     for (k, v) in map {

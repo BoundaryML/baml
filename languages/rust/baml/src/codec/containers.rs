@@ -7,10 +7,12 @@ use super::{
     traits::{BamlDecode, BamlEncode},
 };
 use crate::{
-    codec::traits::BamlSerializeMapKey, error::BamlError, proto::baml_cffi_v1::{
+    codec::traits::BamlSerializeMapKey,
+    error::BamlError,
+    proto::baml_cffi_v1::{
         CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
         host_map_entry, host_value,
-    }
+    },
 };
 
 // =============================================================================
@@ -151,6 +153,7 @@ impl BamlSerializeMapKey for String {
     fn baml_encode_map_key(&self) -> host_map_entry::Key {
         host_map_entry::Key::StringKey(self.clone())
     }
+
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
         Ok(key.to_string())
     }
@@ -160,8 +163,11 @@ impl BamlSerializeMapKey for i64 {
     fn baml_encode_map_key(&self) -> host_map_entry::Key {
         host_map_entry::Key::IntKey(*self)
     }
+
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        Ok(key.parse::<i64>().map_err(|e| BamlError::internal(format!("failed to parse int map key: {}", e)))?) 
+        Ok(key
+            .parse::<i64>()
+            .map_err(|e| BamlError::internal(format!("failed to parse int map key: {}", e)))?)
     }
 }
 
@@ -169,8 +175,11 @@ impl BamlSerializeMapKey for bool {
     fn baml_encode_map_key(&self) -> host_map_entry::Key {
         host_map_entry::Key::BoolKey(*self)
     }
+
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        Ok(key.parse::<bool>().map_err(|e| BamlError::internal(format!("failed to parse bool map key: {}", e)))?)
+        Ok(key
+            .parse::<bool>()
+            .map_err(|e| BamlError::internal(format!("failed to parse bool map key: {}", e)))?)
     }
 }
 

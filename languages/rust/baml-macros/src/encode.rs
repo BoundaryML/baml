@@ -6,7 +6,7 @@ use syn::{Data, DeriveInput, Fields, Result};
 
 use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
 
-pub(crate) fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
+pub(crate) fn derive_encode(input: &DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
     let type_name = &input.ident;
     let baml_name = container_attrs
@@ -27,7 +27,7 @@ pub(crate) fn derive_encode(input: DeriveInput) -> Result<TokenStream> {
             container_attrs.union,
         ),
         Data::Union(_) => Err(syn::Error::new_spanned(
-            &input,
+            input,
             "BamlEncode cannot be derived for unions",
         )),
     }

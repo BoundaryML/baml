@@ -28,6 +28,7 @@ impl KnownTypes for MockTypes {
     fn as_any(&self) -> &dyn std::any::Any {
         match *self {}
     }
+
     fn type_name(&self) -> &'static str {
         match *self {}
     }
@@ -40,6 +41,7 @@ impl KnownTypes for MockStreamTypes {
     fn as_any(&self) -> &dyn std::any::Any {
         match *self {}
     }
+
     fn type_name(&self) -> &'static str {
         match *self {}
     }
@@ -1401,8 +1403,8 @@ mod dynamic_union_unwrapping {
 
     #[test]
     fn union_with_string_unwraps_to_string() {
-        // When we have a DynamicUnion wrapping a String (like string | null where the value is string),
-        // we should be able to extract it as a String
+        // When we have a DynamicUnion wrapping a String (like string | null where the
+        // value is string), we should be able to extract it as a String
         let holder = make_union_holder("string", "string", make_string_holder("hello"));
         let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
 
@@ -1413,8 +1415,8 @@ mod dynamic_union_unwrapping {
 
     #[test]
     fn union_with_string_unwraps_to_option_string() {
-        // This is the real-world case: optional types come as DynamicUnion(string | null)
-        // When the value is present (string), we should get Some(string)
+        // This is the real-world case: optional types come as DynamicUnion(string |
+        // null) When the value is present (string), we should get Some(string)
         let holder = make_union_holder("string", "string", make_string_holder("AJ"));
         let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
 

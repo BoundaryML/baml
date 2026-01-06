@@ -36,7 +36,8 @@ impl HTTPBody {
 
     /// Get body as JSON value
     ///
-    /// Parses the body text as JSON. Returns an error if the body is not valid JSON.
+    /// Parses the body text as JSON. Returns an error if the body is not valid
+    /// JSON.
     pub fn json(&self) -> Result<serde_json::Value, BamlError> {
         let text: String = self.raw.try_call_method("text", ())?;
         serde_json::from_str(&text)

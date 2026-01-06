@@ -9,10 +9,12 @@ use super::{
     traits::{BamlDecode, BamlEncode},
 };
 use crate::{
-    __internal::cffi_field_type_literal, BamlValue, error::BamlError, proto::baml_cffi_v1::{
+    __internal::cffi_field_type_literal,
+    error::BamlError,
+    proto::baml_cffi_v1::{
         CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
         host_map_entry, host_value,
-    }
+    },
 };
 
 // =============================================================================
@@ -215,12 +217,17 @@ impl BamlDecode for JsonValue {
         match &holder.value {
             Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(JsonValue::Null),
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(JsonValue::String(s.clone())),
-            Some(cffi_value_holder::Value::IntValue(i)) => Ok(JsonValue::Number(i64::from(*i).into())),
+            Some(cffi_value_holder::Value::IntValue(i)) => {
+                Ok(JsonValue::Number(i64::from(*i).into()))
+            }
             Some(cffi_value_holder::Value::FloatValue(f)) => {
                 if let Some(number) = serde_json::Number::from_f64(*f) {
                     Ok(JsonValue::Number(number))
                 } else {
-                    Err(BamlError::internal(format!("failed to convert float to json number: {}", *f)))
+                    Err(BamlError::internal(format!(
+                        "failed to convert float to json number: {}",
+                        *f
+                    )))
                 }
             }
             Some(cffi_value_holder::Value::BoolValue(b)) => Ok(JsonValue::Bool(*b)),

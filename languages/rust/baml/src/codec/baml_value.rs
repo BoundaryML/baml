@@ -43,14 +43,18 @@ pub enum BamlValue<T: KnownTypes, S: KnownTypes> {
     DynamicUnion(DynamicUnion<T, S>),
 }
 
-/// Implement FullTypeName for BamlValue so it can be used with BamlError::type_check
+/// Implement FullTypeName for BamlValue so it can be used with
+/// BamlError::type_check
 impl<T: KnownTypes, S: KnownTypes> FullTypeName for BamlValue<T, S> {
     /// Get the full type name for error messages.
     /// Returns descriptive names like:
     /// - Primitives: "String", "Int", "Float", "Bool", "Null"
-    /// - Containers: "List<?>", "Map<String, ?>" (element types unknown at runtime)
-    /// - Wrappers: "Checked<?>", "StreamState<?>" (inner type requires recursion)
-    /// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)", "DynamicUnion(FooOrBar)"
+    /// - Containers: "List<?>", "Map<String, ?>" (element types unknown at
+    ///   runtime)
+    /// - Wrappers: "Checked<?>", "StreamState<?>" (inner type requires
+    ///   recursion)
+    /// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)",
+    ///   "DynamicUnion(FooOrBar)"
     fn full_type_name(&self) -> String {
         match self {
             BamlValue::String(_) => String::baml_type_name(),

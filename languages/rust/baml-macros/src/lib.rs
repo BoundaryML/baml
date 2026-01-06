@@ -1,7 +1,8 @@
 //! Derive macros for BAML types.
 //!
-//! This crate provides `#[derive(BamlEncode)]` and `#[derive(BamlDecode)]` macros
-//! for automatically implementing serialization to/from BAML's protobuf format.
+//! This crate provides `#[derive(BamlEncode)]` and `#[derive(BamlDecode)]`
+//! macros for automatically implementing serialization to/from BAML's protobuf
+//! format.
 //!
 //! # Usage
 //!
@@ -42,7 +43,8 @@ mod shared;
 /// # Attributes
 ///
 /// - `#[baml(name = "...")]` on the type: Specify the BAML type name
-/// - `#[baml(name = "...")]` on a field/variant: Specify the BAML field/variant name
+/// - `#[baml(name = "...")]` on a field/variant: Specify the BAML field/variant
+///   name
 /// - `#[baml(skip)]` on a field: Skip this field during encoding
 ///
 /// # Example
@@ -59,19 +61,21 @@ mod shared;
 #[proc_macro_derive(BamlEncode, attributes(baml))]
 pub fn derive_baml_encode(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    encode::derive_encode(input)
+    encode::derive_encode(&input)
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }
 
 /// Derive macro for `BamlDecode` trait.
 ///
-/// Generates code to decode BAML's `CffiValueHolder` format to Rust structs/enums.
+/// Generates code to decode BAML's `CffiValueHolder` format to Rust
+/// structs/enums.
 ///
 /// # Attributes
 ///
 /// - `#[baml(name = "...")]` on the type: Specify the BAML type name
-/// - `#[baml(name = "...")]` on a field/variant: Specify the BAML field/variant name
+/// - `#[baml(name = "...")]` on a field/variant: Specify the BAML field/variant
+///   name
 ///
 /// # Example
 ///
@@ -87,7 +91,7 @@ pub fn derive_baml_encode(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(BamlDecode, attributes(baml))]
 pub fn derive_baml_decode(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    decode::derive_decode(input)
+    decode::derive_decode(&input)
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }

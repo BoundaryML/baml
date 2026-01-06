@@ -183,12 +183,12 @@ impl LLMStreamCall {
 
 /// Either an LLMCall or LLMStreamCall
 ///
-/// The CFFI layer returns different object types (OBJECT_LLM_CALL vs OBJECT_LLM_STREAM_CALL)
-/// based on the actual underlying type. We dispatch on the protobuf oneof discriminator
-/// to construct the appropriate variant.
+/// The CFFI layer returns different object types (OBJECT_LLM_CALL vs
+/// OBJECT_LLM_STREAM_CALL) based on the actual underlying type. We dispatch on
+/// the protobuf oneof discriminator to construct the appropriate variant.
 ///
-/// This mirrors how Python uses `Either<LLMCall, LLMStreamCall>` and Go uses interface
-/// embedding where `LLMStreamCall` extends `LLMCall`.
+/// This mirrors how Python uses `Either<LLMCall, LLMStreamCall>` and Go uses
+/// interface embedding where `LLMStreamCall` extends `LLMCall`.
 #[derive(Clone)]
 pub enum LLMCallKind {
     /// Regular (non-streaming) LLM call
@@ -201,8 +201,10 @@ impl LLMCallKind {
     /// Create from an object handle by dispatching on the object type
     ///
     /// The CFFI layer encodes each object with its actual type:
-    /// - `Either::Left(LLMCall)` -> `BamlObjectHandle.llm_call` (OBJECT_LLM_CALL = 6)
-    /// - `Either::Right(LLMStreamCall)` -> `BamlObjectHandle.llm_stream_call` (OBJECT_LLM_STREAM_CALL = 7)
+    /// - `Either::Left(LLMCall)` -> `BamlObjectHandle.llm_call`
+    ///   (OBJECT_LLM_CALL = 6)
+    /// - `Either::Right(LLMStreamCall)` -> `BamlObjectHandle.llm_stream_call`
+    ///   (OBJECT_LLM_STREAM_CALL = 7)
     pub(crate) fn from_handle(
         handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
         runtime: *const std::ffi::c_void,

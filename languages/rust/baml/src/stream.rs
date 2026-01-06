@@ -29,7 +29,8 @@ pub struct StreamingCall<TStream, TFinal: Clone> {
     state: StreamState,
     final_value: Option<Result<TFinal, BamlError>>,
     // Since we we need to have a dual type parameter, we use a phantom type to ensure type safety
-    // Rust requires that declared generic types be used in the type parameters, so we use a phantom type to ensure type safety
+    // Rust requires that declared generic types be used in the type parameters, so we use a
+    // phantom type to ensure type safety
     _phantom: std::marker::PhantomData<TStream>,
 }
 
@@ -147,8 +148,8 @@ where
     TPartial: BamlDecode,
     TFinal: BamlDecode,
 {
-    type Item = Result<TPartial, BamlError>;
     type IntoIter = Partials<'a, TPartial, TFinal>;
+    type Item = Result<TPartial, BamlError>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.partials()
@@ -156,7 +157,6 @@ where
 }
 
 /// Support for owned for loops
-///
 
 pub struct PartialsOwned<TPartial, TFinal: Clone> {
     call: StreamingCall<TPartial, TFinal>,
@@ -183,8 +183,8 @@ where
     TPartial: BamlDecode,
     TFinal: BamlDecode,
 {
-    type Item = Result<TPartial, BamlError>;
     type IntoIter = PartialsOwned<TPartial, TFinal>;
+    type Item = Result<TPartial, BamlError>;
 
     fn into_iter(self) -> Self::IntoIter {
         PartialsOwned { call: self }

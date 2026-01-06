@@ -29,11 +29,12 @@ pub(crate) fn variant_name(v: &cffi_value_holder::Value) -> &'static str {
     }
 }
 
-// Note: BamlClass types get BamlDecode implemented by the derive macro directly.
-// This avoids blanket impl conflicts with container types like Box<T>.
+// Note: BamlClass types get BamlDecode implemented by the derive macro
+// directly. This avoids blanket impl conflicts with container types like
+// Box<T>.
 
-// Note: BamlEnum doesn't auto-impl BamlDecode because enums need special handling
-// in generated code to support both regular and dynamic enums
+// Note: BamlEnum doesn't auto-impl BamlDecode because enums need special
+// handling in generated code to support both regular and dynamic enums
 
 /// Decode an enum from a CffiValueHolder
 pub fn decode_enum<T: BamlEnum>(holder: &CffiValueHolder) -> Result<T, BamlError> {
@@ -65,7 +66,8 @@ pub fn encode_class(name: &str, fields: Vec<(&str, HostValue)>) -> HostValue {
     }
 }
 
-/// Encode a class with dynamic field names (for dynamic classes that flatten __dynamic fields)
+/// Encode a class with dynamic field names (for dynamic classes that flatten
+/// __dynamic fields)
 pub fn encode_class_dynamic(name: &str, fields: Vec<(&str, HostValue)>) -> HostValue {
     let entries = fields
         .into_iter()

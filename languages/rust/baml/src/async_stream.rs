@@ -46,7 +46,8 @@ where
     /// Returns `Some(Err(e))` on error.
     /// Returns `None` when the stream is complete (final result received).
     ///
-    /// After receiving `None`, call `get_final_response()` to get the final result.
+    /// After receiving `None`, call `get_final_response()` to get the final
+    /// result.
     pub async fn next(&mut self) -> Option<Result<TPartial, BamlError>> {
         if self.state == StreamState::Finished {
             return None;
@@ -74,7 +75,8 @@ where
     /// Get the final response, consuming the stream.
     ///
     /// If there are remaining partial results, they will be drained.
-    /// Call this after `next()` returns `None`, or to skip all partials and get just the final.
+    /// Call this after `next()` returns `None`, or to skip all partials and get
+    /// just the final.
     pub async fn get_final_response(mut self) -> Result<TFinal, BamlError> {
         // Return cached final if we already have it
         if let Some(result) = self.final_value.take() {
@@ -119,7 +121,8 @@ fn decode_final<T: BamlDecode>(data: &[u8]) -> Result<T, BamlError> {
     T::baml_decode(&holder)
 }
 
-/// Cancellation on drop - if stream is dropped before completion, cancel the underlying call
+/// Cancellation on drop - if stream is dropped before completion, cancel the
+/// underlying call
 impl<TPartial, TFinal> Drop for AsyncStreamingCall<TPartial, TFinal> {
     fn drop(&mut self) {
         if self.state == StreamState::Open {

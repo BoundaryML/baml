@@ -59,10 +59,12 @@ impl BamlError {
 /// - Primitives: "String", "Int", "Float", "Bool", "Null"
 /// - Containers: "List<String>", "Map<String, Int>", "Optional<Person>"
 /// - Wrappers: "Checked<String>", "StreamState<Person>"
-/// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)", "DynamicUnion(unknown)"
+/// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)",
+///   "DynamicUnion(unknown)"
 pub trait BamlTypeName {
     /// The base BAML type name (e.g., "String", "Int", "List", "Map")
-    /// For primitives this is the full name; for containers it's just the container name.
+    /// For primitives this is the full name; for containers it's just the
+    /// container name.
     const BASE_TYPE_NAME: &'static str;
 
     /// Get the full type name including generic parameters.
@@ -97,6 +99,7 @@ impl BamlTypeName for &str {
 // Container type names (include element type)
 impl<T: BamlTypeName> BamlTypeName for Vec<T> {
     const BASE_TYPE_NAME: &'static str = "List";
+
     fn baml_type_name() -> String {
         format!("List<{}>", T::baml_type_name())
     }
@@ -104,6 +107,7 @@ impl<T: BamlTypeName> BamlTypeName for Vec<T> {
 
 impl<T: BamlTypeName> BamlTypeName for Option<T> {
     const BASE_TYPE_NAME: &'static str = "Optional";
+
     fn baml_type_name() -> String {
         format!("Optional<{}>", T::baml_type_name())
     }
@@ -111,6 +115,7 @@ impl<T: BamlTypeName> BamlTypeName for Option<T> {
 
 impl<V: BamlTypeName> BamlTypeName for HashMap<String, V> {
     const BASE_TYPE_NAME: &'static str = "Map";
+
     fn baml_type_name() -> String {
         format!("Map<String, {}>", V::baml_type_name())
     }
@@ -119,6 +124,7 @@ impl<V: BamlTypeName> BamlTypeName for HashMap<String, V> {
 // Wrapper types (include inner type)
 impl<T: BamlTypeName> BamlTypeName for crate::types::Checked<T> {
     const BASE_TYPE_NAME: &'static str = "Checked";
+
     fn baml_type_name() -> String {
         format!("Checked<{}>", T::baml_type_name())
     }
@@ -126,6 +132,7 @@ impl<T: BamlTypeName> BamlTypeName for crate::types::Checked<T> {
 
 impl<T: BamlTypeName> BamlTypeName for crate::types::StreamState<T> {
     const BASE_TYPE_NAME: &'static str = "StreamState";
+
     fn baml_type_name() -> String {
         format!("StreamState<{}>", T::baml_type_name())
     }
@@ -134,6 +141,7 @@ impl<T: BamlTypeName> BamlTypeName for crate::types::StreamState<T> {
 // Box delegates to inner type
 impl<T: BamlTypeName> BamlTypeName for Box<T> {
     const BASE_TYPE_NAME: &'static str = T::BASE_TYPE_NAME;
+
     fn baml_type_name() -> String {
         T::baml_type_name()
     }
@@ -156,6 +164,7 @@ impl BamlTypeName for Unknown {
 // Slice reference type name (for raw list access)
 impl<T> BamlTypeName for &[T] {
     const BASE_TYPE_NAME: &'static str = "List";
+
     fn baml_type_name() -> String {
         // We don't know the element type at compile time for raw BamlValue slices
         "List<?>".to_string()
@@ -165,6 +174,7 @@ impl<T> BamlTypeName for &[T] {
 // HashMap reference type name (for raw map access)
 impl<K, V> BamlTypeName for &HashMap<K, V> {
     const BASE_TYPE_NAME: &'static str = "Map";
+
     fn baml_type_name() -> String {
         // We don't know the value type at compile time for raw BamlValue maps
         "Map<String, ?>".to_string()

@@ -1,6 +1,7 @@
 //! Tests for media types (Image, Audio, Pdf, Video)
 //!
-//! Each media type has the same interface, so we use a macro to generate tests for all four.
+//! Each media type has the same interface, so we use a macro to generate tests
+//! for all four.
 
 use std::collections::HashMap;
 

@@ -137,7 +137,8 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     }
 }
 
-/// StreamState ref - returns reference to the StreamState wrapper containing BamlValue
+/// StreamState ref - returns reference to the StreamState wrapper containing
+/// BamlValue
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a StreamState<Box<BamlValue<T, S>>>
 {

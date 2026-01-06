@@ -1,7 +1,8 @@
 //! FFI-backed BAML objects (RawObject infrastructure)
 //!
-//! This module contains all types that wrap FFI pointers managed by the Rust runtime.
-//! Each type holds a `RawObject` which handles method calls, encoding, and cleanup.
+//! This module contains all types that wrap FFI pointers managed by the Rust
+//! runtime. Each type holds a `RawObject` which handles method calls, encoding,
+//! and cleanup.
 
 /// Macro to define a wrapper type around `RawObject`.
 ///
@@ -80,7 +81,8 @@ use crate::{
 
 /// Inner data for a FFI-backed BAML object.
 ///
-/// Wrapped in Arc to enable cheap cloning while preserving single-drop semantics.
+/// Wrapped in Arc to enable cheap cloning while preserving single-drop
+/// semantics.
 struct RawObjectInner {
     ptr: i64,
     runtime: *const c_void,
@@ -185,8 +187,8 @@ impl RawObject {
 
     /// Call a method on this object and decode the result using `BamlDecode`.
     ///
-    /// This is the primary method for calling object methods that return values.
-    /// Use `T = ()` for void methods (side-effect only).
+    /// This is the primary method for calling object methods that return
+    /// values. Use `T = ()` for void methods (side-effect only).
     ///
     /// # Panics
     /// Panics if the FFI call fails. This should never happen in practice since
@@ -220,8 +222,8 @@ impl RawObject {
 
     /// Call a method on this object and decode the result using `BamlDecode`.
     ///
-    /// Returns a `Result` for callers that need to handle FFI errors explicitly.
-    /// Most callers should use `call_method` instead.
+    /// Returns a `Result` for callers that need to handle FFI errors
+    /// explicitly. Most callers should use `call_method` instead.
     ///
     /// Use `T = ()` for void methods (side-effect only).
     pub fn try_call_method<T: BamlDecode, K: IntoKwargs>(
@@ -498,8 +500,8 @@ pub(crate) trait RawObjectTrait: Send + Sync {
 
 /// Decode a `BamlObjectHandle` back to a concrete type
 ///
-/// This function dispatches to the appropriate concrete type based on the object type
-/// in the handle.
+/// This function dispatches to the appropriate concrete type based on the
+/// object type in the handle.
 pub(crate) fn decode_object_handle(
     handle: &BamlObjectHandle,
     runtime: *const c_void,
