@@ -268,11 +268,12 @@ fn value_type_tag(value: &Value, objects: &ObjectPool) -> i64 {
             Object::Enum(_) => type_tags::ENUM,
             Object::Class(_) => type_tags::UNKNOWN,
             Object::Instance(instance) => {
-                if let Object::Class(class) = &objects[instance.class] {
-                    class.type_tag
-                } else {
-                    type_tags::UNKNOWN
-                }
+                // Instance.class must always point to a Class object.
+                // If not, there's a bug in the VM's instance allocation.
+                let Object::Class(class) = &objects[instance.class] else {
+                    unreachable!("Instance.class does not point to a Class object")
+                };
+                class.type_tag
             }
         },
     }
