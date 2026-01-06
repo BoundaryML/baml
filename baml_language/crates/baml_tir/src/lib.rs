@@ -466,8 +466,6 @@ pub struct TypeContext<'db> {
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
     watched_vars: HashSet<Name>,
-    /// Tracks where variables were declared (for error messages).
-    var_decl_spans: HashMap<Name, Span>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -493,7 +491,6 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
-            var_decl_spans: HashMap::new(),
         }
     }
 
@@ -521,7 +518,6 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
-            var_decl_spans: HashMap::new(),
         }
     }
 
@@ -555,7 +551,6 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
-            var_decl_spans: HashMap::new(),
         }
     }
 
