@@ -144,6 +144,7 @@ fn convert_instruction(
         },
         baml_vm::Instruction::Discriminant => Instruction::Discriminant,
         baml_vm::Instruction::TypeTag => Instruction::TypeTag,
+        baml_vm::Instruction::Unreachable => Instruction::Unreachable,
     })
 }
 

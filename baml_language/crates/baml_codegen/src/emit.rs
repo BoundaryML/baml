@@ -893,21 +893,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             Terminator::Unreachable => {
-                // TODO(#UNREACHABLE): This code should NEVER be reached at runtime.
-                // Currently we emit a safety return of null, but this is a fallback
-                // that masks bugs. We should instead:
-                //
-                // 1. Add a `Panic` instruction to the VM that halts execution with
-                //    an error message like "reached unreachable code".
-                // 2. Emit `Instruction::Panic("unreachable")` here instead.
-                // 3. Consider adding dead code elimination to remove unreachable
-                //    blocks entirely during compilation.
-                //
-                // For now, we return null to avoid undefined behavior if this is
-                // somehow reached due to a compiler bug or type system unsoundness.
-                let idx = self.add_constant(Value::Null);
-                self.emit(Instruction::LoadConst(idx));
-                self.emit(Instruction::Return);
+                // Emit an instruction that will panic at runtime if reached.
+                // This should never happen - if it does, there's a bug in the
+                // compiler or type system (e.g., non-exhaustive match incorrectly
+                // marked as exhaustive).
+                self.emit(Instruction::Unreachable);
             }
 
             Terminator::DispatchFuture {

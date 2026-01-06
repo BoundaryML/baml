@@ -59,6 +59,12 @@ pub enum RuntimeError {
     /// User code triggered an assertion failure via the [`crate::Instruction::Assert`] opcode.
     AssertionError,
 
+    /// Execution reached code that should be unreachable.
+    ///
+    /// This indicates a bug in the compiler or type system - exhaustive match
+    /// expressions should never fall through to unreachable code.
+    Unreachable,
+
     /// VM internal error.
     InternalError(InternalError),
 

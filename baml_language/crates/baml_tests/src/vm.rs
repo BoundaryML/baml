@@ -338,4 +338,5 @@ pub enum Instruction {
     JumpTable { table_idx: usize, default: isize },
     Discriminant,
     TypeTag,
+    Unreachable,
 }

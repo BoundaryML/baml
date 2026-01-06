@@ -2031,6 +2031,12 @@ impl Vm {
 
                     self.stack.push(Value::Int(tag));
                 }
+
+                Instruction::Unreachable => {
+                    // This instruction should never be executed. If we reach it,
+                    // there's a bug in the compiler or type system.
+                    return Err(RuntimeError::Unreachable.into());
+                }
             }
         }
     }

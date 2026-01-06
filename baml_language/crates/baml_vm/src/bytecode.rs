@@ -354,6 +354,15 @@ pub enum Instruction {
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
+
+    /// Halt execution with an unreachable code error.
+    ///
+    /// This instruction should never be executed at runtime. If it is,
+    /// it indicates a bug in the compiler or type system (e.g., a non-exhaustive
+    /// match expression that the compiler incorrectly marked as exhaustive).
+    ///
+    /// Throws [`RuntimeError::Unreachable`].
+    Unreachable,
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -551,6 +560,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::Unreachable => f.write_str("UNREACHABLE"),
         }
     }
 }
