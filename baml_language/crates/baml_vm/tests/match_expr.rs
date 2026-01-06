@@ -1334,3 +1334,486 @@ fn match_negative_in_union_pattern() -> anyhow::Result<()> {
         expected: ExecState::Complete(Value::string("small")),
     })
 }
+
+// ============================================================================
+// Negative Integer Jump Table Tests
+// ============================================================================
+
+#[test]
+fn match_negative_jump_table() -> anyhow::Result<()> {
+    // Dense negative range should use jump table: -3, -2, -1, 0
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -3 => "neg three",
+                    -2 => "neg two",
+                    -1 => "neg one",
+                    0 => "zero",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(-2)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("neg two")),
+    })
+}
+
+#[test]
+fn match_negative_jump_table_fallback() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -3 => "neg three",
+                    -2 => "neg two",
+                    -1 => "neg one",
+                    0 => "zero",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(5)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("other")),
+    })
+}
+
+#[test]
+fn match_spanning_zero_jump_table() -> anyhow::Result<()> {
+    // Dense range crossing zero: -2, -1, 0, 1, 2
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -2 => "neg two",
+                    -1 => "neg one",
+                    0 => "zero",
+                    1 => "one",
+                    2 => "two",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(1)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one")),
+    })
+}
+
+#[test]
+fn match_spanning_zero_negative_hit() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -2 => "neg two",
+                    -1 => "neg one",
+                    0 => "zero",
+                    1 => "one",
+                    2 => "two",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(-1)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("neg one")),
+    })
+}
+
+// ============================================================================
+// Binary Search with Negative Values
+// ============================================================================
+
+#[test]
+fn match_binary_search_negative_sparse() -> anyhow::Result<()> {
+    // Sparse negative values
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -100 => "a",
+                    -50 => "b",
+                    -10 => "c",
+                    -1 => "d",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(-50)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("b")),
+    })
+}
+
+#[test]
+fn match_binary_search_spanning_zero_sparse() -> anyhow::Result<()> {
+    // Sparse values spanning zero
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -100 => "neg hundred",
+                    -1 => "neg one",
+                    1 => "one",
+                    100 => "hundred",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(1)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one")),
+    })
+}
+
+// ============================================================================
+// Mixed Patterns: Literals + Types + Guards
+// ============================================================================
+
+#[test]
+fn match_mixed_literal_typed_guard() -> anyhow::Result<()> {
+    // Literal + guarded literal + typed pattern
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int, flag bool) -> string {
+                match (x) {
+                    0 => "zero",
+                    1 if flag => "one with flag",
+                    n: int => "other int"
+                }
+            }
+            function main() -> string {
+                classify(1, true)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one with flag")),
+    })
+}
+
+#[test]
+fn match_mixed_literal_typed_guard_fallthrough() -> anyhow::Result<()> {
+    // Guard fails, falls through to typed pattern
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int, flag bool) -> string {
+                match (x) {
+                    0 => "zero",
+                    1 if flag => "one with flag",
+                    n: int => "other int"
+                }
+            }
+            function main() -> string {
+                classify(1, false)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("other int")),
+    })
+}
+
+#[test]
+fn match_guard_on_typed_pattern_field_access() -> anyhow::Result<()> {
+    // Guard accesses bound variable's field
+    assert_vm_executes(Program {
+        source: r#"
+            class Success { data: string }
+            class Failure { reason: string }
+
+            function classify(result Success | Failure) -> string {
+                match (result) {
+                    s: Success if s.data != "" => "success with data",
+                    s: Success => "empty success",
+                    f: Failure => "failure"
+                }
+            }
+            function main() -> string {
+                let r = Success { data: "hello" };
+                classify(r)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("success with data")),
+    })
+}
+
+#[test]
+fn match_guard_on_typed_pattern_field_access_fails() -> anyhow::Result<()> {
+    // Guard fails, falls to next arm
+    assert_vm_executes(Program {
+        source: r#"
+            class Success { data: string }
+            class Failure { reason: string }
+
+            function classify(result Success | Failure) -> string {
+                match (result) {
+                    s: Success if s.data != "" => "success with data",
+                    s: Success => "empty success",
+                    f: Failure => "failure"
+                }
+            }
+            function main() -> string {
+                let r = Success { data: "" };
+                classify(r)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("empty success")),
+    })
+}
+
+#[test]
+fn match_string_literal_with_typed_fallback() -> anyhow::Result<()> {
+    // String literals + typed catch-all
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(s string) -> int {
+                match (s) {
+                    "ok" => 200,
+                    "error" => 500,
+                    _: string => 0
+                }
+            }
+            function main() -> int {
+                classify("unknown")
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(0)),
+    })
+}
+
+// ============================================================================
+// Three-Level Nested Match
+// ============================================================================
+
+#[test]
+fn match_three_levels_nested() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int, y int, z int) -> string {
+                match (x) {
+                    0 => match (y) {
+                        0 => match (z) {
+                            0 => "all zero",
+                            _ => "z nonzero"
+                        },
+                        _ => "y nonzero"
+                    },
+                    _ => "x nonzero"
+                }
+            }
+            function main() -> string {
+                classify(0, 0, 0)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("all zero")),
+    })
+}
+
+#[test]
+fn match_three_levels_nested_middle() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int, y int, z int) -> string {
+                match (x) {
+                    0 => match (y) {
+                        0 => match (z) {
+                            0 => "all zero",
+                            _ => "z nonzero"
+                        },
+                        _ => "y nonzero"
+                    },
+                    _ => "x nonzero"
+                }
+            }
+            function main() -> string {
+                classify(0, 1, 0)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("y nonzero")),
+    })
+}
+
+// ============================================================================
+// Optional with Null Pattern
+// ============================================================================
+
+#[test]
+fn match_optional_null_pattern() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function process(x int?) -> string {
+                match (x) {
+                    null => "none",
+                    n: int => "some"
+                }
+            }
+            function main() -> string {
+                process(null)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("none")),
+    })
+}
+
+#[test]
+fn match_optional_value_pattern() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function process(x int?) -> string {
+                match (x) {
+                    null => "none",
+                    n: int => "some"
+                }
+            }
+            function main() -> string {
+                process(42)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("some")),
+    })
+}
+
+#[test]
+fn match_optional_with_literal_and_typed() -> anyhow::Result<()> {
+    // null + literal + typed pattern
+    assert_vm_executes(Program {
+        source: r#"
+            function process(x int?) -> string {
+                match (x) {
+                    null => "none",
+                    0 => "zero",
+                    n: int => "other"
+                }
+            }
+            function main() -> string {
+                process(0)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("zero")),
+    })
+}
+
+// ============================================================================
+// Enum Variant Patterns
+// ============================================================================
+
+#[test]
+fn match_enum_variant_first() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            enum Status {
+                Active
+                Inactive
+                Pending
+            }
+
+            function classify(s Status) -> string {
+                match (s) {
+                    Status.Active => "active",
+                    Status.Inactive => "inactive",
+                    Status.Pending => "pending"
+                }
+            }
+            function main() -> string {
+                classify(Status.Active)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("active")),
+    })
+}
+
+#[test]
+fn match_enum_variant_last() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            enum Status {
+                Active
+                Inactive
+                Pending
+            }
+
+            function classify(s Status) -> string {
+                match (s) {
+                    Status.Active => "active",
+                    Status.Inactive => "inactive",
+                    Status.Pending => "pending"
+                }
+            }
+            function main() -> string {
+                classify(Status.Pending)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("pending")),
+    })
+}
+
+// ============================================================================
+// Complex Scrutinee Expressions
+// ============================================================================
+
+#[test]
+fn match_arithmetic_scrutinee() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(a int, b int) -> string {
+                match (a + b) {
+                    0 => "zero",
+                    1 => "one",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(2, -1)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one")),
+    })
+}
+
+#[test]
+fn match_function_call_scrutinee() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function helper() -> int {
+                42
+            }
+
+            function classify() -> string {
+                match (helper()) {
+                    42 => "answer",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify()
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("answer")),
+    })
+}

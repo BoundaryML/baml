@@ -3,9 +3,9 @@ source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 80
-Objects: 255
-Globals: 98
+Functions: 86
+Objects: 279
+Globals: 104
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (b)
@@ -600,6 +600,11 @@ Function ExhaustiveWithUnderscore (arity: 1, kind: Exec):
      18   LOAD_CONST 4           (100)
      19   RETURN                 
 
+Function GetStatus (arity: 0, kind: Exec):
+     0   LOAD_CONST 0      (0)
+     1   ALLOC_VARIANT 3   (<enum Status>)
+     2   RETURN            
+
 Function GuardedOnlyNonExhaustive (arity: 1, kind: Exec):
      0    LOAD_VAR 1              (x)
      1    LOAD_CONST 0            (false)
@@ -730,6 +735,81 @@ Function LiteralUnionWithCatchAll (arity: 1, kind: Exec):
      34   LOAD_CONST 6            (success)
      35   RETURN                  
 
+Function MatchArithmeticScrutinee (arity: 2, kind: Exec):
+     0    LOAD_VAR 1             (a)
+     1    LOAD_VAR 2             (b)
+     2    BIN_OP +               
+     3    COPY 0                 
+     4    LOAD_CONST 0           (0)
+     5    CMP_OP ==              
+     6    POP_JUMP_IF_FALSE +3   (to 9)
+     7    POP 1                  
+     8    JUMP +12               (to 20)
+     9    COPY 0                 
+     10   LOAD_CONST 1           (1)
+     11   CMP_OP ==              
+     12   POP_JUMP_IF_FALSE +3   (to 15)
+     13   POP 1                  
+     14   JUMP +4                (to 18)
+     15   POP 1                  
+     16   LOAD_CONST 2           (other)
+     17   JUMP +4                (to 21)
+     18   LOAD_CONST 3           (one)
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 4           (zero)
+     21   RETURN                 
+
+Function MatchComplexScrutinee (arity: 1, kind: Exec):
+     0    LOAD_VAR 1             (x)
+     1    LOAD_CONST 0           (2)
+     2    BIN_OP *               
+     3    LOAD_CONST 1           (1)
+     4    BIN_OP +               
+     5    COPY 0                 
+     6    LOAD_CONST 1           (1)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +3   (to 11)
+     9    POP 1                  
+     10   JUMP +12               (to 22)
+     11   COPY 0                 
+     12   LOAD_CONST 2           (3)
+     13   CMP_OP ==              
+     14   POP_JUMP_IF_FALSE +3   (to 17)
+     15   POP 1                  
+     16   JUMP +4                (to 20)
+     17   POP 1                  
+     18   LOAD_CONST 3           (other)
+     19   JUMP +4                (to 23)
+     20   LOAD_CONST 4           (x was 1)
+     21   JUMP +2                (to 23)
+     22   LOAD_CONST 5           (x was 0)
+     23   RETURN                 
+
+Function MatchFunctionCallScrutinee (arity: 0, kind: Exec):
+     0    LOAD_CONST 0           (null)
+     1    LOAD_GLOBAL 59         (<fn GetStatus>)
+     2    CALL 0                 
+     3    STORE_VAR 1            (_1)
+     4    LOAD_VAR 1             (_1)
+     5    LOAD_CONST 1           (0)
+     6    ALLOC_VARIANT 3        (<enum Status>)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +12               (to 21)
+     10   LOAD_VAR 1             (_1)
+     11   LOAD_CONST 2           (1)
+     12   ALLOC_VARIANT 3        (<enum Status>)
+     13   CMP_OP ==              
+     14   POP_JUMP_IF_FALSE +2   (to 16)
+     15   JUMP +4                (to 19)
+     16   JUMP +1                (to 17)
+     17   LOAD_CONST 3           (pending)
+     18   JUMP +4                (to 22)
+     19   LOAD_CONST 4           (inactive)
+     20   JUMP +2                (to 22)
+     21   LOAD_CONST 5           (active)
+     22   RETURN                 
+
 Function MixedPatterns (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
      1    LOAD_CONST 0           (0)
@@ -794,6 +874,44 @@ Function MultipleUnreachableSpans (arity: 1, kind: Exec):
      32   JUMP +2                (to 34)
      33   LOAD_CONST 6           (active)
      34   RETURN                 
+
+Function NestedEnumMatch (arity: 2, kind: Exec):
+     0    LOAD_VAR 1             (s1)
+     1    LOAD_CONST 0           (0)
+     2    ALLOC_VARIANT 3        (<enum Status>)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    JUMP +12               (to 17)
+     6    LOAD_VAR 1             (s1)
+     7    LOAD_CONST 1           (1)
+     8    ALLOC_VARIANT 3        (<enum Status>)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +2   (to 12)
+     11   JUMP +4                (to 15)
+     12   JUMP +1                (to 13)
+     13   LOAD_CONST 2           (first pending)
+     14   JUMP +21               (to 35)
+     15   LOAD_CONST 3           (first inactive)
+     16   JUMP +19               (to 35)
+     17   LOAD_VAR 2             (s2)
+     18   LOAD_CONST 0           (0)
+     19   ALLOC_VARIANT 3        (<enum Status>)
+     20   CMP_OP ==              
+     21   POP_JUMP_IF_FALSE +2   (to 23)
+     22   JUMP +12               (to 34)
+     23   LOAD_VAR 2             (s2)
+     24   LOAD_CONST 1           (1)
+     25   ALLOC_VARIANT 3        (<enum Status>)
+     26   CMP_OP ==              
+     27   POP_JUMP_IF_FALSE +2   (to 29)
+     28   JUMP +4                (to 32)
+     29   JUMP +1                (to 30)
+     30   LOAD_CONST 4           (first active, second pending)
+     31   JUMP +4                (to 35)
+     32   LOAD_CONST 5           (first active, second inactive)
+     33   JUMP +2                (to 35)
+     34   LOAD_CONST 6           (both active)
+     35   RETURN                 
 
 Function NestedEnumVariantUnions (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (s)
@@ -1373,6 +1491,40 @@ Function StringLiteralWithCatchAll (arity: 1, kind: Exec):
      13   JUMP +2                (to 15)
      14   LOAD_CONST 4           (User message)
      15   RETURN                 
+
+Function ThreeLevelNestedMatch (arity: 3, kind: Exec):
+     0    LOAD_VAR 1             (x)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (0)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +4                (to 10)
+     7    POP 1                  
+     8    LOAD_CONST 1           (x nonzero)
+     9    JUMP +22               (to 31)
+     10   LOAD_VAR 2             (y)
+     11   COPY 0                 
+     12   LOAD_CONST 0           (0)
+     13   CMP_OP ==              
+     14   POP_JUMP_IF_FALSE +3   (to 17)
+     15   POP 1                  
+     16   JUMP +4                (to 20)
+     17   POP 1                  
+     18   LOAD_CONST 2           (y nonzero)
+     19   JUMP +12               (to 31)
+     20   LOAD_VAR 3             (z)
+     21   COPY 0                 
+     22   LOAD_CONST 0           (0)
+     23   CMP_OP ==              
+     24   POP_JUMP_IF_FALSE +3   (to 27)
+     25   POP 1                  
+     26   JUMP +4                (to 30)
+     27   POP 1                  
+     28   LOAD_CONST 3           (z nonzero)
+     29   JUMP +2                (to 31)
+     30   LOAD_CONST 4           (all zero)
+     31   RETURN                 
 
 Function UnionPatternCoversAll (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (r)

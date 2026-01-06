@@ -1147,6 +1147,38 @@ impl Vm {
                             })
                         }
 
+                        // Variant comparison: compare by enum type and variant index
+                        (Value::Object(left_index), Value::Object(right_index))
+                            if matches!(self.objects[left_index], Object::Variant(_))
+                                && matches!(self.objects[right_index], Object::Variant(_)) =>
+                        {
+                            let Object::Variant(left_var) = &self.objects[left_index] else {
+                                unreachable!()
+                            };
+                            let Object::Variant(right_var) = &self.objects[right_index] else {
+                                unreachable!()
+                            };
+
+                            Value::Bool(match op {
+                                CmpOp::Eq => {
+                                    left_var.enm == right_var.enm
+                                        && left_var.index == right_var.index
+                                }
+                                CmpOp::NotEq => {
+                                    left_var.enm != right_var.enm
+                                        || left_var.index != right_var.index
+                                }
+                                _ => {
+                                    return Err(InternalError::CannotApplyCmpOp {
+                                        left: Type::Object(ObjectType::Variant),
+                                        right: Type::Object(ObjectType::Variant),
+                                        op,
+                                    }
+                                    .into());
+                                }
+                            })
+                        }
+
                         _ => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,

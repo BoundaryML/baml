@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -92,12 +92,16 @@ expression: output
       - Non-exhaustive match on bool: missing false
   Function IntLiteralUnionPattern:
     Return: String
+  Function ThreeLevelNestedMatch:
+    Return: String
   Function MultipleUnreachableSpans:
     Return: String
     Errors:
       - Unreachable match arm
       - Unreachable match arm
   Function ExhaustiveCustomBool:
+    Return: String
+  Function NestedEnumMatch:
     Return: String
   Function ExhaustiveMixedLiterals:
     Return: String
@@ -113,6 +117,8 @@ expression: output
     Return: String
     Errors:
       - Non-exhaustive match on MaybeOk: missing 200
+  Function GetStatus:
+    Return: Named("Status")
   Function EnumVariantUnion:
     Return: String
   Function NestedTypeAlias:
@@ -145,6 +151,8 @@ expression: output
     Return: String
   Function GuardedWithFallback:
     Return: Int
+  Function MatchArithmeticScrutinee:
+    Return: String
   Function HighLineNumberNonExhaustive:
     Return: String
     Errors:
@@ -175,6 +183,8 @@ expression: output
     Return: String
     Errors:
       - Non-exhaustive match on Status: missing Status.Pending
+  Function MatchComplexScrutinee:
+    Return: String
   Function ExhaustiveOptional:
     Return: String
   Function NonExhaustiveCustomBoolMissing:
@@ -219,6 +229,8 @@ expression: output
     Return: String
     Errors:
       - Non-exhaustive match on Role: missing "system"
+  Function MatchFunctionCallScrutinee:
+    Return: String
   Function StringLiteralWithCatchAll:
     Return: String
   Function NonExhaustiveEnumMissingMultiple:

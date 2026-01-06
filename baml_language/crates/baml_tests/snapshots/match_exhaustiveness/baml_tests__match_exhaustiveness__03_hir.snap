@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -234,6 +234,19 @@ function IntLiteralUnionPattern(code: SuccessCode) -> string {
       }
 }
 
+function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+      match (x) {
+          0 => match (y) {
+              0 => match (z) {
+                  0 => "all zero",
+                  _ => "z nonzero",
+              },
+              _ => "y nonzero",
+          },
+          _ => "x nonzero",
+      }
+}
+
 function MultipleUnreachableSpans(s: Status) -> string {
       match (s) {
           Status.Active => "active",
@@ -248,6 +261,18 @@ function ExhaustiveCustomBool(b: CustomBool) -> string {
       match (b) {
           true => "yes",
           false => "no",
+      }
+}
+
+function NestedEnumMatch(s1: Status, s2: Status) -> string {
+      match (s1) {
+          Status.Active => match (s2) {
+              Status.Active => "both active",
+              Status.Inactive => "first active, second inactive",
+              Status.Pending => "first active, second pending",
+          },
+          Status.Inactive => "first inactive",
+          Status.Pending => "first pending",
       }
 }
 
@@ -287,6 +312,10 @@ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
       match (code) {
           null => "no code",
       }
+}
+
+function GetStatus() -> Status {
+      Status.Active
 }
 
 function EnumVariantUnion(s: Status) -> string {
@@ -369,6 +398,14 @@ function GuardedWithFallback(x: int) -> int {
       }
 }
 
+function MatchArithmeticScrutinee(a: int, b: int) -> string {
+      match (a + b) {
+          0 => "zero",
+          1 => "one",
+          _ => "other",
+      }
+}
+
 function HighLineNumberNonExhaustive(s: Status) -> string {
       match (s) {
           Status.Active => "active only",
@@ -428,6 +465,14 @@ function NonExhaustiveEnumMissingOne(s: Status) -> string {
       match (s) {
           Status.Active => "active",
           Status.Inactive => "inactive",
+      }
+}
+
+function MatchComplexScrutinee(x: int) -> string {
+      match (x * 2 + 1) {
+          1 => "x was 0",
+          3 => "x was 1",
+          _ => "other",
       }
 }
 
@@ -523,6 +568,14 @@ function NonExhaustiveStringLiteral(role: Role) -> string {
       match (role) {
           "user" => "User",
           "assistant" => "Assistant",
+      }
+}
+
+function MatchFunctionCallScrutinee() -> string {
+      match (GetStatus()) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
       }
 }
 

@@ -1620,130 +1620,108 @@ impl LoweringContext {
         };
 
         // Find CALL_ARGS node and extract arguments
-        let args =
-            node.children()
-                .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
-                .map(|args_node| {
-                    let mut args = Vec::new();
+        // We iterate over children_with_tokens() to handle both expression nodes
+        // and bare tokens (like simple identifiers) in argument position.
+        let args = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CALL_ARGS)
+            .map(|args_node| {
+                let mut args = Vec::new();
 
-                    // First, collect expression nodes
-                    for child in args_node.children() {
-                        if matches!(
-                            child.kind(),
-                            SyntaxKind::EXPR
-                                | SyntaxKind::BINARY_EXPR
-                                | SyntaxKind::UNARY_EXPR
-                                | SyntaxKind::CALL_EXPR
-                                | SyntaxKind::PATH_EXPR
-                                | SyntaxKind::FIELD_ACCESS_EXPR
-                                | SyntaxKind::INDEX_EXPR
-                                | SyntaxKind::IF_EXPR
-                                | SyntaxKind::BLOCK_EXPR
-                                | SyntaxKind::PAREN_EXPR
-                                | SyntaxKind::ARRAY_LITERAL
-                                | SyntaxKind::STRING_LITERAL
-                                | SyntaxKind::OBJECT_LITERAL
-                                | SyntaxKind::MAP_LITERAL
-                        ) {
-                            args.push(self.lower_expr(&child));
+                for element in args_node.children_with_tokens() {
+                    match element {
+                        baml_syntax::NodeOrToken::Node(child_node) => {
+                            // Handle expression nodes
+                            if matches!(
+                                child_node.kind(),
+                                SyntaxKind::EXPR
+                                    | SyntaxKind::BINARY_EXPR
+                                    | SyntaxKind::UNARY_EXPR
+                                    | SyntaxKind::CALL_EXPR
+                                    | SyntaxKind::PATH_EXPR
+                                    | SyntaxKind::FIELD_ACCESS_EXPR
+                                    | SyntaxKind::INDEX_EXPR
+                                    | SyntaxKind::IF_EXPR
+                                    | SyntaxKind::BLOCK_EXPR
+                                    | SyntaxKind::PAREN_EXPR
+                                    | SyntaxKind::ARRAY_LITERAL
+                                    | SyntaxKind::STRING_LITERAL
+                                    | SyntaxKind::OBJECT_LITERAL
+                                    | SyntaxKind::MAP_LITERAL
+                            ) {
+                                args.push(self.lower_expr(&child_node));
+                            }
                         }
-                    }
-
-                    // If no expression nodes found, check for literal tokens
-                    // (parser may emit literals as tokens directly in CALL_ARGS)
-                    if args.is_empty() {
-                        for element in args_node.children_with_tokens() {
-                            match element {
-                                baml_syntax::NodeOrToken::Token(token) => {
-                                    let span = token.text_range();
-                                    let expr = match token.kind() {
-                                        SyntaxKind::INTEGER_LITERAL => {
-                                            let text = token.text();
-                                            let value = text.parse::<i64>().unwrap_or(0);
+                        baml_syntax::NodeOrToken::Token(token) => {
+                            // Handle bare tokens (literals, identifiers)
+                            let span = token.text_range();
+                            let expr = match token.kind() {
+                                SyntaxKind::INTEGER_LITERAL => {
+                                    let text = token.text();
+                                    let value = text.parse::<i64>().unwrap_or(0);
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
+                                }
+                                SyntaxKind::FLOAT_LITERAL => {
+                                    let text = token.text().to_string();
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), span))
+                                }
+                                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                                    let text = token.text().to_string();
+                                    // Strip quotes
+                                    let content =
+                                        if text.starts_with("#\"") && text.ends_with("\"#") {
+                                            text[2..text.len() - 2].to_string()
+                                        } else if text.starts_with('"') && text.ends_with('"') {
+                                            text[1..text.len() - 1].to_string()
+                                        } else {
+                                            text
+                                        };
+                                    Some(
+                                        self.alloc_expr(
+                                            Expr::Literal(Literal::String(content)),
+                                            span,
+                                        ),
+                                    )
+                                }
+                                SyntaxKind::WORD => {
+                                    // Variable reference or keyword (true/false/null)
+                                    let text = token.text();
+                                    match text {
+                                        "true" => {
                                             Some(self.alloc_expr(
-                                                Expr::Literal(Literal::Int(value)),
+                                                Expr::Literal(Literal::Bool(true)),
                                                 span,
                                             ))
                                         }
-                                        SyntaxKind::FLOAT_LITERAL => {
-                                            let text = token.text().to_string();
+                                        "false" => {
                                             Some(self.alloc_expr(
-                                                Expr::Literal(Literal::Float(text)),
+                                                Expr::Literal(Literal::Bool(false)),
                                                 span,
                                             ))
                                         }
-                                        SyntaxKind::STRING_LITERAL
-                                        | SyntaxKind::RAW_STRING_LITERAL => {
-                                            let text = token.text().to_string();
-                                            // Strip quotes
-                                            let content = if text.starts_with("#\"")
-                                                && text.ends_with("\"#")
-                                            {
-                                                text[2..text.len() - 2].to_string()
-                                            } else if text.starts_with('"') && text.ends_with('"') {
-                                                text[1..text.len() - 1].to_string()
-                                            } else {
-                                                text
-                                            };
+                                        "null" => Some(
+                                            self.alloc_expr(Expr::Literal(Literal::Null), span),
+                                        ),
+                                        _ => {
                                             Some(self.alloc_expr(
-                                                Expr::Literal(Literal::String(content)),
+                                                Expr::Path(vec![Name::new(text)]),
                                                 span,
                                             ))
                                         }
-                                        SyntaxKind::WORD => {
-                                            // Variable reference or keyword (true/false/null)
-                                            let text = token.text();
-                                            match text {
-                                                "true" => Some(self.alloc_expr(
-                                                    Expr::Literal(Literal::Bool(true)),
-                                                    span,
-                                                )),
-                                                "false" => Some(self.alloc_expr(
-                                                    Expr::Literal(Literal::Bool(false)),
-                                                    span,
-                                                )),
-                                                "null" => Some(self.alloc_expr(
-                                                    Expr::Literal(Literal::Null),
-                                                    span,
-                                                )),
-                                                _ => Some(self.alloc_expr(
-                                                    Expr::Path(vec![Name::new(text)]),
-                                                    span,
-                                                )),
-                                            }
-                                        }
-                                        _ => None,
-                                    };
-                                    if let Some(e) = expr {
-                                        args.push(e);
                                     }
                                 }
-                                baml_syntax::NodeOrToken::Node(child_node) => {
-                                    // Also handle expression nodes in this pass
-                                    if matches!(
-                                        child_node.kind(),
-                                        SyntaxKind::EXPR
-                                            | SyntaxKind::BINARY_EXPR
-                                            | SyntaxKind::UNARY_EXPR
-                                            | SyntaxKind::CALL_EXPR
-                                            | SyntaxKind::PATH_EXPR
-                                            | SyntaxKind::FIELD_ACCESS_EXPR
-                                            | SyntaxKind::INDEX_EXPR
-                                            | SyntaxKind::IF_EXPR
-                                            | SyntaxKind::BLOCK_EXPR
-                                            | SyntaxKind::PAREN_EXPR
-                                            | SyntaxKind::ARRAY_LITERAL
-                                    ) {
-                                        args.push(self.lower_expr(&child_node));
-                                    }
-                                }
+                                _ => None,
+                            };
+                            if let Some(e) = expr {
+                                args.push(e);
                             }
                         }
                     }
+                }
 
-                    args
-                })
-                .unwrap_or_default();
+                args
+            })
+            .unwrap_or_default();
 
         self.alloc_expr(Expr::Call { callee, args }, node.text_range())
     }

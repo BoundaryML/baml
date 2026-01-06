@@ -1490,6 +1490,63 @@ fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
 
 }
 
+fn ThreeLevelNestedMatch(x: Int, y: Int, z: Int) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Int // x // param
+    let _2: Int // y // param
+    let _3: Int // z // param
+
+    bb0: {
+        switch copy _1 [0: bb3, otherwise: bb4];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        switch copy _2 [0: bb6, otherwise: bb7];
+    }
+
+    bb4: {
+        _0 = const "x nonzero";
+        goto -> bb2;
+    }
+
+    bb5: {
+        goto -> bb2;
+    }
+
+    bb6: {
+        switch copy _3 [0: bb9, otherwise: bb10];
+    }
+
+    bb7: {
+        _0 = const "y nonzero";
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb5;
+    }
+
+    bb9: {
+        _0 = const "all zero";
+        goto -> bb8;
+    }
+
+    bb10: {
+        _0 = const "z nonzero";
+        goto -> bb8;
+    }
+
+}
+
 fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
@@ -1600,6 +1657,95 @@ fn ExhaustiveCustomBool(b: Named("CustomBool")) -> String {
     }
 
     bb6: {
+        goto -> bb2;
+    }
+
+}
+
+fn NestedEnumMatch(s1: Enum("Status"), s2: Enum("Status")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Enum("Status") // s1 // param
+    let _2: Enum("Status") // s2 // param
+    let _3: Bool
+    let _4: Bool
+    let _5: Bool
+    let _6: Bool
+    let _7: Bool
+    let _8: Bool
+
+    bb0: {
+        _3 = copy _1 == const Status.Active;
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _4 = copy _2 == const Status.Active;
+        branch copy _4 -> [bb6, bb7];
+    }
+
+    bb4: {
+        _7 = copy _1 == const Status.Inactive;
+        branch copy _7 -> [bb12, bb13];
+    }
+
+    bb5: {
+        goto -> bb2;
+    }
+
+    bb6: {
+        _0 = const "both active";
+        goto -> bb5;
+    }
+
+    bb7: {
+        _5 = copy _2 == const Status.Inactive;
+        branch copy _5 -> [bb8, bb9];
+    }
+
+    bb8: {
+        _0 = const "first active, second inactive";
+        goto -> bb5;
+    }
+
+    bb9: {
+        _6 = copy _2 == const Status.Pending;
+        branch copy _6 -> [bb10, bb11];
+    }
+
+    bb10: {
+        _0 = const "first active, second pending";
+        goto -> bb5;
+    }
+
+    bb11: {
+        goto -> bb5;
+    }
+
+    bb12: {
+        _0 = const "first inactive";
+        goto -> bb2;
+    }
+
+    bb13: {
+        _8 = copy _1 == const Status.Pending;
+        branch copy _8 -> [bb14, bb15];
+    }
+
+    bb14: {
+        _0 = const "first pending";
+        goto -> bb2;
+    }
+
+    bb15: {
         goto -> bb2;
     }
 
@@ -1832,6 +1978,21 @@ fn NonExhaustiveOptionalMissingValue(code: Named("MaybeOk")) -> String {
 
     bb4: {
         goto -> bb2;
+    }
+
+}
+
+fn GetStatus() -> Enum("Status") {
+    // Locals:
+    let _0: Enum("Status") // return
+
+    bb0: {
+        _0 = const fn Status.Active;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 
 }
@@ -2320,6 +2481,47 @@ fn GuardedWithFallback(x: Int) -> Int {
 
 }
 
+fn MatchArithmeticScrutinee(a: Int, b: Int) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Int // a // param
+    let _2: Int // b // param
+    let _3: Int
+    let _4: Int
+    let _5: Int
+
+    bb0: {
+        _4 = copy _1;
+        _5 = copy _2;
+        _3 = copy _4 + copy _5;
+        switch copy _3 [0: bb3, 1: bb4, otherwise: bb5];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = const "zero";
+        goto -> bb2;
+    }
+
+    bb4: {
+        _0 = const "one";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const "other";
+        goto -> bb2;
+    }
+
+}
+
 fn HighLineNumberNonExhaustive(s: Enum("Status")) -> String {
     // Locals:
     let _0: String // return
@@ -2699,6 +2901,50 @@ fn NonExhaustiveEnumMissingOne(s: Enum("Status")) -> String {
     }
 
     bb6: {
+        goto -> bb2;
+    }
+
+}
+
+fn MatchComplexScrutinee(x: Int) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Int // x // param
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Int
+    let _6: Int
+
+    bb0: {
+        _4 = copy _1;
+        _5 = const 2_i64;
+        _3 = copy _4 * copy _5;
+        _6 = const 1_i64;
+        _2 = copy _3 + copy _6;
+        switch copy _2 [1: bb3, 3: bb4, otherwise: bb5];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = const "x was 0";
+        goto -> bb2;
+    }
+
+    bb4: {
+        _0 = const "x was 1";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const "other";
         goto -> bb2;
     }
 
@@ -3275,6 +3521,64 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
 
     bb6: {
         goto -> bb2;
+    }
+
+}
+
+fn MatchFunctionCallScrutinee() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("Status")
+    let _2: Function { params: [], ret: Named("Status") }
+    let _3: Bool
+    let _4: Bool
+    let _5: Bool
+
+    bb0: {
+        _2 = const fn GetStatus;
+        _1 = call copy _2() -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _3 = copy _1 == const Status.Active;
+        branch copy _3 -> [bb4, bb5];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+    bb4: {
+        _0 = const "active";
+        goto -> bb3;
+    }
+
+    bb5: {
+        _4 = copy _1 == const Status.Inactive;
+        branch copy _4 -> [bb6, bb7];
+    }
+
+    bb6: {
+        _0 = const "inactive";
+        goto -> bb3;
+    }
+
+    bb7: {
+        _5 = copy _1 == const Status.Pending;
+        branch copy _5 -> [bb8, bb9];
+    }
+
+    bb8: {
+        _0 = const "pending";
+        goto -> bb3;
+    }
+
+    bb9: {
+        goto -> bb3;
     }
 
 }
