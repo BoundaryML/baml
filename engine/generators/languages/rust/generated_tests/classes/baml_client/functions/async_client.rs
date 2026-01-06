@@ -26,6 +26,14 @@ macro_rules! impl_options_convenience_methods {
                 self.with_options(self.options.clone().with_collector(collector))
             }
 
+            pub fn with_collectors(&self, collectors: &[baml::Collector]) -> Self {
+                self.with_options(self.options.clone().with_collectors(collectors))
+            }
+
+            pub fn with_cancellation_token(&self, token: Option<baml::CancellationToken>) -> Self {
+                self.with_options(self.options.clone().with_cancellation_token(token))
+            }
+
             pub fn with_type_builder(&self, tb: &super::super::type_builder::TypeBuilder) -> Self {
                 self.with_options(self.options.clone().with_type_builder(tb))
             }

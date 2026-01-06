@@ -14,6 +14,7 @@ pub struct FunctionOptions {
     collectors: Option<Vec<baml::Collector>>,
     client: Option<String>,
     client_registry: Option<baml::ClientRegistry>,
+    cancellation_token: Option<baml::CancellationToken>,
 }
 
 impl Default for FunctionOptions {
@@ -32,6 +33,7 @@ impl FunctionOptions {
             collectors: None,
             client: None,
             client_registry: None,
+            cancellation_token: None,
         }
     }
 
@@ -72,6 +74,20 @@ impl FunctionOptions {
         self.collectors
             .get_or_insert_with(Vec::new)
             .push(collector.clone());
+        self
+    }
+
+    /// Add multiple collectors to gather telemetry from this call.
+    pub fn with_collectors(mut self, collectors: &[baml::Collector]) -> Self {
+        self.collectors
+            .get_or_insert_with(Vec::new)
+            .extend(collectors.iter().map(|c| c.clone()));
+        self
+    }
+
+    /// Set the cancellation token for this call.
+    pub fn with_cancellation_token(mut self, token: Option<baml::CancellationToken>) -> Self {
+        self.cancellation_token = token;
         self
     }
 

@@ -44,7 +44,7 @@ mod proto {
 use std::ffi::CString;
 
 // Public API - re-exported through baml_client
-pub use args::FunctionArgs;
+pub use args::{CancellationToken, FunctionArgs};
 // New dynamic type exports
 pub use async_stream::AsyncStreamingCall;
 // Re-export derive macros

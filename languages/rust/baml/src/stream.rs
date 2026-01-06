@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use prost::Message;
 
 use crate::{
+    args::cancellation::OnCancelGuard,
     codec::BamlDecode, error::BamlError, ffi::callbacks::CallbackResult,
     proto::baml_cffi_v1::CffiValueHolder,
 };
@@ -28,6 +29,8 @@ pub struct StreamingCall<TStream, TFinal: Clone> {
     receiver: mpsc::Receiver<CallbackResult>,
     state: StreamState,
     final_value: Option<Result<TFinal, BamlError>>,
+    // Holds the cancellation guard - when dropped, stops watching for cancellation
+    _cancel_guard: Option<OnCancelGuard>,
     // Since we we need to have a dual type parameter, we use a phantom type to ensure type safety
     // Rust requires that declared generic types be used in the type parameters, so we use a
     // phantom type to ensure type safety
@@ -44,12 +47,17 @@ where
     TPartial: BamlDecode,
     TFinal: BamlDecode,
 {
-    pub(crate) fn new(id: u32, receiver: mpsc::Receiver<CallbackResult>) -> Self {
+    pub(crate) fn new(
+        id: u32,
+        receiver: mpsc::Receiver<CallbackResult>,
+        cancel_guard: Option<OnCancelGuard>,
+    ) -> Self {
         Self {
             id,
             receiver,
             state: StreamState::Open,
             final_value: None,
+            _cancel_guard: cancel_guard,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -206,7 +214,10 @@ where
 impl<TPartial, TFinal: Clone> Drop for StreamingCall<TPartial, TFinal> {
     fn drop(&mut self) {
         if matches!(self.state, StreamState::Open) {
-            // TODO: Abort the call
+            #[allow(unsafe_code)]
+            unsafe {
+                let _ = baml_sys::cancel_function_call(self.id);
+            }
         }
     }
 }

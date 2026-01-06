@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use prost::Message;
 
 use crate::{
+    args::cancellation::OnCancelGuard,
     codec::BamlDecode,
     error::BamlError,
     ffi::{self, callbacks::CallbackResult},
@@ -22,6 +23,8 @@ pub struct AsyncStreamingCall<TPartial, TFinal> {
     receiver: async_channel::Receiver<CallbackResult>,
     state: StreamState,
     final_value: Option<Result<TFinal, BamlError>>,
+    // Holds the cancellation guard - when dropped, stops watching for cancellation
+    _cancel_guard: Option<OnCancelGuard>,
     _phantom: PhantomData<TPartial>,
 }
 
@@ -30,12 +33,17 @@ where
     TPartial: BamlDecode,
     TFinal: BamlDecode + Clone,
 {
-    pub(crate) fn new(id: u32, receiver: async_channel::Receiver<CallbackResult>) -> Self {
+    pub(crate) fn new(
+        id: u32,
+        receiver: async_channel::Receiver<CallbackResult>,
+        cancel_guard: Option<OnCancelGuard>,
+    ) -> Self {
         Self {
             id,
             receiver,
             state: StreamState::Open,
             final_value: None,
+            _cancel_guard: cancel_guard,
             _phantom: PhantomData,
         }
     }

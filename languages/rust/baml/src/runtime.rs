@@ -108,6 +108,17 @@ impl BamlRuntime {
             return Err(BamlError::internal(error_msg));
         }
 
+        // Set up cancellation callback if token provided
+        // Guard is dropped when function returns, stopping the watcher
+        let _cancel_guard = args.cancellation_token.as_ref().map(|token| {
+            token.on_cancel(move || {
+                #[allow(unsafe_code)]
+                unsafe {
+                    let _ = ffi::cancel_function_call(id);
+                }
+            })
+        });
+
         // Wait for result
         match receiver.recv() {
             Ok(callbacks::CallbackResult::Final(data)) => {
@@ -164,7 +175,17 @@ impl BamlRuntime {
             return Err(BamlError::internal(error_msg));
         }
 
-        Ok(StreamingCall::new(id, receiver))
+        // Set up cancellation callback if token provided
+        let cancel_guard = args.cancellation_token.as_ref().map(|token| {
+            token.on_cancel(move || {
+                #[allow(unsafe_code)]
+                unsafe {
+                    let _ = ffi::cancel_function_call(id);
+                }
+            })
+        });
+
+        Ok(StreamingCall::new(id, receiver, cancel_guard))
     }
 
     /// Call a function asynchronously (non-blocking)
@@ -204,6 +225,17 @@ impl BamlRuntime {
             };
             return Err(BamlError::internal(error_msg));
         }
+
+        // Set up cancellation callback if token provided
+        // Guard is dropped when function returns, stopping the watcher
+        let _cancel_guard = args.cancellation_token.as_ref().map(|token| {
+            token.on_cancel(move || {
+                #[allow(unsafe_code)]
+                unsafe {
+                    let _ = ffi::cancel_function_call(id);
+                }
+            })
+        });
 
         // Await result (non-blocking)
         match receiver.recv().await {
@@ -261,7 +293,17 @@ impl BamlRuntime {
             return Err(BamlError::internal(error_msg));
         }
 
-        Ok(AsyncStreamingCall::new(id, receiver))
+        // Set up cancellation callback if token provided
+        let cancel_guard = args.cancellation_token.as_ref().map(|token| {
+            token.on_cancel(move || {
+                #[allow(unsafe_code)]
+                unsafe {
+                    let _ = ffi::cancel_function_call(id);
+                }
+            })
+        });
+
+        Ok(AsyncStreamingCall::new(id, receiver, cancel_guard))
     }
 
     /// Parse raw LLM output into typed result

@@ -149,7 +149,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     "rust" => {
                         vec![
                             format!(
-                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} RUSTFLAGS=-Awarnings cargo check",
+                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo test --no-run",
                                 get_dylib_path()?.display()
                             )
                             .to_string(),
