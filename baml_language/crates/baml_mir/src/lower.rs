@@ -497,14 +497,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
 
             Expr::Assert { condition } => {
-                // Evaluate the condition
-                let cond_local = self
-                    .builder
-                    .temp(Self::lower_typed_ir_ty(body.ty(*condition)));
-                self.lower_expr(*condition, Place::local(cond_local), body);
-
-                // Emit assert statement
-                self.builder.assert(Operand::copy_local(cond_local));
+                // Evaluate the condition and emit assert statement
+                let cond_operand = self.lower_to_operand(*condition, body);
+                self.builder.assert(cond_operand);
 
                 // Return unit
                 self.builder
@@ -513,13 +508,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             // ========== Assignment ==========
             Expr::Assign { target, value } => {
-                let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                let value_local = self.builder.temp(value_ty);
-                self.lower_expr(*value, Place::local(value_local), body);
-
+                let value_operand = self.lower_to_operand(*value, body);
                 let target_place = self.lower_lvalue(*target, body);
                 self.builder
-                    .assign(target_place, Rvalue::Use(Operand::copy_local(value_local)));
+                    .assign(target_place, Rvalue::Use(value_operand));
 
                 // Return unit
                 self.builder
@@ -537,10 +529,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     Rvalue::Use(Operand::Copy(target_place.clone())),
                 );
 
-                // Load rhs
-                let rhs_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                let rhs_local = self.builder.temp(rhs_ty);
-                self.lower_expr(*value, Place::local(rhs_local), body);
+                // Evaluate rhs
+                let rhs_operand = self.lower_to_operand(*value, body);
 
                 // Compute new value
                 let mir_op = Self::convert_assign_op(*op);
@@ -550,7 +540,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     Rvalue::BinaryOp {
                         op: mir_op,
                         left: Operand::copy_local(current_local),
-                        right: Operand::copy_local(rhs_local),
+                        right: rhs_operand,
                     },
                 );
 
@@ -580,9 +570,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
 
             Expr::Unary { op, operand } => {
-                let operand_ty = Self::lower_typed_ir_ty(body.ty(*operand));
-                let operand_local = self.builder.temp(operand_ty);
-                self.lower_expr(*operand, Place::local(operand_local), body);
+                let operand_val = self.lower_to_operand(*operand, body);
 
                 let mir_op = match op {
                     UnaryOp::Not => MirUnaryOp::Not,
@@ -593,7 +581,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     dest,
                     Rvalue::UnaryOp {
                         op: mir_op,
-                        operand: Operand::copy_local(operand_local),
+                        operand: operand_val,
                     },
                 );
             }
@@ -607,12 +595,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Expr::Array { elements } => {
                 let elem_operands: Vec<Operand> = elements
                     .iter()
-                    .map(|&elem| {
-                        let elem_ty = Self::lower_typed_ir_ty(body.ty(elem));
-                        let elem_local = self.builder.temp(elem_ty);
-                        self.lower_expr(elem, Place::local(elem_local), body);
-                        Operand::copy_local(elem_local)
-                    })
+                    .map(|&e| self.lower_to_operand(e, body))
                     .collect();
 
                 self.builder.assign(dest, Rvalue::Array(elem_operands));
@@ -627,12 +610,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 if spreads.is_empty() {
                     let field_operands: Vec<Operand> = fields
                         .iter()
-                        .map(|(_, value)| {
-                            let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                            let value_local = self.builder.temp(value_ty);
-                            self.lower_expr(*value, Place::local(value_local), body);
-                            Operand::copy_local(value_local)
-                        })
+                        .map(|(_, v)| self.lower_to_operand(*v, body))
                         .collect();
 
                     let kind = if let Some(name) = type_name {
@@ -728,10 +706,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                             // Generate the operand based on the source
                             match best_source {
                                 Some(FieldSource::Named(value_expr)) => {
-                                    let value_ty = Self::lower_typed_ir_ty(body.ty(value_expr));
-                                    let value_local = self.builder.temp(value_ty);
-                                    self.lower_expr(value_expr, Place::local(value_local), body);
-                                    Operand::copy_local(value_local)
+                                    self.lower_to_operand(value_expr, body)
                                 }
                                 Some(FieldSource::Spread(spread_local, field_idx)) => {
                                     // Load field from spread source
@@ -762,18 +737,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Expr::Map { entries } => {
                 let entry_operands: Vec<(Operand, Operand)> = entries
                     .iter()
-                    .map(|(key, value)| {
-                        let key_ty = Self::lower_typed_ir_ty(body.ty(*key));
-                        let key_local = self.builder.temp(key_ty);
-                        self.lower_expr(*key, Place::local(key_local), body);
-
-                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
-                        let value_local = self.builder.temp(value_ty);
-                        self.lower_expr(*value, Place::local(value_local), body);
-
+                    .map(|(k, v)| {
                         (
-                            Operand::copy_local(key_local),
-                            Operand::copy_local(value_local),
+                            self.lower_to_operand(*k, body),
+                            self.lower_to_operand(*v, body),
                         )
                     })
                     .collect();
@@ -1271,9 +1238,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     ) {
         // Special case: instanceof operator - RHS is a type name, not a value
         if op == BinaryOp::Instanceof {
-            let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
-            let lhs_local = self.builder.temp(lhs_ty);
-            self.lower_expr(lhs, Place::local(lhs_local), body);
+            let lhs_operand = self.lower_to_operand(lhs, body);
 
             // Extract the type name from RHS (should be a Var or single-segment Path)
             let type_name = match body.expr(rhs) {
@@ -1285,30 +1250,22 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             self.builder.assign(
                 dest,
                 Rvalue::IsType {
-                    operand: Operand::copy_local(lhs_local),
+                    operand: lhs_operand,
                     ty: Ty::Named(type_name),
                 },
             );
             return;
         }
 
-        let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
-        let rhs_ty = Self::lower_typed_ir_ty(body.ty(rhs));
-
-        let lhs_local = self.builder.temp(lhs_ty);
-        self.lower_expr(lhs, Place::local(lhs_local), body);
-
-        let rhs_local = self.builder.temp(rhs_ty);
-        self.lower_expr(rhs, Place::local(rhs_local), body);
-
-        let mir_op = Self::convert_binop(op);
+        let lhs_operand = self.lower_to_operand(lhs, body);
+        let rhs_operand = self.lower_to_operand(rhs, body);
 
         self.builder.assign(
             dest,
             Rvalue::BinaryOp {
-                op: mir_op,
-                left: Operand::copy_local(lhs_local),
-                right: Operand::copy_local(rhs_local),
+                op: Self::convert_binop(op),
+                left: lhs_operand,
+                right: rhs_operand,
             },
         );
     }
@@ -1552,41 +1509,18 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                                             // Look for 'when' field
                                             for (field_name, field_expr_id) in fields {
                                                 if field_name.as_str() == "when" {
-                                                    // Lower the filter expression
-                                                    let filter_ty = Self::lower_typed_ir_ty(
-                                                        body.ty(*field_expr_id),
-                                                    );
-                                                    let filter_local = self.builder.temp(filter_ty);
-                                                    self.lower_expr(
-                                                        *field_expr_id,
-                                                        Place::local(filter_local),
-                                                        body,
-                                                    );
-
-                                                    // Emit WatchOptions statement
-                                                    self.builder.watch_options(
-                                                        local,
-                                                        Operand::copy_local(filter_local),
-                                                    );
+                                                    let filter_operand =
+                                                        self.lower_to_operand(*field_expr_id, body);
+                                                    self.builder
+                                                        .watch_options(local, filter_operand);
                                                     break;
                                                 }
                                             }
                                         } else {
                                             // Direct filter value (function or string)
-                                            let filter_ty =
-                                                Self::lower_typed_ir_ty(body.ty(filter_arg));
-                                            let filter_local = self.builder.temp(filter_ty);
-                                            self.lower_expr(
-                                                filter_arg,
-                                                Place::local(filter_local),
-                                                body,
-                                            );
-
-                                            // Emit WatchOptions statement
-                                            self.builder.watch_options(
-                                                local,
-                                                Operand::copy_local(filter_local),
-                                            );
+                                            let filter_operand =
+                                                self.lower_to_operand(filter_arg, body);
+                                            self.builder.watch_options(local, filter_operand);
                                         }
                                     }
                                     // Assign null to dest (options returns void)
@@ -1625,29 +1559,15 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             if let Some((def, _)) = baml_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
             {
-                // Found a builtin method
-                let receiver_local = self.builder.temp(thir_base_ty);
-                self.lower_expr(*base, Place::local(receiver_local), body);
+                // Found a builtin method - pass receiver as first argument
+                let mut all_args = vec![self.lower_to_operand(*base, body)];
+                all_args.extend(self.lower_args(args, body));
 
-                let mut all_args = vec![Operand::copy_local(receiver_local)];
-                for &arg in args {
-                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
-                    let arg_local = self.builder.temp(arg_ty);
-                    self.lower_expr(arg, Place::local(arg_local), body);
-                    all_args.push(Operand::copy_local(arg_local));
-                }
-
-                let continue_block = self.builder.create_block();
-
-                self.builder.call(
+                self.emit_call(
                     Operand::Constant(Constant::Function(Name::new(def.path))),
                     all_args,
                     dest,
-                    continue_block,
-                    None,
                 );
-
-                self.builder.set_current_block(continue_block);
                 return;
             }
         }
@@ -1661,62 +1581,20 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             // Check if base is a class type (has a class name)
             if Self::class_name_from_ty(&thir_base_ty).is_some() {
                 // This is a method call - pass receiver as first argument
-                let receiver_local = self.builder.temp(thir_base_ty);
-                self.lower_expr(*base, Place::local(receiver_local), body);
+                // Must lower receiver before callee to preserve evaluation order
+                let mut all_args = vec![self.lower_to_operand(*base, body)];
+                all_args.extend(self.lower_args(args, body));
+                let callee_operand = self.lower_to_operand(callee, body);
 
-                let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
-                let callee_local = self.builder.temp(callee_ty);
-                self.lower_expr(callee, Place::local(callee_local), body);
-
-                let mut all_args = vec![Operand::copy_local(receiver_local)];
-                for &arg in args {
-                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
-                    let arg_local = self.builder.temp(arg_ty);
-                    self.lower_expr(arg, Place::local(arg_local), body);
-                    all_args.push(Operand::copy_local(arg_local));
-                }
-
-                let continue_block = self.builder.create_block();
-
-                self.builder.call(
-                    Operand::copy_local(callee_local),
-                    all_args,
-                    dest,
-                    continue_block,
-                    None,
-                );
-
-                self.builder.set_current_block(continue_block);
+                self.emit_call(callee_operand, all_args, dest);
                 return;
             }
         }
 
         // Regular function call (not a method)
-        let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
-        let callee_local = self.builder.temp(callee_ty);
-        self.lower_expr(callee, Place::local(callee_local), body);
-
-        let arg_operands: Vec<Operand> = args
-            .iter()
-            .map(|&arg| {
-                let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
-                let arg_local = self.builder.temp(arg_ty);
-                self.lower_expr(arg, Place::local(arg_local), body);
-                Operand::copy_local(arg_local)
-            })
-            .collect();
-
-        let continue_block = self.builder.create_block();
-
-        self.builder.call(
-            Operand::copy_local(callee_local),
-            arg_operands,
-            dest,
-            continue_block,
-            None,
-        );
-
-        self.builder.set_current_block(continue_block);
+        let callee_operand = self.lower_to_operand(callee, body);
+        let arg_operands = self.lower_args(args, body);
+        self.emit_call(callee_operand, arg_operands, dest);
     }
 
     /// Lower an expression that can be assigned to (lvalue).
@@ -1823,6 +1701,33 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Ty::Named(name) | Ty::Class(name) => Some(name.to_string()),
             _ => None,
         }
+    }
+
+    /// Lower an expression to a temporary and return an operand that copies it.
+    ///
+    /// This is a convenience method for the common pattern of:
+    /// 1. Creating a temporary local with the expression's type
+    /// 2. Lowering the expression into that temporary
+    /// 3. Creating an operand that copies from the temporary
+    fn lower_to_operand(&mut self, expr: ExprId, body: &ExprBody) -> Operand {
+        let ty = Self::lower_typed_ir_ty(body.ty(expr));
+        let local = self.builder.temp(ty);
+        self.lower_expr(expr, Place::local(local), body);
+        Operand::copy_local(local)
+    }
+
+    /// Lower a slice of expressions to operands.
+    fn lower_args(&mut self, args: &[ExprId], body: &ExprBody) -> Vec<Operand> {
+        args.iter()
+            .map(|&a| self.lower_to_operand(a, body))
+            .collect()
+    }
+
+    /// Emit a function call with automatic continue block handling.
+    fn emit_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
+        let continue_block = self.builder.create_block();
+        self.builder.call(callee, args, dest, continue_block, None);
+        self.builder.set_current_block(continue_block);
     }
 
     /// Convert a VIR type to a TIR type for MIR locals.
