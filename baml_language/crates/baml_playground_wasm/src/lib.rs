@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use baml_db::{RootDatabase, SourceFile, baml_hir, baml_tir, baml_workspace};
+use baml_db::{baml_hir, baml_tir, baml_workspace, RootDatabase, SourceFile};
+use baml_runtime::function_lookup;
 use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "console_error_panic")]
@@ -183,21 +184,9 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
-    /// Find a FunctionLoc by name, iterating through project items.
+    /// Find a FunctionLoc by name, using the shared function_lookup module.
     fn find_function_by_name(&self, name: &str) -> Option<baml_hir::FunctionLoc<'_>> {
-        let items = baml_hir::project_items(&self.db, self.project);
-
-        for item in items.items(&self.db) {
-            if let baml_hir::ItemId::Function(func_loc) = item {
-                let file = func_loc.file(&self.db);
-                let item_tree = baml_hir::file_item_tree(&self.db, file);
-                let func = &item_tree[func_loc.id(&self.db)];
-                if func.name.as_str() == name {
-                    return Some(*func_loc);
-                }
-            }
-        }
-        None
+        function_lookup::find_function_by_name(&self.db, self.project, name)
     }
 }
 

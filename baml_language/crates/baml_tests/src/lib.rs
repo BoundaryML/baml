@@ -4,6 +4,7 @@
 //! - [`vm`]: Test-friendly representations of VM values and execution states
 //! - [`codegen`]: Test utilities for bytecode compilation tests
 //! - [`bytecode`]: Shared test utilities for bytecode compilation and VM execution
+//! - [`render_prompt`]: Snapshot tests for prompt rendering
 //! - Automatic snapshot tests generated from the `projects/` directory by `build.rs`
 
 pub mod bytecode;
@@ -12,6 +13,7 @@ pub mod vm;
 
 #[cfg(test)]
 pub mod incremental;
+
 
 #[cfg(test)]
 pub mod utils;

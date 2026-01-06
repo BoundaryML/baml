@@ -325,6 +325,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_build_request_tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_db",
+ "baml_jinja_runtime",
+ "baml_runtime",
+ "baml_types",
+ "insta",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "baml_cli"
 version = "0.0.0"
 dependencies = [
@@ -574,8 +588,11 @@ dependencies = [
 name = "baml_runtime"
 version = "0.0.0"
 dependencies = [
+ "baml_db",
+ "baml_hir",
  "baml_jinja_runtime",
  "baml_jsonish",
+ "baml_tir",
  "baml_types",
  "chrono",
  "getrandom 0.2.16",
@@ -2160,11 +2177,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46fdb647ebde000f43b5b53f773c30cf9b0cb4300453208713fa38b2c70935a0"
 dependencies = [
  "console",
+ "globset",
  "once_cell",
  "pest",
  "pest_derive",
  "serde",
  "similar",
+ "walkdir",
 ]
 
 [[package]]

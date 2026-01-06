@@ -23,6 +23,7 @@
 pub mod api;
 pub mod context;
 pub mod errors;
+pub mod function_lookup;
 pub mod llm_request;
 pub mod llm_response;
 pub mod orchestrator;
