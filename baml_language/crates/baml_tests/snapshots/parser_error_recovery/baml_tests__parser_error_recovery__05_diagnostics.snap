@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected class name, found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -14,7 +14,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected '{', found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -24,7 +24,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -34,7 +34,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ 0:1:10 ]
+   ╭─[ invalid_syntax.baml:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
@@ -44,7 +44,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found '{'
-   ╭─[ 0:1:18 ]
+   ╭─[ invalid_syntax.baml:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
@@ -54,7 +54,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ 0:2:3 ]
+   ╭─[ invalid_syntax.baml:2:3 ]
    │
  2 │   field string
    │   ──┬──  
@@ -64,7 +64,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found identifier
-   ╭─[ 0:2:9 ]
+   ╭─[ invalid_syntax.baml:2:9 ]
    │
  2 │   field string
    │         ───┬──  
@@ -74,7 +74,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected top-level declaration, found '}'
-   ╭─[ 0:3:1 ]
+   ╭─[ invalid_syntax.baml:3:1 ]
    │
  3 │ }
    │ ┬  
@@ -84,7 +84,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected type, found '{'
-    ╭─[ 0:10:19 ]
+    ╭─[ invalid_syntax.baml:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
@@ -94,7 +94,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected LLM function missing 'prompt' field, found '}'
-    ╭─[ 0:12:1 ]
+    ╭─[ invalid_syntax.baml:12:1 ]
     │
  12 │ }
     │ ┬  
@@ -104,7 +104,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected '}', found class
-   ╭─[ 1:5:1 ]
+   ╭─[ missing_braces.baml:5:1 ]
    │
  5 │ class Another {  // Should still parse this class
    │ ──┬──  
@@ -114,7 +114,7 @@ expression: output
 ───╯
 
   [parse] Error: field 'field2' is missing a type annotation
-   ╭─[ 2:4:3 ]
+   ╭─[ partial_input.baml:4:3 ]
    │
  4 │   field2  // Missing type entirely
    │   ───┬──  
@@ -124,7 +124,7 @@ expression: output
 ───╯
 
   [parse] Error: field 'string' is missing a type annotation
-   ╭─[ 2:6:10 ]
+   ╭─[ partial_input.baml:6:10 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │          ───┬──  
@@ -134,7 +134,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Unexpected token in class body, found '@'
-   ╭─[ 2:6:17 ]
+   ╭─[ partial_input.baml:6:17 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
@@ -144,7 +144,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected ')', found identifier
-   ╭─[ 2:7:10 ]
+   ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
@@ -154,7 +154,7 @@ expression: output
 ───╯
 
   [parse] Error: field 'string' is missing a type annotation
-   ╭─[ 2:7:10 ]
+   ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
@@ -164,7 +164,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected ')', found function
-    ╭─[ 2:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -174,7 +174,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected return type (->), found function
-    ╭─[ 2:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -184,7 +184,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected function body, found function
-    ╭─[ 2:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -194,7 +194,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected '{', found identifier
-    ╭─[ 2:19:3 ]
+    ╭─[ partial_input.baml:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
@@ -204,7 +204,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected top-level declaration, found identifier
-    ╭─[ 2:19:3 ]
+    ╭─[ partial_input.baml:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
@@ -214,7 +214,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ 2:20:1 ]
+    ╭─[ partial_input.baml:20:1 ]
     │
  20 │ }
     │ ┬  
@@ -224,7 +224,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected ')', found identifier
-   ╭─[ 3:4:25 ]
+   ╭─[ unclosed_string.baml:4:25 ]
    │
  4 │   field3 string @alias("another closed string")  // Should still parse this
    │                         ───┬───  
@@ -234,7 +234,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Unclosed string literal, found EOF
-   ╭─[ 3:5:2 ]
+   ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
    │  ┬  
@@ -244,7 +244,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected '}', found EOF
-   ╭─[ 3:5:2 ]
+   ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
    │  ┬  
@@ -254,13 +254,13 @@ expression: output
 ───╯
 
   [hir] Error: Duplicate field 'string' in class 'Partial'
-   ╭─[ 2:7:10 ]
+   ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
    │             ╰──── duplicate definition
    │
-   ├─[ 2:7:10 ]
+   ├─[ partial_input.baml:7:10 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │          ───┬──  

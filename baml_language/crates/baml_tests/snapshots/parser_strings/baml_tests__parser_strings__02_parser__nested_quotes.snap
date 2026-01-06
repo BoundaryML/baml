@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -183,7 +183,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected attribute argument, found error
-   ╭─[ 0:4:34 ]
+   ╭─[ nested_quotes.baml:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
@@ -193,7 +193,7 @@ Error: Expected attribute argument, found error
 ───╯
 
 Error: Expected ')', found error
-   ╭─[ 0:4:34 ]
+   ╭─[ nested_quotes.baml:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
@@ -203,7 +203,7 @@ Error: Expected ')', found error
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:4:34 ]
+   ╭─[ nested_quotes.baml:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
@@ -213,7 +213,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:4:44 ]
+   ╭─[ nested_quotes.baml:4:44 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                            ┬  
@@ -223,7 +223,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: field 'The' is missing a type annotation
-   ╭─[ 0:5:37 ]
+   ╭─[ nested_quotes.baml:5:37 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                     ─┬─  
@@ -233,7 +233,7 @@ Error: field 'The' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:5:41 ]
+   ╭─[ nested_quotes.baml:5:41 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
@@ -243,7 +243,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:5:42 ]
+   ╭─[ nested_quotes.baml:5:42 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                          ┬  
@@ -253,7 +253,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: field 'quote' is missing a type annotation
-   ╭─[ 0:5:43 ]
+   ╭─[ nested_quotes.baml:5:43 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                           ──┬──  
@@ -263,7 +263,7 @@ Error: field 'quote' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:5:48 ]
+   ╭─[ nested_quotes.baml:5:48 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
@@ -273,7 +273,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:5:49 ]
+   ╭─[ nested_quotes.baml:5:49 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                 ┬  
@@ -283,7 +283,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:5:58 ]
+   ╭─[ nested_quotes.baml:5:58 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                          ┬  
@@ -293,7 +293,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found ')'
-   ╭─[ 0:5:59 ]
+   ╭─[ nested_quotes.baml:5:59 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                           ┬  
@@ -303,7 +303,7 @@ Error: Expected Unexpected token in class body, found ')'
 ───╯
 
 Error: Expected ')', found identifier
-   ╭─[ 0:6:47 ]
+   ╭─[ nested_quotes.baml:6:47 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                               ───┬──  
@@ -313,7 +313,7 @@ Error: Expected ')', found identifier
 ───╯
 
 Error: field 'really' is missing a type annotation
-   ╭─[ 0:6:47 ]
+   ╭─[ nested_quotes.baml:6:47 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                               ───┬──  
@@ -323,7 +323,7 @@ Error: field 'really' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:6:53 ]
+   ╭─[ nested_quotes.baml:6:53 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                     ┬  
@@ -333,7 +333,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:6:54 ]
+   ╭─[ nested_quotes.baml:6:54 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                      ┬  
@@ -343,7 +343,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:6:56 ]
+   ╭─[ nested_quotes.baml:6:56 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                        ┬  
@@ -353,7 +353,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: field 'complex' is missing a type annotation
-   ╭─[ 0:6:57 ]
+   ╭─[ nested_quotes.baml:6:57 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                         ───┬───  
@@ -363,7 +363,7 @@ Error: field 'complex' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:6:64 ]
+   ╭─[ nested_quotes.baml:6:64 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                ┬  
@@ -373,7 +373,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:6:65 ]
+   ╭─[ nested_quotes.baml:6:65 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                 ┬  
@@ -383,7 +383,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found ')'
-   ╭─[ 0:6:66 ]
+   ╭─[ nested_quotes.baml:6:66 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                  ┬  
@@ -393,7 +393,7 @@ Error: Expected Unexpected token in class body, found ')'
 ───╯
 
 Error: Expected ')', found identifier
-   ╭─[ 0:7:31 ]
+   ╭─[ nested_quotes.baml:7:31 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                               ─┬─  
@@ -403,7 +403,7 @@ Error: Expected ')', found identifier
 ───╯
 
 Error: field 'key' is missing a type annotation
-   ╭─[ 0:7:31 ]
+   ╭─[ nested_quotes.baml:7:31 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                               ─┬─  
@@ -413,7 +413,7 @@ Error: field 'key' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:7:34 ]
+   ╭─[ nested_quotes.baml:7:34 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                  ┬  
@@ -423,7 +423,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:7:35 ]
+   ╭─[ nested_quotes.baml:7:35 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                   ┬  
@@ -433,7 +433,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found ':'
-   ╭─[ 0:7:36 ]
+   ╭─[ nested_quotes.baml:7:36 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                    ┬  
@@ -443,7 +443,7 @@ Error: Expected Unexpected token in class body, found ':'
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:7:38 ]
+   ╭─[ nested_quotes.baml:7:38 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                      ┬  
@@ -453,7 +453,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:7:39 ]
+   ╭─[ nested_quotes.baml:7:39 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                       ┬  
@@ -463,7 +463,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: field 'value' is missing a type annotation
-   ╭─[ 0:7:40 ]
+   ╭─[ nested_quotes.baml:7:40 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                        ──┬──  
@@ -473,7 +473,7 @@ Error: field 'value' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:7:45 ]
+   ╭─[ nested_quotes.baml:7:45 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                             ┬  
@@ -483,7 +483,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:7:46 ]
+   ╭─[ nested_quotes.baml:7:46 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                              ┬  
@@ -493,7 +493,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected top-level declaration, found '"'
-   ╭─[ 0:7:48 ]
+   ╭─[ nested_quotes.baml:7:48 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                ┬  
@@ -503,7 +503,7 @@ Error: Expected top-level declaration, found '"'
 ───╯
 
 Error: Expected top-level declaration, found ')'
-   ╭─[ 0:7:49 ]
+   ╭─[ nested_quotes.baml:7:49 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                 ┬  
@@ -513,7 +513,7 @@ Error: Expected top-level declaration, found ')'
 ───╯
 
 Error: Expected top-level declaration, found '}'
-   ╭─[ 0:8:1 ]
+   ╭─[ nested_quotes.baml:8:1 ]
    │
  8 │ }
    │ ┬  

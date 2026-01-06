@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -108,7 +108,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected function name, found integer
-   ╭─[ 0:6:10 ]
+   ╭─[ syntax_errors.baml:6:10 ]
    │
  6 │ function 123Invalid() {}
    │          ─┬─  
@@ -118,7 +118,7 @@ Error: Expected function name, found integer
 ───╯
 
 Error: Expected return type (->), found '{'
-   ╭─[ 0:6:23 ]
+   ╭─[ syntax_errors.baml:6:23 ]
    │
  6 │ function 123Invalid() {}
    │                       ┬  
@@ -128,7 +128,7 @@ Error: Expected return type (->), found '{'
 ───╯
 
 Error: Expected '=>' after pattern, found ':'
-    ╭─[ 0:18:19 ]
+    ╭─[ syntax_errors.baml:18:19 ]
     │
  18 │         a: int | b: bool => "bad"
     │                   ┬  
@@ -138,7 +138,7 @@ Error: Expected '=>' after pattern, found ':'
 ────╯
 
 Error: Expected expression, found ':'
-    ╭─[ 0:18:19 ]
+    ╭─[ syntax_errors.baml:18:19 ]
     │
  18 │         a: int | b: bool => "bad"
     │                   ┬  
@@ -148,7 +148,7 @@ Error: Expected expression, found ':'
 ────╯
 
 Error: Expected '}', found EOF
-    ╭─[ 0:27:1 ]
+    ╭─[ syntax_errors.baml:27:1 ]
     │
  27 │ }
     │ ┬  

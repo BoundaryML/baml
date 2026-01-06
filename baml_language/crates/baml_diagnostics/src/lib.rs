@@ -24,9 +24,9 @@ pub mod to_diagnostic;
 // Re-export the unified diagnostic types
 // Re-export the legacy error types and rendering (for backwards compatibility during migration)
 pub use compiler_error::{
-    ColorMode, CompilerError, HirDiagnostic, NameError, ParseError, TypeError, render_error,
-    render_hir_diagnostic, render_name_error, render_parse_error, render_report_to_string,
-    render_type_error,
+    ColorMode, CompilerError, DbSourceCache, HirDiagnostic, NameError, ParseError, TypeError,
+    render_error, render_hir_diagnostic, render_name_error, render_parse_error,
+    render_report_to_string, render_type_error,
 };
 pub use diagnostic::{Annotation, Diagnostic, DiagnosticId, RelatedInfo, Severity, ToDiagnostic};
 // Re-export LSP conversion utilities

@@ -229,7 +229,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_hir::{function_body, function_signature};
             use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
-            use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
+            use baml_diagnostics::{DbSourceCache, render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -299,9 +299,9 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
             let mut db = RootDatabase::new();
-            let mut sources = HashMap::new();
+            let root = db.set_project_root(std::path::PathBuf::from("."));
             let source_file = db.add_file(#relative_path, &content);
-            sources.insert(source_file.file_id(&db), content.clone());
+            root.set_files(&mut db).to(vec![source_file]);
             let tree = baml_parser::syntax_tree(&db, source_file);
             let errors = baml_parser::parse_errors(&db, source_file);
 
@@ -312,8 +312,9 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             if errors.is_empty() {
                 writeln!(output, "None").unwrap();
             } else {
+                let mut cache = DbSourceCache::new(&db, root);
                 for error in errors.iter() {
-                    writeln!(output, "{}", render_parse_error(error, &sources, false)).unwrap();
+                    writeln!(output, "{}", render_parse_error(error, &mut cache, false)).unwrap();
                 }
             }
 
@@ -542,6 +543,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 }
 
 fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
+    // File loaders just load files, don't collect errors yet
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -558,13 +560,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                         #relative_path,
                         &content,
                     );
-                    sources.insert(source_file.file_id(&db), content.clone());
                     source_files.push(source_file);
-
-                    let errors = baml_parser::parse_errors(&db, source_file);
-                    for error in errors {
-                        all_errors.push(("parse".to_string(), render_parse_error(&error, &sources, false)));
-                    }
                 }
             }
         })
@@ -575,7 +571,6 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
         fn test_05_diagnostics() {
             let mut db = RootDatabase::new();
             let root = db.set_project_root(std::path::PathBuf::from("."));
-            let mut sources = HashMap::new();
             let mut source_files = Vec::new();
             let mut all_errors = Vec::new();
 
@@ -584,21 +579,32 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             // Update project root with the list of files for proper Salsa tracking
             root.set_files(&mut db).to(source_files.clone());
 
+            // Create cache for rendering diagnostics (reused across all errors)
+            let mut cache = DbSourceCache::new(&db, root);
+
+            // Collect parse errors
+            for source_file in &source_files {
+                let errors = baml_parser::parse_errors(&db, *source_file);
+                for error in errors {
+                    all_errors.push(("parse".to_string(), render_parse_error(&error, &mut cache, false)));
+                }
+            }
+
             // Collect HIR lowering diagnostics (per-file validation)
             for source_file in &source_files {
                 let lowering_result = baml_hir::file_lowering(&db, *source_file);
                 for diag in lowering_result.diagnostics(&db) {
-                    all_errors.push(("hir".to_string(), render_hir_diagnostic(diag, &sources, false)));
+                    all_errors.push(("hir".to_string(), render_hir_diagnostic(diag, &mut cache, false)));
                 }
             }
 
             // Check for validation errors (project-wide validation)
             let validation_result = baml_hir::validate_hir(&db, root);
             for diag in validation_result.hir_diagnostics {
-                all_errors.push(("hir".to_string(), render_hir_diagnostic(&diag, &sources, false)));
+                all_errors.push(("hir".to_string(), render_hir_diagnostic(&diag, &mut cache, false)));
             }
             for error in validation_result.name_errors {
-                all_errors.push(("name".to_string(), render_name_error(&error, &sources, false)));
+                all_errors.push(("name".to_string(), render_name_error(&error, &mut cache, false)));
             }
 
             // Build typing context and run type inference
@@ -617,7 +623,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                         let body = function_body(&db, *func_id);
                         let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
                         for error in &result.errors {
-                            all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
+                            all_errors.push(("type".to_string(), render_type_error(error, &mut cache, false)));
                         }
                     }
                 }

@@ -12,6 +12,26 @@ use rowan::{TextRange, ast::AstNode};
 
 use crate::{Name, type_ref::TypeRef};
 
+/// Strip quote delimiters from a string literal.
+///
+/// Handles both raw strings (`#"..."#`) and regular strings (`"..."`).
+/// Returns the content without the delimiters.
+///
+/// # Examples
+/// - `#"hello"#` -> `hello`
+/// - `"hello"` -> `hello`
+/// - `hello` -> `hello` (no change if no delimiters)
+pub fn strip_string_delimiters(text: &str) -> &str {
+    let text = text.trim();
+    if text.starts_with("#\"") && text.ends_with("\"#") {
+        &text[2..text.len() - 2]
+    } else if text.starts_with('"') && text.ends_with('"') && text.len() >= 2 {
+        &text[1..text.len() - 1]
+    } else {
+        text
+    }
+}
+
 /// The body of a function - determined by CST node type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionBody {
@@ -432,33 +452,17 @@ impl FunctionBody {
     }
 
     fn lower_llm_body(llm_body: &baml_syntax::ast::LlmFunctionBody) -> LlmBody {
-        let mut client = None;
-        let mut prompt = None;
+        // Extract client name using AST accessor
+        let client = llm_body
+            .client_field()
+            .and_then(|cf| cf.name())
+            .map(|name_token| Name::new(name_token.text()));
 
-        // Extract client from CLIENT_FIELD
-        for child in llm_body.syntax().children() {
-            if child.kind() == baml_syntax::SyntaxKind::CLIENT_FIELD {
-                // CLIENT_FIELD has: KW_CLIENT "client" WORD "GPT4"
-                if let Some(client_name) = child
-                    .children_with_tokens()
-                    .filter_map(baml_syntax::NodeOrToken::into_token)
-                    .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
-                    .nth(0)
-                {
-                    client = Some(Name::new(client_name.text()));
-                }
-            } else if child.kind() == baml_syntax::SyntaxKind::PROMPT_FIELD {
-                // PROMPT_FIELD has: WORD "prompt" RAW_STRING_LITERAL (node, not token!)
-                // The RAW_STRING_LITERAL node contains the full text including delimiters
-                if let Some(prompt_node) = child
-                    .children()
-                    .find(|n| n.kind() == baml_syntax::SyntaxKind::RAW_STRING_LITERAL)
-                {
-                    let text = prompt_node.text().to_string();
-                    prompt = Some(Self::parse_prompt(&text));
-                }
-            }
-        }
+        // Extract prompt using AST accessor
+        let prompt = llm_body
+            .prompt_field()
+            .and_then(|pf| pf.raw_string())
+            .map(|raw_str| Self::parse_prompt(&raw_str.full_text()));
 
         LlmBody { client, prompt }
     }
@@ -1892,14 +1896,8 @@ impl LoweringContext {
                 node.text().to_string().trim().to_string()
             });
 
-        // Strip quotes
-        let content = if text.starts_with("#\"") && text.ends_with("\"#") {
-            &text[2..text.len() - 2]
-        } else if text.starts_with('"') && text.ends_with('"') {
-            &text[1..text.len() - 1]
-        } else {
-            &text
-        };
+        // Strip quotes using the helper
+        let content = strip_string_delimiters(&text);
 
         self.alloc_expr(
             Expr::Literal(Literal::String(content.to_string())),
@@ -1924,46 +1922,8 @@ impl LoweringContext {
         if elements.is_empty() {
             for elem in node.children_with_tokens() {
                 if let rowan::NodeOrToken::Token(token) = elem {
-                    let span = token.text_range();
-                    match token.kind() {
-                        SyntaxKind::INTEGER_LITERAL => {
-                            let value = token.text().parse::<i64>().unwrap_or(0);
-                            elements
-                                .push(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
-                        }
-                        SyntaxKind::FLOAT_LITERAL => {
-                            elements.push(self.alloc_expr(
-                                Expr::Literal(Literal::Float(token.text().to_string())),
-                                span,
-                            ));
-                        }
-                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                            let text = token.text();
-                            let content = if text.starts_with("#\"") && text.ends_with("\"#") {
-                                &text[2..text.len() - 2]
-                            } else if text.starts_with('"') && text.ends_with('"') {
-                                &text[1..text.len() - 1]
-                            } else {
-                                text
-                            };
-                            elements.push(self.alloc_expr(
-                                Expr::Literal(Literal::String(content.to_string())),
-                                span,
-                            ));
-                        }
-                        SyntaxKind::WORD => {
-                            let text = token.text();
-                            let expr = match text {
-                                "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
-                                "false" => {
-                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
-                                }
-                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
-                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
-                            };
-                            elements.push(expr);
-                        }
-                        _ => {}
+                    if let Some(expr_id) = self.lower_value_token(&token) {
+                        elements.push(expr_id);
                     }
                 }
             }
@@ -2007,7 +1967,7 @@ impl LoweringContext {
                             .map(|n| self.lower_expr(&n))
                             .or_else(|| {
                                 // Try to get value as a direct token (literal or identifier)
-                                // Skip the field name WORD and look for the value token after COLON
+                                // Skip tokens until we see COLON, then lower the next value token
                                 let mut seen_colon = false;
                                 child
                                     .children_with_tokens()
@@ -2020,68 +1980,7 @@ impl LoweringContext {
                                         if !seen_colon {
                                             return None;
                                         }
-                                        let span = token.text_range();
-                                        match token.kind() {
-                                            SyntaxKind::INTEGER_LITERAL => {
-                                                let value =
-                                                    token.text().parse::<i64>().unwrap_or(0);
-                                                Some(self.alloc_expr(
-                                                    Expr::Literal(Literal::Int(value)),
-                                                    span,
-                                                ))
-                                            }
-                                            SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
-                                                Expr::Literal(Literal::Float(
-                                                    token.text().to_string(),
-                                                )),
-                                                span,
-                                            )),
-                                            SyntaxKind::STRING_LITERAL
-                                            | SyntaxKind::RAW_STRING_LITERAL => {
-                                                let text = token.text();
-                                                let content = if text.starts_with("#\"")
-                                                    && text.ends_with("\"#")
-                                                {
-                                                    &text[2..text.len() - 2]
-                                                } else if text.starts_with('"')
-                                                    && text.ends_with('"')
-                                                {
-                                                    &text[1..text.len() - 1]
-                                                } else {
-                                                    text
-                                                };
-                                                Some(self.alloc_expr(
-                                                    Expr::Literal(Literal::String(
-                                                        content.to_string(),
-                                                    )),
-                                                    span,
-                                                ))
-                                            }
-                                            SyntaxKind::WORD => {
-                                                // Variable reference or boolean/null literal
-                                                let text = token.text();
-                                                let expr = match text {
-                                                    "true" => self.alloc_expr(
-                                                        Expr::Literal(Literal::Bool(true)),
-                                                        span,
-                                                    ),
-                                                    "false" => self.alloc_expr(
-                                                        Expr::Literal(Literal::Bool(false)),
-                                                        span,
-                                                    ),
-                                                    "null" => self.alloc_expr(
-                                                        Expr::Literal(Literal::Null),
-                                                        span,
-                                                    ),
-                                                    _ => self.alloc_expr(
-                                                        Expr::Path(vec![Name::new(text)]),
-                                                        span,
-                                                    ),
-                                                };
-                                                Some(expr)
-                                            }
-                                            _ => None,
-                                        }
+                                        self.lower_value_token(&token)
                                     })
                             })
                             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, field_span));
@@ -2247,42 +2146,55 @@ impl LoweringContext {
     }
 
     fn try_lower_literal_token(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
-        // Check if this node contains a literal token
+        // Check if this node contains a value token (literal or identifier)
         node.children_with_tokens()
             .filter_map(baml_syntax::NodeOrToken::into_token)
-            .find_map(|token| self.try_lower_token(&token))
+            .find_map(|token| self.lower_value_token(&token))
     }
 
     /// Lower a bare token (WORD, `INTEGER_LITERAL`, `FLOAT_LITERAL`) to an expression.
     fn lower_bare_token(&mut self, token: &baml_syntax::SyntaxToken) -> ExprId {
-        self.try_lower_token(token)
+        self.lower_value_token(token)
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, token.text_range()))
     }
 
-    /// Try to lower a token to a literal expression.
-    fn try_lower_token(&mut self, token: &baml_syntax::SyntaxToken) -> Option<ExprId> {
+    /// Lower any value token to an expression.
+    ///
+    /// Handles all value tokens including:
+    /// - Boolean literals: `true`, `false`
+    /// - Null literal: `null`
+    /// - Integer literals: `42`
+    /// - Float literals: `3.14`
+    /// - String literals: `"hello"`, `#"raw"#`
+    /// - Variable references (WORD tokens that aren't literals)
+    ///
+    /// Returns `None` for non-value tokens (operators, brackets, etc.).
+    fn lower_value_token(&mut self, token: &baml_syntax::SyntaxToken) -> Option<ExprId> {
         use baml_syntax::SyntaxKind;
 
         let span = token.text_range();
         match token.kind() {
             SyntaxKind::WORD => {
-                // Check if this is a boolean or null literal
                 let text = token.text();
-                match text {
-                    "true" => Some(self.alloc_expr(Expr::Literal(Literal::Bool(true)), span)),
-                    "false" => Some(self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)),
-                    "null" => Some(self.alloc_expr(Expr::Literal(Literal::Null), span)),
-                    _ => None,
-                }
+                let expr = match text {
+                    "true" => Expr::Literal(Literal::Bool(true)),
+                    "false" => Expr::Literal(Literal::Bool(false)),
+                    "null" => Expr::Literal(Literal::Null),
+                    _ => Expr::Path(vec![Name::new(text)]),
+                };
+                Some(self.alloc_expr(expr, span))
             }
             SyntaxKind::INTEGER_LITERAL => {
-                let text = token.text();
-                let value = text.parse::<i64>().unwrap_or(0);
+                let value = token.text().parse::<i64>().unwrap_or(0);
                 Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
             }
-            SyntaxKind::FLOAT_LITERAL => {
-                let text = token.text();
-                Some(self.alloc_expr(Expr::Literal(Literal::Float(text.to_string())), span))
+            SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                Expr::Literal(Literal::Float(token.text().to_string())),
+                span,
+            )),
+            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                let content = strip_string_delimiters(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::String(content.to_string())), span))
             }
             _ => None,
         }
@@ -2295,40 +2207,19 @@ impl LoweringContext {
     fn try_lower_paren_token_content(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
         use baml_syntax::SyntaxKind;
 
-        // Look for tokens inside the parentheses (skip L_PAREN and R_PAREN)
+        // Look for value tokens inside the parentheses (skip L_PAREN and R_PAREN)
         for elem in node.children_with_tokens() {
             if let Some(token) = elem.into_token() {
-                let span = token.text_range();
-                match token.kind() {
-                    SyntaxKind::WORD => {
-                        let text = token.text();
-                        // Check if this is a literal (true/false/null)
-                        return match text {
-                            "true" => {
-                                Some(self.alloc_expr(Expr::Literal(Literal::Bool(true)), span))
-                            }
-                            "false" => {
-                                Some(self.alloc_expr(Expr::Literal(Literal::Bool(false)), span))
-                            }
-                            "null" => Some(self.alloc_expr(Expr::Literal(Literal::Null), span)),
-                            // Otherwise it's a variable reference
-                            _ => Some(self.alloc_expr(Expr::Path(vec![Name::new(text)]), span)),
-                        };
-                    }
-                    SyntaxKind::INTEGER_LITERAL => {
-                        let text = token.text();
-                        let value = text.parse::<i64>().unwrap_or(0);
-                        return Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
-                    }
-                    SyntaxKind::FLOAT_LITERAL => {
-                        let text = token.text();
-                        return Some(
-                            self.alloc_expr(Expr::Literal(Literal::Float(text.to_string())), span),
-                        );
-                    }
-                    // Skip parentheses and whitespace
-                    SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::WHITESPACE => {}
-                    _ => {}
+                // Skip structural tokens
+                if matches!(
+                    token.kind(),
+                    SyntaxKind::L_PAREN | SyntaxKind::R_PAREN | SyntaxKind::WHITESPACE
+                ) {
+                    continue;
+                }
+                // Try to lower as a value token
+                if let Some(expr_id) = self.lower_value_token(&token) {
+                    return Some(expr_id);
                 }
             }
         }
@@ -2336,8 +2227,6 @@ impl LoweringContext {
     }
 
     fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode, is_watched: bool) -> StmtId {
-        use baml_syntax::SyntaxKind;
-
         // Use the LetStmt AST wrapper for cleaner access
         let let_stmt = baml_syntax::ast::LetStmt::cast(node.clone());
 
@@ -2363,7 +2252,7 @@ impl LoweringContext {
         // Extract type annotation if present
         let type_annotation = type_node.as_ref().map(TypeRef::from_ast);
 
-        let type_span = type_node.map(|t: TypeExpr| t.syntax().text_range());
+        let type_span = type_node.map(|t: TypeExpr| t.text_range());
 
         // Extract initializer expression - first try as a node, then as a token
         let initializer = let_stmt
@@ -2371,55 +2260,11 @@ impl LoweringContext {
             .and_then(baml_syntax::LetStmt::initializer)
             .map(|n| self.lower_expr(&n))
             .or_else(|| {
-                // Try to get initializer as a direct token (for simple literals)
+                // Try to get initializer as a direct token (for simple literals/vars)
                 let_stmt
                     .as_ref()
                     .and_then(baml_syntax::LetStmt::initializer_token)
-                    .map(|token| {
-                        let span = token.text_range();
-                        match token.kind() {
-                            SyntaxKind::INTEGER_LITERAL => {
-                                let value = token.text().parse::<i64>().unwrap_or(0);
-                                self.alloc_expr(Expr::Literal(Literal::Int(value)), span)
-                            }
-                            SyntaxKind::FLOAT_LITERAL => self.alloc_expr(
-                                Expr::Literal(Literal::Float(token.text().to_string())),
-                                span,
-                            ),
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
-                                let text = token.text();
-                                let content = if text.starts_with("#\"") && text.ends_with("\"#") {
-                                    &text[2..text.len() - 2]
-                                } else if text.starts_with('"') && text.ends_with('"') {
-                                    &text[1..text.len() - 1]
-                                } else {
-                                    text
-                                };
-                                self.alloc_expr(
-                                    Expr::Literal(Literal::String(content.to_string())),
-                                    span,
-                                )
-                            }
-                            SyntaxKind::WORD => {
-                                // Handle boolean/null literals (parsed as WORD tokens)
-                                // and variable references
-                                match token.text() {
-                                    "true" => {
-                                        self.alloc_expr(Expr::Literal(Literal::Bool(true)), span)
-                                    }
-                                    "false" => {
-                                        self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
-                                    }
-                                    "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
-                                    // Other WORD tokens are variable references
-                                    name => {
-                                        self.alloc_expr(Expr::Path(vec![Name::new(name)]), span)
-                                    }
-                                }
-                            }
-                            _ => self.alloc_expr(Expr::Missing, span),
-                        }
-                    })
+                    .and_then(|token| self.lower_value_token(&token))
             });
 
         self.alloc_stmt(

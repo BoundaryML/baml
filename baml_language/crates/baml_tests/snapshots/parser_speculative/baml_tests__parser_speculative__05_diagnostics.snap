@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected LLM function missing 'prompt' field, found '}'
-   ╭─[ 0:5:1 ]
+   ╭─[ ambiguous_function.baml:5:1 ]
    │
  5 │ }
    │ ┬  
@@ -14,7 +14,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   ╭─[ 0:9:3 ]
+   ╭─[ ambiguous_function.baml:9:3 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │   ──┬──  
@@ -24,7 +24,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   ╭─[ 0:9:9 ]
+   ╭─[ ambiguous_function.baml:9:9 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │         ──┬─  
@@ -34,7 +34,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected LLM function missing 'client' field, found '}'
-    ╭─[ 0:11:1 ]
+    ╭─[ ambiguous_function.baml:11:1 ]
     │
  11 │ }
     │ ┬  

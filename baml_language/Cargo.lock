@@ -355,7 +355,9 @@ version = "0.0.0"
 dependencies = [
  "ariadne",
  "baml_base",
+ "baml_workspace",
  "lsp-types",
+ "salsa",
  "text-size",
 ]
 
