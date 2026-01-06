@@ -156,7 +156,7 @@ impl LanguageFeatures for RustLanguageFeatures {
         // Get functions
         let functions: Vec<_> = ir
             .walk_functions()
-            .map(|f| ir_to_rust::functions::ir_function_to_rust(f.item, &pkg))
+            .map(|f| ir_to_rust::rust_functions::ir_function_to_rust(f.item, &pkg))
             .collect();
 
         // Phase 4: Generate types/ directory

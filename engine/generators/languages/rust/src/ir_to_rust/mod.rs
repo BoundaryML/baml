@@ -13,9 +13,13 @@ use crate::{
 
 pub mod classes;
 pub mod enums;
-pub mod functions;
+mod functions;
 pub mod type_aliases;
 pub mod unions;
+
+pub mod rust_functions {
+    pub use super::functions::*;
+}
 
 pub(crate) fn stream_type_to_rust(
     field: &TypeStreaming,
