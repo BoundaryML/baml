@@ -27,7 +27,7 @@ use crate::{
 // ============================================================================
 
 /// MIR to bytecode compiler with stackification.
-struct StackifyCodegen<'ctx, 'obj, 'db> {
+struct StackifyCodegen<'ctx, 'obj> {
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
     /// Resolved class field indices.
@@ -43,7 +43,7 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
     objects: &'obj mut ObjectPool,
 
     /// Analysis results (classifications, def-use, etc.).
-    analysis: AnalysisResult<'db>,
+    analysis: AnalysisResult,
 
     /// Maps MIR Local -> stack slot index (only for Real locals).
     local_slots: HashMap<Local, usize>,
@@ -71,10 +71,10 @@ struct StackifyCodegen<'ctx, 'obj, 'db> {
     block_notifications: Vec<BlockNotification>,
 }
 
-impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
+impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
-    fn new(ctx: MirCodegenContext<'ctx, 'obj>, analysis: AnalysisResult<'db>) -> Self {
+    fn new(ctx: MirCodegenContext<'ctx, 'obj>, analysis: AnalysisResult) -> Self {
         Self {
             globals: ctx.globals,
             classes: ctx.classes,
@@ -95,7 +95,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     }
 
     /// Compile a MIR function to bytecode.
-    fn compile(mut self, mir: &MirFunction<'db>) -> Function {
+    fn compile(mut self, mir: &MirFunction) -> Function {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
@@ -164,7 +164,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     /// Allocate stack slots only for Real locals.
     ///
     /// Virtual locals don't get slots - they're inlined at use sites.
-    fn allocate_real_locals(&mut self, mir: &MirFunction<'_>) {
+    fn allocate_real_locals(&mut self, mir: &MirFunction) {
         self.local_slots.clear();
         let arity = mir.arity;
 
@@ -267,7 +267,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     // ========================================================================
 
     /// Emit a basic block.
-    fn emit_block(&mut self, block: &BasicBlock<'db>, mir: &MirFunction<'db>) {
+    fn emit_block(&mut self, block: &BasicBlock, mir: &MirFunction) {
         // Emit all statements
         for stmt in &block.statements {
             self.emit_statement(&stmt.kind, mir);
@@ -280,7 +280,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     }
 
     /// Emit a statement (with virtual assignment skipping).
-    fn emit_statement(&mut self, kind: &StatementKind<'db>, mir: &MirFunction<'db>) {
+    fn emit_statement(&mut self, kind: &StatementKind, mir: &MirFunction) {
         match kind {
             StatementKind::Assign { destination, value } => {
                 // Check if this is an assignment to a Virtual, PhiLike, or Dead local
@@ -424,7 +424,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
     /// For Real locals, this emits a `LoadVar` instruction.
-    fn emit_operand_pull(&mut self, operand: &Operand<'db>, mir: &MirFunction<'db>) {
+    fn emit_operand_pull(&mut self, operand: &Operand, mir: &MirFunction) {
         match operand {
             Operand::Copy(place) | Operand::Move(place) => {
                 self.emit_place_value_pull(place, mir);
@@ -436,7 +436,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     }
 
     /// Emit a place's value using the pull model.
-    fn emit_place_value_pull(&mut self, place: &Place, mir: &MirFunction<'db>) {
+    fn emit_place_value_pull(&mut self, place: &Place, mir: &MirFunction) {
         match place {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
@@ -492,7 +492,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     }
 
     /// Emit an rvalue using the pull model.
-    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue<'db>, mir: &MirFunction<'db>) {
+    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue, mir: &MirFunction) {
         match rvalue {
             Rvalue::Use(operand) => {
                 self.emit_operand_pull(operand, mir);
@@ -626,7 +626,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     }
 
     /// Emit a constant value.
-    fn emit_constant(&mut self, constant: &Constant<'db>) {
+    fn emit_constant(&mut self, constant: &Constant) {
         match constant {
             Constant::Int(v) => {
                 let idx = self.add_constant(Value::Int(*v));
@@ -700,7 +700,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     /// Note: Field and Index stores from statements are handled directly in
     /// `emit_statement` to emit base/index before the value. This function
     /// is primarily used for Call/Await destinations which are always locals.
-    fn emit_store_place(&mut self, place: &Place, _mir: &MirFunction<'db>) {
+    fn emit_store_place(&mut self, place: &Place, _mir: &MirFunction) {
         match place {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
@@ -738,7 +738,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     // ========================================================================
 
     /// Emit a terminator.
-    fn emit_terminator(&mut self, term: &Terminator<'db>, mir: &MirFunction<'db>) {
+    fn emit_terminator(&mut self, term: &Terminator, mir: &MirFunction) {
         match term {
             Terminator::Goto { target } => {
                 // Skip jump if target is the next block (fall-through)
@@ -931,7 +931,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
     /// This ensures user variable names are preserved in bytecode output,
     /// mapping slot indices to their actual names based on how locals were assigned.
     fn build_locals_in_scope(
-        mir: &MirFunction<'_>,
+        mir: &MirFunction,
         local_slots: &HashMap<Local, usize>,
     ) -> Vec<Vec<String>> {
         // Find the maximum slot index to size the names vector
@@ -963,10 +963,7 @@ impl<'ctx, 'obj, 'db> StackifyCodegen<'ctx, 'obj, 'db> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(
-    mir: &MirFunction<'_>,
-    ctx: MirCodegenContext<'_, '_>,
-) -> Function {
+pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
 

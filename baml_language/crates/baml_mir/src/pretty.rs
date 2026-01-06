@@ -28,14 +28,14 @@ use crate::{
 };
 
 /// Pretty print a MIR function.
-pub fn display_function(func: &MirFunction<'_>) -> String {
+pub fn display_function(func: &MirFunction) -> String {
     let mut output = String::new();
     let _ = write_function(&mut output, func);
     output
 }
 
 /// Write a MIR function to a formatter.
-pub fn write_function(f: &mut impl Write, func: &MirFunction<'_>) -> fmt::Result {
+pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
     // Function header
     write!(f, "fn {}(", func.name)?;
 
@@ -87,7 +87,7 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction<'_>) -> fmt::Result
     Ok(())
 }
 
-fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl<'_>) -> fmt::Result {
+fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> fmt::Result {
     if let Some(name) = &decl.name {
         write!(f, "{name}: {:?}", decl.ty)
     } else {
@@ -95,7 +95,7 @@ fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl<'_>) 
     }
 }
 
-fn write_block(f: &mut impl Write, block: &BasicBlock<'_>) -> fmt::Result {
+fn write_block(f: &mut impl Write, block: &BasicBlock) -> fmt::Result {
     writeln!(f, "    {}: {{", block.id)?;
 
     for stmt in &block.statements {
@@ -116,7 +116,7 @@ fn write_block(f: &mut impl Write, block: &BasicBlock<'_>) -> fmt::Result {
     Ok(())
 }
 
-fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
+fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
     match &stmt.kind {
         StatementKind::Assign { destination, value } => {
             write!(f, "{destination} = ")?;
@@ -157,7 +157,7 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
     }
 }
 
-fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
+fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
     match term {
         Terminator::Goto { target } => {
             write!(f, "goto -> {target};")
@@ -247,7 +247,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator<'_>) -> fmt::Result {
     }
 }
 
-fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
+fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
         Rvalue::BinaryOp { op, left, right } => {
@@ -312,7 +312,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
     }
 }
 
-fn write_operand(f: &mut impl Write, operand: &Operand<'_>) -> fmt::Result {
+fn write_operand(f: &mut impl Write, operand: &Operand) -> fmt::Result {
     match operand {
         Operand::Copy(place) => write!(f, "copy {place}"),
         Operand::Move(place) => write!(f, "move {place}"),
@@ -320,7 +320,7 @@ fn write_operand(f: &mut impl Write, operand: &Operand<'_>) -> fmt::Result {
     }
 }
 
-fn write_constant(f: &mut impl Write, constant: &Constant<'_>) -> fmt::Result {
+fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
     match constant {
         Constant::Int(n) => write!(f, "const {n}_i64"),
         Constant::Float(n) => write!(f, "const {n}_f64"),
@@ -337,7 +337,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant<'_>) -> fmt::Result {
 // Display implementations
 // ============================================================================
 
-impl fmt::Display for MirFunction<'_> {
+impl fmt::Display for MirFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Use a String buffer since fmt::Formatter doesn't implement Write
         let mut buf = String::new();

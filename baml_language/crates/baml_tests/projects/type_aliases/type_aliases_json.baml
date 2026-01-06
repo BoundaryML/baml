@@ -1,0 +1,15 @@
+type JSON = int | float | string | bool | JSON[] | map<string,json>
+
+class NotJSON {
+  inner name
+}
+
+// Should be type error.
+function EchoJSON(i: JSON) -> JSON {
+  NotJSON{ inner: "Whoops" }
+}
+
+// Should work.
+function MakeJSON(i: NotJSON) -> JSON {
+ i.inner
+}

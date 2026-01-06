@@ -1,0 +1,94 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "foo"
+    EQUALS "="
+    TYPE_EXPR "bar"
+      WORD "bar"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "bar"
+    EQUALS "="
+    TYPE_EXPR "int"
+      WORD "int"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "foo"
+      WORD "foo"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Bar"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "foo"
+      WORD "foo"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  true
+}"
+        L_BRACE "{"
+        WORD "true"
+        R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Json"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "int"
+      PIPE "|"
+      WORD "float"
+      PIPE "|"
+      WORD "string"
+      PIPE "|"
+      WORD "Json"
+      L_BRACKET "["
+      R_BRACKET "]"
+      PIPE "|"
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "Json"
+          WORD "Json"
+        GREATER ">"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Baz"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Json"
+      WORD "Json"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "hello"
+          QUOTE """
+          WORD "hello"
+          QUOTE """
+        R_BRACE "}"
+
+=== ERRORS ===
+None

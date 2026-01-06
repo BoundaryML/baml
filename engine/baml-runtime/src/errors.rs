@@ -111,10 +111,8 @@ impl std::fmt::Display for ExposedError {
             } => {
                 write!(f, "LLM client \"{client_name}\" timed out: {message}")
             }
-            ExposedError::AbortError {
-                detailed_message: _,
-            } => {
-                write!(f, "AbortError")
+            ExposedError::AbortError { detailed_message } => {
+                write!(f, "AbortError: {detailed_message}")
             }
         }
     }
@@ -176,11 +174,11 @@ impl IntoBamlError for &anyhow::Error {
                     message: Cow::Owned(message.clone()),
                     status_code: 408, // HTTP 408 Request Timeout
                 },
-                ExposedError::AbortError {
-                    detailed_message: _,
-                } => baml_types::tracing::events::BamlError::Base {
-                    message: "AbortError".into(),
-                },
+                ExposedError::AbortError { detailed_message } => {
+                    baml_types::tracing::events::BamlError::Base {
+                        message: Cow::Owned(format!("AbortError: {detailed_message}")),
+                    }
+                }
             };
         }
         if let Some(baml_error) = self.downcast_ref::<baml_types::tracing::events::BamlError<'_>>()

@@ -5,6 +5,7 @@
 
 use std::fmt::Write;
 
+use baml_base::Span;
 use baml_diagnostics::compiler_error::TypeError;
 use baml_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
@@ -12,7 +13,7 @@ use baml_hir::{
 };
 
 use super::Ty;
-use crate::{InferenceResult, lower_type_ref};
+use crate::{InferenceResult, TypeResolutionContext};
 
 /// Renders a function's TIR as a tree showing expression structure with types.
 ///
@@ -29,13 +30,14 @@ use crate::{InferenceResult, lower_type_ref};
 /// ```
 pub fn render_function_tree(
     db: &dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext,
     func_name: &str,
     signature: &FunctionSignature,
     body: &FunctionBody,
-    result: &InferenceResult<'_>,
+    result: &InferenceResult,
 ) -> String {
     let mut output = String::new();
-    let mut renderer = TreeRenderer::new(db, &mut output);
+    let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
     renderer.render_function(func_name, signature, body, result);
     output
 }
@@ -43,28 +45,36 @@ pub fn render_function_tree(
 /// Renders just a function body's TIR as a tree.
 pub fn render_body_tree(
     db: &dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext,
     body: &FunctionBody,
-    result: &InferenceResult<'_>,
+    result: &InferenceResult,
 ) -> String {
     let mut output = String::new();
-    let mut renderer = TreeRenderer::new(db, &mut output);
+    let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
     renderer.render_body(body, result);
     output
 }
 
 /// Internal tree renderer.
-struct TreeRenderer<'a, 'db> {
-    db: &'db dyn baml_hir::Db,
+struct TreeRenderer<'a> {
+    #[allow(dead_code)]
+    db: &'a dyn baml_hir::Db,
+    resolution_ctx: &'a TypeResolutionContext,
     output: &'a mut String,
     /// Tracks whether each depth level has more siblings coming.
     /// `true` means there are more siblings (draw │), `false` means it was the last child (draw space).
     continuation: Vec<bool>,
 }
 
-impl<'a, 'db> TreeRenderer<'a, 'db> {
-    fn new(db: &'db dyn baml_hir::Db, output: &'a mut String) -> Self {
+impl<'a> TreeRenderer<'a> {
+    fn new(
+        db: &'a dyn baml_hir::Db,
+        resolution_ctx: &'a TypeResolutionContext,
+        output: &'a mut String,
+    ) -> Self {
         Self {
             db,
+            resolution_ctx,
             output,
             continuation: Vec::new(),
         }
@@ -75,15 +85,21 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         func_name: &str,
         signature: &FunctionSignature,
         body: &FunctionBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult,
     ) {
         // Function header
-        let return_type = lower_type_ref(self.db, &signature.return_type);
+        let return_type = self
+            .resolution_ctx
+            .lower_type_ref(&signature.return_type, Span::default())
+            .0;
         let params: Vec<String> = signature
             .params
             .iter()
             .map(|p| {
-                let ty = lower_type_ref(self.db, &p.type_ref);
+                let ty = self
+                    .resolution_ctx
+                    .lower_type_ref(&p.type_ref, Span::default())
+                    .0;
                 format!("{}: {}", p.name, ty)
             })
             .collect();
@@ -100,7 +116,10 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         // Show parameters as tree nodes
         let param_count = signature.params.len();
         for (i, param) in signature.params.iter().enumerate() {
-            let param_ty = lower_type_ref(self.db, &param.type_ref);
+            let param_ty = self
+                .resolution_ctx
+                .lower_type_ref(&param.type_ref, Span::default())
+                .0;
             let is_last = i == param_count - 1 && matches!(body, FunctionBody::Missing);
             let prefix = if is_last { "└─" } else { "├─" };
             writeln!(self.output, "{} param {}: {}", prefix, param.name, param_ty).ok();
@@ -118,7 +137,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         }
     }
 
-    fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult<'_>) {
+    fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult) {
         match body {
             FunctionBody::Expr(expr_body) => {
                 if let Some(root_expr) = expr_body.root_expr {
@@ -147,7 +166,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         &mut self,
         expr_id: ExprId,
         body: &ExprBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult,
         is_last: bool,
     ) {
         let expr = &body.exprs[expr_id];
@@ -224,7 +243,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         }
     }
 
-    fn render_expr_children(&mut self, expr: &Expr, body: &ExprBody, result: &InferenceResult<'_>) {
+    fn render_expr_children(&mut self, expr: &Expr, body: &ExprBody, result: &InferenceResult) {
         match expr {
             Expr::Binary { lhs, rhs, .. } => {
                 self.render_expr(*lhs, body, result, false);
@@ -355,7 +374,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         &mut self,
         stmt_id: StmtId,
         body: &ExprBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult,
         is_last: bool,
     ) {
         let stmt = &body.stmts[stmt_id];
@@ -378,7 +397,10 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
                 };
 
                 let ty_str = if let Some(type_ref) = type_annotation {
-                    let ty = lower_type_ref(self.db, type_ref);
+                    let ty = self
+                        .resolution_ctx
+                        .lower_type_ref(type_ref, Span::default())
+                        .0;
                     format!(": {ty}")
                 } else if let Some(init) = initializer {
                     result
@@ -602,7 +624,7 @@ fn unary_op_to_str(op: UnaryOp) -> &'static str {
     }
 }
 
-pub fn short_display(error: &TypeError<Ty<'_>>) -> String {
+pub fn short_display(error: &TypeError<Ty>) -> String {
     match error {
         TypeError::TypeMismatch {
             expected, found, ..

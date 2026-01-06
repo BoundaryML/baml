@@ -24,11 +24,11 @@ use baml_mir::{
 
 /// Where a local is defined.
 #[derive(Clone, Debug)]
-pub(crate) struct DefLocation<'db> {
+pub(crate) struct DefLocation {
     pub block: BlockId,
     pub statement_idx: usize,
     /// The rvalue that produces this local's value (for inlining).
-    pub rvalue: Rvalue<'db>,
+    pub rvalue: Rvalue,
 }
 
 /// Where a local is used.
@@ -43,11 +43,11 @@ pub(crate) const TERMINATOR_IDX: usize = usize::MAX;
 
 /// Def-use information for a single local.
 #[derive(Clone, Debug)]
-pub(crate) struct LocalDefUse<'db> {
+pub(crate) struct LocalDefUse {
     #[allow(dead_code)] // Kept for debugging and future use
     pub local: Local,
     /// Definition site (None for parameters, which are defined at entry).
-    pub def: Option<DefLocation<'db>>,
+    pub def: Option<DefLocation>,
     /// All use sites.
     pub uses: Vec<UseLocation>,
 }
@@ -114,11 +114,11 @@ impl Dominators {
 
 /// Complete analysis result for a function.
 #[derive(Debug)]
-pub(crate) struct AnalysisResult<'db> {
+pub(crate) struct AnalysisResult {
     /// Classification for each local.
     pub classifications: HashMap<Local, LocalClassification>,
     /// Def-use information for each local.
-    pub def_use: HashMap<Local, LocalDefUse<'db>>,
+    pub def_use: HashMap<Local, LocalDefUse>,
     /// Dominator tree.
     #[allow(dead_code)] // Kept for future scope-aware codegen
     pub dominators: Dominators,
@@ -139,9 +139,9 @@ pub(crate) struct AnalysisResult<'db> {
 // Analysis Entry Point
 // ============================================================================
 
-impl<'db> AnalysisResult<'db> {
+impl AnalysisResult {
     /// Analyze a MIR function and produce classification results.
-    pub(crate) fn analyze(mir: &MirFunction<'db>) -> Self {
+    pub(crate) fn analyze(mir: &MirFunction) -> Self {
         // Step 1: Build predecessor map
         let predecessors = build_predecessors(mir);
 
@@ -198,7 +198,7 @@ impl<'db> AnalysisResult<'db> {
 // ============================================================================
 
 /// Build predecessor map for all blocks.
-fn build_predecessors(mir: &MirFunction<'_>) -> HashMap<BlockId, Vec<BlockId>> {
+fn build_predecessors(mir: &MirFunction) -> HashMap<BlockId, Vec<BlockId>> {
     let mut preds: HashMap<BlockId, Vec<BlockId>> = HashMap::new();
 
     // Initialize with empty vecs
@@ -222,7 +222,7 @@ fn build_predecessors(mir: &MirFunction<'_>) -> HashMap<BlockId, Vec<BlockId>> {
 
 /// DFS helper for computing postorder.
 fn rpo_dfs(
-    mir: &MirFunction<'_>,
+    mir: &MirFunction,
     block_id: BlockId,
     visited: &mut HashSet<BlockId>,
     postorder: &mut Vec<BlockId>,
@@ -242,7 +242,7 @@ fn rpo_dfs(
 }
 
 /// Compute reverse postorder (depth-first, postorder reversed).
-fn compute_rpo(mir: &MirFunction<'_>) -> Vec<BlockId> {
+fn compute_rpo(mir: &MirFunction) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
@@ -255,7 +255,7 @@ fn compute_rpo(mir: &MirFunction<'_>) -> Vec<BlockId> {
 ///
 /// A block is dead if it has no statements and terminates with `Unreachable`.
 /// Such blocks exist only as targets for impossible control flow paths.
-pub(crate) fn is_dead_unreachable_block(block: &baml_mir::BasicBlock<'_>) -> bool {
+pub(crate) fn is_dead_unreachable_block(block: &baml_mir::BasicBlock) -> bool {
     block.statements.is_empty() && matches!(block.terminator, Some(Terminator::Unreachable))
 }
 
@@ -267,7 +267,7 @@ pub(crate) fn is_dead_unreachable_block(block: &baml_mir::BasicBlock<'_>) -> boo
 ///
 /// Identifies empty blocks that only contain a Goto terminator and maps them
 /// to their final destination. This allows emission to skip intermediate jumps.
-fn build_redirect_targets(mir: &MirFunction<'_>) -> HashMap<BlockId, BlockId> {
+fn build_redirect_targets(mir: &MirFunction) -> HashMap<BlockId, BlockId> {
     // First pass: identify empty goto-only blocks
     let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
 
@@ -318,7 +318,7 @@ fn resolve_redirect_chain(start: BlockId, goto_targets: &HashMap<BlockId, BlockI
 /// This is a simple, efficient iterative algorithm that computes immediate
 /// dominators by repeatedly intersecting dominator sets until convergence.
 fn compute_dominators(
-    mir: &MirFunction<'_>,
+    mir: &MirFunction,
     rpo: &[BlockId],
     preds: &HashMap<BlockId, Vec<BlockId>>,
 ) -> Dominators {
@@ -391,8 +391,8 @@ fn intersect(
 // ============================================================================
 
 /// Collect def-use information for all locals.
-fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'db>> {
-    let mut def_use: HashMap<Local, LocalDefUse<'db>> = HashMap::new();
+fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
+    let mut def_use: HashMap<Local, LocalDefUse> = HashMap::new();
 
     // Initialize for all locals
     for (idx, _) in mir.locals.iter().enumerate() {
@@ -526,11 +526,11 @@ fn collect_def_use<'db>(mir: &MirFunction<'db>) -> HashMap<Local, LocalDefUse<'d
 }
 
 /// Collect uses in an rvalue.
-fn collect_uses_in_rvalue<'db>(
-    rvalue: &Rvalue<'db>,
+fn collect_uses_in_rvalue(
+    rvalue: &Rvalue,
     block: BlockId,
     stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+    def_use: &mut HashMap<Local, LocalDefUse>,
 ) {
     match rvalue {
         Rvalue::Use(operand) => {
@@ -569,11 +569,11 @@ fn collect_uses_in_rvalue<'db>(
 }
 
 /// Collect uses in an operand.
-fn collect_uses_in_operand<'db>(
-    operand: &Operand<'db>,
+fn collect_uses_in_operand(
+    operand: &Operand,
     block: BlockId,
     stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+    def_use: &mut HashMap<Local, LocalDefUse>,
 ) {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => {
@@ -591,7 +591,7 @@ fn collect_uses_in_place(
     place: &Place,
     block: BlockId,
     stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse<'_>>,
+    def_use: &mut HashMap<Local, LocalDefUse>,
 ) {
     match place {
         Place::Local(local) => {
@@ -622,10 +622,10 @@ fn collect_uses_in_place(
 }
 
 /// Collect uses (and defs for Call/Await) in a terminator.
-fn collect_uses_in_terminator<'db>(
-    term: &Terminator<'db>,
+fn collect_uses_in_terminator(
+    term: &Terminator,
     block: BlockId,
-    def_use: &mut HashMap<Local, LocalDefUse<'db>>,
+    def_use: &mut HashMap<Local, LocalDefUse>,
 ) {
     match term {
         Terminator::Goto { .. } | Terminator::Unreachable => {}
@@ -717,9 +717,9 @@ fn collect_uses_in_terminator<'db>(
 /// Classify each local as Virtual, Real, `PhiLike`, `CopyOf`, or Dead.
 ///
 /// Returns both the classifications and the `copy_sources` map for copy propagation.
-fn classify_locals<'db>(
-    mir: &MirFunction<'db>,
-    def_use: &HashMap<Local, LocalDefUse<'db>>,
+fn classify_locals(
+    mir: &MirFunction,
+    def_use: &HashMap<Local, LocalDefUse>,
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
@@ -792,7 +792,7 @@ fn classify_locals<'db>(
 ///
 /// Unlike `def_use` which only tracks the "last" definition, this tracks ALL
 /// assignments to each local across all blocks.
-fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId, usize)>> {
+fn collect_all_definitions(mir: &MirFunction) -> HashMap<Local, Vec<(BlockId, usize)>> {
     let mut all_defs: HashMap<Local, Vec<(BlockId, usize)>> = HashMap::new();
 
     for block in &mir.blocks {
@@ -848,8 +848,8 @@ fn collect_all_definitions(mir: &MirFunction<'_>) -> HashMap<Local, Vec<(BlockId
 /// - No need for explicit Store/Load through a named variable
 fn is_phi_like(
     local: Local,
-    du: &LocalDefUse<'_>,
-    mir: &MirFunction<'_>,
+    du: &LocalDefUse,
+    mir: &MirFunction,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> bool {
@@ -927,7 +927,7 @@ fn is_phi_like(
 /// Stack-neutral statements can safely execute while a value meant for return sits on
 /// the stack, enabling optimizations like `ReturnPhi` even when there are statements
 /// between the assignment to `_0` and the `Return` terminator.
-fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
+fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
     match kind {
         // These don't touch the stack at all - just update external state
         StatementKind::Unwatch(_) => true,
@@ -959,7 +959,7 @@ fn is_stack_neutral_statement(kind: &StatementKind<'_>) -> bool {
 /// This eliminates the redundant `StoreVar("_0"); LoadVar("_0"); Return` pattern.
 fn is_return_phi(
     local: Local,
-    mir: &MirFunction<'_>,
+    mir: &MirFunction,
     all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
 ) -> bool {
@@ -1061,12 +1061,12 @@ fn is_return_phi(
 }
 
 /// Check if a local can be classified as Virtual.
-fn can_be_virtual<'db>(
+fn can_be_virtual(
     local: Local,
-    du: &LocalDefUse<'db>,
+    du: &LocalDefUse,
     dominators: &Dominators,
-    mir: &MirFunction<'db>,
-    def_use: &HashMap<Local, LocalDefUse<'db>>,
+    mir: &MirFunction,
+    def_use: &HashMap<Local, LocalDefUse>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> bool {
@@ -1202,13 +1202,13 @@ fn can_be_virtual<'db>(
 /// A side effect is anything that could change the value of the rvalue when re-evaluated:
 /// - Function calls (may have side effects)
 /// - Assignments to variables that the rvalue reads from (transitively)
-fn has_side_effects_between<'db>(
-    mir: &MirFunction<'db>,
+fn has_side_effects_between(
+    mir: &MirFunction,
     block_id: BlockId,
     start: usize,
     end: usize,
-    rvalue: &Rvalue<'db>,
-    def_use: &HashMap<Local, LocalDefUse<'db>>,
+    rvalue: &Rvalue,
+    def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
     let block = mir.block(block_id);
     // Collect transitive reads - if this rvalue reads from local X which is defined
@@ -1234,9 +1234,9 @@ fn has_side_effects_between<'db>(
 ///
 /// We only follow definitions that occur before `def_block:def_stmt_idx` to
 /// avoid including dependencies on values computed later.
-fn collect_transitive_reads<'db>(
-    rvalue: &Rvalue<'db>,
-    def_use: &HashMap<Local, LocalDefUse<'db>>,
+fn collect_transitive_reads(
+    rvalue: &Rvalue,
+    def_use: &HashMap<Local, LocalDefUse>,
     def_block: BlockId,
     def_stmt_idx: usize,
 ) -> HashSet<Local> {
@@ -1267,7 +1267,7 @@ fn collect_transitive_reads<'db>(
 }
 
 /// Collect locals directly read by an rvalue (non-transitive).
-fn collect_rvalue_reads(rvalue: &Rvalue<'_>, locals: &mut Vec<Local>) {
+fn collect_rvalue_reads(rvalue: &Rvalue, locals: &mut Vec<Local>) {
     match rvalue {
         Rvalue::Use(operand) => collect_operand_reads(operand, locals),
         Rvalue::BinaryOp { left, right, .. } => {
@@ -1303,7 +1303,7 @@ fn collect_rvalue_reads(rvalue: &Rvalue<'_>, locals: &mut Vec<Local>) {
 }
 
 /// Collect locals read by an operand.
-fn collect_operand_reads(operand: &Operand<'_>, locals: &mut Vec<Local>) {
+fn collect_operand_reads(operand: &Operand, locals: &mut Vec<Local>) {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => {
             collect_place_reads(place, locals);
@@ -1329,7 +1329,7 @@ fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
 }
 
 /// Check if a statement has side effects that would prevent inlining.
-fn has_side_effect(kind: &StatementKind<'_>, rvalue_reads: &HashSet<Local>) -> bool {
+fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => {
             // Check if this assignment modifies a variable (or field/index of a variable)
@@ -1363,7 +1363,7 @@ fn get_base_local(place: &Place) -> Local {
 }
 
 /// Check if an rvalue can be inlined.
-fn is_inlinable_rvalue(_rvalue: &Rvalue<'_>) -> bool {
+fn is_inlinable_rvalue(_rvalue: &Rvalue) -> bool {
     // All current rvalues can be inlined
     // May want to exclude complex aggregates in the future
     true
@@ -1373,7 +1373,7 @@ fn is_inlinable_rvalue(_rvalue: &Rvalue<'_>) -> bool {
 ///
 /// Pure constants have no side effects and always produce the same value,
 /// so they can be re-emitted at every use site even with multiple uses.
-fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
+fn is_pure_constant(rvalue: &Rvalue) -> bool {
     matches!(rvalue, Rvalue::Use(Operand::Constant(_)))
 }
 
@@ -1391,7 +1391,7 @@ fn is_pure_constant(rvalue: &Rvalue<'_>) -> bool {
 /// - At use site: don't emit `LoadVar` (value already on stack from Call)
 ///
 /// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
-fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunction<'_>) -> bool {
+fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
         return false;
@@ -1474,8 +1474,8 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse<'_>, mir: &MirFunctio
 /// scrutinee is copied into a temporary before comparisons.
 fn get_copy_source(
     local: Local,
-    du: &LocalDefUse<'_>,
-    mir: &MirFunction<'_>,
+    du: &LocalDefUse,
+    mir: &MirFunction,
     all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> Option<Local> {
     // Must have exactly one definition

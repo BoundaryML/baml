@@ -1,0 +1,95 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "JSON"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "int"
+      PIPE "|"
+      WORD "float"
+      PIPE "|"
+      WORD "string"
+      PIPE "|"
+      WORD "bool"
+      PIPE "|"
+      WORD "JSON"
+      L_BRACKET "["
+      R_BRACKET "]"
+      PIPE "|"
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "json"
+          WORD "json"
+        GREATER ">"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NotJSON"
+    L_BRACE "{"
+    FIELD
+      WORD "inner"
+      TYPE_EXPR "name"
+        WORD "name"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "EchoJSON"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "i"
+        COLON ":"
+        TYPE_EXPR "JSON"
+          WORD "JSON"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "JSON"
+      WORD "JSON"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "NotJSON"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "inner"
+            COLON ":"
+            STRING_LITERAL "Whoops"
+              QUOTE """
+              WORD "Whoops"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MakeJSON"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "i"
+        COLON ":"
+        TYPE_EXPR "NotJSON"
+          WORD "NotJSON"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "JSON"
+      WORD "JSON"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "i.inner"
+          WORD "i"
+          DOT "."
+          WORD "inner"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -488,6 +488,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             let globals = typing_context(&db, root);
             let class_field_types_map = class_field_types(&db, root);
 
+            let resolution_ctx = baml_tir::TypeResolutionContext::new(&db, root);
+
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
             for source_file in &source_files {
@@ -517,9 +519,9 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let inference = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference) {
+                        let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {
                             Ok(vir) => {
-                                let mir = baml_mir::lower(&signature, &vir, &db, &classes);
+                                let mir = baml_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
                                 baml_mir::pretty::display_function(&mir)
                             }
                             Err(err) => {
