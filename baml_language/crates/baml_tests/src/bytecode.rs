@@ -58,11 +58,14 @@ pub struct TestDatabase {
 impl salsa::Database for TestDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for TestDatabase {
+impl baml_workspace::Db for TestDatabase {
     fn project(&self) -> baml_workspace::Project {
         self.project.expect("project must be set before querying")
     }
 }
+
+#[salsa::db]
+impl baml_hir::Db for TestDatabase {}
 
 #[salsa::db]
 impl baml_tir::Db for TestDatabase {}

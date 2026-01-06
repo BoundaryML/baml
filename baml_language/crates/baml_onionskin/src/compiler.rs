@@ -787,9 +787,15 @@ impl CompilerRunner {
         let mut interactive_state = ThirInteractiveState::default();
 
         // Build initial typing context with all function types
-        let globals = typing_context(&self.db, self.project_root);
-        let class_fields = class_field_types(&self.db, self.project_root);
-        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_fields = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
@@ -893,9 +899,15 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Build typing context and class fields for inference
-        let globals = typing_context(&self.db, self.project_root);
-        let class_fields = class_field_types(&self.db, self.project_root);
-        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_fields = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
@@ -987,8 +999,12 @@ impl CompilerRunner {
 
         // Build typing context and class fields map for MIR lowering
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = typing_context(&self.db, self.project_root);
-        let class_field_types_map = class_field_types(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_field_types_map = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();

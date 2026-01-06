@@ -56,8 +56,6 @@ pub use lower::lower;
 // Database Trait
 // ============================================================================
 
-/// Database trait for MIR queries.
-///
-/// Extends TIR's database to access type information during lowering.
+/// Database trait for MIR queries. Extends `baml_tir::Db`.
 #[salsa::db]
 pub trait Db: baml_tir::Db {}

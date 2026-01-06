@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use baml_db::{
     RootDatabase,
     baml_hir::{self, file_items, function_body, function_signature},
-    baml_parser, baml_tir,
+    baml_parser,
+    baml_tir::{self, class_field_types, type_aliases, typing_context},
 };
 use baml_diagnostics::{
     render_hir_diagnostic, render_name_error, render_parse_error, render_type_error,
@@ -81,9 +82,9 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     }
 
     // Collect type errors
-    let globals = baml_tir::typing_context(&db, root);
-    let class_fields = baml_tir::class_field_types(&db, root);
-    let type_aliases = baml_tir::type_aliases(&db, root);
+    let globals = typing_context(&db, root).functions(&db).clone();
+    let class_fields = class_field_types(&db, root).classes(&db).clone();
+    let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
     let enum_variants_map = baml_tir::enum_variants(&db, root);
     let enum_variants = enum_variants_map.enums(&db).clone();
 
@@ -100,7 +101,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
                     &body,
                     Some(globals.clone()),
                     Some(class_fields.clone()),
-                    Some(type_aliases.clone()),
+                    Some(type_aliases_map.clone()),
                     Some(enum_variants.clone()),
                     *func_id,
                 );

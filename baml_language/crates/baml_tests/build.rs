@@ -227,7 +227,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
-            use baml_tir::{typing_context, class_field_types, type_aliases, enum_variants};
+            use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
             use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
@@ -411,9 +411,9 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = typing_context(&db, root);
-            let class_fields = class_field_types(&db, root);
-            let type_aliases_map = type_aliases(&db, root);
+            let globals = typing_context(&db, root).functions(&db).clone();
+            let class_fields = class_field_types(&db, root).classes(&db).clone();
+            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
             let enum_variants_map = enum_variants(&db, root);
             let enum_variants_data = enum_variants_map.enums(&db).clone();
 
@@ -485,8 +485,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== MIR ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = typing_context(&db, root);
-            let class_field_types_map = class_field_types(&db, root);
+            let globals = typing_context(&db, root).functions(&db).clone();
+            let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
 
             let resolution_ctx = baml_tir::TypeResolutionContext::new(&db, root);
 
@@ -602,9 +602,9 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             }
 
             // Build typing context and run type inference
-            let globals = typing_context(&db, root);
-            let class_fields = class_field_types(&db, root);
-            let type_aliases_map = type_aliases(&db, root);
+            let globals = typing_context(&db, root).functions(&db).clone();
+            let class_fields = class_field_types(&db, root).classes(&db).clone();
+            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
             let enum_variants_map = enum_variants(&db, root);
             let enum_variants_data = enum_variants_map.enums(&db).clone();
 

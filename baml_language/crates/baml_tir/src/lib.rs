@@ -103,8 +103,8 @@ pub enum ResolvedPath {
 
 /// Database trait for TIR queries.
 ///
-/// This trait extends `baml_hir::Db` and provides access to all TIR-related
-/// Salsa queries, including type inference and the initial typing context.
+/// Extends `baml_hir::Db`. Use the free functions in this crate
+/// (e.g., `typing_context`, `class_field_types`) for TIR queries.
 #[salsa::db]
 pub trait Db: baml_hir::Db {}
 
@@ -118,6 +118,54 @@ pub struct EnumVariantsMap<'db> {
     #[tracked]
     #[returns(ref)]
     pub enums: HashMap<Name, Vec<Name>>,
+}
+
+/// Tracked struct holding function types (function name -> function type).
+#[salsa::tracked]
+pub struct TypingContextMap<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub functions: HashMap<Name, Ty>,
+}
+
+/// Tracked struct holding class field types (class name -> field name -> field type).
+#[salsa::tracked]
+pub struct ClassFieldTypesMap<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub classes: HashMap<Name, HashMap<Name, Ty>>,
+}
+
+/// Tracked struct holding type aliases (alias name -> resolved type).
+#[salsa::tracked]
+pub struct TypeAliasesMap<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub aliases: HashMap<Name, Ty>,
+}
+
+/// Tracked struct holding class names.
+#[salsa::tracked]
+pub struct ClassNamesSet<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: HashSet<Name>,
+}
+
+/// Tracked struct holding enum names.
+#[salsa::tracked]
+pub struct EnumNamesSet<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: HashSet<Name>,
+}
+
+/// Tracked struct holding all known type names (classes, enums, type aliases).
+#[salsa::tracked]
+pub struct KnownTypesSet<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub names: HashSet<Name>,
 }
 
 // ============================================================================
@@ -148,24 +196,21 @@ pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
 }
 
 // ============================================================================
-// Non-Salsa Helper Functions
+// Salsa Tracked Queries
 // ============================================================================
 //
-// These functions compute type-related data on-demand. The underlying HIR
-// queries they depend on (project_items, project_class_fields, etc.) ARE
-// cached by Salsa.
+// These queries compute type-related data and are cached by Salsa.
 
-/// Get the typing context for a project.
+/// Query: Get the typing context for a project.
 ///
-/// Maps function names to their arrow types, e.g.:
-/// `Foo` -> `(int) -> int` for `function Foo(x: int) -> int`
-pub fn typing_context(db: &dyn Db, project: Project) -> HashMap<Name, Ty> {
-    let files = baml_workspace::project_files(db, project);
+/// Maps function names to their arrow types.
+#[salsa::tracked]
+pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let mut context = HashMap::new();
 
-    for file in files {
-        let items_struct = baml_hir::file_items(db, file);
+    for file in project.files(db) {
+        let items_struct = baml_hir::file_items(db, *file);
         let items = items_struct.items(db);
 
         for item in items {
@@ -193,19 +238,19 @@ pub fn typing_context(db: &dyn Db, project: Project) -> HashMap<Name, Ty> {
         }
     }
 
-    context
+    TypingContextMap::new(db, context)
 }
 
-/// Get class field types for a project.
+/// Query: Get class field types for a project.
 ///
-/// Maps class names to their field types, e.g.:
-/// `Baz` -> { `name` -> `String` }
-pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap<Name, Ty>> {
+/// Maps class names to their field types.
+#[salsa::tracked]
+pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_> {
     let hir_fields = baml_hir::project_class_fields(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from fields
 
-    hir_fields
+    let classes = hir_fields
         .classes(db)
         .iter()
         .map(|(class_name, fields)| {
@@ -220,14 +265,16 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> HashMap<Name, HashMap
                 .collect();
             (class_name.clone(), lowered_fields)
         })
-        .collect()
+        .collect();
+
+    ClassFieldTypesMap::new(db, classes)
 }
 
-/// Get type alias definitions for a project.
+/// Query: Get type alias definitions for a project.
 ///
-/// Maps type alias names to their resolved types, e.g.:
-/// `Result` -> `Success | Failure`
-pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty> {
+/// Maps type alias names to their resolved types.
+#[salsa::tracked]
+pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
     let items = baml_hir::project_items(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from alias
@@ -244,11 +291,12 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> HashMap<Name, Ty> {
         }
     }
 
-    aliases
+    TypeAliasesMap::new(db, aliases)
 }
 
-/// Get class names for a project.
-pub fn class_names(db: &dyn Db, project: Project) -> HashSet<Name> {
+/// Query: Get class names for a project.
+#[salsa::tracked]
+pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
     let items = baml_hir::project_items(db, project);
     let mut names = HashSet::new();
 
@@ -261,11 +309,12 @@ pub fn class_names(db: &dyn Db, project: Project) -> HashSet<Name> {
         }
     }
 
-    names
+    ClassNamesSet::new(db, names)
 }
 
-/// Get enum names for a project.
-pub fn enum_names(db: &dyn Db, project: Project) -> HashSet<Name> {
+/// Query: Get enum names for a project.
+#[salsa::tracked]
+pub fn enum_names(db: &dyn Db, project: Project) -> EnumNamesSet<'_> {
     let items = baml_hir::project_items(db, project);
     let mut names = HashSet::new();
 
@@ -278,11 +327,12 @@ pub fn enum_names(db: &dyn Db, project: Project) -> HashSet<Name> {
         }
     }
 
-    names
+    EnumNamesSet::new(db, names)
 }
 
-/// Get all known type names for a project (classes, enums, type aliases).
-pub fn known_types(db: &dyn Db, project: Project) -> HashSet<Name> {
+/// Query: Get all known type names for a project (classes, enums, type aliases).
+#[salsa::tracked]
+pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
     let items = baml_hir::project_items(db, project);
     let mut names = HashSet::new();
 
@@ -310,7 +360,7 @@ pub fn known_types(db: &dyn Db, project: Project) -> HashSet<Name> {
         }
     }
 
-    names
+    KnownTypesSet::new(db, names)
 }
 
 /// Context for type resolution across a project.
@@ -327,9 +377,9 @@ impl TypeResolutionContext {
     /// Create a new type resolution context for a project.
     pub fn new(db: &dyn Db, project: Project) -> Self {
         Self {
-            class_names: class_names(db, project),
-            enum_names: enum_names(db, project),
-            known_types: known_types(db, project),
+            class_names: class_names(db, project).names(db).clone(),
+            enum_names: enum_names(db, project).names(db).clone(),
+            known_types: known_types(db, project).names(db).clone(),
         }
     }
 
@@ -819,9 +869,9 @@ pub fn infer_function<'db>(
     let known_types: std::collections::HashSet<_> =
         known_type_names.names(db).iter().cloned().collect();
 
-    // Get class and enum name sets for type resolution
-    let class_name_set = class_names(db, project);
-    let enum_name_set = enum_names(db, project);
+    // Get class and enum name sets for type resolution (Salsa-cached)
+    let class_name_set = class_names(db, project).names(db).clone();
+    let enum_name_set = enum_names(db, project).names(db).clone();
 
     let file_id = function_loc.file(db).file_id(db);
     // Use a placeholder span for now - ideally we'd have spans on TypeRef

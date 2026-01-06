@@ -11,7 +11,8 @@ use baml_db::{
     FileId, SourceFile,
     baml_diagnostics::{HirDiagnostic, NameError, ParseError, TypeError},
     baml_hir::{self, FunctionBody, ItemId, file_lowering},
-    baml_parser, baml_tir,
+    baml_parser,
+    baml_tir::{self, class_field_types, enum_variants, type_aliases, typing_context},
 };
 use lsp_server::ErrorCode;
 use lsp_types::{
@@ -212,11 +213,11 @@ pub(super) fn project_diagnostics(
     }
 
     // 3. Gather type errors from function inference
-    let globals = baml_tir::typing_context(db, project_root);
-    let class_fields = baml_tir::class_field_types(db, project_root);
-    let type_aliases = baml_tir::type_aliases(db, project_root);
-    let enum_variants_map = baml_tir::enum_variants(db, project_root);
-    let enum_variants = enum_variants_map.enums(db).clone();
+    let globals = typing_context(db, project_root).functions(db).clone();
+    let class_fields = class_field_types(db, project_root).classes(db).clone();
+    let type_aliases_map = type_aliases(db, project_root).aliases(db).clone();
+    let enum_variants_struct = enum_variants(db, project_root);
+    let enum_variants = enum_variants_struct.enums(db).clone();
 
     for source_file in &source_files {
         let items_struct = baml_hir::file_items(db, *source_file);
@@ -235,7 +236,7 @@ pub(super) fn project_diagnostics(
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        Some(type_aliases.clone()),
+                        Some(type_aliases_map.clone()),
                         Some(enum_variants.clone()),
                         *func_loc,
                     );

@@ -64,8 +64,7 @@ pub use baml_vm::{
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
 pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
-    let files = baml_workspace::project_files(db, project);
-    compile_files(db, &files)
+    compile_files(db, project.files(db))
 }
 
 /// Generate bytecode for a list of source files.

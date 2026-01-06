@@ -40,12 +40,15 @@ pub struct RootDatabase {
 impl salsa::Database for RootDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for RootDatabase {
+impl baml_workspace::Db for RootDatabase {
     fn project(&self) -> baml_workspace::Project {
         self.project
             .expect("project must be set before querying - call set_project_root first")
     }
 }
+
+#[salsa::db]
+impl baml_hir::Db for RootDatabase {}
 
 #[salsa::db]
 impl baml_tir::Db for RootDatabase {}
