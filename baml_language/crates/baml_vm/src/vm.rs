@@ -246,6 +246,38 @@ pub struct BamlVmProgram {
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
+/// Get the type tag for any runtime value.
+///
+/// This is a free function to avoid borrow checker issues when called
+/// from within the instruction dispatch loop.
+fn value_type_tag(value: &Value, objects: &ObjectPool) -> i64 {
+    use crate::types::type_tags;
+
+    match value {
+        Value::Int(_) => type_tags::INT,
+        Value::Float(_) => type_tags::FLOAT,
+        Value::Bool(_) => type_tags::BOOL,
+        Value::Null => type_tags::NULL,
+        Value::Object(object_idx) => match &objects[*object_idx] {
+            Object::String(_) => type_tags::STRING,
+            Object::Variant(_) => type_tags::ENUM,
+            Object::Array(_) => type_tags::LIST,
+            Object::Map(_) => type_tags::MAP,
+            Object::Function(_) => type_tags::FUNCTION,
+            Object::Future(_) => type_tags::FUTURE,
+            Object::Enum(_) => type_tags::ENUM,
+            Object::Class(_) => type_tags::UNKNOWN,
+            Object::Instance(instance) => {
+                if let Object::Class(class) = &objects[instance.class] {
+                    class.type_tag
+                } else {
+                    type_tags::UNKNOWN
+                }
+            }
+        },
+    }
+}
+
 impl Vm {
     pub fn new(
         BamlVmProgram {
@@ -278,38 +310,6 @@ impl Vm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-        }
-    }
-
-    /// Get the type tag for any runtime value.
-    ///
-    /// Used by the `TypeTag` instruction for jump table dispatch on union types.
-    pub fn type_tag(&self, value: &Value) -> i64 {
-        use crate::types::type_tags;
-
-        match value {
-            Value::Int(_) => type_tags::INT,
-            Value::Float(_) => type_tags::FLOAT,
-            Value::Bool(_) => type_tags::BOOL,
-            Value::Null => type_tags::NULL,
-            Value::Object(object_idx) => match &self.objects[*object_idx] {
-                Object::String(_) => type_tags::STRING,
-                Object::Variant(_) => type_tags::ENUM,
-                Object::Array(_) => type_tags::LIST,
-                Object::Map(_) => type_tags::MAP,
-                Object::Function(_) => type_tags::FUNCTION,
-                Object::Future(_) => type_tags::FUTURE,
-                Object::Enum(_) => type_tags::ENUM,
-                Object::Class(_) => type_tags::UNKNOWN, // Class objects themselves
-                Object::Instance(instance) => {
-                    // Get type tag directly from the Class object
-                    if let Object::Class(class) = &self.objects[instance.class] {
-                        class.type_tag
-                    } else {
-                        type_tags::UNKNOWN
-                    }
-                }
-            },
         }
     }
 
@@ -1998,37 +1998,8 @@ impl Vm {
                 }
 
                 Instruction::TypeTag => {
-                    use crate::types::type_tags;
-
-                    // Pop value from stack
                     let value = self.stack.ensure_pop()?;
-
-                    // Inline type tag computation for performance
-                    let tag = match value {
-                        Value::Int(_) => type_tags::INT,
-                        Value::Float(_) => type_tags::FLOAT,
-                        Value::Bool(_) => type_tags::BOOL,
-                        Value::Null => type_tags::NULL,
-                        Value::Object(object_idx) => match &self.objects[object_idx] {
-                            Object::String(_) => type_tags::STRING,
-                            Object::Variant(_) => type_tags::ENUM,
-                            Object::Array(_) => type_tags::LIST,
-                            Object::Map(_) => type_tags::MAP,
-                            Object::Function(_) => type_tags::FUNCTION,
-                            Object::Future(_) => type_tags::FUTURE,
-                            Object::Enum(_) => type_tags::ENUM,
-                            Object::Class(_) => type_tags::UNKNOWN,
-                            Object::Instance(instance) => {
-                                // Get type tag directly from the Class object (no HashMap lookup)
-                                if let Object::Class(class) = &self.objects[instance.class] {
-                                    class.type_tag
-                                } else {
-                                    type_tags::UNKNOWN
-                                }
-                            }
-                        },
-                    };
-
+                    let tag = value_type_tag(&value, &self.objects);
                     self.stack.push(Value::Int(tag));
                 }
 
