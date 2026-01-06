@@ -52,7 +52,7 @@ use baml_tir::TypeResolutionContext;
 pub use baml_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
-    ObjectIndex, Program, UnaryOp, Value,
+    ObjectIndex, Program, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -114,6 +114,7 @@ pub fn compile_files(
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut class_field_types: HashMap<Name, HashMap<Name, baml_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
+    let mut class_type_tag_counter = 0i64;
 
     for file in files {
         let item_tree = baml_hir::file_item_tree(db, *file);
@@ -138,7 +139,9 @@ pub fn compile_files(
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
                     field_names,
+                    type_tag: type_tags::CLASS_BASE + class_type_tag_counter,
                 });
+                class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
                 class_object_indices.insert(class_name.clone(), class_obj_idx);
 

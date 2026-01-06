@@ -59,12 +59,6 @@ pub struct Program {
 
     /// Maps function names to their object indices.
     pub function_indices: HashMap<String, usize>,
-
-    /// Global type tag mapping for classes (assigned during codegen).
-    ///
-    /// Maps class name -> type tag (`CLASS_BASE` + index).
-    /// Used by the `TypeTag` instruction for jump table dispatch on unions.
-    pub class_type_tags: HashMap<String, i64>,
 }
 
 impl Default for Program {
@@ -73,7 +67,6 @@ impl Default for Program {
             objects: ObjectPool::new(),
             globals: GlobalPool::new(),
             function_indices: HashMap::new(),
-            class_type_tags: HashMap::new(),
         }
     }
 }
@@ -177,6 +170,10 @@ pub struct Class {
 
     /// Class field names. Debug info, VM doesn't need this.
     pub field_names: Vec<String>,
+
+    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
+    /// Assigned during codegen as `CLASS_BASE + class_index`.
+    pub type_tag: i64,
 }
 
 impl std::fmt::Display for Class {

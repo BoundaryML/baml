@@ -195,12 +195,6 @@ pub struct Vm {
     pub watched_vars: HashMap<StackIndex, (String, String)>,
 
     pub interrupt_frame: Option<usize>,
-
-    /// Global type tag mapping for classes.
-    ///
-    /// Moved from `Program` during `Vm::from_program()`.
-    /// Maps class name -> type tag for jump table dispatch on unions.
-    pub class_type_tags: HashMap<String, i64>,
 }
 
 /// VM execution state.
@@ -269,7 +263,6 @@ impl Vm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            class_type_tags: HashMap::new(),
         }
     }
 
@@ -285,7 +278,6 @@ impl Vm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-            class_type_tags: program.class_type_tags,
         }
     }
 
@@ -310,12 +302,9 @@ impl Vm {
                 Object::Enum(_) => type_tags::ENUM,
                 Object::Class(_) => type_tags::UNKNOWN, // Class objects themselves
                 Object::Instance(instance) => {
-                    // Get class name from the Class object
+                    // Get type tag directly from the Class object
                     if let Object::Class(class) = &self.objects[instance.class] {
-                        self.class_type_tags
-                            .get(&class.name)
-                            .copied()
-                            .unwrap_or(type_tags::UNKNOWN)
+                        class.type_tag
                     } else {
                         type_tags::UNKNOWN
                     }
@@ -2014,7 +2003,7 @@ impl Vm {
                     // Pop value from stack
                     let value = self.stack.ensure_pop()?;
 
-                    // Inline type tag computation to avoid borrow checker issues
+                    // Inline type tag computation for performance
                     let tag = match value {
                         Value::Int(_) => type_tags::INT,
                         Value::Float(_) => type_tags::FLOAT,
@@ -2030,11 +2019,9 @@ impl Vm {
                             Object::Enum(_) => type_tags::ENUM,
                             Object::Class(_) => type_tags::UNKNOWN,
                             Object::Instance(instance) => {
+                                // Get type tag directly from the Class object (no HashMap lookup)
                                 if let Object::Class(class) = &self.objects[instance.class] {
-                                    self.class_type_tags
-                                        .get(&class.name)
-                                        .copied()
-                                        .unwrap_or(type_tags::UNKNOWN)
+                                    class.type_tag
                                 } else {
                                     type_tags::UNKNOWN
                                 }
