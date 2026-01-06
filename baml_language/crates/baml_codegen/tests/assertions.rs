@@ -7,7 +7,6 @@ use baml_tests::{
 use baml_vm::{BinOp, CmpOp};
 
 #[test]
-#[ignore = "assert not yet in HIR"]
 fn assert_statement_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -33,7 +32,6 @@ fn assert_statement_ok() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assert not yet in HIR"]
 fn assert_statement_not_ok() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "

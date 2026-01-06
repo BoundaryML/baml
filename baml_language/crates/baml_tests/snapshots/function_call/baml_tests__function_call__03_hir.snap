@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -10,6 +10,14 @@ function array_length() -> int {
 
 function Greeting(self: Baz) -> string {
       "Hello, " + self.name + "!"
+}
+
+function param_in_if_statement(b: bool) -> int {
+      if (b) {
+          1
+      } else {
+          2
+      }
 }
 
 function Bar() -> int {

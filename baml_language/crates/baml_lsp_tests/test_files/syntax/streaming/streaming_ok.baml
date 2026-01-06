@@ -12,21 +12,21 @@ class Foo2 {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in class body, found Dot
+// Error: Expected Unexpected token in class body, found '.'
 //     ╭─[ 0:10:13 ]
 //     │
 //  10 │     @@stream.done
 //     │             ┬  
-//     │             ╰── Expected Unexpected token in class body, found Dot
+//     │             ╰── Expected Unexpected token in class body, found '.'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type, found RBrace
-//     ╭─[ 0:11:1 ]
+// Error: field 'done' is missing a type annotation
+//     ╭─[ 0:10:14 ]
 //     │
-//  11 │ }
-//     │ ┬  
-//     │ ╰── Expected type, found RBrace
+//  10 │     @@stream.done
+//     │              ──┬─  
+//     │                ╰─── field 'done' is missing a type annotation
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

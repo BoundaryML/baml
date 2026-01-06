@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.216.0](https://github.com/boundaryml/baml/compare/0.215.2..0.216.0) - 2025-12-31
+
+### Bug Fixes
+
+- **(aws-bedrock)** Pass region to DefaultCredentialsChain for IRSA support (#2856) - ([30ff957](https://github.com/boundaryml/baml/commit/30ff9577f52f69bc3861f8bdb0cf57180d94352e)) - Benjamin Poile
+- Fix PDF viewer CSS preload bug (#2876) - ([fb0257b](https://github.com/boundaryml/baml/commit/fb0257bdf9ec0900be9f131a83d2e05d63c33458)) - Antonio Sarosi
+- Fix issue where a request would timeout if there was no finish reason payload (#2881) - ([629c14e](https://github.com/boundaryml/baml/commit/629c14e88171f89240713598a156f0a7712d6b6f)) - aaronvg
+- Typescript x86 alpine fix (#2887) - ([5c2c6d8](https://github.com/boundaryml/baml/commit/5c2c6d844aa8a4623601dd60c829b608ede771fe)) - aaronvg
+- Fix Typescript arm64 linux issue with vertex credentials parsing (#2892) - ([6a97b69](https://github.com/boundaryml/baml/commit/6a97b69c489053ab0fe5ba84115063d31bd0a0cf)) - aaronvg
+
+### Features
+- **(codegen)** add `client` option to BamlCallOptions (#2870) - ([3aa56df](https://github.com/boundaryml/baml/commit/3aa56df16e0f68cba1bcc76ff8cb9a43491e29d1)) - hellovai
+
+### Docs
+- Documentation seniority format correction (#2857) - ([3bebb8c](https://github.com/boundaryml/baml/commit/3bebb8cdce0fa7efcf0e69ac3ca995615496de5b)) - hellovai
+- Clarify how `ClientRegistry.set_primary` works in the docs (#2875) - ([4afec32](https://github.com/boundaryml/baml/commit/4afec32b95cf8c13ae1f895d64465a8ce3ef7a26)) - Antonio Sarosi
+
+
 ## [0.215.2](https://github.com/boundaryml/baml/compare/0.215.1..0.215.2) - 2025-12-22
 
 ### Features

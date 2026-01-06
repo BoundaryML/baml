@@ -4,7 +4,7 @@ expression: output
 ---
 === HIR ITEMS ===
 function GetTodo() -> Todo {
-      <missing>()
+      <missing>({ method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" })
 }
 
 class Todo {

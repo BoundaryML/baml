@@ -19,48 +19,4 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: Expected config key, found Comma
-//    ╭─[ 0:5:26 ]
-//    │
-//  5 │     allowed_roles ["user", "assistant"]
-//    │                          ┬  
-//    │                          ╰── Expected config key, found Comma
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected config key, found Quote
-//    ╭─[ 0:5:28 ]
-//    │
-//  5 │     allowed_roles ["user", "assistant"]
-//    │                            ┬  
-//    │                            ╰── Expected config key, found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Unclosed string literal, found EOF
-//     ╭─[ 0:18:7 ]
-//     │
-//  18 │ //    |
-//     │       ┬  
-//     │       ╰── Expected Unclosed string literal, found EOF
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected RBrace, found EOF
-//     ╭─[ 0:18:7 ]
-//     │
-//  18 │ //    |
-//     │       ┬  
-//     │       ╰── Expected RBrace, found EOF
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected RBrace, found EOF
-//     ╭─[ 0:18:7 ]
-//     │
-//  18 │ //    |
-//     │       ┬  
-//     │       ╰── Expected RBrace, found EOF
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+// <no-diagnostics-expected>

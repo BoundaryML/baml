@@ -23,39 +23,4 @@ let x = 1
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found Let
-//    ╭─[ 0:7:1 ]
-//    │
-//  7 │ let x = 1
-//    │ ─┬─  
-//    │  ╰─── Expected top-level declaration, found Let
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found Word
-//    ╭─[ 0:7:5 ]
-//    │
-//  7 │ let x = 1
-//    │     ┬  
-//    │     ╰── Expected top-level declaration, found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found Equals
-//    ╭─[ 0:7:7 ]
-//    │
-//  7 │ let x = 1
-//    │       ┬  
-//    │       ╰── Expected top-level declaration, found Equals
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found IntegerLiteral
-//    ╭─[ 0:7:9 ]
-//    │
-//  7 │ let x = 1
-//    │         ┬  
-//    │         ╰── Expected top-level declaration, found IntegerLiteral
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
+// <no-diagnostics-expected>

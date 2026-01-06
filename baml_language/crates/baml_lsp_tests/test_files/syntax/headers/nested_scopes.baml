@@ -17,12 +17,4 @@ function NestedScopes() -> string {
 
 //----
 //- diagnostics
-// Error: Expected string, found string | void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ function NestedScopes() -> string {
-//    │ │ 
-//    │ ╰─ Expected string, found string | void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

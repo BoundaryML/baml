@@ -3,9 +3,9 @@ source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Foo() -> Error {
+fn Foo() -> Int {
     // Locals:
-    let _0: Error // return
+    let _0: Int // return
     let _1: Int
     let _2: String
 

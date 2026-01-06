@@ -17,9 +17,7 @@ on:
       - "test-release/*.*"
       - "*.*"
     branches:
-      - gofix2
-      - cursor/implement-collector-clear-and-update-docs-7c67
-      - greg/bedrock-pdf-citations
+      - tool-update
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
@@ -154,11 +152,11 @@ jobs:
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
-        
+
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-action-version: 'v6'
+          node-action-version: "v6"
           node-version: latest
 
       - name: Ensure npm CLI supports trusted publishing
@@ -223,7 +221,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-action-version: 'v6'
+          node-action-version: "v6"
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts
@@ -251,7 +249,7 @@ jobs:
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
         with:
-          node-action-version: 'v6'
+          node-action-version: "v6"
           install_dependencies: false
           npm-token: ${{ secrets.NPM_TOKEN }}
       - name: Download VSIX artifacts

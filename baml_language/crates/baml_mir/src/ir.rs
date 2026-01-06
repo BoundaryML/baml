@@ -6,7 +6,7 @@
 use std::fmt;
 
 use baml_base::Name;
-use baml_thir::Ty;
+use baml_tir::Ty;
 use text_size::TextRange;
 
 // ============================================================================
@@ -28,6 +28,8 @@ pub struct MirFunction<'db> {
     pub locals: Vec<LocalDecl<'db>>,
     /// Source span for error reporting.
     pub span: Option<TextRange>,
+    /// Visualization nodes for control flow visualization.
+    pub viz_nodes: Vec<VizNode>,
 }
 
 impl<'db> MirFunction<'db> {
@@ -84,6 +86,8 @@ pub struct LocalDecl<'db> {
     pub ty: Ty<'db>,
     /// Source span (for diagnostics).
     pub span: Option<TextRange>,
+    /// Whether this local is being watched for changes.
+    pub is_watched: bool,
 }
 
 // ============================================================================
@@ -146,8 +150,46 @@ pub enum StatementKind<'db> {
     /// Drop a value (run destructor if any).
     Drop(Place),
 
+    /// Unwatch a local variable (unregister from watch tracking).
+    /// Emitted when a watched variable goes out of scope.
+    Unwatch(Local),
+
+    /// Block notification: `//# name`
+    /// Emits a block notification when executed.
+    NotifyBlock {
+        /// The name of the block annotation
+        name: Name,
+        /// The header level (number of # symbols)
+        level: usize,
+    },
+
+    /// Set watch options for a watched variable.
+    /// Emitted for `var.$watch.options(filter)`.
+    WatchOptions {
+        /// The watched local variable
+        local: Local,
+        /// The new filter (function, "manual", "never", etc.)
+        filter: Operand<'db>,
+    },
+
+    /// Manually trigger notification for a watched variable.
+    /// Emitted for `var.$watch.notify()`.
+    WatchNotify(Local),
+
+    /// Enter a visualization node.
+    /// Emitted at the start of control flow structures (if, while, etc.).
+    VizEnter(usize),
+
+    /// Exit a visualization node.
+    /// Emitted at the end of control flow structures.
+    VizExit(usize),
+
     /// No-op (placeholder for removed statements).
     Nop,
+
+    /// Assert that a condition is true.
+    /// Evaluates the operand and panics if it's false.
+    Assert(Operand<'db>),
 }
 
 // ============================================================================
@@ -275,6 +317,15 @@ impl Terminator<'_> {
 // Place
 // ============================================================================
 
+/// The kind of indexing operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IndexKind {
+    /// Array indexing: `arr[i]`
+    Array,
+    /// Map indexing: `map[key]`
+    Map,
+}
+
 /// A place in memory (lvalue).
 ///
 /// Places represent locations that can be read from or written to.
@@ -286,8 +337,12 @@ pub enum Place {
     /// Field access: `_1.field_idx`
     Field { base: Box<Place>, field: usize },
 
-    /// Array indexing: `_1[_2]`
-    Index { base: Box<Place>, index: Local },
+    /// Indexing: `_1[_2]`
+    Index {
+        base: Box<Place>,
+        index: Local,
+        kind: IndexKind,
+    },
 }
 
 impl Place {
@@ -305,10 +360,11 @@ impl Place {
     }
 
     /// Create an index projection.
-    pub fn index(base: Place, index: Local) -> Self {
+    pub fn index(base: Place, index: Local, kind: IndexKind) -> Self {
         Place::Index {
             base: Box::new(base),
             index,
+            kind,
         }
     }
 
@@ -326,7 +382,7 @@ impl fmt::Display for Place {
         match self {
             Place::Local(l) => write!(f, "{l}"),
             Place::Field { base, field } => write!(f, "{base}.{field}"),
-            Place::Index { base, index } => write!(f, "{base}[{index}]"),
+            Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
         }
     }
 }
@@ -356,6 +412,10 @@ pub enum Rvalue<'db> {
 
     /// Create an array: `[_1, _2, _3]`
     Array(Vec<Operand<'db>>),
+
+    /// Create a map: `{ key1: value1, key2: value2, ... }`
+    /// Each entry is a (key, value) pair.
+    Map(Vec<(Operand<'db>, Operand<'db>)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {
@@ -432,6 +492,11 @@ pub enum Constant<'db> {
     Null,
     /// A function reference.
     Function(Name),
+    /// An enum variant value.
+    EnumVariant {
+        enum_name: Name,
+        variant: Name,
+    },
     /// Placeholder for type info when needed.
     #[allow(dead_code)]
     Ty(Ty<'db>),
@@ -465,6 +530,9 @@ pub enum BinOp {
     BitXor,
     Shl,
     Shr,
+
+    // Type checking
+    Instanceof,
 }
 
 impl fmt::Display for BinOp {
@@ -486,6 +554,7 @@ impl fmt::Display for BinOp {
             BinOp::BitXor => "^",
             BinOp::Shl => "<<",
             BinOp::Shr => ">>",
+            BinOp::Instanceof => "instanceof",
         };
         write!(f, "{s}")
     }
@@ -506,4 +575,42 @@ impl fmt::Display for UnaryOp {
         };
         write!(f, "{s}")
     }
+}
+
+// ============================================================================
+// Visualization Nodes
+// ============================================================================
+
+/// Type of visualization node for control flow visualization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VizNodeType {
+    /// Root of a function's control flow.
+    FunctionRoot,
+    /// Header context from `//# header` annotation.
+    HeaderContextEnter,
+    /// Group of branches (if-else chain).
+    BranchGroup,
+    /// Single branch arm (if/else if/else).
+    BranchArm,
+    /// Loop construct (while/for).
+    Loop,
+    /// Other block scope.
+    OtherScope,
+}
+
+/// Visualization node metadata for control flow visualization.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VizNode {
+    /// Unique node ID within this function.
+    pub node_id: u32,
+    /// Encoded log filter key for this node.
+    pub log_filter_key: String,
+    /// Parent node's log filter key (None for root).
+    pub parent_log_filter_key: Option<String>,
+    /// Type of this visualization node.
+    pub node_type: VizNodeType,
+    /// Human-readable label for this node.
+    pub label: String,
+    /// Header level (only for `HeaderContextEnter`).
+    pub header_level: Option<u8>,
 }

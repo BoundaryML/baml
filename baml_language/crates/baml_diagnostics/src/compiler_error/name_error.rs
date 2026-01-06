@@ -16,4 +16,17 @@ pub enum NameError {
         second: Span,
         second_path: String,
     },
+
+    /// Duplicate test targeting the same function.
+    ///
+    /// Tests with the same name are allowed if they target different functions,
+    /// but two tests with the same name cannot target the same function.
+    DuplicateTestForFunction {
+        test_name: String,
+        function_name: String,
+        first: Span,
+        first_path: String,
+        second: Span,
+        second_path: String,
+    },
 }

@@ -64,6 +64,7 @@ async fn run_parser_loop<'a, ParseFn, EventFn>(
                 ).await;
             }
             changed = snapshot_rx.changed() => {
+
                 if changed.is_err() {
                     process_latest_snapshot(
                         &scope,
@@ -74,6 +75,7 @@ async fn run_parser_loop<'a, ParseFn, EventFn>(
                     ).await;
                     break;
                 }
+                // we purposefully dont process snpashot here -- only strictly every 50ms in case parsing takes long.
             }
         }
     }
@@ -219,6 +221,7 @@ where
                 let stream_res = node.stream(&ctx, &prompt).await;
                 let final_response = match stream_res {
                     Ok(mut response_stream) => {
+
                         let mut last_response: Option<LLMResponse> = None;
                         let parse_state = Arc::new(Mutex::new(ParserState::default()));
                         let (snapshot_tx, snapshot_rx) = watch::channel::<Option<Arc<LLMCompleteResponse>>>(None);
@@ -262,7 +265,6 @@ where
                             let snapshot_sender = snapshot_tx;
                             let mut first_token_received = false;
                             let stream_start = web_time::Instant::now();
-                            let mut stream_ended_cleanly = false;
 
                             loop {
                                 // Determine which timeout to use for this iteration
@@ -276,7 +278,7 @@ where
                                 let next_result: Result<LLMResponse, ()> = if let Some(timeout_dur) = timeout_duration {
                                     match timeout(timeout_dur, FuturesStreamExt::next(&mut response_stream)).await {
                                         Ok(Some(part)) => Ok(part),
-                                        Ok(None) => break, // Stream ended
+                                        Ok(None) => break, // Stream ended normally
                                         Err(_elapsed) => {
                                             // Timeout occurred
                                             let timeout_type = if !first_token_received {
@@ -308,7 +310,7 @@ where
                                     // No timeout configured, wait indefinitely
                                     match FuturesStreamExt::next(&mut response_stream).await {
                                         Some(part) => Ok(part),
-                                        None => break, // Stream ended
+                                        None => break, // Stream ended normally
                                     }
                                 };
 
@@ -328,11 +330,6 @@ where
                                             let _ = snapshot_sender.send_replace(Some(snapshot.clone()));
                                             last_response = Some(LLMResponse::Success((*snapshot).clone()));
 
-                                            // Check if stream completed cleanly
-                                            if s.metadata.baml_is_complete {
-                                                stream_ended_cleanly = true;
-                                            }
-
                                             let mut state = parse_state_for_sse.lock().await;
                                             state.last_processed_snapshot_ptr = None;
                                         }
@@ -345,34 +342,23 @@ where
 
                             drop(snapshot_sender);
 
-                            // If stream ended without a clean completion marker, treat it as a timeout error
-                            // (likely due to request_timeout_ms cutting the stream short)
-                            if !stream_ended_cleanly {
-                                if let Some(LLMResponse::Success(_)) = last_response {
-                                    // Stream was cut short with partial response - likely due to request_timeout_ms
-                                    last_response = Some(LLMResponse::LLMFailure(LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: None,
-                                        prompt: stream_prompt.clone(),
-                                        start_time: system_start,
-                                        latency: stream_start.elapsed(),
-                                        request_options: request_options_for_timeout.clone(),
-                                        message: "Stream ended prematurely without completion marker (likely timeout)".to_string(),
-                                        code: ErrorCode::Timeout,
-                                    }));
-                                } else if last_response.is_none() {
-                                    // Stream ended before any tokens received - also likely a timeout
-                                    last_response = Some(LLMResponse::LLMFailure(LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: None,
-                                        prompt: stream_prompt.clone(),
-                                        start_time: system_start,
-                                        latency: stream_start.elapsed(),
-                                        request_options: request_options_for_timeout.clone(),
-                                        message: "Stream ended without receiving any tokens (likely timeout)".to_string(),
-                                        code: ErrorCode::Timeout,
-                                    }));
-                                }
+                            // Note: We no longer treat missing baml_is_complete as a timeout.
+                            // The stream ending naturally (returning None) is a valid completion.
+                            // Timeouts are only detected above when the timeout() call returns Err.
+                            //
+                            // If last_response is None here, it means we never received any events,
+                            // which could be a connection issue but NOT necessarily a timeout.
+                            if last_response.is_none() {
+                                last_response = Some(LLMResponse::LLMFailure(LLMErrorResponse {
+                                    client: client_name.clone(),
+                                    model: None,
+                                    prompt: stream_prompt.clone(),
+                                    start_time: system_start,
+                                    latency: stream_start.elapsed(),
+                                    request_options: request_options_for_timeout.clone(),
+                                    message: "Stream ended without receiving any events".to_string(),
+                                    code: ErrorCode::Other(2),
+                                }));
                             }
 
                             last_response
@@ -388,8 +374,8 @@ where
                         if let Some(response) = final_last_response {
                             response
                         } else {
-                            // This should be unreachable now - we handle all None cases above in the
-                            // !stream_ended_cleanly branch (lines 363-375). But keep as defensive fallback.
+                            // This should be unreachable - we handle the None case in sse_future.
+                            // But keep as defensive fallback.
                             LLMResponse::LLMFailure(LLMErrorResponse {
                                 client: node.provider.name().into(),
                                 model: None,

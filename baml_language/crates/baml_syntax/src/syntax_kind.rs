@@ -30,6 +30,7 @@ pub enum SyntaxKind {
     KW_CONTINUE,
     KW_RETURN,
     KW_MATCH,
+    KW_ASSERT,
 
     // Other keywords
     KW_WATCH,
@@ -59,6 +60,7 @@ pub enum SyntaxKind {
     DOUBLE_COLON, // ::
     COMMA,        // ,
     SEMICOLON,    // ;
+    DOT_DOT_DOT,  // ...
     DOT,          // .
     DOLLAR,       // $
     ARROW,        // ->
@@ -113,8 +115,9 @@ pub enum SyntaxKind {
     // Whitespace and comments (preserved for losslessness)
     WHITESPACE,
     NEWLINE,
-    LINE_COMMENT,  // //...
-    BLOCK_COMMENT, // /* ... */
+    LINE_COMMENT,   // //...
+    BLOCK_COMMENT,  // /* ... */
+    HEADER_COMMENT, // //# Header (MDX-style)
 
     // Error token
     ERROR_TOKEN,
@@ -129,6 +132,7 @@ pub enum SyntaxKind {
     CLASS_DEF,
     ENUM_DEF,
     CLIENT_DEF,
+    GENERATOR_DEF,
     TEST_DEF,
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
@@ -222,12 +226,14 @@ pub enum SyntaxKind {
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
+    ASSERT_STMT,
 
     // Expression components
     CALL_ARGS,
     GENERIC_ARGS,
     OBJECT_LITERAL,
     OBJECT_FIELD,
+    SPREAD_ELEMENT, // ...expr in object/array literals
     ARRAY_LITERAL,
     MAP_LITERAL,
 

@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 2
-Objects: 23
+Objects: 24
 Globals: 20
 
 Function GetStatus (arity: 0, kind: Llm):

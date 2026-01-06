@@ -51,6 +51,7 @@ ast_node!(ClassDef, CLASS_DEF);
 ast_node!(EnumDef, ENUM_DEF);
 ast_node!(ClientDef, CLIENT_DEF);
 ast_node!(TestDef, TEST_DEF);
+ast_node!(GeneratorDef, GENERATOR_DEF);
 ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
@@ -92,6 +93,10 @@ impl TypeExpr {
         for child in self.syntax.children_with_tokens() {
             match child {
                 rowan::NodeOrToken::Token(token) => {
+                    // Skip trivia tokens (whitespace, comments)
+                    if token.kind().is_trivia() {
+                        continue;
+                    }
                     if token.kind() == SyntaxKind::PIPE {
                         let trimmed = current_part.trim().to_string();
                         if !trimmed.is_empty() {
@@ -121,7 +126,35 @@ impl TypeExpr {
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);
-ast_node!(LetStmt, LET_STMT);
+
+// LetStmt accepts both LET_STMT and WATCH_LET syntax kinds
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LetStmt {
+    syntax: SyntaxNode,
+}
+
+impl BamlAstNode for LetStmt {}
+
+impl AstNode for LetStmt {
+    type Language = crate::BamlLanguage;
+
+    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
+        kind == SyntaxKind::LET_STMT || kind == SyntaxKind::WATCH_LET
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
 ast_node!(IfExpr, IF_EXPR);
 ast_node!(WhileStmt, WHILE_STMT);
 ast_node!(ForExpr, FOR_EXPR);
@@ -327,6 +360,24 @@ impl ClientDef {
     }
 }
 
+impl GeneratorDef {
+    /// Get the generator name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0) // Get the first WORD (generator keyword is KW_GENERATOR, not WORD)
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
 impl ConfigBlock {
     /// Get all config items.
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
@@ -343,14 +394,99 @@ impl ConfigItem {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// Get the config item value (second WORD token, if present).
+    /// Get the config item value (WORD token inside `CONFIG_VALUE`, if present).
     /// For simple `key value` patterns like `provider openai`.
+    /// The value is nested inside a `CONFIG_VALUE` node: `CONFIG_ITEM` { WORD "key", `CONFIG_VALUE` { WORD "value" } }
     pub fn value_word(&self) -> Option<SyntaxToken> {
+        // Find the CONFIG_VALUE child node
         self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
-            .nth(1)
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .and_then(|config_value| {
+                // Look for a WORD token inside CONFIG_VALUE
+                config_value
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::WORD)
+            })
+    }
+
+    /// Get the text range of the config value, regardless of whether it's a WORD or `STRING_LITERAL`.
+    /// This is useful for error reporting when the value type doesn't matter.
+    pub fn value_text_range(&self) -> Option<rowan::TextRange> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| config_value.text_range())
+    }
+
+    /// Get the full config item value as a string.
+    /// This handles compound values like "python/pydantic" that span multiple tokens.
+    /// Returns the unquoted text of the value.
+    pub fn value_str(&self) -> Option<String> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                // Collect all non-whitespace, non-quote token text from nested tokens
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| {
+                        !matches!(
+                            token.kind(),
+                            SyntaxKind::WHITESPACE
+                                | SyntaxKind::NEWLINE
+                                | SyntaxKind::LINE_COMMENT
+                                | SyntaxKind::BLOCK_COMMENT
+                                | SyntaxKind::QUOTE
+                        )
+                    })
+                    .map(|token| token.text().to_string())
+                    .collect::<String>()
+            })
+            .filter(|s| !s.is_empty())
+    }
+
+    /// Get a nested config block, if this item has one.
+    /// For items like `options { ... }` or `http { ... }`.
+    pub fn nested_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+
+    /// Check if this config item has a `CONFIG_VALUE` child (vs a nested `CONFIG_BLOCK`).
+    pub fn has_value(&self) -> bool {
+        self.syntax
+            .children()
+            .any(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+    }
+
+    /// Get the integer value if this is an integer literal.
+    pub fn value_int(&self) -> Option<i64> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .and_then(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
+                    .and_then(|token| token.text().parse().ok())
+            })
+    }
+
+    /// Check if the value starts with a minus sign (for negative numbers).
+    pub fn is_negative(&self) -> bool {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                config_value
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::MINUS)
+            })
+            .unwrap_or(false)
     }
 }
 
@@ -366,15 +502,32 @@ impl TestDef {
             .nth(0) // Get the first WORD (test keyword is KW_TEST, not WORD)
     }
 
-    /// Get the function name that this test is for.
+    /// Get the function name that this test is for (first function only).
     /// Pattern: `test <TestName> { functions [<FunctionName>] ... }`
     pub fn function_name(&self) -> Option<SyntaxToken> {
-        // Look for a ConfigItem with key "functions" and extract the function name
+        self.function_names().into_iter().next()
+    }
+
+    /// Get all function names that this test is for.
+    /// Pattern: `test <TestName> { functions [<Func1>, <Func2>, ...] ... }`
+    pub fn function_names(&self) -> Vec<SyntaxToken> {
+        // Look for a ConfigItem with key "functions" and extract all function names
+        // The function names are inside a CONFIG_VALUE node: functions [Func1, Func2]
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
             .find(|item| item.key().map(|k| k.text() == "functions").unwrap_or(false))
-            .and_then(|item| item.value_word())
+            .map(|item| {
+                // Look for WORD tokens within the config item's descendants
+                // Skip the first one (which is the key "functions")
+                item.syntax()
+                    .descendants_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|token| token.kind() == SyntaxKind::WORD)
+                    .skip(1) // Skip "functions" key
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Get the config block.
@@ -403,22 +556,108 @@ impl TypeAliasDef {
 }
 
 impl BlockAttribute {
-    /// Get the attribute name (e.g., "dynamic" from @@dynamic).
+    /// Get the first segment of the attribute name (e.g., "dynamic" from @@dynamic).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
     }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @@stream.done returns "stream.done", for @@dynamic returns "dynamic".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::DOT
+                )
+            })
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
+    }
 }
 
 impl Attribute {
-    /// Get the attribute name (e.g., "alias" from @alias).
+    /// Get the first segment of the attribute name (e.g., "stream" from @stream.done).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the full attribute name including dot-separated modifiers.
+    /// For @stream.done returns "stream.done", for @alias returns "alias".
+    pub fn full_name(&self) -> Option<String> {
+        let segments: Vec<String> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if segments.is_empty() {
+            None
+        } else {
+            Some(segments.join("."))
+        }
+    }
+
+    /// Get the text range covering the full attribute name (including modifiers).
+    /// For @stream.done returns the range from "stream" to "done".
+    pub fn full_name_range(&self) -> Option<rowan::TextRange> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .collect();
+
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let first = tokens.first()?;
+        let last = tokens.last()?;
+
+        Some(rowan::TextRange::new(
+            first.text_range().start(),
+            last.text_range().end(),
+        ))
     }
 }
 
@@ -679,26 +918,29 @@ impl LetStmt {
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::ARRAY_LITERAL
                     | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::MAP_LITERAL
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL
             )
         })
     }
 
-    /// Get the initializer as a token (for direct literals like integers).
+    /// Get the initializer as a token (for direct literals like integers, bools, null).
     /// Returns the literal token if the initializer is a simple literal.
     pub fn initializer_token(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| {
-                matches!(
-                    token.kind(),
+                match token.kind() {
                     SyntaxKind::INTEGER_LITERAL
-                        | SyntaxKind::FLOAT_LITERAL
-                        | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                )
+                    | SyntaxKind::FLOAT_LITERAL
+                    | SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL => true,
+                    // Boolean and null literals are parsed as WORD tokens
+                    SyntaxKind::WORD => matches!(token.text(), "true" | "false" | "null"),
+                    _ => false,
+                }
             })
     }
 }
@@ -719,12 +961,14 @@ pub enum BlockElement {
     ExprNode(SyntaxNode),
     /// A literal or identifier token that forms an expression
     ExprToken(SyntaxToken),
+    /// A header comment (`//# name`)
+    HeaderComment(SyntaxNode),
 }
 
 impl BlockElement {
     /// Returns true if this element is a statement (has no value).
     pub fn is_stmt(&self) -> bool {
-        matches!(self, BlockElement::Stmt(_))
+        matches!(self, BlockElement::Stmt(_) | BlockElement::HeaderComment(_))
     }
 
     /// Returns true if this element is an expression (has a value).
@@ -735,7 +979,9 @@ impl BlockElement {
     /// Get the syntax node if this is a node-based element.
     pub fn as_node(&self) -> Option<&SyntaxNode> {
         match self {
-            BlockElement::Stmt(n) | BlockElement::ExprNode(n) => Some(n),
+            BlockElement::Stmt(n) | BlockElement::ExprNode(n) | BlockElement::HeaderComment(n) => {
+                Some(n)
+            }
             BlockElement::ExprToken(_) => None,
         }
     }
@@ -767,6 +1013,7 @@ impl BlockElement {
                     .filter_map(rowan::NodeOrToken::into_token)
                     .any(|t| t.kind() == SyntaxKind::SEMICOLON)
             }
+            BlockElement::HeaderComment(_) => false, // Header comments don't have trailing semicolons
         }
     }
 }
@@ -783,11 +1030,15 @@ impl BlockExpr {
                     match n.kind() {
                         // Statement nodes
                         SyntaxKind::LET_STMT
+                        | SyntaxKind::WATCH_LET
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
-                        | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::CONTINUE_STMT
+                        | SyntaxKind::ASSERT_STMT => Some(BlockElement::Stmt(n)),
+                        // Header comment (//# name)
+                        SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes
                         SyntaxKind::EXPR
                         | SyntaxKind::BINARY_EXPR
@@ -801,7 +1052,10 @@ impl BlockExpr {
                         | SyntaxKind::INDEX_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
-                        | SyntaxKind::OBJECT_LITERAL => Some(BlockElement::ExprNode(n)),
+                        | SyntaxKind::OBJECT_LITERAL
+                        | SyntaxKind::MAP_LITERAL
+                        | SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
                         _ => None,
                     }
                 }

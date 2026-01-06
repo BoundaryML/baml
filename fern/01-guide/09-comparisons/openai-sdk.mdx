@@ -271,15 +271,11 @@ function ExtractResume(resume_text: string) -> Resume {
   prompt #"
     Extract structured information from this resume.
     
-    When determining seniority, use these guidelines:
-    {{ ctx.output_format.seniority }}
-    
     Resume:
     ---
     {{ resume_text }}
     ---
     
-    Output format:
     {{ ctx.output_format }}
   "#
 }

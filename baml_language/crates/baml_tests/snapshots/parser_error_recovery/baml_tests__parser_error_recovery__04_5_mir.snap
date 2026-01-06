@@ -1,40 +1,18 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Foo() -> Unknown {
-    // Locals:
-    let _0: Unknown // return
-    let _1: Unknown
+fn Foo:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _1 = dispatch_future const fn Foo() -> bb1;
-    }
-
-    bb1: {
-        _0 = await _1 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn Incomplete(_1: <missing>) -> Void {
-    // Locals:
-    let _0: Void // return
-
-    bb0: {
-        return;
-    }
-
-}
+fn Incomplete:
+  (no MIR due to errors: MissingBody)
 
 fn NextFunction() -> String {
     // Locals:
     let _0: String // return
+    let _1: Void
 
     bb0: {
         _0 = const "parsed";

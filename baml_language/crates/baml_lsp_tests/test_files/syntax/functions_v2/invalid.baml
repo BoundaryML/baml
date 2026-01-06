@@ -31,30 +31,30 @@ function FooBar(arg) -> bar {
 
 //----
 //- diagnostics
-// Error: Expected type, found LBrace
+// Error: Expected type, found '{'
 //    ╭─[ 0:1:19 ]
 //    │
 //  1 │ function Foo() -> {
 //    │                   ┬  
-//    │                   ╰── Expected type, found LBrace
+//    │                   ╰── Expected type, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found RParen
+// Error: Expected type annotation, found ')'
 //    ╭─[ 0:6:20 ]
 //    │
 //  6 │ function FooBar(arg) -> bar {
 //    │                    ┬  
-//    │                    ╰── Expected type annotation, found RParen
+//    │                    ╰── Expected type annotation, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected bar, found void
+// Error: Unknown type bar
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ function Foo() -> {
 //    │ │ 
-//    │ ╰─ Expected bar, found void
+//    │ ╰─ Unknown type bar
 //    │ 
-//    │ Note: Error code: E0001
+//    │ Note: Error code: E0002
 // ───╯

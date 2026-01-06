@@ -231,6 +231,10 @@ pub enum VmExecState {
 pub enum WatchNotification {
     Variables(Vec<watch::NodeId>),
     Block(BlockNotification),
+    Viz {
+        function_name: String,
+        event: crate::bytecode::VizExecEvent,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -674,6 +678,34 @@ impl Vm {
                         full_notification,
                     )));
                 }
+                Instruction::VizEnter(index) | Instruction::VizExit(index) => {
+                    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+                    let delta = match instruction {
+                        Instruction::VizEnter(_) => crate::bytecode::VizExecDelta::Enter,
+                        Instruction::VizExit(_) => crate::bytecode::VizExecDelta::Exit,
+                        _ => unreachable!("matched on viz instruction"),
+                    };
+
+                    let node = function.viz_nodes.get(index).ok_or({
+                        InternalError::ArrayIndexOutOfBounds {
+                            index,
+                            length: function.viz_nodes.len(),
+                        }
+                    })?;
+
+                    let event = crate::bytecode::VizExecEvent {
+                        delta,
+                        node_id: node.node_id,
+                        node_type: node.node_type,
+                        label: node.label.clone(),
+                        header_level: node.header_level,
+                    };
+
+                    return Ok(VmExecState::Notify(WatchNotification::Viz {
+                        function_name: function.name.clone(),
+                        event,
+                    }));
+                }
                 Instruction::LoadConst(index) => {
                     let value = &function.bytecode.constants[index];
                     self.stack.push(*value);
@@ -895,9 +927,12 @@ impl Vm {
                     frame.instruction_ptr = instruction_ptr + offset;
                 }
 
-                Instruction::JumpIfFalse(offset) => {
-                    match &self.stack[self.stack.ensure_stack_top()?] {
-                        // Reassign only if the top of the stack is false.
+                Instruction::PopJumpIfFalse(offset) => {
+                    // Pop the condition from the stack (don't leave it there).
+                    let condition = self.stack.ensure_pop()?;
+
+                    match condition {
+                        // Reassign only if the condition is false.
                         Value::Bool(value) => {
                             if !value {
                                 frame.instruction_ptr = instruction_ptr + offset;
@@ -909,7 +944,7 @@ impl Vm {
                         other => {
                             return Err(VmError::from(InternalError::TypeError {
                                 expected: Type::Bool,
-                                got: self.objects.type_of(other),
+                                got: self.objects.type_of(&other),
                             }));
                         }
                     }
@@ -1575,7 +1610,7 @@ impl Vm {
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,
-                        (watched_var_name.to_string(), function.name.clone()),
+                        (watched_var_name.clone(), function.name.clone()),
                     );
 
                     // If it's an object, build the entire dependency graph
@@ -1589,6 +1624,27 @@ impl Vm {
                             NodeId::HeapObject(object_index),
                             &self.objects,
                         );
+                    }
+                }
+
+                Instruction::Unwatch(index) => {
+                    let local_var_index = StackIndex::from_raw(frame.locals_offset.raw() + index);
+
+                    // Remove from watched_vars tracking
+                    if self.watched_vars.remove(&local_var_index).is_some() {
+                        let var_node = NodeId::LocalVar(local_var_index);
+                        // Unregister this variable as a root
+                        self.watch.unregister_root(var_node);
+
+                        // If it was linked to an object, unlink it
+                        let value = self.stack[local_var_index];
+                        if let Value::Object(object_index) = value {
+                            self.watch.unlink_edge(
+                                var_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(object_index),
+                            );
+                        }
                     }
                 }
 

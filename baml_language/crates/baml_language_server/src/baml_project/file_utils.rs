@@ -18,10 +18,10 @@ use lsp_types::{TextDocumentItem, Url};
 /// # Internal Development Support
 ///
 /// If no `baml_src` directory is found but the path contains a directory named
-/// `baml_language` anywhere in its ancestry, this function returns the file's
-/// parent directory as the project root. This allows `.baml` files in the
-/// baml_language repository (e.g., test fixtures in `crates/baml_lsp_tests/`)
-/// to be treated as standalone single-file projects for development/testing.
+/// `baml_language` anywhere in its ancestry, this function returns the file path
+/// itself as the project root. This allows each `.baml` file in the baml_language
+/// repository (e.g., test fixtures in `crates/baml_lsp_tests/`) to be treated as
+/// its own isolated single-file project for development/testing.
 ///
 /// **Note:** This `baml_language` behavior is for internal BAML development only
 /// and should not be relied upon by end users. Users should always place their
@@ -34,7 +34,7 @@ use lsp_types::{TextDocumentItem, Url};
 /// # Returns
 ///
 /// * `Some(PathBuf)` if a directory with basename "baml_src" is found,
-///   or if the path is within a "baml_language" directory (returns file's parent dir),
+///   or if the path is within a "baml_language" directory (returns file path itself),
 ///   or `None` otherwise.
 pub fn find_top_level_parent(file_path: &Path) -> Option<PathBuf> {
     // First, check for baml_src (standard project detection - takes precedence)
@@ -54,15 +54,16 @@ pub fn find_top_level_parent(file_path: &Path) -> Option<PathBuf> {
     }
 
     // Fallback: Check for baml_language directory (internal development only).
-    // If found, treat the file's parent directory as its own single-file project.
+    // If found, treat each .baml file as its own isolated single-file project.
     // This enables LSP features for test fixtures and development files.
     let mut check_path = file_path;
     while let Some(parent) = check_path.parent() {
         if let Some(dir_name) = parent.file_name() {
             if dir_name == "baml_language" {
-                // Return the file's parent directory as the project root.
-                // This makes each .baml file its own isolated single-file project.
-                return file_path.parent().map(|p| p.to_path_buf());
+                // Return the file path itself as the project root.
+                // This ensures each standalone .baml file gets its own project context,
+                // rather than sharing a project with other files in the same directory.
+                return Some(file_path.to_path_buf());
             }
         }
         check_path = parent;
@@ -86,13 +87,15 @@ pub fn find_baml_src(file_path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Gathers files with .baml or extensions from a given root directory.
-/// The search is performed iteratively using a stack so that each directory is only
-/// visited once.
+/// Gathers files with .baml extensions from a given root path.
+///
+/// If `root_path` is a file with a `.baml` extension, returns just that file.
+/// If `root_path` is a directory, performs an iterative search so that each
+/// directory is only visited once.
 ///
 /// # Arguments
 ///
-/// * `root_path` - The root directory to start searching.
+/// * `root_path` - The root file or directory to start searching.
 /// * `debug` - When true, errors reading directories are printed to stderr.
 ///
 /// # Returns
@@ -100,6 +103,17 @@ pub fn find_baml_src(file_path: &Path) -> Option<PathBuf> {
 /// * `Ok(Vec<PathBuf>)` containing the paths of discovered files,
 ///   or an `io::Error` if an error is encountered.
 pub fn gather_files(root_path: &Path, debug: bool) -> io::Result<Vec<PathBuf>> {
+    // If root_path is a file (standalone mode), just return it if it's a .baml file.
+    if root_path.is_file() {
+        if let Some(ext) = root_path.extension().and_then(|s| s.to_str()) {
+            if ext.eq_ignore_ascii_case("baml") {
+                return Ok(vec![root_path.to_path_buf()]);
+            }
+        }
+        // Not a .baml file, return empty
+        return Ok(vec![]);
+    }
+
     let mut visited_dirs = HashSet::new();
     let mut dir_stack = Vec::new();
     let mut file_list = Vec::new();
@@ -216,18 +230,21 @@ mod tests {
 
     #[test]
     fn test_find_top_level_parent_baml_language() {
-        // baml_language directory should return file's parent (internal dev support)
+        // baml_language directory should return the file path itself (internal dev support)
+        // Each standalone .baml file gets its own isolated project context
         let path = PathBuf::from("/path/to/baml_language/crates/test/file.baml");
         let result = find_top_level_parent(&path);
         assert_eq!(
             result,
-            Some(PathBuf::from("/path/to/baml_language/crates/test"))
+            Some(PathBuf::from(
+                "/path/to/baml_language/crates/test/file.baml"
+            ))
         );
     }
 
     #[test]
     fn test_find_top_level_parent_baml_language_nested() {
-        // Deeply nested in baml_language
+        // Deeply nested in baml_language - returns the file path itself
         let path = PathBuf::from(
             "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class/valid.baml",
         );
@@ -235,7 +252,7 @@ mod tests {
         assert_eq!(
             result,
             Some(PathBuf::from(
-                "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class"
+                "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class/valid.baml"
             ))
         );
     }

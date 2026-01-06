@@ -10,17 +10,18 @@ use std::{
 use anyhow::Result;
 use baml_db::{
     FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_thir, baml_workspace,
+    baml_tir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
-    CompilerError, ParseError, TypeError, render_parse_error, render_type_error,
+    CompilerError, HirDiagnostic, ParseError, TypeError, render_hir_diagnostic, render_parse_error,
+    render_type_error,
 };
-use baml_hir::{ItemId, function_body, function_signature};
+use baml_hir::{ItemId, file_lowering, function_body, function_signature};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_thir::{build_class_fields_from_files, build_typing_context_from_files};
+use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -32,6 +33,7 @@ pub(crate) enum CompilerPhase {
     Ast,
     Hir,
     Thir,
+    TypedIr,
     Mir,
     Diagnostics,
     Codegen,
@@ -46,6 +48,7 @@ impl CompilerPhase {
         CompilerPhase::Ast,
         CompilerPhase::Hir,
         CompilerPhase::Thir,
+        CompilerPhase::TypedIr,
         CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
@@ -59,7 +62,8 @@ impl CompilerPhase {
             CompilerPhase::Parser => "Parser (CST)",
             CompilerPhase::Ast => "AST (Typed Nodes)",
             CompilerPhase::Hir => "HIR (High-level IR)",
-            CompilerPhase::Thir => "THIR (Typed IR)",
+            CompilerPhase::Thir => "THIR (Typed HIR)",
+            CompilerPhase::TypedIr => "TypedIR (Expr-only)",
             CompilerPhase::Mir => "MIR (CFG)",
             CompilerPhase::Diagnostics => "Diagnostics",
             CompilerPhase::Codegen => "Codegen (Bytecode)",
@@ -74,7 +78,8 @@ impl CompilerPhase {
             CompilerPhase::Parser => CompilerPhase::Ast,
             CompilerPhase::Ast => CompilerPhase::Hir,
             CompilerPhase::Hir => CompilerPhase::Thir,
-            CompilerPhase::Thir => CompilerPhase::Mir,
+            CompilerPhase::Thir => CompilerPhase::TypedIr,
+            CompilerPhase::TypedIr => CompilerPhase::Mir,
             CompilerPhase::Mir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
             CompilerPhase::Codegen => CompilerPhase::VmRunner,
@@ -90,7 +95,8 @@ impl CompilerPhase {
             CompilerPhase::Ast => CompilerPhase::Parser,
             CompilerPhase::Hir => CompilerPhase::Ast,
             CompilerPhase::Thir => CompilerPhase::Hir,
-            CompilerPhase::Mir => CompilerPhase::Thir,
+            CompilerPhase::TypedIr => CompilerPhase::Thir,
+            CompilerPhase::Mir => CompilerPhase::TypedIr,
             CompilerPhase::Diagnostics => CompilerPhase::Mir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
             CompilerPhase::VmRunner => CompilerPhase::Codegen,
@@ -374,6 +380,7 @@ impl CompilerRunner {
             CompilerPhase::Ast,
             CompilerPhase::Hir,
             CompilerPhase::Thir,
+            CompilerPhase::TypedIr,
             CompilerPhase::Mir,
             CompilerPhase::Diagnostics,
             CompilerPhase::Codegen,
@@ -392,6 +399,7 @@ impl CompilerRunner {
             CompilerPhase::Ast => self.run_ast(),
             CompilerPhase::Hir => self.run_hir(),
             CompilerPhase::Thir => self.run_thir(),
+            CompilerPhase::TypedIr => self.run_typed_ir(),
             CompilerPhase::Mir => self.run_mir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
             CompilerPhase::Codegen => self.run_codegen(),
@@ -478,6 +486,13 @@ impl CompilerRunner {
             for error in parse_errors {
                 self.diagnostic_errors
                     .push(CompilerError::ParseError(error.clone()));
+            }
+
+            // Collect HIR lowering diagnostics for this file
+            let lowering_result = file_lowering(&self.db, *source_file);
+            for diag in lowering_result.diagnostics(&self.db) {
+                self.diagnostic_errors
+                    .push(CompilerError::HirDiagnostic(diag.clone()));
             }
 
             let (formatted_lines, cached_ids) =
@@ -740,6 +755,19 @@ impl CompilerRunner {
                             writeln!(output).ok();
                             output_annotated.push((String::new(), LineStatus::Unknown));
                         }
+                        ItemId::Generator(gen_loc) => {
+                            let generator = &item_tree[gen_loc.id(&self.db)];
+                            let output_type =
+                                generator.output_type.as_deref().unwrap_or("<missing>");
+                            let line = format!(
+                                "generator {} (output_type: {})",
+                                generator.name, output_type
+                            );
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
                     }
                 }
             }
@@ -759,12 +787,11 @@ impl CompilerRunner {
         let mut interactive_state = ThirInteractiveState::default();
 
         // Build initial typing context with all function types
-        let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = build_typing_context_from_files(&self.db, &file_list);
-        let class_fields = build_class_fields_from_files(&self.db, self.project_root);
-        let type_aliases = baml_thir::build_type_aliases_from_project(&self.db, self.project_root);
-        let enum_variants =
-            baml_thir::build_enum_variants_from_project(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root);
+        let class_fields = class_field_types(&self.db, self.project_root);
+        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let enum_variants_map = enum_variants(&self.db, self.project_root);
+        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -795,15 +822,15 @@ impl CompilerRunner {
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
-                    // Run type inference with global function types
-                    let inference_result = baml_thir::infer_function(
+                    // Run type inference with global function types and type validation
+                    let inference_result = baml_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        Some(type_aliases.clone()),
-                        Some(enum_variants.clone()),
+                        Some(type_aliases_map.clone()),
+                        Some(enum_variants_data.clone()),
                         *func_id,
                     );
 
@@ -815,7 +842,7 @@ impl CompilerRunner {
                     }
 
                     // Use tree view for both modes - interactive mode parses this afterward
-                    let tree_output = baml_thir::render_function_tree(
+                    let tree_output = baml_tir::render_function_tree(
                         &self.db,
                         &func_name,
                         &signature,
@@ -856,14 +883,107 @@ impl CompilerRunner {
             .insert(CompilerPhase::Thir, output_annotated);
     }
 
+    fn run_typed_ir(&mut self) {
+        use baml_vir::{lower_from_hir, pretty_print};
+
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Build typing context and class fields for inference
+        let globals = typing_context(&self.db, self.project_root);
+        let class_fields = class_field_types(&self.db, self.project_root);
+        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let enum_variants_map = enum_variants(&self.db, self.project_root);
+        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
+
+        // Sort files alphabetically
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+
+            // Get HIR items for this file
+            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
+
+            for item in items {
+                if let ItemId::Function(func_id) = item {
+                    let signature = function_signature(&self.db, *func_id);
+                    let func_name = signature.name.to_string();
+                    let body = function_body(&self.db, *func_id);
+
+                    // Skip non-expression bodies
+                    let baml_hir::FunctionBody::Expr(_) = &*body else {
+                        continue;
+                    };
+
+                    // Run type inference
+                    let inference_result = baml_tir::infer_function(
+                        &self.db,
+                        &signature,
+                        &body,
+                        Some(globals.clone()),
+                        Some(class_fields.clone()),
+                        Some(type_aliases_map.clone()),
+                        Some(enum_variants_data.clone()),
+                        *func_id,
+                    );
+
+                    // Try to lower to TypedIR
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
+
+                    let header = format!("=== Function: {} ===", func_name);
+                    writeln!(output, "{}", header).ok();
+                    output_annotated.push((header, status));
+
+                    match lower_from_hir(&self.db, &body, &inference_result) {
+                        Ok(typed_ir) => {
+                            // Pretty print the TypedIR
+                            let ir_output = pretty_print(&typed_ir);
+                            for line in ir_output.lines() {
+                                writeln!(output, "{}", line).ok();
+                                output_annotated.push((line.to_string(), status));
+                            }
+                        }
+                        Err(e) => {
+                            // Show error if lowering failed
+                            let error_line = format!("  <lowering failed: {}>", e);
+                            writeln!(output, "{}", error_line).ok();
+                            output_annotated.push((error_line, LineStatus::Recomputed));
+                        }
+                    }
+
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::TypedIr, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::TypedIr, output_annotated);
+    }
+
     fn run_mir(&mut self) {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
         // Build typing context and class fields map for MIR lowering
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = build_typing_context_from_files(&self.db, &file_list);
-        let class_field_types = build_class_fields_from_files(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root);
+        let class_field_types_map = class_field_types(&self.db, self.project_root);
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -906,28 +1026,28 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
                         Some(globals.clone()),
-                        Some(class_field_types.clone()),
+                        Some(class_field_types_map.clone()),
                         None, // type_aliases
                         None, // enum_variants
                         *func_id,
                     );
 
-                    // Lower to MIR
-                    let mir = baml_mir::lower_function(
-                        &signature,
-                        &body,
-                        &inference_result,
-                        &self.db,
-                        &classes,
-                    );
-
-                    // Display the MIR
-                    let mir_output = baml_mir::pretty::display_function(&mir);
+                    // Lower HIR → VIR → MIR
+                    let mir_output =
+                        match baml_vir::lower_from_hir(&self.db, &body, &inference_result) {
+                            Ok(vir) => {
+                                let mir = baml_mir::lower(&signature, &vir, &self.db, &classes);
+                                baml_mir::pretty::display_function(&mir)
+                            }
+                            Err(err) => {
+                                format!("(no MIR due to errors: {:?})", err)
+                            }
+                        };
 
                     let status = if file_recomputed {
                         LineStatus::Recomputed
@@ -969,9 +1089,10 @@ impl CompilerRunner {
             sources.insert(file_id, text);
         }
 
-        // Group errors by file_id and error type (parse vs type)
+        // Group errors by file_id and error type (parse vs type vs hir)
         let mut parse_errors_by_file: HashMap<FileId, Vec<&ParseError>> = HashMap::new();
         let mut type_errors_by_file: HashMap<FileId, Vec<&TypeError<String>>> = HashMap::new();
+        let mut hir_errors_by_file: HashMap<FileId, Vec<&HirDiagnostic>> = HashMap::new();
 
         for error in &self.diagnostic_errors {
             let file_id = get_error_file_id(error);
@@ -981,6 +1102,9 @@ impl CompilerRunner {
                 }
                 CompilerError::TypeError(e) => {
                     type_errors_by_file.entry(file_id).or_default().push(e);
+                }
+                CompilerError::HirDiagnostic(e) => {
+                    hir_errors_by_file.entry(file_id).or_default().push(e);
                 }
                 CompilerError::NameError(_) => {
                     // TODO: Handle name errors in diagnostics display
@@ -993,6 +1117,7 @@ impl CompilerRunner {
         sorted_files.sort_by_key(|(path, _)| path.as_path());
 
         let mut total_parse_errors = 0;
+        let mut total_hir_errors = 0;
         let mut total_type_errors = 0;
 
         // Render parse errors grouped by file
@@ -1015,6 +1140,43 @@ impl CompilerRunner {
                 for error in errors {
                     total_parse_errors += 1;
                     let rendered = render_parse_error(error, &sources, false);
+                    for line in rendered.lines() {
+                        writeln!(output, "{}", line).ok();
+                        output_annotated.push((
+                            line.to_string(),
+                            if file_recomputed {
+                                LineStatus::Recomputed
+                            } else {
+                                LineStatus::Cached
+                            },
+                        ));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+            }
+        }
+
+        // Render HIR errors grouped by file
+        for (path, source_file) in &sorted_files {
+            let file_id = source_file.file_id(&self.db);
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(*path);
+
+            if let Some(errors) = hir_errors_by_file.get(&file_id) {
+                writeln!(output, "── HIR Errors: {file_path} ──").ok();
+                output_annotated.push((
+                    format!("── HIR Errors: {file_path} ──"),
+                    if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Unknown
+                    },
+                ));
+
+                for error in errors {
+                    total_hir_errors += 1;
+                    let rendered = render_hir_diagnostic(error, &sources, false);
                     for line in rendered.lines() {
                         writeln!(output, "{}", line).ok();
                         output_annotated.push((
@@ -1069,7 +1231,7 @@ impl CompilerRunner {
             }
         }
 
-        let total_errors = total_parse_errors + total_type_errors;
+        let total_errors = total_parse_errors + total_hir_errors + total_type_errors;
 
         if total_errors == 0 {
             let no_errors = "✓ No errors found".to_string();
@@ -1086,6 +1248,13 @@ impl CompilerRunner {
                     "{} parse error{}",
                     total_parse_errors,
                     if total_parse_errors == 1 { "" } else { "s" }
+                ));
+            }
+            if total_hir_errors > 0 {
+                parts.push(format!(
+                    "{} HIR error{}",
+                    total_hir_errors,
+                    if total_hir_errors == 1 { "" } else { "s" }
                 ));
             }
             if total_type_errors > 0 {
@@ -1110,11 +1279,29 @@ impl CompilerRunner {
         // Use compile_files directly with our source files instead of generate_project_bytecode,
         // because project_files(db, root) returns an empty vector (not yet implemented).
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
-        let file_recomputed = !self.modified_files.is_empty();
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
+
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
+                output_annotated.push((
+                    "=== NO CODEGEN DUE TO ERRORS ===".to_string(),
+                    LineStatus::Unknown,
+                ));
+                writeln!(output, "Error: {:?}", err).ok();
+                output_annotated.push((format!("Error: {:?}", err), LineStatus::Unknown));
+
+                self.phase_outputs.insert(CompilerPhase::Codegen, output);
+                self.phase_outputs_annotated
+                    .insert(CompilerPhase::Codegen, output_annotated);
+                return;
+            }
+        };
+
+        let file_recomputed = !self.modified_files.is_empty();
 
         // Summary header
         writeln!(output, "=== BYTECODE ===").ok();
@@ -1200,7 +1387,27 @@ impl CompilerRunner {
 
         // Compile the program
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                writeln!(output, "=== VM RUNNER ===").ok();
+                output_annotated.push(("=== VM RUNNER ===".to_string(), LineStatus::Unknown));
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
+                writeln!(output, "Cannot run VM: codegen failed due to errors").ok();
+                output_annotated.push((
+                    "Cannot run VM: codegen failed due to errors".to_string(),
+                    LineStatus::Unknown,
+                ));
+                writeln!(output, "Error: {:?}", err).ok();
+                output_annotated.push((format!("Error: {:?}", err), LineStatus::Unknown));
+
+                self.phase_outputs.insert(CompilerPhase::VmRunner, output);
+                self.phase_outputs_annotated
+                    .insert(CompilerPhase::VmRunner, output_annotated);
+                return;
+            }
+        };
 
         // Extract available executable functions (exclude LLM functions)
         let mut exec_functions: Vec<(String, usize)> = Vec::new();
@@ -1327,7 +1534,16 @@ impl CompilerRunner {
         use baml_vm::{Object, Vm, VmExecState};
 
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = baml_codegen::compile_files(&self.db, &files);
+        let program = match baml_codegen::compile_files(&self.db, &files) {
+            Ok(p) => p,
+            Err(err) => {
+                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
+                    "Codegen failed: {:?}",
+                    err
+                )));
+                return;
+            }
+        };
 
         let Some(func_name) = self
             .vm_runner_state
@@ -2059,6 +2275,9 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             baml_diagnostics::compiler_error::ParseError::UnexpectedEof { span, .. } => {
                 span.file_id
             }
+            baml_diagnostics::compiler_error::ParseError::InvalidSyntax { span, .. } => {
+                span.file_id
+            }
         },
         CompilerError::TypeError(e) => match e {
             TypeError::TypeMismatch { span, .. } => span.file_id,
@@ -2072,9 +2291,32 @@ fn get_error_file_id(error: &StoredCompilerError) -> FileId {
             TypeError::NotIndexable { span, .. } => span.file_id,
             TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
             TypeError::UnreachableArm { span, .. } => span.file_id,
+            TypeError::UnknownEnumVariant { span, .. } => span.file_id,
+            TypeError::WatchOnNonVariable { span, .. } => span.file_id,
+            TypeError::WatchOnUnwatchedVariable { span, .. } => span.file_id,
         },
         CompilerError::NameError(e) => match e {
             baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
+            baml_diagnostics::NameError::DuplicateTestForFunction { second, .. } => second.file_id,
+        },
+        CompilerError::HirDiagnostic(e) => match e {
+            HirDiagnostic::DuplicateField { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateVariant { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateBlockAttribute { second_span, .. } => second_span.file_id,
+            HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
+            HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
+            HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
+            HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
+            HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
+            HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
+            HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
+            HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
+            HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
+            HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
+            HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
+            HirDiagnostic::MissingProvider { span, .. } => span.file_id,
+            HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
         },
     }
 }

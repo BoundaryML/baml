@@ -1,43 +1,10 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn GetStatus() -> Named("Status") {
-    // Locals:
-    let _0: Named("Status") // return
-    let _1: Unknown
+fn GetStatus:
+  (no MIR due to errors: MissingBody)
 
-    bb0: {
-        _1 = dispatch_future const fn GetStatus() -> bb1;
-    }
-
-    bb1: {
-        _0 = await _1 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
-
-fn GetUser(id: Int) -> Named("User") {
-    // Locals:
-    let _0: Named("User") // return
-    let _1: Int // id // param
-    let _2: Unknown
-
-    bb0: {
-        _2 = dispatch_future const fn GetUser(copy _1) -> bb1;
-    }
-
-    bb1: {
-        _0 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        return;
-    }
-
-}
+fn GetUser:
+  (no MIR due to errors: MissingBody)

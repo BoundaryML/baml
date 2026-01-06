@@ -18,75 +18,30 @@ generator default {
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found Generator
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ generator default {
-//    │ ────┬────  
-//    │     ╰────── Expected top-level declaration, found Generator
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found Word
-//    ╭─[ 0:1:11 ]
-//    │
-//  1 │ generator default {
-//    │           ───┬───  
-//    │              ╰───── Expected top-level declaration, found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found LBrace
-//    ╭─[ 0:1:19 ]
-//    │
-//  1 │ generator default {
-//    │                   ┬  
-//    │                   ╰── Expected top-level declaration, found LBrace
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Unknown property 'language' in generator 'default'. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
 //    ╭─[ 0:2:3 ]
 //    │
 //  2 │   language python
 //    │   ────┬───  
-//    │       ╰───── Expected top-level declaration, found Word
+//    │       ╰───── Unknown property 'language' in generator 'default'. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
 //    │ 
-//    │ Note: Error code: E0010
+//    │ Note: Error code: E0017
 // ───╯
-// Error: Expected top-level declaration, found Word
-//    ╭─[ 0:2:12 ]
-//    │
-//  2 │   language python
-//    │            ───┬──  
-//    │               ╰──── Expected top-level declaration, found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Unknown property 'o' in generator 'default'. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
 //    ╭─[ 0:3:3 ]
 //    │
 //  3 │   o o
 //    │   ┬  
-//    │   ╰── Expected top-level declaration, found Word
+//    │   ╰── Unknown property 'o' in generator 'default'. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
 //    │ 
-//    │ Note: Error code: E0010
+//    │ Note: Error code: E0017
 // ───╯
-// Error: Expected top-level declaration, found Word
-//    ╭─[ 0:3:5 ]
+// Error: Generator 'default' is missing required property 'output_type'
+//    ╭─[ 0:1:11 ]
 //    │
-//  3 │   o o
-//    │     ┬  
-//    │     ╰── Expected top-level declaration, found Word
+//  1 │ generator default {
+//    │           ───┬───  
+//    │              ╰───── Generator 'default' is missing required property 'output_type'
 //    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found RBrace
-//    ╭─[ 0:4:1 ]
-//    │
-//  4 │ }
-//    │ ┬  
-//    │ ╰── Expected top-level declaration, found RBrace
-//    │ 
-//    │ Note: Error code: E0010
+//    │ Note: Error code: E0018
 // ───╯

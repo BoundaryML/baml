@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -63,12 +63,12 @@ SOURCE_FILE
           R_BRACE "}"
 
 === ERRORS ===
-Error: Expected RParen, found Word
+Error: Expected ')', found identifier
    ╭─[ 0:4:25 ]
    │
  4 │   field3 string @alias("another closed string")  // Should still parse this
    │                         ───┬───  
-   │                            ╰───── Expected RParen, found Word
+   │                            ╰───── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -83,12 +83,12 @@ Error: Expected Unclosed string literal, found EOF
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RBrace, found EOF
+Error: Expected '}', found EOF
    ╭─[ 0:5:2 ]
    │
  5 │ }
    │  ┬  
-   │  ╰── Expected RBrace, found EOF
+   │  ╰── Expected '}', found EOF
    │ 
    │ Note: Error code: E0010
 ───╯

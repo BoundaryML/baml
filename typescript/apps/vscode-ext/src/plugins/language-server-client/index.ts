@@ -174,6 +174,8 @@ let bamlOutputChannel: OutputChannel;
 let currentExecutingCliPath: string | null = null;
 // Flag to prevent concurrent LSP restarts
 let isRestarting = false;
+// Flag to ensure periodic version report interval is only set once
+let periodicVersionReportScheduled = false;
 
 // Track last known CLI version and generator info for telemetry
 let lastKnownCliVersion: string | null = null;
@@ -751,7 +753,8 @@ const activateClient = (
         client.outputChannel.show(true);
       }
 
-      if (intervalTimers.length === 0) {
+      if (!periodicVersionReportScheduled) {
+        periodicVersionReportScheduled = true;
         console.log('Setting up periodic update checks.');
         // Publish the first version report after 5 min of extension activation.
         setTimeout(() => {

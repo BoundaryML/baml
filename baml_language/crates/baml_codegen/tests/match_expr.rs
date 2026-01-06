@@ -1,10 +1,4 @@
 //! Compiler tests for match expressions.
-//!
-//! NOTE: These tests were written for the old direct THIR->bytecode compiler.
-//! The new MIR-based pipeline produces functionally equivalent but structurally
-//! different bytecode (using explicit locals instead of stack manipulation).
-//! These tests are ignored until they can be rewritten for the MIR format.
-//! Match functionality is tested through snapshot tests in `baml_tests`.
 
 use baml_tests::{
     codegen::{Program, assert_compiles},
@@ -17,7 +11,6 @@ use baml_vm::CmpOp;
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_catch_all_underscore() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -29,19 +22,14 @@ fn match_catch_all_underscore() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            vec![
-                // Scrutinee stored (but catch-all doesn't need to check it)
-                Instruction::LoadConst(Value::Int(42)),
-                // Catch-all arm body
-                Instruction::LoadConst(Value::Int(100)),
-                Instruction::Return,
-            ],
+            // Wildcard elimination: _ binding is unused so eliminated entirely
+            // Scrutinee 42 is also unused, so no code for it
+            vec![Instruction::LoadConst(Value::Int(100)), Instruction::Return],
         )],
     })
 }
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_catch_all_named_binding() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -53,14 +41,11 @@ fn match_catch_all_named_binding() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // x binds to 42, used once in x+1 -> optimizer inlines to 42+1
             vec![
                 Instruction::LoadConst(Value::Int(42)),
-                // x is bound to scrutinee, then x + 1
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(baml_vm::BinOp::Add),
-                Instruction::PopReplace(1),
                 Instruction::Return,
             ],
         )],
@@ -72,7 +57,6 @@ fn match_catch_all_named_binding() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_literal_int_with_fallback() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -85,17 +69,17 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 1 is inlined at each use site
+            // Wildcard elimination: _ binding is unused so eliminated
             vec![
-                Instruction::LoadConst(Value::Int(1)), // scrutinee
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined for comparison)
                 Instruction::LoadConst(Value::Int(1)), // literal 1
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // skip to next arm
-                Instruction::Pop(1),         // pop comparison result
-                Instruction::LoadConst(Value::Int(100)), // arm body
-                Instruction::Jump(3),        // jump to end
-                Instruction::Pop(1),         // pop comparison result (false path)
-                Instruction::LoadConst(Value::Int(0)), // catch-all body
+                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
+                Instruction::Jump(3),           // if true, skip to arm body (100)
+                Instruction::LoadConst(Value::Int(0)), // catch-all result (no _ binding)
+                Instruction::Jump(2),           // skip to return
+                Instruction::LoadConst(Value::Int(100)), // first arm result
                 Instruction::Return,
             ],
         )],
@@ -103,7 +87,6 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -116,21 +99,23 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee true is inlined at each comparison
+            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
             vec![
-                Instruction::LoadConst(Value::Bool(true)), // scrutinee
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // skip to next arm
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::string("yes")),
-                Instruction::Jump(7), // jump to end
-                Instruction::Pop(1),
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::PopJumpIfFalse(2), // if false, try next arm
+                Instruction::Jump(8),           // if true, skip to "yes"
+                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Bool(false)), // literal false
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::Pop(1), // last arm, no jump needed
+                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
+                Instruction::Jump(1),           // if true, skip to "no"
+                // Unreachable block eliminated - jump target points here
                 Instruction::LoadConst(Value::string("no")),
+                Instruction::Jump(2), // skip to return
+                Instruction::LoadConst(Value::string("yes")),
                 Instruction::Return,
             ],
         )],
@@ -138,7 +123,6 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_literal_null() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -151,17 +135,17 @@ fn match_literal_null() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee null is inlined at each use
+            // Wildcard elimination: _ binding is unused so eliminated
             vec![
-                Instruction::LoadConst(Value::Null), // scrutinee
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::LoadConst(Value::Null), // scrutinee (inlined for comparison)
                 Instruction::LoadConst(Value::Null), // literal null
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::string("nothing")),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::string("something")),
+                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
+                Instruction::Jump(3),           // if true, skip to "nothing"
+                Instruction::LoadConst(Value::string("something")), // catch-all result (no _ binding)
+                Instruction::Jump(2),                               // skip to return
+                Instruction::LoadConst(Value::string("nothing")),   // first arm result
                 Instruction::Return,
             ],
         )],
@@ -173,7 +157,6 @@ fn match_literal_null() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_typed_pattern_single_class() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -191,28 +174,27 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Wildcard elimination: _ binding is unused so eliminated
             vec![
+                Instruction::LoadConst(Value::Null), // slot for _3 (scrutinee)
                 // let result = Success { data: "hello" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::string("hello")),
                 Instruction::StoreField(0),
-                // match (result)
-                Instruction::LoadVar("result".to_string()),
-                // s: Success pattern - instanceof check
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::StoreVar("_3".to_string()),
+                // instanceof check
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::JumpIfFalse(7), // skip to catch-all
-                Instruction::Pop(1),
-                // bind s and access s.data
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadVar("s".to_string()),
-                Instruction::LoadField(0), // field 0 is 'data'
-                Instruction::PopReplace(1),
-                Instruction::Jump(3), // jump past catch-all
-                Instruction::Pop(1),
+                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
+                Instruction::Jump(3),           // if true, skip to s.data
+                // catch-all arm (no _ binding)
                 Instruction::LoadConst(Value::string("unknown")),
+                Instruction::Jump(3), // skip to return
+                // s: Success arm - access s.data (s is virtual, so use _3 directly)
+                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadField(0),
                 Instruction::Return,
             ],
         )],
@@ -220,7 +202,6 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -242,35 +223,35 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Exhaustive match: unreachable fallthrough block is eliminated by DCE
             vec![
+                Instruction::LoadConst(Value::Null), // slot for _3 (scrutinee)
                 // let result = Success { data: "ok" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::string("ok")),
                 Instruction::StoreField(0),
-                // match (result)
-                Instruction::LoadVar("result".to_string()),
-                // s: Success
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::StoreVar("_3".to_string()),
+                // s: Success instanceof check
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::JumpIfFalse(7),
-                Instruction::Pop(1),
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadVar("s".to_string()),
-                Instruction::LoadField(0),
-                Instruction::PopReplace(1),
-                Instruction::Jump(10), // jump past f: Failure arm
-                // f: Failure
-                Instruction::Pop(1),
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::PopJumpIfFalse(2), // if false, try Failure
+                Instruction::Jump(9),           // if true, skip to s.data
+                // f: Failure instanceof check
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadConst(Value::class("Failure")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::Pop(1), // last arm
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadVar("f".to_string()),
+                Instruction::PopJumpIfFalse(2), // if false (unreachable - jumps to eliminated block)
+                Instruction::Jump(1),           // if true, skip to f.reason
+                // Unreachable block eliminated - jump target points here
+                // f: Failure arm - access f.reason
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::LoadField(0),
-                Instruction::PopReplace(1),
+                Instruction::Jump(3), // skip to return
+                // s: Success arm - access s.data
+                Instruction::LoadVar("_3".to_string()),
+                Instruction::LoadField(0),
                 Instruction::Return,
             ],
         )],
@@ -282,7 +263,6 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_union_literal_two_values() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
@@ -295,25 +275,26 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 200 is inlined at each use
+            // Wildcard elimination: _ binding is unused so eliminated
             vec![
-                Instruction::LoadConst(Value::Int(200)), // scrutinee
-                // Union pattern: 200 | 201
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadConst(Value::Int(200)),
+                // First part of union: 200
+                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(200)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(3), // try 201
-                Instruction::Pop(1),
-                Instruction::Jump(7), // matched! jump to arm body
-                Instruction::Pop(1),
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadConst(Value::Int(201)),
+                Instruction::PopJumpIfFalse(2), // if false, try 201
+                Instruction::Jump(8),           // if true, skip to "success"
+                // Second part of union: 201
+                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(201)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4), // neither matched, try next arm
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::string("success")),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                Instruction::PopJumpIfFalse(2), // if false, try catch-all
+                Instruction::Jump(3),           // if true, skip to "success"
+                // Catch-all arm (no _ binding)
                 Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(2), // skip to return
+                // Union arm result
+                Instruction::LoadConst(Value::string("success")),
                 Instruction::Return,
             ],
         )],
@@ -325,7 +306,6 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_in_arithmetic() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -338,20 +318,22 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinee 2 is inlined at each use
+            // Phi-like optimization: match result stays on stack (no Store/Load)!
+            // Wildcard elimination: _ binding is unused so eliminated
             vec![
-                Instruction::LoadConst(Value::Int(1)),
-                // match expression
-                Instruction::LoadConst(Value::Int(2)), // scrutinee
-                Instruction::LoadVar("@match_scrut_0".to_string()),
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
                 Instruction::LoadConst(Value::Int(2)), // literal 2
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(20)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
+                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
+                Instruction::Jump(3),           // if true, skip to first arm
+                // Catch-all arm: value stays on stack
                 Instruction::LoadConst(Value::Int(0)),
-                // addition
+                Instruction::Jump(2), // skip to addition
+                // First arm: value stays on stack
+                Instruction::LoadConst(Value::Int(20)),
+                // Addition: 1 + match result (match result already on stack)
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(baml_vm::BinOp::Add),
                 Instruction::Return,
             ],
@@ -364,7 +346,6 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
 // ============================================================================
 
 #[test]
-#[ignore = "needs rewrite for MIR-based bytecode format"]
 fn match_nested() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: "
@@ -380,33 +361,29 @@ fn match_nested() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
+            // Constant propagation: scrutinees 1 and 2 are inlined at each use
+            // Wildcard elimination: both _ bindings are unused so eliminated
             vec![
-                // Outer match scrutinee
-                Instruction::LoadConst(Value::Int(1)),
-                // outer: 1 pattern
-                Instruction::LoadVar("@match_scrut_0".to_string()),
-                Instruction::LoadConst(Value::Int(1)),
+                // Outer match: compare with 1
+                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(1)), // literal
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(14), // skip to outer catch-all
-                Instruction::Pop(1),
-                // Inner match scrutinee
-                Instruction::LoadConst(Value::Int(2)),
-                // inner: 2 pattern
-                Instruction::LoadVar("@match_scrut_1".to_string()),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::JumpIfFalse(4),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(12)),
-                Instruction::Jump(3),
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(10)),
-                // End of inner match - replace scrutinee on stack
-                Instruction::PopReplace(1),
-                Instruction::Jump(3), // skip outer catch-all
-                // Outer catch-all
-                Instruction::Pop(1),
+                Instruction::PopJumpIfFalse(2), // if outer != 1, skip to outer catch-all
+                Instruction::Jump(3),           // if outer == 1, skip to inner match
+                // Outer catch-all arm (no _ binding)
                 Instruction::LoadConst(Value::Int(0)),
+                Instruction::Jump(9), // skip to return
+                // Inner match: compare with 2
+                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
+                Instruction::LoadConst(Value::Int(2)), // literal
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(2), // if inner != 2, skip to inner catch-all
+                Instruction::Jump(3),           // if inner == 2, skip to 12
+                // Inner catch-all arm (no _ binding)
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::Jump(2), // skip to return
+                // Inner first arm
+                Instruction::LoadConst(Value::Int(12)),
                 Instruction::Return,
             ],
         )],

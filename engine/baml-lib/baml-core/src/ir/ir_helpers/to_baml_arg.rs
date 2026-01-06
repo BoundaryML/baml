@@ -1,5 +1,5 @@
 use core::result::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use baml_types::{
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel,
@@ -8,6 +8,101 @@ use baml_types::{
 
 use super::{scope_diagnostics::ScopeStack, IRHelper, IRHelperExtended};
 use crate::ir::{ir_helpers::infer_type, jinja_helpers::evaluate_predicate, IntermediateRepr};
+
+/// Common image file extensions.
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "tiff", "tif",
+];
+
+/// Common audio file extensions.
+const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "wav", "ogg", "flac", "m4a", "aac", "wma", "aiff", "opus",
+];
+
+/// Common video file extensions.
+const VIDEO_EXTENSIONS: &[&str] = &[
+    "mp4", "webm", "mov", "avi", "mkv", "wmv", "flv", "m4v", "mpeg", "mpg",
+];
+
+/// Check if a union contains at least 2 different media types (including nested unions).
+/// Uses iterative stack-based traversal to handle arbitrarily nested unions.
+fn has_multiple_media_types(options: &[&TypeIR]) -> bool {
+    const IMAGE: u8 = 1 << 0;
+    const AUDIO: u8 = 1 << 1;
+    const VIDEO: u8 = 1 << 2;
+    const PDF: u8 = 1 << 3;
+
+    let mut found: u8 = 0;
+
+    let mut stack: Vec<&TypeIR> = options.to_vec();
+    while let Some(ty) = stack.pop() {
+        match ty {
+            TypeIR::Primitive(TypeValue::Media(media_type), _) => {
+                found |= match media_type {
+                    BamlMediaType::Image => IMAGE,
+                    BamlMediaType::Audio => AUDIO,
+                    BamlMediaType::Video => VIDEO,
+                    BamlMediaType::Pdf => PDF,
+                };
+
+                if found.count_ones() > 1 {
+                    return true;
+                }
+            }
+            TypeIR::Union(inner, _) => {
+                stack.extend(inner.iter_include_null());
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Given a list of union type options and a value, find the index of the media
+/// type variant that best matches the file extension. Returns None if no media
+/// type matches the extension or if there's no file/url path.
+fn find_matching_media_type_index(options: &[&TypeIR], value: &BamlValue) -> Option<usize> {
+    // Extract path from { file: "..." } or { url: "..." }
+    let path = 'extract_path: {
+        if let BamlValue::Map(kv) = value {
+            if let Some(BamlValue::String(s)) = kv.get("file") {
+                break 'extract_path s.as_str();
+            }
+            if let Some(BamlValue::String(s)) = kv.get("url") {
+                break 'extract_path s.as_str();
+            }
+        }
+        return None;
+    };
+
+    // Extract extension, handling URLs with query params/fragments
+    let ext = 'extract_ext: {
+        let path_part = path.split('?').next().unwrap_or(path);
+        let path_part = path_part.split('#').next().unwrap_or(path_part);
+        let filename = path_part.rsplit('/').next().unwrap_or(path_part);
+        match Path::new(filename).extension().and_then(|e| e.to_str()) {
+            Some(ext) => break 'extract_ext ext,
+            None => return None,
+        }
+    };
+
+    let ext_lower = ext.to_lowercase();
+
+    for (idx, option) in options.iter().enumerate() {
+        if let TypeIR::Primitive(TypeValue::Media(media_type), _) = option {
+            let matches = match media_type {
+                BamlMediaType::Image => IMAGE_EXTENSIONS.contains(&ext_lower.as_str()),
+                BamlMediaType::Audio => AUDIO_EXTENSIONS.contains(&ext_lower.as_str()),
+                BamlMediaType::Video => VIDEO_EXTENSIONS.contains(&ext_lower.as_str()),
+                BamlMediaType::Pdf => ext_lower == "pdf",
+            };
+            if matches {
+                return Some(idx);
+            }
+        }
+    }
+    None
+}
 
 #[derive(Default)]
 pub struct ParameterError {
@@ -174,6 +269,30 @@ impl ArgCoercer {
                     Ok(BamlValueWithMeta::Bool(*v, TypeIR::bool()))
                 }
                 (TypeValue::Null, BamlValue::Null) => Ok(BamlValueWithMeta::Null(TypeIR::null())),
+                (TypeValue::Media(BamlMediaType::Image), BamlValue::Media(v))
+                    if v.media_type == BamlMediaType::Image =>
+                {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::image()))
+                }
+                (TypeValue::Media(BamlMediaType::Audio), BamlValue::Media(v))
+                    if v.media_type == BamlMediaType::Audio =>
+                {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::audio()))
+                }
+                (TypeValue::Media(BamlMediaType::Pdf), BamlValue::Media(v))
+                    if v.media_type == BamlMediaType::Pdf =>
+                {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::pdf()))
+                }
+                (TypeValue::Media(BamlMediaType::Video), BamlValue::Media(v))
+                    if v.media_type == BamlMediaType::Video =>
+                {
+                    Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::video()))
+                }
+                // Fallback for mismatched media types (e.g., PDF media passed to Image target).
+                // This preserves backwards compatibility but the value keeps its original media_type,
+                // which may cause issues downstream if the types are incompatible.
+                // The union matching fix (extension-based) should prevent most cases of this.
                 (TypeValue::Media(BamlMediaType::Image), BamlValue::Media(v)) => {
                     Ok(BamlValueWithMeta::Media(v.clone(), TypeIR::image()))
                 }
@@ -426,12 +545,48 @@ impl ArgCoercer {
                 }
             },
             TypeIR::Union(options, _) => {
+                // For unions containing multiple media types (e.g., `image | pdf`), we use
+                // the file extension as a heuristic to pick the best matching variant. This
+                // prevents issues like a `.pdf` file being matched to `image` just because
+                // `image` appears first in the union, which would result in invalid MIME
+                // types like "image/pdf".
+                //
+                // NOTE: This is a heuristic based on file extensions, which can be incorrect
+                // (e.g., a file named "image.pdf" that's actually a PNG). For a more robust
+                // solution, we could use the `infer` crate at runtime to detect the actual
+                // file content type from magic bytes. However, that would require reading
+                // the file contents during type checking, which may not always be possible
+                // or desirable. The runtime code in `baml-runtime/src/internal/llm_client/traits/mod.rs`
+                // already uses `infer` as a fallback for MIME type detection.
+                //
+                // If extension-based matching finds a candidate, we try it first. If it
+                // fails or no extension match is found, we fall back to the original
+                // behavior of trying each option in order.
+                let all_options = options.iter_include_null();
+
+                // Only try extension-based matching if there are multiple media types
+                if has_multiple_media_types(&all_options) {
+                    if let Some(preferred_idx) = find_matching_media_type_index(&all_options, value)
+                    {
+                        let mut temp_scope = ScopeStack::new();
+                        let result =
+                            self.coerce_arg(ir, all_options[preferred_idx], value, &mut temp_scope);
+                        if !temp_scope.has_errors() {
+                            if let Ok(v) = result {
+                                return Ok(v);
+                            }
+                        }
+                        // Extension-matched option failed, fall through to default behavior
+                    }
+                }
+
+                // Default behavior: try each option in order, taking the first match
                 let mut first_good_result = Err(ArgCoerceError);
-                for option in options.iter_include_null() {
-                    let mut scope = ScopeStack::new();
+                for option in all_options.iter() {
+                    let mut temp_scope = ScopeStack::new();
                     if first_good_result.is_err() {
-                        let result = self.coerce_arg(ir, option, value, &mut scope);
-                        if !scope.has_errors() && first_good_result.is_err() {
+                        let result = self.coerce_arg(ir, option, value, &mut temp_scope);
+                        if !temp_scope.has_errors() && first_good_result.is_err() {
                             first_good_result = result
                         }
                     }

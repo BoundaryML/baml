@@ -72,6 +72,23 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
             ItemId::Test(_) => {
                 // Tests don't have hover
             }
+            ItemId::Generator(gen_loc) => {
+                let file = gen_loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let generator = &item_tree[gen_loc.id(db)];
+
+                if generator.name.as_str() == symbol_name {
+                    let mut lines = vec![format!("generator {} {{", generator.name)];
+                    if let Some(ref output_type) = generator.output_type {
+                        lines.push(format!("  output_type: {}", output_type));
+                    }
+                    if let Some(ref output_dir) = generator.output_dir {
+                        lines.push(format!("  output_dir: {}", output_dir));
+                    }
+                    lines.push("}".to_string());
+                    return Some(lines.join("\n"));
+                }
+            }
         }
     }
 

@@ -214,84 +214,12 @@ function HeaderOnlyFunction() -> string {
 
 //----
 //- diagnostics
-// Error: Expected Colon, found RBrace
-//     ╭─[ 0:71:16 ]
-//     │
-//  71 │             //### Back to If Level
-//     │                ┬  
-//     │                ╰── Expected Colon, found RBrace
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Expected string, found int
 //    ╭─[ 0:1:1 ]
 //    │
 //  1 │ // Edge cases for MDX headers
 //    │ │ 
 //    │ ╰─ Expected string, found int
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found unknown | void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found unknown | void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected string, found void
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

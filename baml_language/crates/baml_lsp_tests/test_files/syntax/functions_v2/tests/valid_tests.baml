@@ -76,14 +76,4 @@ test Foo {
 
 //----
 //- diagnostics
-// Error: Duplicate test 'Foo'
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ client<llm> Bar {
-//    │ │ 
-//    │ ╰─ test 'Foo' defined in functions_v2_tests_valid_tests.baml
-//    │ │ 
-//    │ ╰─ 'Foo' previously defined in functions_v2_tests_valid_tests.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
+// <no-diagnostics-expected>

@@ -10,6 +10,14 @@ func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
         opt(&callOpts)
     }
 
+    // Resolve client option to clientRegistry (client takes precedence)
+    if callOpts.client != nil {
+        if callOpts.clientRegistry == nil {
+            callOpts.clientRegistry = baml.NewClientRegistry()
+        }
+        callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+    }
+
     args := baml.BamlFunctionArguments{
         Kwargs: map[string]any{ {% for (name, go_type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
         Env: getEnvVars(callOpts.env),

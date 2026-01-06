@@ -5,9 +5,11 @@ use std::collections::HashMap;
 use baml_db::{
     RootDatabase,
     baml_hir::{self, file_items, function_body, function_signature},
-    baml_parser, baml_thir,
+    baml_parser, baml_tir,
 };
-use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
+use baml_diagnostics::{
+    render_hir_diagnostic, render_name_error, render_parse_error, render_type_error,
+};
 use salsa::Setter;
 
 use super::{
@@ -61,14 +63,29 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         }
     }
 
-    // Collect name errors (duplicates)
-    for error in baml_hir::validate_duplicate_names(&db, root) {
+    // Collect HIR lowering diagnostics (per-file validation)
+    for source_file in &source_files {
+        let lowering_result = baml_hir::file_lowering(&db, *source_file);
+        for diag in lowering_result.diagnostics(&db) {
+            all_errors.push(render_hir_diagnostic(diag, &sources, false));
+        }
+    }
+
+    // Collect validation errors (duplicates across files, reserved names)
+    let validation_result = baml_hir::validate_hir(&db, root);
+    for diag in validation_result.hir_diagnostics {
+        all_errors.push(render_hir_diagnostic(&diag, &sources, false));
+    }
+    for error in validation_result.name_errors {
         all_errors.push(render_name_error(&error, &sources, false));
     }
 
     // Collect type errors
-    let globals = baml_thir::build_typing_context_from_files(&db, &source_files);
-    let class_fields = baml_thir::lower_project_class_fields(&db, root);
+    let globals = baml_tir::typing_context(&db, root);
+    let class_fields = baml_tir::class_field_types(&db, root);
+    let type_aliases = baml_tir::type_aliases(&db, root);
+    let enum_variants_map = baml_tir::enum_variants(&db, root);
+    let enum_variants = enum_variants_map.enums(&db).clone();
 
     for source_file in &source_files {
         let items_struct = file_items(&db, *source_file);
@@ -77,14 +94,14 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
             if let baml_hir::ItemId::Function(func_id) = item {
                 let signature = function_signature(&db, *func_id);
                 let body = function_body(&db, *func_id);
-                let result = baml_thir::infer_function(
+                let result = baml_tir::infer_function(
                     &db,
                     &signature,
                     &body,
                     Some(globals.clone()),
                     Some(class_fields.clone()),
-                    None, // type_aliases
-                    None, // enum_variants
+                    Some(type_aliases.clone()),
+                    Some(enum_variants.clone()),
                     *func_id,
                 );
                 for error in &result.errors {

@@ -21,12 +21,12 @@ function InconsistentStyleUse() -> int{
 
 //----
 //- diagnostics
-// Error: Expected expression, found Colon
+// Error: Expected expression, found ':'
 //    ╭─[ 0:9:19 ]
 //    │
 //  9 │         some_ident: "yes"
 //    │                   ┬  
-//    │                   ╰── Expected expression, found Colon
+//    │                   ╰── Expected expression, found ':'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

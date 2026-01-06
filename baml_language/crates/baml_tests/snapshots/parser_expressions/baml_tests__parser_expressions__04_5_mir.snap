@@ -22,6 +22,7 @@ fn Calculate() -> Int {
     let _14: Int
     let _15: Int
     let _16: Int
+    let _17: Void
 
     bb0: {
         _2 = const 1_i64;
@@ -59,20 +60,35 @@ fn FieldAccess(user: Named("User")) -> String {
     let _0: String // return
     let _1: Named("User") // user // param
     let _2: String // name
-    let _3: String // bio
-    let _4: String // theme
-    let _5: String // firstTag
-    let _6: List(String)
-    let _7: Int
+    let _3: Named("User")
+    let _4: String // bio
+    let _5: Named("Profile")
+    let _6: Named("User")
+    let _7: String // theme
+    let _8: Named("Settings")
+    let _9: Named("Profile")
+    let _10: Named("User")
+    let _11: String // firstTag
+    let _12: List(String)
+    let _13: Named("User")
+    let _14: Int
+    let _15: Void
 
     bb0: {
-        _2 = copy _1.0;
-        _3 = copy _1.1.0;
-        _4 = copy _1.1.1.0;
-        _6 = copy _1.2;
-        _7 = const 0_i64;
-        _5 = copy _6[_7];
-        _0 = copy _4;
+        _3 = copy _1;
+        _2 = copy _3.0;
+        _6 = copy _1;
+        _5 = copy _6.1;
+        _4 = copy _5.0;
+        _10 = copy _1;
+        _9 = copy _10.1;
+        _8 = copy _9.1;
+        _7 = copy _8.0;
+        _13 = copy _1;
+        _12 = copy _13.2;
+        _14 = const 0_i64;
+        _11 = copy _12[_14];
+        _0 = copy _7;
         goto -> bb2;
     }
 
@@ -107,6 +123,7 @@ fn IndexAccess(users: List(Named("IndexUser"))) -> String {
     let _16: List(Named("IndexUser"))
     let _17: Int
     let _18: Int
+    let _19: Void
 
     bb0: {
         _3 = copy _1;
@@ -161,6 +178,7 @@ fn TestPrecedence() -> Bool {
     let _16: Bool // d
     let _17: Bool
     let _18: Bool
+    let _19: Void
 
     bb0: {
         _2 = const 2_i64;

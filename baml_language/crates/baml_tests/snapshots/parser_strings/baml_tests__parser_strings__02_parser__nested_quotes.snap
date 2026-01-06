@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -55,14 +55,12 @@ SOURCE_FILE
           WORD "alias"
           L_PAREN "("
           QUOTE """
-    FIELD
+    FIELD "The"
       WORD "The"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
-    FIELD
+    FIELD "quote"
       WORD "quote"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     FIELD
@@ -87,15 +85,13 @@ SOURCE_FILE
             WORD "s"
             ERROR_TOKEN "\"
             QUOTE """
-    FIELD
+    FIELD "really"
       WORD "really"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     ERROR_TOKEN "'"
-    FIELD
+    FIELD "complex"
       WORD "complex"
-      TYPE_EXPR
     ERROR_TOKEN "'"
     QUOTE """
     R_PAREN ")"
@@ -113,17 +109,15 @@ SOURCE_FILE
             L_BRACE "{"
             ERROR_TOKEN "\"
             QUOTE """
-    FIELD
+    FIELD "key"
       WORD "key"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     COLON ":"
     ERROR_TOKEN "\"
     QUOTE """
-    FIELD
+    FIELD "value"
       WORD "value"
-      TYPE_EXPR
     ERROR_TOKEN "\"
     QUOTE """
     R_BRACE "}"
@@ -188,342 +182,342 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected attribute argument, found Error
+Error: Expected attribute argument, found error
    ╭─[ 0:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
-   │                                  ╰── Expected attribute argument, found Error
+   │                                  ╰── Expected attribute argument, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RParen, found Error
+Error: Expected ')', found error
    ╭─[ 0:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
-   │                                  ╰── Expected RParen, found Error
+   │                                  ╰── Expected ')', found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:4:34 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                  ┬  
-   │                                  ╰── Expected Unexpected token in class body, found Error
+   │                                  ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:4:44 ]
    │
  4 │   double_in_single string @alias('She said "hello"')
    │                                            ┬  
-   │                                            ╰── Expected Unexpected token in class body, found Quote
+   │                                            ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'The' is missing a type annotation
+   ╭─[ 0:5:37 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                     ─┬─  
+   │                                      ╰─── field 'The' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:5:41 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
-   │                                         ╰── Expected type, found Error
+   │                                         ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:5:41 ]
-   │
- 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                         ┬  
-   │                                         ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:5:42 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                          ┬  
-   │                                          ╰── Expected Unexpected token in class body, found Quote
+   │                                          ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'quote' is missing a type annotation
+   ╭─[ 0:5:43 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                           ──┬──  
+   │                                             ╰──── field 'quote' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:5:48 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
-   │                                                ╰── Expected type, found Error
+   │                                                ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:5:48 ]
-   │
- 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
-   │                                                ┬  
-   │                                                ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:5:49 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                 ┬  
-   │                                                 ╰── Expected Unexpected token in class body, found Quote
+   │                                                 ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:5:58 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                          ┬  
-   │                                                          ╰── Expected Unexpected token in class body, found Quote
+   │                                                          ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found RParen
+Error: Expected Unexpected token in class body, found ')'
    ╭─[ 0:5:59 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                           ┬  
-   │                                                           ╰── Expected Unexpected token in class body, found RParen
+   │                                                           ╰── Expected Unexpected token in class body, found ')'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RParen, found Word
+Error: Expected ')', found identifier
    ╭─[ 0:6:47 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                               ───┬──  
-   │                                                  ╰──── Expected RParen, found Word
+   │                                                  ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'really' is missing a type annotation
+   ╭─[ 0:6:47 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                               ───┬──  
+   │                                                  ╰──── field 'really' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:6:53 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                     ┬  
-   │                                                     ╰── Expected type, found Error
+   │                                                     ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:6:53 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                     ┬  
-   │                                                     ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:6:54 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                      ┬  
-   │                                                      ╰── Expected Unexpected token in class body, found Quote
+   │                                                      ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:6:56 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                        ┬  
-   │                                                        ╰── Expected Unexpected token in class body, found Error
+   │                                                        ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'complex' is missing a type annotation
+   ╭─[ 0:6:57 ]
+   │
+ 6 │   complex_nesting string @description("It's \"really\" 'complex'")
+   │                                                         ───┬───  
+   │                                                            ╰───── field 'complex' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:6:64 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                ┬  
-   │                                                                ╰── Expected type, found Error
+   │                                                                ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:6:64 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                                ┬  
-   │                                                                ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:6:65 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                 ┬  
-   │                                                                 ╰── Expected Unexpected token in class body, found Quote
+   │                                                                 ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found RParen
+Error: Expected Unexpected token in class body, found ')'
    ╭─[ 0:6:66 ]
    │
  6 │   complex_nesting string @description("It's \"really\" 'complex'")
    │                                                                  ┬  
-   │                                                                  ╰── Expected Unexpected token in class body, found RParen
+   │                                                                  ╰── Expected Unexpected token in class body, found ')'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected RParen, found Word
+Error: Expected ')', found identifier
    ╭─[ 0:7:31 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                               ─┬─  
-   │                                ╰─── Expected RParen, found Word
+   │                                ╰─── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'key' is missing a type annotation
+   ╭─[ 0:7:31 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                               ─┬─  
+   │                                ╰─── field 'key' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:7:34 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                  ┬  
-   │                                  ╰── Expected type, found Error
+   │                                  ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:7:34 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                  ┬  
-   │                                  ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:7:35 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                   ┬  
-   │                                   ╰── Expected Unexpected token in class body, found Quote
+   │                                   ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Colon
+Error: Expected Unexpected token in class body, found ':'
    ╭─[ 0:7:36 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                    ┬  
-   │                                    ╰── Expected Unexpected token in class body, found Colon
+   │                                    ╰── Expected Unexpected token in class body, found ':'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:7:38 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                      ┬  
-   │                                      ╰── Expected Unexpected token in class body, found Error
+   │                                      ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:7:39 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                       ┬  
-   │                                       ╰── Expected Unexpected token in class body, found Quote
+   │                                       ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected type, found Error
+Error: field 'value' is missing a type annotation
+   ╭─[ 0:7:40 ]
+   │
+ 7 │   json_like string @alias("{\"key\": \"value\"}")
+   │                                        ──┬──  
+   │                                          ╰──── field 'value' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected Unexpected token in class body, found error
    ╭─[ 0:7:45 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                             ┬  
-   │                                             ╰── Expected type, found Error
+   │                                             ╰── Expected Unexpected token in class body, found error
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found Error
-   ╭─[ 0:7:45 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                             ┬  
-   │                                             ╰── Expected Unexpected token in class body, found Error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found Quote
+Error: Expected Unexpected token in class body, found '"'
    ╭─[ 0:7:46 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                              ┬  
-   │                                              ╰── Expected Unexpected token in class body, found Quote
+   │                                              ╰── Expected Unexpected token in class body, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found Quote
+Error: Expected top-level declaration, found '"'
    ╭─[ 0:7:48 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                ┬  
-   │                                                ╰── Expected top-level declaration, found Quote
+   │                                                ╰── Expected top-level declaration, found '"'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found RParen
+Error: Expected top-level declaration, found ')'
    ╭─[ 0:7:49 ]
    │
  7 │   json_like string @alias("{\"key\": \"value\"}")
    │                                                 ┬  
-   │                                                 ╰── Expected top-level declaration, found RParen
+   │                                                 ╰── Expected top-level declaration, found ')'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
    ╭─[ 0:8:1 ]
    │
  8 │ }
    │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found '}'
    │ 
    │ Note: Error code: E0010
 ───╯

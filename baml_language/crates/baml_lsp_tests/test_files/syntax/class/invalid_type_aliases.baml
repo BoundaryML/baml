@@ -57,39 +57,39 @@ type Four = int | string | b
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:1 ]
 //    │
 //  9 │ typpe Two = float
 //    │ ──┬──  
-//    │   ╰──── Expected top-level declaration, found Word
+//    │   ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:7 ]
 //    │
 //  9 │ typpe Two = float
 //    │       ─┬─  
-//    │        ╰─── Expected top-level declaration, found Word
+//    │        ╰─── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Equals
+// Error: Expected top-level declaration, found '='
 //    ╭─[ 0:9:11 ]
 //    │
 //  9 │ typpe Two = float
 //    │           ┬  
-//    │           ╰── Expected top-level declaration, found Equals
+//    │           ╰── Expected top-level declaration, found '='
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //    ╭─[ 0:9:13 ]
 //    │
 //  9 │ typpe Two = float
 //    │             ──┬──  
-//    │               ╰──── Expected top-level declaration, found Word
+//    │               ╰──── Expected top-level declaration, found identifier
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

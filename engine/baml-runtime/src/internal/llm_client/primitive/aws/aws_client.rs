@@ -582,6 +582,12 @@ impl AwsClient {
                     if let Some(profile) = self.properties.profile.as_ref() {
                         builder = builder.profile_name(profile);
                     }
+                    // Add region to DefaultCredentialsChain for IRSA support.
+                    // IRSA (IAM Roles for Service Accounts) uses STS AssumeRoleWithWebIdentity
+                    // which requires a region to make the STS API call.
+                    if let Some(region) = self.properties.region.as_ref() {
+                        builder = builder.region(Region::new(region.clone()));
+                    }
                     loader.credentials_provider(builder.build().await)
                 }
             }

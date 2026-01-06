@@ -1,0 +1,49 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "MyClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        KW_RETRY_POLICY "retry_policy"
+        CONFIG_VALUE "MyRetry"
+          WORD "MyRetry"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "MyRetry"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "3"
+          INTEGER_LITERAL "3"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

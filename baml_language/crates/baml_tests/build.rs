@@ -189,7 +189,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
     let hir_test = generate_hir_test(project);
-    let thir_test = generate_thir_test(project);
+    let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project);
@@ -222,13 +222,14 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_lexer;
             use baml_db::baml_parser;
             use baml_db::baml_hir;
-            use baml_db::baml_thir;
+            use baml_db::baml_tir;
+            use baml_db::baml_vir;
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
-            use baml_thir::{build_typing_context_from_files};
-            use baml_thir::pretty::short_display;
-            use baml_diagnostics::{render_name_error, render_parse_error, render_type_error};
+            use baml_tir::{typing_context, class_field_types, type_aliases, enum_variants};
+            use baml_tir::pretty::short_display;
+            use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -240,7 +241,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             #lexer_tests
             #parser_tests
             #hir_test
-            #thir_test
+            #tir_test
             #mir_test
             #diagnostics_test
             #codegen_test
@@ -371,7 +372,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_thir_test(project: &TestProject) -> TokenStream {
+fn generate_tir_test(project: &TestProject) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -396,7 +397,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
 
     quote! {
         #[test]
-        fn test_04_thir() {
+        fn test_04_tir() {
             let mut db = RootDatabase::new();
             let root = db.set_project_root(std::path::PathBuf::from("."));
             let mut source_files = Vec::new();
@@ -410,10 +411,11 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_fields = baml_thir::lower_project_class_fields(&db, root);
-            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
-            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
+            let globals = typing_context(&db, root);
+            let class_fields = class_field_types(&db, root);
+            let type_aliases_map = type_aliases(&db, root);
+            let enum_variants_map = enum_variants(&db, root);
+            let enum_variants_data = enum_variants_map.enums(&db).clone();
 
             // Iterate over files and their functions
             for source_file in &source_files {
@@ -423,7 +425,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
+                        let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -438,7 +440,7 @@ fn generate_thir_test(project: &TestProject) -> TokenStream {
             }
 
             with_settings!({snapshot_path => SNAPSHOT_PATH}, {
-                assert_snapshot!("04_thir", output);
+                assert_snapshot!("04_tir", output);
             });
         }
     }
@@ -483,8 +485,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== MIR ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_field_types = baml_thir::lower_project_class_fields(&db, root);
+            let globals = typing_context(&db, root);
+            let class_field_types_map = class_field_types(&db, root);
 
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -512,13 +514,20 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types.clone()), None, None, *func_id);
+                        let inference = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
-                        // Lower to MIR
-                        let mir = baml_mir::lower_function(&signature, &body, &inference, &db, &classes);
+                        // Lower HIR → VIR → MIR
+                        let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference) {
+                            Ok(vir) => {
+                                let mir = baml_mir::lower(&signature, &vir, &db, &classes);
+                                baml_mir::pretty::display_function(&mir)
+                            }
+                            Err(err) => {
+                                format!("fn {}:\n  (no MIR due to errors: {:?})\n", signature.name, err)
+                            }
+                        };
 
-                        // Pretty print the MIR
-                        writeln!(output, "{}", baml_mir::pretty::display_function(&mir)).unwrap();
+                        writeln!(output, "{}", mir_output).unwrap();
                     }
                 }
             }
@@ -573,16 +582,30 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             // Update project root with the list of files for proper Salsa tracking
             root.set_files(&mut db).to(source_files.clone());
 
-            // Check for duplicate names
-            for error in baml_hir::validate_duplicate_names(&db, root) {
+            // Collect HIR lowering diagnostics (per-file validation)
+            for source_file in &source_files {
+                let lowering_result = baml_hir::file_lowering(&db, *source_file);
+                for diag in lowering_result.diagnostics(&db) {
+                    all_errors.push(("hir".to_string(), render_hir_diagnostic(diag, &sources, false)));
+                }
+            }
+
+            // Check for validation errors (project-wide validation)
+            let validation_result = baml_hir::validate_hir(&db, root);
+            for diag in validation_result.hir_diagnostics {
+                all_errors.push(("hir".to_string(), render_hir_diagnostic(&diag, &sources, false)));
+            }
+            for error in validation_result.name_errors {
                 all_errors.push(("name".to_string(), render_name_error(&error, &sources, false)));
             }
 
             // Build typing context and run type inference
-            let globals = build_typing_context_from_files(&db, &source_files);
-            let class_fields = baml_thir::lower_project_class_fields(&db, root);
-            let type_aliases = baml_thir::build_type_aliases_from_project(&db, root);
-            let enum_variants = baml_thir::build_enum_variants_from_project(&db, root);
+            let globals = typing_context(&db, root);
+            let class_fields = class_field_types(&db, root);
+            let type_aliases_map = type_aliases(&db, root);
+            let enum_variants_map = enum_variants(&db, root);
+            let enum_variants_data = enum_variants_map.enums(&db).clone();
+
             for source_file in &source_files {
                 let items_struct = baml_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
@@ -590,7 +613,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                     if let baml_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_thir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases.clone()), Some(enum_variants.clone()), *func_id);
+                        let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
                         for error in &result.errors {
                             all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
                         }
@@ -642,41 +665,51 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_06_codegen() {
             let mut db = RootDatabase::new();
-            let _root = db.set_project_root(std::path::PathBuf::from("."));
+            let root = db.set_project_root(std::path::PathBuf::from("."));
             let mut source_files = Vec::new();
 
             #file_loaders
 
-            let program = baml_codegen::compile_files(&db, &source_files);
+            // Update project root with the list of files for proper Salsa tracking
+            root.set_files(&mut db).to(source_files.clone());
 
             let mut output = String::new();
-            writeln!(output, "=== BYTECODE ===").unwrap();
-            writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
-            writeln!(output, "Objects: {}", program.objects.len()).unwrap();
-            writeln!(output, "Globals: {}", program.globals.len()).unwrap();
 
-            // Show functions and their bytecode using debug formatting
-            let mut func_names: Vec<_> = program.function_indices.keys().collect();
-            func_names.sort();
-            for func_name in func_names {
-                if let Some(&idx) = program.function_indices.get(func_name)
-                    && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
-                {
-                    writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
-                    let bytecode_table = baml_vm::debug::display_bytecode(
-                        func,
-                        &baml_vm::EvalStack::new(),
-                        &program.objects,
-                        &program.globals,
-                        false,  // no colors
-                    );
-                    if bytecode_table.is_empty() {
-                        writeln!(output, "  (no bytecode)").unwrap();
-                    } else {
-                        for line in bytecode_table.lines() {
-                            writeln!(output, "  {}", line).unwrap();
+            match baml_codegen::compile_files(&db, &source_files) {
+                Ok(program) => {
+                    writeln!(output, "=== BYTECODE ===").unwrap();
+                    writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
+                    writeln!(output, "Objects: {}", program.objects.len()).unwrap();
+                    writeln!(output, "Globals: {}", program.globals.len()).unwrap();
+
+                    // Show functions and their bytecode using debug formatting
+                    let mut func_names: Vec<_> = program.function_indices.keys().collect();
+                    func_names.sort();
+                    for func_name in func_names {
+                        if let Some(&idx) = program.function_indices.get(func_name)
+                            && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+                        {
+                            writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
+                            let bytecode_table = baml_vm::debug::display_bytecode(
+                                func,
+                                &baml_vm::EvalStack::new(),
+                                &program.objects,
+                                &program.globals,
+                                false,  // no colors
+                            );
+                            if bytecode_table.is_empty() {
+                                writeln!(output, "  (no bytecode)").unwrap();
+                            } else {
+                                for line in bytecode_table.lines() {
+                                    writeln!(output, "  {}", line).unwrap();
+                                }
+                            }
                         }
                     }
+                }
+                Err(err) => {
+                    writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
+                    writeln!(output, "Error: {:?}", err).unwrap();
                 }
             }
 

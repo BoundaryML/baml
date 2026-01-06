@@ -19,30 +19,30 @@ function InitWithLet() -> int {
 
 //----
 //- diagnostics
-// Error: Expected RParen, found Semicolon
+// Error: Expected ')', found ';'
 //    ╭─[ 0:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
 //    │                      ┬  
-//    │                      ╰── Expected RParen, found Semicolon
+//    │                      ╰── Expected ')', found ';'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected block after for expression, found Semicolon
+// Error: Expected block after for expression, found ';'
 //    ╭─[ 0:4:19 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
 //    │                      ┬  
-//    │                      ╰── Expected block after for expression, found Semicolon
+//    │                      ╰── Expected block after for expression, found ';'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected expression, found RParen
+// Error: Expected expression, found ')'
 //    ╭─[ 0:4:27 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {
 //    │                              ┬  
-//    │                              ╰── Expected expression, found RParen
+//    │                              ╰── Expected expression, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

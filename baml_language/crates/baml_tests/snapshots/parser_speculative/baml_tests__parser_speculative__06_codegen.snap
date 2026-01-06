@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -23,82 +23,65 @@ Function LLMAnalyze (arity: 1, kind: Llm):
   (no bytecode)
 
 Function ProcessAnalysis (arity: 1, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_CONST 0       (null)
-     2    LOAD_VAR 1         (analysis)
-     3    LOAD_FIELD 2       
-     4    STORE_VAR 3        (score)
-     5    LOAD_VAR 3         (score)
-     6    LOAD_CONST 1       (0.8)
-     7    CMP_OP >           
-     8    JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +32           (to 41)
-     10   LOAD_VAR 3         (score)
-     11   LOAD_CONST 2       (0.5)
-     12   CMP_OP >           
-     13   JUMP_IF_FALSE +2   (to 15)
-     14   JUMP +20           (to 34)
-     15   LOAD_VAR 3         (score)
-     16   LOAD_CONST 3       (0.2)
-     17   CMP_OP >           
-     18   JUMP_IF_FALSE +2   (to 20)
-     19   JUMP +8            (to 27)
-     20   LOAD_CONST 4       (Negative: )
-     21   LOAD_VAR 1         (analysis)
-     22   LOAD_FIELD 0       
-     23   BIN_OP +           
-     24   STORE_VAR 2        (_0)
-     25   LOAD_VAR 2         (_0)
-     26   RETURN             
-     27   LOAD_CONST 5       (Neutral: )
-     28   LOAD_VAR 1         (analysis)
-     29   LOAD_FIELD 0       
-     30   BIN_OP +           
-     31   STORE_VAR 2        (_0)
-     32   LOAD_VAR 2         (_0)
-     33   RETURN             
-     34   LOAD_CONST 6       (Positive: )
-     35   LOAD_VAR 1         (analysis)
-     36   LOAD_FIELD 0       
-     37   BIN_OP +           
-     38   STORE_VAR 2        (_0)
-     39   LOAD_VAR 2         (_0)
-     40   RETURN             
-     41   LOAD_CONST 7       (Very positive: )
-     42   LOAD_VAR 1         (analysis)
-     43   LOAD_FIELD 0       
-     44   BIN_OP +           
-     45   STORE_VAR 2        (_0)
-     46   LOAD_VAR 2         (_0)
-     47   RETURN             
+     0    LOAD_CONST 0           (null)
+     1    LOAD_VAR 1             (analysis)
+     2    LOAD_FIELD 2           
+     3    STORE_VAR 2            (score)
+     4    LOAD_VAR 2             (score)
+     5    LOAD_CONST 1           (0.8)
+     6    CMP_OP >               
+     7    POP_JUMP_IF_FALSE +2   (to 9)
+     8    JUMP +26               (to 34)
+     9    LOAD_VAR 2             (score)
+     10   LOAD_CONST 2           (0.5)
+     11   CMP_OP >               
+     12   POP_JUMP_IF_FALSE +2   (to 14)
+     13   JUMP +16               (to 29)
+     14   LOAD_VAR 2             (score)
+     15   LOAD_CONST 3           (0.2)
+     16   CMP_OP >               
+     17   POP_JUMP_IF_FALSE +2   (to 19)
+     18   JUMP +6                (to 24)
+     19   LOAD_CONST 4           (Negative: )
+     20   LOAD_VAR 1             (analysis)
+     21   LOAD_FIELD 0           
+     22   BIN_OP +               
+     23   RETURN                 
+     24   LOAD_CONST 5           (Neutral: )
+     25   LOAD_VAR 1             (analysis)
+     26   LOAD_FIELD 0           
+     27   BIN_OP +               
+     28   RETURN                 
+     29   LOAD_CONST 6           (Positive: )
+     30   LOAD_VAR 1             (analysis)
+     31   LOAD_FIELD 0           
+     32   BIN_OP +               
+     33   RETURN                 
+     34   LOAD_CONST 7           (Very positive: )
+     35   LOAD_VAR 1             (analysis)
+     36   LOAD_FIELD 0           
+     37   BIN_OP +               
+     38   RETURN                 
 
 Function ProcessData (arity: 1, kind: Exec):
-     0    LOAD_CONST 0       (null)
-     1    LOAD_VAR 1         (data)
-     2    LOAD_FIELD 0       
-     3    LOAD_VAR 1         (data)
-     4    LOAD_FIELD 1       
-     5    BIN_OP +           
-     6    LOAD_CONST 1       (100)
-     7    CMP_OP >           
-     8    JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +5            (to 14)
-     10   LOAD_CONST 2       (low)
-     11   STORE_VAR 2        (_0)
-     12   LOAD_VAR 2         (_0)
-     13   RETURN             
-     14   LOAD_CONST 3       (high)
-     15   STORE_VAR 2        (_0)
-     16   LOAD_VAR 2         (_0)
-     17   RETURN             
+     0    LOAD_VAR 1             (data)
+     1    LOAD_FIELD 0           
+     2    LOAD_VAR 1             (data)
+     3    LOAD_FIELD 1           
+     4    BIN_OP +               
+     5    LOAD_CONST 0           (100)
+     6    CMP_OP >               
+     7    POP_JUMP_IF_FALSE +2   (to 9)
+     8    JUMP +3                (to 11)
+     9    LOAD_CONST 1           (low)
+     10   RETURN                 
+     11   LOAD_CONST 2           (high)
+     12   RETURN                 
 
 Function SimpleCalc (arity: 2, kind: Exec):
-     0   LOAD_CONST 0   (null)
-     1   LOAD_VAR 1     (a)
-     2   LOAD_VAR 2     (b)
-     3   LOAD_CONST 1   (2)
-     4   BIN_OP *       
-     5   BIN_OP +       
-     6   STORE_VAR 3    (_0)
-     7   LOAD_VAR 3     (_0)
-     8   RETURN
+     0   LOAD_VAR 1     (a)
+     1   LOAD_VAR 2     (b)
+     2   LOAD_CONST 0   (2)
+     3   BIN_OP *       
+     4   BIN_OP +       
+     5   RETURN

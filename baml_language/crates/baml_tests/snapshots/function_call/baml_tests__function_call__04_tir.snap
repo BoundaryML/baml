@@ -1,0 +1,17 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function array_length:
+    Return: Int
+  Function Greeting:
+    Return: String
+  Function param_in_if_statement:
+    Return: Int
+  Function Bar:
+    Return: Int
+  Function Foo:
+    Return: Int
+  Function GreetBaz:
+    Return: String

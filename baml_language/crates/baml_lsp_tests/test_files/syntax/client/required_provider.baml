@@ -17,4 +17,14 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Missing `provider` field in client. e.g. `provider openai`
+//    ╭─[ 0:1:1 ]
+//    │
+//  1 │ ╭─▶ client<llm> MyClient {
+//    ┆ ┆   
+//  5 │ ├─▶ }
+//    │ │       
+//    │ ╰─────── Missing `provider` field in client. e.g. `provider openai`
+//    │     
+//    │     Note: Error code: E0026
+// ───╯

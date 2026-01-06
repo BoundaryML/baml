@@ -30,7 +30,6 @@ fn class_constructor() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -64,7 +63,6 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -102,7 +100,6 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -136,7 +133,6 @@ fn class_constructor_with_spread_operator_before_named_fields() -> anyhow::Resul
 }
 
 #[test]
-#[ignore = "spread operator in constructors not yet implemented"]
 fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -257,7 +253,6 @@ fn nested_field_read() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "constructor with preceding variables not yet working"]
 fn constructor_with_preceding_variables() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -279,7 +274,6 @@ fn constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "nested constructor with preceding variables not yet working"]
 fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -306,7 +300,6 @@ fn nested_constructor_with_preceding_variables() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method calls not yet working"]
 fn basic_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -332,7 +325,6 @@ fn basic_method_decl() -> anyhow::Result<()> {
 
 // Method tests
 #[test]
-#[ignore = "mut self methods not yet working"]
 fn mut_self_method_decl() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

@@ -1,0 +1,175 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "HasDuplicateDescription"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      WORD "description"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "First description"
+          QUOTE """
+          WORD "First"
+          WORD "description"
+          QUOTE """
+        R_PAREN ")"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      WORD "alias"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "AKA"
+          QUOTE """
+          WORD "AKA"
+          QUOTE """
+        R_PAREN ")"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      WORD "description"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "Second description"
+          QUOTE """
+          WORD "Second"
+          WORD "description"
+          QUOTE """
+        R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "HasDuplicateField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "HasDuplicateFieldAttr"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "n"
+            QUOTE """
+            WORD "n"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "Name"
+            QUOTE """
+            WORD "Name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "nm"
+            QUOTE """
+            WORD "nm"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "HasDuplicateVariant"
+    L_BRACE "{"
+    ENUM_VARIANT "RED"
+      WORD "RED"
+    ENUM_VARIANT "BLUE"
+      WORD "BLUE"
+    ENUM_VARIANT "RED"
+      WORD "RED"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "HasDuplicateEnumAttr"
+    L_BRACE "{"
+    ENUM_VARIANT "ONE"
+      WORD "ONE"
+    ENUM_VARIANT "TWO"
+      WORD "TWO"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      WORD "description"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "First"
+          QUOTE """
+          WORD "First"
+          QUOTE """
+        R_PAREN ")"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      WORD "description"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "Second"
+          QUOTE """
+          WORD "Second"
+          QUOTE """
+        R_PAREN ")"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "HasDuplicateVariantAttr"
+    L_BRACE "{"
+    ENUM_VARIANT
+      WORD "ACTIVE"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "a"
+            QUOTE """
+            WORD "a"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "active"
+            QUOTE """
+            WORD "active"
+            QUOTE """
+          R_PAREN ")"
+    ENUM_VARIANT "INACTIVE"
+      WORD "INACTIVE"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

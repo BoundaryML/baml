@@ -1,0 +1,63 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "blah"
+      WORD "blah"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Bar"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "unknown_param_type"
+          WORD "unknown_param_type"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Baz"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "unknown_optional?"
+      WORD "unknown_optional"
+      QUESTION "?"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  null
+}"
+        L_BRACE "{"
+        WORD "null"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

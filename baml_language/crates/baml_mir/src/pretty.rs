@@ -126,8 +126,33 @@ fn write_statement(f: &mut impl Write, stmt: &Statement<'_>) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
+        StatementKind::Unwatch(local) => {
+            write!(f, "unwatch({local});")
+        }
+        StatementKind::NotifyBlock { name, level } => {
+            write!(f, "notify_block({name}, level={level});")
+        }
+        StatementKind::WatchOptions { local, filter } => {
+            write!(f, "{local}.$watch.options(")?;
+            write_operand(f, filter)?;
+            write!(f, ");")
+        }
+        StatementKind::WatchNotify(local) => {
+            write!(f, "{local}.$watch.notify();")
+        }
+        StatementKind::VizEnter(idx) => {
+            write!(f, "viz_enter({idx});")
+        }
+        StatementKind::VizExit(idx) => {
+            write!(f, "viz_exit({idx});")
+        }
         StatementKind::Nop => {
             write!(f, "nop;")
+        }
+        StatementKind::Assert(operand) => {
+            write!(f, "assert(")?;
+            write_operand(f, operand)?;
+            write!(f, ");")
         }
     }
 }
@@ -244,6 +269,18 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue<'_>) -> fmt::Result {
             }
             write!(f, "]")
         }
+        Rvalue::Map(entries) => {
+            write!(f, "{{ ")?;
+            for (i, (key, value)) in entries.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, key)?;
+                write!(f, ": ")?;
+                write_operand(f, value)?;
+            }
+            write!(f, " }}")
+        }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
                 AggregateKind::Array => write!(f, "array")?,
@@ -291,6 +328,7 @@ fn write_constant(f: &mut impl Write, constant: &Constant<'_>) -> fmt::Result {
         Constant::Bool(b) => write!(f, "const {b}"),
         Constant::Null => write!(f, "const null"),
         Constant::Function(name) => write!(f, "const fn {name}"),
+        Constant::EnumVariant { enum_name, variant } => write!(f, "const {enum_name}.{variant}"),
         Constant::Ty(ty) => write!(f, "const type {ty:?}"),
     }
 }

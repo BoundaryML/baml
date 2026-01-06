@@ -98,6 +98,17 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
+// Error: Expected bool, found string?
+//     ╭─[ 0:17:18 ]
+//     │
+//  17 │ ╭─▶     let summary = if (transcript) {
+//     ┆ ┆   
+//  33 │ ├─▶     };
+//     │ │            
+//     │ ╰──────────── Expected bool, found string?
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
 // Error: Unknown variable SummarizeVideo
 //     ╭─[ 0:21:17 ]
 //     │
@@ -152,6 +163,17 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
+// Error: Expected bool, found unknown | string
+//     ╭─[ 0:50:20 ]
+//     │
+//  50 │ ╭─▶     let pr_status = if (summary) {
+//     ┆ ┆   
+//  57 │ ├─▶     };
+//     │ │            
+//     │ ╰──────────── Expected bool, found unknown | string
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
 // Error: Unknown variable CreatePR
 //     ╭─[ 0:52:18 ]
 //     │
@@ -170,12 +192,3 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Expected string, found void
-//    ╭─[ 0:1:1 ]
-//    │
-//  1 │ //# AI Content Pipeline
-//    │ │ 
-//    │ ╰─ Expected string, found void
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯

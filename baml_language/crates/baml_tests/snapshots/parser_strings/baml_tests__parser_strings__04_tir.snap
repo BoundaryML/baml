@@ -1,0 +1,11 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function FormatMessage:
+    Return: String
+  Function ProcessText:
+    Return: String
+  Function GetRole:
+    Return: String

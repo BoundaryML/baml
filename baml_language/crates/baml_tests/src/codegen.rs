@@ -94,7 +94,7 @@ fn convert_instruction(
         baml_vm::Instruction::Copy(idx) => Instruction::Copy(*idx),
         baml_vm::Instruction::PopReplace(n) => Instruction::PopReplace(*n),
         baml_vm::Instruction::Jump(offset) => Instruction::Jump(*offset),
-        baml_vm::Instruction::JumpIfFalse(offset) => Instruction::JumpIfFalse(*offset),
+        baml_vm::Instruction::PopJumpIfFalse(offset) => Instruction::PopJumpIfFalse(*offset),
         baml_vm::Instruction::BinOp(op) => Instruction::BinOp(*op),
         baml_vm::Instruction::CmpOp(op) => Instruction::CmpOp(*op),
         baml_vm::Instruction::UnaryOp(op) => Instruction::UnaryOp(*op),
@@ -130,11 +130,14 @@ fn convert_instruction(
         baml_vm::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
         baml_vm::Instruction::Await => Instruction::Await,
         baml_vm::Instruction::Watch(idx) => Instruction::Watch(*idx),
+        baml_vm::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
         baml_vm::Instruction::Notify(idx) => Instruction::Notify(*idx),
         baml_vm::Instruction::Call(n) => Instruction::Call(*n),
         baml_vm::Instruction::Return => Instruction::Return,
         baml_vm::Instruction::Assert => Instruction::Assert,
         baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
+        baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
+        baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
     })
 }
 
@@ -176,9 +179,11 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 fn compile_source(source: &str) -> CompileResult {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
+    db.set_project(vec![file]);
 
     // Use the production compile_files function
-    let program = baml_codegen::compile_files(&db, &[file]);
+    let program = baml_codegen::compile_files(&db, &[file])
+        .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program
     let mut functions = Vec::new();

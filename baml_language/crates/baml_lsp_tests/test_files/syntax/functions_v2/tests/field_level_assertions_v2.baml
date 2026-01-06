@@ -21,165 +21,138 @@ test MyTest {
 
 //----
 //- diagnostics
-// Error: Expected client name, found Quote
-//    ╭─[ 0:4:10 ]
+// Error: Expected config key, found '@'
+//    ╭─[ 0:9:28 ]
 //    │
-//  4 │   client "openai/gpt-4"
-//    │          ┬  
-//    │          ╰── Expected client name, found Quote
+//  9 │   functions [TestFunction] @assert({{ true }})
+//    │                            ┬  
+//    │                            ╰── Expected config key, found '@'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:4:10 ]
+// Error: Expected config key, found assert
+//    ╭─[ 0:9:29 ]
 //    │
-//  4 │   client "openai/gpt-4"
-//    │          ┬  
-//    │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
+//  9 │   functions [TestFunction] @assert({{ true }})
+//    │                             ───┬──  
+//    │                                ╰──── Expected config key, found assert
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
-//    ╭─[ 0:4:11 ]
+// Error: Expected config key, found '('
+//    ╭─[ 0:9:35 ]
 //    │
-//  4 │   client "openai/gpt-4"
-//    │           ───┬──  
-//    │              ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'openai', found Word
+//  9 │   functions [TestFunction] @assert({{ true }})
+//    │                                   ┬  
+//    │                                   ╰── Expected config key, found '('
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    ╭─[ 0:4:17 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                 ┬  
-//    │                 ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '/', found Slash
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4', found Word
-//    ╭─[ 0:4:18 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                  ──┬──  
-//    │                    ╰──── Expected Only 'client' and 'prompt' allowed in LLM function, found 'gpt-4', found Word
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    ╭─[ 0:4:23 ]
-//    │
-//  4 │   client "openai/gpt-4"
-//    │                       ┬  
-//    │                       ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found Quote
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected config key, found LBrace
+// Error: Expected config key, found '{'
 //    ╭─[ 0:9:36 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                    ┬  
-//    │                                    ╰── Expected config key, found LBrace
+//    │                                    ╰── Expected config key, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected config key, found LBrace
+// Error: Expected config key, found '{'
 //    ╭─[ 0:9:37 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                     ┬  
-//    │                                     ╰── Expected config key, found LBrace
+//    │                                     ╰── Expected config key, found '{'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //    ╭─[ 0:9:45 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                             ┬  
-//    │                                             ╰── Expected top-level declaration, found RBrace
+//    │                                             ╰── Expected top-level declaration, found '}'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found RParen
+// Error: Expected top-level declaration, found ')'
 //    ╭─[ 0:9:46 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                              ┬  
-//    │                                              ╰── Expected top-level declaration, found RParen
+//    │                                              ╰── Expected top-level declaration, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:10:3 ]
 //     │
 //  10 │   args {
 //     │   ──┬─  
-//     │     ╰─── Expected top-level declaration, found Word
+//     │     ╰─── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found LBrace
+// Error: Expected top-level declaration, found '{'
 //     ╭─[ 0:10:8 ]
 //     │
 //  10 │   args {
 //     │        ┬  
-//     │        ╰── Expected top-level declaration, found LBrace
+//     │        ╰── Expected top-level declaration, found '{'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:11:5 ]
 //     │
 //  11 │     input "hello"
 //     │     ──┬──  
-//     │       ╰──── Expected top-level declaration, found Word
+//     │       ╰──── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:11:11 ]
 //     │
 //  11 │     input "hello"
 //     │           ┬  
-//     │           ╰── Expected top-level declaration, found Quote
+//     │           ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Word
+// Error: Expected top-level declaration, found identifier
 //     ╭─[ 0:11:12 ]
 //     │
 //  11 │     input "hello"
 //     │            ──┬──  
-//     │              ╰──── Expected top-level declaration, found Word
+//     │              ╰──── Expected top-level declaration, found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found Quote
+// Error: Expected top-level declaration, found '"'
 //     ╭─[ 0:11:17 ]
 //     │
 //  11 │     input "hello"
 //     │                 ┬  
-//     │                 ╰── Expected top-level declaration, found Quote
+//     │                 ╰── Expected top-level declaration, found '"'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:12:3 ]
 //     │
 //  12 │   }
 //     │   ┬  
-//     │   ╰── Expected top-level declaration, found RBrace
+//     │   ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected top-level declaration, found RBrace
+// Error: Expected top-level declaration, found '}'
 //     ╭─[ 0:13:1 ]
 //     │
 //  13 │ }
 //     │ ┬  
-//     │ ╰── Expected top-level declaration, found RBrace
+//     │ ╰── Expected top-level declaration, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

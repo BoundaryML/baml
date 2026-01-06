@@ -1,0 +1,27 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function HeaderOnlyFunction:
+    Return: String
+  Function VeryLongHeaderTitle:
+    Return: String
+  Function HeadersAroundExpressions:
+    Return: Int
+    Errors:
+      - Expected string. Found int
+  Function HeadersInComplexNesting:
+    Return: String
+  Function HeadersAndComments:
+    Return: String
+  Function ConsecutiveHeaders:
+    Return: String
+  Function UnicodeHeaders:
+    Return: String
+  Function HeaderLevels:
+    Return: String
+  Function HeadersWithSpecialChars:
+    Return: String
+  Function HeadersWithWhitespace:
+    Return: String

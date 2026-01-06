@@ -1,144 +1,101 @@
-//! Lowering from THIR/HIR to MIR.
+//! Lowering from VIR to MIR.
 //!
-//! This module converts the tree-structured HIR (with THIR type information)
-//! into the CFG-based MIR representation.
+//! This module converts the expression-only VIR representation into
+//! the CFG-based MIR. Because VIR has no statements (everything is an
+//! expression), this lowering is much simpler than HIR → MIR lowering.
 //!
-//! # Key Concepts
+//! # Key Simplifications
 //!
-//! - **Destinations**: When lowering expressions, we specify where the result should go
-//! - **Break/Continue Targets**: Loop context tracks where to jump for break/continue
-//! - **Short-circuit Evaluation**: `&&` and `||` become branches rather than `BinOp`
-//!
-//! # Lowering Strategy
-//!
-//! Expressions are lowered in "destination-passing style" - we pass down where the
-//! result should be stored, which avoids extra temporaries in many cases.
+//! Compared to `lower.rs` (HIR → MIR):
+//! - Single `lower_expr` method (no `lower_stmt` or `lower_expr_for_effect`)
+//! - `Let { value, body }` handles scoping naturally
+//! - `Seq { first, second }` handles sequencing
+//! - Types are embedded in the IR (no `HashMap` lookup)
+//! - No `Block { stmts, tail_expr }` or tail expression handling
+//! - No `Missing` nodes to handle
 
 use std::collections::HashMap;
 
 use baml_base::Name;
-use baml_hir::{
-    BinaryOp, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, MatchArm, Pattern, StmtId,
-};
-use baml_thir::{InferenceResult, Ty};
+use baml_hir::FunctionSignature;
+use baml_tir::Ty;
+use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
-    Rvalue, UnaryOp,
+    Rvalue, StatementKind, UnaryOp as MirUnaryOp, VizNode, VizNodeType,
 };
 
-/// Lower a function to MIR.
+/// Source of a field value in spread expansion.
+enum FieldSource {
+    /// Field value comes from a named field assignment.
+    Named(ExprId),
+    /// Field value comes from a spread source (local containing spread value, field index).
+    Spread(Local, usize),
+}
+
+/// Lower a function from VIR to MIR.
 ///
-/// The `class_fields` parameter maps class names to their field name -> index mappings.
-/// This is used to resolve field access expressions like `obj.field` to the correct field index.
-pub fn lower_function<'db>(
+/// This is the main entry point for VIR → MIR lowering.
+pub fn lower<'db>(
     signature: &FunctionSignature,
-    body: &FunctionBody,
-    inference: &InferenceResult<'db>,
+    typed_body: &ExprBody,
     db: &'db dyn crate::Db,
     class_fields: &HashMap<String, HashMap<String, usize>>,
 ) -> MirFunction<'db> {
-    match body {
-        FunctionBody::Expr(expr_body) => {
-            let mut ctx =
-                LoweringContext::new(db, &signature.name, signature.params.len(), class_fields);
-            ctx.lower_expr_body(signature, expr_body, inference);
-            ctx.finish()
-        }
-        FunctionBody::Llm(_) => {
-            // LLM functions are handled specially - they dispatch a future
-            lower_llm_function(signature, inference, db)
-        }
-        FunctionBody::Missing => {
-            // Empty function - just return void
-            let mut builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
-            let ret = builder.declare_local(None, Ty::Void, None);
-            assert_eq!(ret, Local(0));
-
-            let entry = builder.create_block();
-            builder.set_current_block(entry);
-            builder.return_();
-
-            builder.build()
-        }
-    }
+    let mut ctx = LoweringContext::new(db, signature.params.len(), class_fields);
+    ctx.lower_function(signature, typed_body);
+    ctx.finish()
 }
 
-/// Lower an LLM function to MIR.
-///
-/// LLM functions dispatch a future to the runtime and await the result.
-fn lower_llm_function<'db>(
-    signature: &FunctionSignature,
-    inference: &InferenceResult<'db>,
-    _db: &'db dyn crate::Db,
-) -> MirFunction<'db> {
-    let mut builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
-
-    // _0: return place
-    let ret_ty = inference.return_type.clone();
-    let ret = builder.declare_local(None, ret_ty.clone(), None);
-    assert_eq!(ret, Local(0));
-
-    // _1..=_n: parameters
-    for param in &signature.params {
-        let param_ty = inference
-            .param_types
-            .get(&param.name)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        builder.declare_local(Some(param.name.clone()), param_ty, None);
-    }
-
-    // Temp for the future handle
-    let future_local = builder.temp(Ty::Unknown);
-
-    // bb0: dispatch the LLM call
-    let entry = builder.create_block();
-    let await_block = builder.create_block();
-    let return_block = builder.create_block();
-
-    builder.set_current_block(entry);
-
-    // Build argument operands from parameters
-    let args: Vec<Operand<'db>> = (1..=signature.params.len())
-        .map(|i| Operand::copy_local(Local(i)))
-        .collect();
-
-    // Dispatch the LLM function itself (self-reference)
-    builder.dispatch_future(
-        Operand::Constant(Constant::Function(Name::new(&signature.name))),
-        args,
-        Place::local(future_local),
-        await_block,
-    );
-
-    // bb1: await the future
-    builder.set_current_block(await_block);
-    builder.await_(
-        Place::local(future_local),
-        Place::local(ret),
-        return_block,
-        None, // No unwind for now
-    );
-
-    // bb2: return
-    builder.set_current_block(return_block);
-    builder.return_();
-
-    builder.build()
-}
-
-/// Context for lowering HIR/THIR to MIR.
+/// Context for lowering VIR to MIR.
 struct LoweringContext<'db, 'ctx> {
     #[allow(dead_code)]
     db: &'db dyn crate::Db,
     builder: MirBuilder<'db>,
-    /// Map from HIR variable names to MIR locals.
+    /// Map from variable names to MIR locals.
     locals: HashMap<Name, Local>,
     /// Current loop context for break/continue.
     loop_context: Option<LoopContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Stack of watched locals for tracking scope exit.
+    watched_locals_stack: Vec<Local>,
+    /// Viz context for control flow visualization.
+    viz_context: VizContext,
+    /// Pending header for control flow visualization.
+    /// When a `//# header` is seen, this is set. When control flow (if/while) follows,
+    /// VizEnter/VizExit will be emitted for that control flow.
+    pending_header: Option<PendingHeader>,
+}
+
+/// A pending header waiting for control flow.
+#[derive(Clone)]
+struct PendingHeader {
+    name: String,
+}
+
+/// Context for control flow visualization.
+struct VizContext {
+    /// Function name for `log_filter_key` prefix.
+    function_name: String,
+    /// Counter for generating unique node IDs.
+    next_node_id: u32,
+    /// Stack of parent `log_filter_keys`.
+    parent_keys: Vec<String>,
+    /// Counter for ordinal within current scope (for unique paths).
+    ordinal_counters: Vec<u16>,
+}
+
+impl VizContext {
+    /// Get the current ordinal and increment for next use.
+    fn get_and_increment_ordinal(&mut self) -> u16 {
+        let ordinal = *self.ordinal_counters.last().unwrap_or(&0);
+        if let Some(last) = self.ordinal_counters.last_mut() {
+            *last += 1;
+        }
+        ordinal
+    }
 }
 
 /// Context for the current loop (for break/continue).
@@ -148,21 +105,31 @@ struct LoopContext {
     break_target: BlockId,
     /// Block to jump to on `continue`.
     continue_target: BlockId,
+    /// Depth of `watched_locals_stack` at loop entry.
+    /// Used to emit Unwatch for watched locals on break/continue.
+    watched_locals_depth: usize,
 }
 
 impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     fn new(
         db: &'db dyn crate::Db,
-        name: &str,
         arity: usize,
         class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
     ) -> Self {
         Self {
             db,
-            builder: MirBuilder::new(name, arity),
+            builder: MirBuilder::new("", arity),
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
+            watched_locals_stack: Vec::new(),
+            viz_context: VizContext {
+                function_name: String::new(),
+                next_node_id: 0,
+                parent_keys: Vec::new(),
+                ordinal_counters: vec![0],
+            },
+            pending_header: None,
         }
     }
 
@@ -170,28 +137,130 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.build()
     }
 
-    /// Lower an expression function body.
-    fn lower_expr_body(
-        &mut self,
-        signature: &FunctionSignature,
-        expr_body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
+    // ========================================================================
+    // Visualization Helpers
+    // ========================================================================
+
+    /// Create a new viz node and emit `VizEnter`.
+    /// Returns the node index for later `VizExit`.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_enter(&mut self, node_type: VizNodeType, label: &str) -> usize {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        // Build the segment key based on node type
+        let segment = match node_type {
+            VizNodeType::FunctionRoot => format!("fn:{ordinal}"),
+            VizNodeType::HeaderContextEnter => format!("hdr:{ordinal}"),
+            VizNodeType::BranchGroup => format!("bg:{ordinal}"),
+            VizNodeType::BranchArm => format!("ba:{ordinal}"),
+            VizNodeType::Loop => format!("loop:{ordinal}"),
+            VizNodeType::OtherScope => format!("scope:{ordinal}"),
+        };
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type,
+            label: label.to_string(),
+            header_level: None,
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+
+        node_idx
+    }
+
+    /// Emit `VizExit` for a previously entered node.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code)]
+    fn viz_exit(&mut self, node_idx: usize) {
+        self.builder.viz_exit(node_idx);
+        self.viz_context.parent_keys.pop();
+        self.viz_context.ordinal_counters.pop();
+    }
+
+    /// Create a new viz node and emit `VizEnter`, but don't track for `VizExit`.
+    /// Used for headers which are hierarchical scopes without explicit exit.
+    /// Currently unused - kept for future use when control flow with headers needs viz nodes.
+    #[allow(dead_code, clippy::cast_possible_truncation)]
+    fn viz_enter_header(&mut self, label: &str, level: usize) {
+        let ordinal = self.viz_context.get_and_increment_ordinal();
+        let node_id = self.viz_context.next_node_id;
+        self.viz_context.next_node_id += 1;
+
+        let segment = format!("hdr:{ordinal}");
+
+        // Build log_filter_key from parent path + this segment
+        let log_filter_key = if self.viz_context.parent_keys.is_empty() {
+            format!("{}|{}", self.viz_context.function_name, segment)
+        } else {
+            format!(
+                "{}|{}",
+                self.viz_context.parent_keys.last().unwrap(),
+                segment
+            )
+        };
+
+        let parent_log_filter_key = self.viz_context.parent_keys.last().cloned();
+
+        // Create the viz node
+        let node = VizNode {
+            node_id,
+            log_filter_key: log_filter_key.clone(),
+            parent_log_filter_key,
+            node_type: VizNodeType::HeaderContextEnter,
+            label: label.to_string(),
+            header_level: Some(level as u8),
+        };
+
+        let node_idx = self.builder.add_viz_node(node);
+        self.builder.viz_enter(node_idx);
+
+        // Push to parent stack for nested nodes (but no VizExit will be emitted)
+        self.viz_context.parent_keys.push(log_filter_key);
+        self.viz_context.ordinal_counters.push(0);
+    }
+
+    /// Lower a complete function.
+    fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
+        self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
+        self.viz_context.function_name = signature.name.to_string();
+
         // _0: return place
-        let ret_ty = inference.return_type.clone();
-        let ret = self.builder.declare_local(None, ret_ty, None);
+        // Use signature return type, not body root type (which may be Never for diverging bodies)
+        let ret_ty = baml_tir::lower_type_ref(self.db, &signature.return_type);
+        let ret = self.builder.declare_local(None, ret_ty, None, false);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
         for param in &signature.params {
-            let param_ty = inference
-                .param_types
-                .get(&param.name)
-                .cloned()
-                .unwrap_or(Ty::Unknown);
+            let param_ty = baml_tir::lower_type_ref(self.db, &param.type_ref);
             let local = self
                 .builder
-                .declare_local(Some(param.name.clone()), param_ty, None);
+                .declare_local(Some(param.name.clone()), param_ty, None, false);
             self.locals.insert(param.name.clone(), local);
         }
 
@@ -202,11 +271,9 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         self.builder.set_current_block(entry);
 
         // Lower the root expression, storing result in _0
-        if let Some(root) = expr_body.root_expr {
-            self.lower_expr_to_place(root, Place::local(ret), expr_body, inference);
-        }
+        self.lower_expr(body.root, Place::local(ret), body);
 
-        // If we haven't terminated the current block, goto exit
+        // If we haven't terminated, goto exit
         if !self.builder.is_current_terminated() {
             self.builder.goto(exit);
         }
@@ -217,25 +284,49 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower an expression, storing the result in `dest`.
-    fn lower_expr_to_place(
-        &mut self,
-        expr_id: ExprId,
-        dest: Place,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
-        use baml_hir::Expr;
-
-        let expr = &body.exprs[expr_id];
+    ///
+    /// This is the core of `TypedIR` lowering. Unlike HIR lowering which needs
+    /// separate `lower_expr_to_place` and `lower_stmt`, here we have just one method.
+    fn lower_expr(&mut self, expr_id: ExprId, dest: Place, body: &ExprBody) {
+        let expr = body.expr(expr_id);
+        let ty = body.ty(expr_id);
 
         match expr {
+            // ========== Literals ==========
             Expr::Literal(lit) => {
                 let constant = Self::lower_literal(lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
 
+            Expr::Unit => {
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            // ========== Variables & Paths ==========
+            Expr::Var(name) => {
+                if let Some(&local) = self.locals.get(name) {
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::copy_local(local)));
+                } else {
+                    // Function reference
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(name.clone()))),
+                    );
+                }
+            }
+
             Expr::Path(segments) => {
+                // Note: Multi-segment paths that are local variable field accesses should have
+                // been converted to nested FieldAccess during HIR → TypedIR lowering.
+                // TODO: Multi-segment paths that reach here are non-local paths like builtin functions
+                // (e.g., baml.Array.length) which need special handling.
+                //
+                // TODO: This is a workaround for the lack of proper module/namespace support.
+                // When we have proper modules, builtin paths should be resolved earlier in the
+                // pipeline and represented differently (not as Expr::Path).
                 if segments.len() == 1 {
                     // Simple variable reference
                     let name = &segments[0];
@@ -243,72 +334,250 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                         self.builder
                             .assign(dest, Rvalue::Use(Operand::copy_local(local)));
                     } else {
-                        // Could be a function reference
+                        // Assume it's a function reference
                         self.builder.assign(
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(name.clone()))),
                         );
                     }
+                } else if let Some((enum_name, variant)) = body.enum_variant_exprs.get(&expr_id) {
+                    // Enum variant value (e.g., Status.Active)
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                            enum_name: enum_name.clone(),
+                            variant: variant.clone(),
+                        })),
+                    );
                 } else {
-                    // Multi-segment path - need to handle field access chain
-                    // First segment is the variable
-                    let first = &segments[0];
-                    if let Some(&base_local) = self.locals.get(first) {
-                        // Get segment types from inference for field indices
-                        let segment_types = inference.path_segment_types.get(&expr_id);
+                    // Multi-segment path that's not a field access chain (e.g., baml.Array.length).
+                    // TODO: This is a hack - we're treating these as builtin function references
+                    // by joining segments into a dotted path. Proper module resolution should
+                    // handle this case earlier in the pipeline.
+                    let full_path = segments
+                        .iter()
+                        .map(smol_str::SmolStr::as_str)
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(Name::new(full_path)))),
+                    );
+                }
+            }
 
-                        // Build chain of field accesses
-                        let mut current_place = Place::local(base_local);
+            // ========== Binding & Sequencing ==========
+            // This is where TypedIR shines - no special tail expression handling!
+            Expr::Let {
+                pattern,
+                ty: var_ty,
+                value,
+                body: let_body,
+                is_watched,
+            } => {
+                // Extract the variable name from the pattern first
+                let pat = body.pattern(*pattern);
+                let name = match pat {
+                    Pattern::Binding(name) => name.clone(),
+                    Pattern::TypedBinding { name, .. } => name.clone(),
+                    // Literal/EnumVariant/Union patterns don't make sense in let bindings,
+                    // but we handle them gracefully
+                    Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
+                        panic!("BUG: non-binding pattern in let statement: {pat:?}")
+                    }
+                };
 
-                        for (i, field) in segments[1..].iter().enumerate() {
-                            // Look up field index based on the base type and field name
-                            let field_idx = if let Some(types) = segment_types {
-                                // types[i] is the type of the receiver at this step
-                                self.field_index_for_type_and_name(&types[i], field)
-                            } else {
-                                // Fallback to position if no type info (error case)
-                                i
-                            };
-                            current_place = Place::field(current_place, field_idx);
-                        }
+                // Lower the value with the actual variable name
+                let local_ty = Self::lower_typed_ir_ty(var_ty);
+                let local =
+                    self.builder
+                        .declare_local(Some(name.clone()), local_ty, None, *is_watched);
+                self.lower_expr(*value, Place::local(local), body);
 
-                        self.builder
-                            .assign(dest, Rvalue::Use(Operand::Copy(current_place)));
-                    } else {
-                        // Unknown variable - assign null as placeholder
-                        self.builder
-                            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                // Bind the variable
+                self.locals.insert(name, local);
+
+                // Track watched local for scope exit
+                if *is_watched {
+                    self.watched_locals_stack.push(local);
+                }
+
+                // Lower the body - this IS the result
+                // No special "tail expression" handling needed!
+                self.lower_expr(*let_body, dest, body);
+
+                // Emit Unwatch when watched local goes out of scope
+                if *is_watched {
+                    self.watched_locals_stack.pop();
+                    // Only emit if body didn't diverge
+                    if !self.builder.is_current_terminated() {
+                        self.builder.unwatch(local);
                     }
                 }
             }
 
+            Expr::Seq { first, second } => {
+                // Lower first for effect (result discarded)
+                let first_ty = Self::lower_typed_ir_ty(body.ty(*first));
+                let temp = self.builder.temp(first_ty);
+                self.lower_expr(*first, Place::local(temp), body);
+
+                // If first diverged, we're done
+                if self.builder.is_current_terminated() {
+                    return;
+                }
+
+                // Lower second - this is our result
+                self.lower_expr(*second, dest, body);
+            }
+
+            // ========== Control Flow ==========
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.lower_if(*condition, *then_branch, *else_branch, dest, body);
+            }
+
+            Expr::While {
+                condition,
+                body: loop_body,
+            } => {
+                self.lower_while(*condition, *loop_body, body);
+                // While returns Unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            Expr::Return(ret_expr) => {
+                if let Some(e) = ret_expr {
+                    self.lower_expr(*e, Place::local(Local(0)), body);
+                }
+                // Create exit and return
+                let exit = self.builder.create_block();
+                self.builder.goto(exit);
+                self.builder.set_current_block(exit);
+                self.builder.return_();
+            }
+
+            Expr::Break => {
+                if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
+                    let target = ctx.break_target;
+                    self.builder.goto(target);
+                } else {
+                    panic!("BUG: `break` outside of loop context");
+                }
+            }
+
+            Expr::Continue => {
+                if let Some(ctx) = &self.loop_context {
+                    // Emit Unwatch for all watched locals since loop entry
+                    for &local in &self.watched_locals_stack[ctx.watched_locals_depth..] {
+                        self.builder.unwatch(local);
+                    }
+                    let target = ctx.continue_target;
+                    self.builder.goto(target);
+                } else {
+                    panic!("BUG: `continue` outside of loop context");
+                }
+            }
+
+            Expr::Assert { condition } => {
+                // Evaluate the condition
+                let cond_local = self
+                    .builder
+                    .temp(Self::lower_typed_ir_ty(body.ty(*condition)));
+                self.lower_expr(*condition, Place::local(cond_local), body);
+
+                // Emit assert statement
+                self.builder.assert(Operand::copy_local(cond_local));
+
+                // Return unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            // ========== Assignment ==========
+            Expr::Assign { target, value } => {
+                let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                let value_local = self.builder.temp(value_ty);
+                self.lower_expr(*value, Place::local(value_local), body);
+
+                let target_place = self.lower_lvalue(*target, body);
+                self.builder
+                    .assign(target_place, Rvalue::Use(Operand::copy_local(value_local)));
+
+                // Return unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            Expr::AssignOp { target, op, value } => {
+                let target_place = self.lower_lvalue(*target, body);
+
+                // Load current value
+                let current_ty = Self::lower_typed_ir_ty(body.ty(*target));
+                let current_local = self.builder.temp(current_ty.clone());
+                self.builder.assign(
+                    Place::local(current_local),
+                    Rvalue::Use(Operand::Copy(target_place.clone())),
+                );
+
+                // Load rhs
+                let rhs_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                let rhs_local = self.builder.temp(rhs_ty);
+                self.lower_expr(*value, Place::local(rhs_local), body);
+
+                // Compute new value
+                let mir_op = Self::convert_assign_op(*op);
+                let result_local = self.builder.temp(current_ty);
+                self.builder.assign(
+                    Place::local(result_local),
+                    Rvalue::BinaryOp {
+                        op: mir_op,
+                        left: Operand::copy_local(current_local),
+                        right: Operand::copy_local(rhs_local),
+                    },
+                );
+
+                // Store back
+                self.builder
+                    .assign(target_place, Rvalue::Use(Operand::copy_local(result_local)));
+
+                // Return unit
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            // ========== Operations ==========
             Expr::Binary { op, lhs, rhs } => {
                 // Check for short-circuit operators
                 match op {
                     BinaryOp::And => {
-                        self.lower_short_circuit_and(*lhs, *rhs, dest, body, inference);
+                        self.lower_short_circuit_and(*lhs, *rhs, dest, body);
                     }
                     BinaryOp::Or => {
-                        self.lower_short_circuit_or(*lhs, *rhs, dest, body, inference);
+                        self.lower_short_circuit_or(*lhs, *rhs, dest, body);
                     }
                     _ => {
-                        self.lower_binary_op(*op, *lhs, *rhs, dest, body, inference);
+                        self.lower_binary_op(*op, *lhs, *rhs, dest, body);
                     }
                 }
             }
 
-            Expr::Unary { op, expr } => {
-                let operand_ty = inference
-                    .expr_types
-                    .get(expr)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
+            Expr::Unary { op, operand } => {
+                let operand_ty = Self::lower_typed_ir_ty(body.ty(*operand));
                 let operand_local = self.builder.temp(operand_ty);
-                self.lower_expr_to_place(*expr, Place::local(operand_local), body, inference);
+                self.lower_expr(*operand, Place::local(operand_local), body);
 
                 let mir_op = match op {
-                    baml_hir::UnaryOp::Not => UnaryOp::Not,
-                    baml_hir::UnaryOp::Neg => UnaryOp::Neg,
+                    UnaryOp::Not => MirUnaryOp::Not,
+                    UnaryOp::Neg => MirUnaryOp::Neg,
                 };
 
                 self.builder.assign(
@@ -320,104 +589,19 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 );
             }
 
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.lower_if(
-                    *condition,
-                    *then_branch,
-                    *else_branch,
-                    dest,
-                    body,
-                    inference,
-                );
-            }
-
-            Expr::Match { scrutinee, arms } => {
-                self.lower_match(*scrutinee, arms, &dest, body, inference);
-            }
-
+            // ========== Function Calls ==========
             Expr::Call { callee, args } => {
-                self.lower_call(*callee, args, dest, body, inference);
+                self.lower_call(*callee, args, dest, body, ty);
             }
 
-            Expr::Block { stmts, tail_expr } => {
-                // Lower each statement
-                for &stmt_id in stmts {
-                    self.lower_stmt(stmt_id, body, inference);
-                    // Check if we terminated (return/break/continue)
-                    if self.builder.is_current_terminated() {
-                        return;
-                    }
-                }
-
-                // Lower tail expression to destination
-                if let Some(tail) = tail_expr {
-                    self.lower_expr_to_place(*tail, dest, body, inference);
-                } else {
-                    // No tail expr - assign void/null
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                }
-            }
-
-            Expr::FieldAccess { base, field } => {
-                let base_ty = inference
-                    .expr_types
-                    .get(base)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let base_local = self.builder.temp(base_ty.clone());
-                self.lower_expr_to_place(*base, Place::local(base_local), body, inference);
-
-                // Look up field index
-                let field_idx = self.field_index_for_type_and_name(&base_ty, field);
-
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Copy(Place::field(
-                        Place::local(base_local),
-                        field_idx,
-                    ))),
-                );
-            }
-
-            Expr::Index { base, index } => {
-                let base_ty = inference
-                    .expr_types
-                    .get(base)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let base_local = self.builder.temp(base_ty);
-                self.lower_expr_to_place(*base, Place::local(base_local), body, inference);
-
-                let index_local = self.builder.temp(Ty::Int);
-                self.lower_expr_to_place(*index, Place::local(index_local), body, inference);
-
-                // Index access - this needs special handling in codegen
-                // For now, represent as a special rvalue
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Copy(Place::index(
-                        Place::local(base_local),
-                        index_local,
-                    ))),
-                );
-            }
-
+            // ========== Data Structures ==========
             Expr::Array { elements } => {
                 let elem_operands: Vec<Operand<'db>> = elements
                     .iter()
                     .map(|&elem| {
-                        let elem_ty = inference
-                            .expr_types
-                            .get(&elem)
-                            .cloned()
-                            .unwrap_or(Ty::Unknown);
+                        let elem_ty = Self::lower_typed_ir_ty(body.ty(elem));
                         let elem_local = self.builder.temp(elem_ty);
-                        self.lower_expr_to_place(elem, Place::local(elem_local), body, inference);
+                        self.lower_expr(elem, Place::local(elem_local), body);
                         Operand::copy_local(elem_local)
                     })
                     .collect();
@@ -425,56 +609,470 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                 self.builder.assign(dest, Rvalue::Array(elem_operands));
             }
 
-            Expr::Object { type_name, fields } => {
-                let field_operands: Vec<Operand<'db>> = fields
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
+                // If there are no spreads, use the simple aggregate approach
+                if spreads.is_empty() {
+                    let field_operands: Vec<Operand<'db>> = fields
+                        .iter()
+                        .map(|(_, value)| {
+                            let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
+                            let value_local = self.builder.temp(value_ty);
+                            self.lower_expr(*value, Place::local(value_local), body);
+                            Operand::copy_local(value_local)
+                        })
+                        .collect();
+
+                    let kind = if let Some(name) = type_name {
+                        AggregateKind::Class(name.to_string())
+                    } else {
+                        AggregateKind::Class("Anonymous".to_string())
+                    };
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind,
+                            fields: field_operands,
+                        },
+                    );
+                } else {
+                    // With spreads, we need to determine the final value for each field
+                    // based on position-based override semantics (last assignment wins).
+                    //
+                    // Algorithm:
+                    // 1. Evaluate all spread sources into temp locals
+                    // 2. Get all class fields in definition order
+                    // 3. For each class field, determine source (named field or spread)
+                    //    based on which has the highest position
+                    // 4. Generate field operands accordingly
+
+                    let class_name = type_name
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_else(|| "Anonymous".to_string());
+
+                    // Get class fields and invert to get field_index -> field_name
+                    let class_field_map = self.class_fields.get(&class_name);
+                    let class_fields_ordered: Vec<(usize, String)> =
+                        if let Some(field_map) = class_field_map {
+                            let mut fields_vec: Vec<(usize, String)> = field_map
+                                .iter()
+                                .map(|(name, &idx)| (idx, name.clone()))
+                                .collect();
+                            fields_vec.sort_by_key(|(idx, _)| *idx);
+                            fields_vec
+                        } else {
+                            // Fallback: use named fields order if class not found
+                            fields
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, (name, _))| (idx, name.to_string()))
+                                .collect()
+                        };
+
+                    // Evaluate all spread sources into temp locals
+                    let spread_locals: Vec<(Local, usize)> = spreads
+                        .iter()
+                        .map(|spread| {
+                            let spread_ty = Self::lower_typed_ir_ty(body.ty(spread.expr));
+                            let spread_local = self.builder.temp(spread_ty);
+                            self.lower_expr(spread.expr, Place::local(spread_local), body);
+                            (spread_local, spread.position)
+                        })
+                        .collect();
+
+                    // Build a map of named field name -> (value_expr_id, position)
+                    // Position is the index in the fields vector
+                    let named_field_map: HashMap<String, (ExprId, usize)> = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(pos, (name, value))| (name.to_string(), (*value, pos)))
+                        .collect();
+
+                    // For each class field, determine the source and generate operand
+                    let field_operands: Vec<Operand<'db>> = class_fields_ordered
+                        .iter()
+                        .map(|(field_idx, field_name)| {
+                            // Find the highest-positioned source for this field
+                            let mut best_source: Option<FieldSource> = None;
+                            let mut best_position: Option<usize> = None;
+
+                            // Check named fields
+                            if let Some(&(value_expr, pos)) = named_field_map.get(field_name) {
+                                best_source = Some(FieldSource::Named(value_expr));
+                                best_position = Some(pos);
+                            }
+
+                            // Check spreads (all spreads provide all fields of the class)
+                            for (spread_local, spread_pos) in &spread_locals {
+                                if best_position.is_none() || *spread_pos > best_position.unwrap() {
+                                    best_source =
+                                        Some(FieldSource::Spread(*spread_local, *field_idx));
+                                    best_position = Some(*spread_pos);
+                                }
+                            }
+
+                            // Generate the operand based on the source
+                            match best_source {
+                                Some(FieldSource::Named(value_expr)) => {
+                                    let value_ty = Self::lower_typed_ir_ty(body.ty(value_expr));
+                                    let value_local = self.builder.temp(value_ty);
+                                    self.lower_expr(value_expr, Place::local(value_local), body);
+                                    Operand::copy_local(value_local)
+                                }
+                                Some(FieldSource::Spread(spread_local, field_idx)) => {
+                                    // Load field from spread source
+                                    Operand::Copy(Place::field(
+                                        Place::local(spread_local),
+                                        field_idx,
+                                    ))
+                                }
+                                None => {
+                                    // This shouldn't happen if the class has fields
+                                    // Fall back to null
+                                    Operand::Constant(Constant::Null)
+                                }
+                            }
+                        })
+                        .collect();
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind: AggregateKind::Class(class_name),
+                            fields: field_operands,
+                        },
+                    );
+                }
+            }
+
+            Expr::Map { entries } => {
+                let entry_operands: Vec<(Operand<'db>, Operand<'db>)> = entries
                     .iter()
-                    .map(|(_, value)| {
-                        let value_ty = inference
-                            .expr_types
-                            .get(value)
-                            .cloned()
-                            .unwrap_or(Ty::Unknown);
+                    .map(|(key, value)| {
+                        let key_ty = Self::lower_typed_ir_ty(body.ty(*key));
+                        let key_local = self.builder.temp(key_ty);
+                        self.lower_expr(*key, Place::local(key_local), body);
+
+                        let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
                         let value_local = self.builder.temp(value_ty);
-                        self.lower_expr_to_place(
-                            *value,
-                            Place::local(value_local),
-                            body,
-                            inference,
-                        );
-                        Operand::copy_local(value_local)
+                        self.lower_expr(*value, Place::local(value_local), body);
+
+                        (
+                            Operand::copy_local(key_local),
+                            Operand::copy_local(value_local),
+                        )
                     })
                     .collect();
 
-                let kind = if let Some(name) = type_name {
-                    AggregateKind::Class(name.to_string())
+                self.builder.assign(dest, Rvalue::Map(entry_operands));
+            }
+
+            // ========== Access ==========
+            Expr::FieldAccess { base, field } => {
+                let result_ty = body.ty(expr_id);
+
+                // Check if this is a method reference (result type is a function)
+                // vs an actual field access (result type is the field's type)
+                if matches!(result_ty, baml_vir::Ty::Function { .. }) {
+                    // Method reference - emit as a function constant
+                    // The method name is just the field name (methods are desugared to top-level functions)
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Constant(Constant::Function(field.clone()))),
+                    );
                 } else {
-                    AggregateKind::Class("Anonymous".to_string())
+                    // Actual field access
+                    let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
+                    let base_local = self.builder.temp(base_ty.clone());
+                    self.lower_expr(*base, Place::local(base_local), body);
+
+                    // Look up field index
+                    let field_idx = self.field_index_for_type_and_name(&base_ty, field);
+
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Use(Operand::Copy(Place::field(
+                            Place::local(base_local),
+                            field_idx,
+                        ))),
+                    );
+                }
+            }
+
+            Expr::Index { base, index } => {
+                let typed_ir_base_ty = body.ty(*base);
+                let base_ty = Self::lower_typed_ir_ty(typed_ir_base_ty);
+                let base_local = self.builder.temp(base_ty.clone());
+                self.lower_expr(*base, Place::local(base_local), body);
+
+                let index_local = self.builder.temp(Ty::Int);
+                self.lower_expr(*index, Place::local(index_local), body);
+
+                // Determine index kind based on base type
+                let index_kind = if matches!(base_ty, Ty::Map { .. }) {
+                    crate::IndexKind::Map
+                } else {
+                    crate::IndexKind::Array
                 };
 
                 self.builder.assign(
                     dest,
-                    Rvalue::Aggregate {
-                        kind,
-                        fields: field_operands,
-                    },
+                    Rvalue::Use(Operand::Copy(Place::index(
+                        Place::local(base_local),
+                        index_local,
+                        index_kind,
+                    ))),
                 );
             }
 
-            Expr::Missing => {
+            Expr::Match {
+                scrutinee,
+                arms,
+                is_exhaustive,
+            } => {
+                // Lower scrutinee to a temp
+                let scrutinee_ty = Self::lower_typed_ir_ty(body.ty(*scrutinee));
+                let scrutinee_local = self.builder.temp(scrutinee_ty.clone());
+                self.lower_expr(*scrutinee, Place::local(scrutinee_local), body);
+
+                // Create join block
+                let join_block = self.builder.create_block();
+
+                // For exhaustive matches, the last arm's failure path is unreachable.
+                // We create a single unreachable block to use as that target, avoiding
+                // the creation of an empty fallthrough block that would need to be emitted.
+                let unreachable_block = if *is_exhaustive {
+                    let saved_block = self.builder.current_block();
+                    let block = self.builder.create_block();
+                    self.builder.set_current_block(block);
+                    self.builder.unreachable();
+                    self.builder.set_current_block(saved_block);
+                    Some(block)
+                } else {
+                    None
+                };
+
+                // For each arm, create test and body blocks
+                let last_arm_idx = arms.len().saturating_sub(1);
+                for (i, arm) in arms.iter().enumerate() {
+                    let is_last_arm = i == last_arm_idx;
+                    let arm_block = self.builder.create_block();
+
+                    // For the last arm of an exhaustive match, pattern failure goes
+                    // to the unreachable block. Otherwise, create a next_block.
+                    let next_block = if is_last_arm && *is_exhaustive {
+                        unreachable_block.expect("unreachable_block created for exhaustive match")
+                    } else {
+                        self.builder.create_block()
+                    };
+
+                    // Generate pattern test
+                    self.lower_pattern_test(
+                        arm.pattern,
+                        scrutinee_local,
+                        &scrutinee_ty,
+                        arm_block,
+                        next_block,
+                        body,
+                    );
+
+                    // Arm body
+                    self.builder.set_current_block(arm_block);
+                    if let Some(guard) = arm.guard {
+                        // Create a separate block for the guarded body
+                        let body_block = self.builder.create_block();
+
+                        // Lower guard expression
+                        let guard_local = self.builder.temp(Ty::Bool);
+                        self.lower_expr(guard, Place::local(guard_local), body);
+
+                        // Branch: if guard is true go to body_block, else go to next_block
+                        // Use branch instead of switch for boolean conditions
+                        self.builder.branch(
+                            Operand::copy_local(guard_local),
+                            body_block,
+                            next_block,
+                        );
+
+                        // Continue in body_block
+                        self.builder.set_current_block(body_block);
+                    }
+                    self.lower_expr(arm.body, dest.clone(), body);
+                    self.builder.goto(join_block);
+
+                    // Only set current block to next_block if it's not the unreachable block
+                    if !(is_last_arm && *is_exhaustive) {
+                        self.builder.set_current_block(next_block);
+                    }
+                }
+
+                if !*is_exhaustive {
+                    // Non-exhaustive match: fallthrough could be reached.
+                    // This is typically a type error, but we generate valid MIR.
+                    // TODO: Consider emitting a runtime panic instruction instead.
+                    self.builder.goto(join_block);
+                }
+                self.builder.set_current_block(join_block);
+            }
+
+            Expr::NotifyBlock { name, level } => {
+                // Set pending header for control flow visualization.
+                // If an if/while follows, it will emit VizEnter/VizExit.
+                self.pending_header = Some(PendingHeader {
+                    name: name.to_string(),
+                });
+
+                // Emit a block notification statement
+                self.builder.push_statement(
+                    StatementKind::NotifyBlock {
+                        name: name.clone(),
+                        level: *level,
+                    },
+                    None,
+                );
+                // NotifyBlock returns unit
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             }
         }
     }
 
+    /// Lower a pattern match test, branching to `success_block` if the pattern matches,
+    /// or `fail_block` if it doesn't.
+    fn lower_pattern_test(
+        &mut self,
+        pat_id: PatId,
+        scrutinee_local: Local,
+        scrutinee_ty: &Ty<'db>,
+        success_block: BlockId,
+        fail_block: BlockId,
+        body: &ExprBody,
+    ) {
+        let pat = body.pattern(pat_id);
+        match pat {
+            Pattern::Binding(name) => {
+                // Binding always matches - bind the variable and go to success
+                let local = self.builder.declare_local(
+                    Some(name.clone()),
+                    scrutinee_ty.clone(),
+                    None,
+                    false,
+                );
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                );
+                self.locals.insert(name.clone(), local);
+                self.builder.goto(success_block);
+            }
+            Pattern::TypedBinding { name, ty } => {
+                // TypedBinding checks if scrutinee is an instance of the given type
+                // Convert VIR type to TIR type for IsType check
+                let pattern_ty = Self::lower_typed_ir_ty(ty);
+
+                // Emit instanceof check
+                let check_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(check_local),
+                    Rvalue::IsType {
+                        operand: Operand::copy_local(scrutinee_local),
+                        ty: pattern_ty.clone(),
+                    },
+                );
+
+                // Branch on the check result
+                // If type matches, bind the variable and go to success
+                // If not, go to fail block
+                let bind_block = self.builder.create_block();
+                self.builder
+                    .branch(Operand::copy_local(check_local), bind_block, fail_block);
+
+                // In bind block: bind the variable and go to success
+                self.builder.set_current_block(bind_block);
+                let local = self
+                    .builder
+                    .declare_local(Some(name.clone()), pattern_ty, None, false);
+                self.builder.assign(
+                    Place::local(local),
+                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                );
+                self.locals.insert(name.clone(), local);
+                self.builder.goto(success_block);
+            }
+            Pattern::Literal(lit) => {
+                // Compare scrutinee with literal
+                let lit_const = Self::lower_literal(lit);
+                let cmp_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(cmp_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::copy_local(scrutinee_local),
+                        right: Operand::Constant(lit_const),
+                    },
+                );
+                // Use branch instead of switch for boolean conditions
+                // (Switch compares against Int which doesn't match Bool)
+                self.builder
+                    .branch(Operand::copy_local(cmp_local), success_block, fail_block);
+            }
+            Pattern::EnumVariant { enum_name, variant } => {
+                // Compare scrutinee (enum value) with the variant
+                let variant_const = Constant::EnumVariant {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                };
+                let cmp_local = self.builder.temp(Ty::Bool);
+                self.builder.assign(
+                    Place::local(cmp_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Eq,
+                        left: Operand::copy_local(scrutinee_local),
+                        right: Operand::Constant(variant_const),
+                    },
+                );
+                // Use branch instead of switch for boolean conditions
+                self.builder
+                    .branch(Operand::copy_local(cmp_local), success_block, fail_block);
+            }
+            Pattern::Union(pats) => {
+                // Union pattern matches if any sub-pattern matches
+                // Try each pattern in order
+                for (i, &sub_pat_id) in pats.iter().enumerate() {
+                    let next_try = if i + 1 < pats.len() {
+                        self.builder.create_block()
+                    } else {
+                        fail_block
+                    };
+                    self.lower_pattern_test(
+                        sub_pat_id,
+                        scrutinee_local,
+                        scrutinee_ty,
+                        success_block,
+                        next_try,
+                        body,
+                    );
+                    if i + 1 < pats.len() {
+                        self.builder.set_current_block(next_try);
+                    }
+                }
+            }
+        }
+    }
+
     /// Lower a literal to a constant.
-    fn lower_literal(lit: &baml_hir::Literal) -> Constant<'db> {
+    fn lower_literal(lit: &Literal) -> Constant<'db> {
         match lit {
-            baml_hir::Literal::Int(n) => Constant::Int(*n),
-            baml_hir::Literal::Float(s) => Constant::Float(s.parse().unwrap_or(0.0)),
-            baml_hir::Literal::String(s) => Constant::String(s.clone()),
-            baml_hir::Literal::Bool(b) => Constant::Bool(*b),
-            baml_hir::Literal::Null => Constant::Null,
+            Literal::Int(n) => Constant::Int(*n),
+            Literal::Float(s) => Constant::Float(s.parse().unwrap_or(0.0)),
+            Literal::String(s) => Constant::String(s.clone()),
+            Literal::Bool(b) => Constant::Bool(*b),
+            Literal::Null => Constant::Null,
         }
     }
 
@@ -486,24 +1084,38 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         rhs: ExprId,
         dest: Place,
         body: &ExprBody,
-        inference: &InferenceResult<'db>,
     ) {
-        let lhs_ty = inference
-            .expr_types
-            .get(&lhs)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        let rhs_ty = inference
-            .expr_types
-            .get(&rhs)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
+        // Special case: instanceof operator - RHS is a type name, not a value
+        if op == BinaryOp::Instanceof {
+            let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
+            let lhs_local = self.builder.temp(lhs_ty);
+            self.lower_expr(lhs, Place::local(lhs_local), body);
+
+            // Extract the type name from RHS (should be a Var or single-segment Path)
+            let type_name = match body.expr(rhs) {
+                Expr::Var(name) => name.clone(),
+                Expr::Path(segments) if segments.len() == 1 => segments[0].clone(),
+                _ => panic!("instanceof RHS must be a simple type name"),
+            };
+
+            self.builder.assign(
+                dest,
+                Rvalue::IsType {
+                    operand: Operand::copy_local(lhs_local),
+                    ty: Ty::Named(type_name),
+                },
+            );
+            return;
+        }
+
+        let lhs_ty = Self::lower_typed_ir_ty(body.ty(lhs));
+        let rhs_ty = Self::lower_typed_ir_ty(body.ty(rhs));
 
         let lhs_local = self.builder.temp(lhs_ty);
-        self.lower_expr_to_place(lhs, Place::local(lhs_local), body, inference);
+        self.lower_expr(lhs, Place::local(lhs_local), body);
 
         let rhs_local = self.builder.temp(rhs_ty);
-        self.lower_expr_to_place(rhs, Place::local(rhs_local), body, inference);
+        self.lower_expr(rhs, Place::local(rhs_local), body);
 
         let mir_op = Self::convert_binop(op);
 
@@ -535,52 +1147,43 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             BinaryOp::BitXor => BinOp::BitXor,
             BinaryOp::Shl => BinOp::Shl,
             BinaryOp::Shr => BinOp::Shr,
-            // And/Or are handled as short-circuit, but include for completeness
-            BinaryOp::And => BinOp::BitAnd, // Shouldn't reach here
-            BinaryOp::Or => BinOp::BitOr,   // Shouldn't reach here
+            // These are handled separately as short-circuit
+            BinaryOp::And => BinOp::BitAnd,
+            BinaryOp::Or => BinOp::BitOr,
+            BinaryOp::Instanceof => BinOp::Instanceof,
+        }
+    }
+
+    fn convert_assign_op(op: AssignOp) -> BinOp {
+        match op {
+            AssignOp::Add => BinOp::Add,
+            AssignOp::Sub => BinOp::Sub,
+            AssignOp::Mul => BinOp::Mul,
+            AssignOp::Div => BinOp::Div,
+            AssignOp::Mod => BinOp::Mod,
+            AssignOp::BitAnd => BinOp::BitAnd,
+            AssignOp::BitOr => BinOp::BitOr,
+            AssignOp::BitXor => BinOp::BitXor,
+            AssignOp::Shl => BinOp::Shl,
+            AssignOp::Shr => BinOp::Shr,
         }
     }
 
     /// Lower short-circuit AND: `a && b`
-    ///
-    /// ```text
-    /// bb_entry:
-    ///     _lhs = <a>
-    ///     branch _lhs -> bb_rhs, bb_false
-    ///
-    /// bb_rhs:
-    ///     _dest = <b>
-    ///     goto -> bb_join
-    ///
-    /// bb_false:
-    ///     _dest = false
-    ///     goto -> bb_join
-    ///
-    /// bb_join:
-    ///     // continue
-    /// ```
-    fn lower_short_circuit_and(
-        &mut self,
-        lhs: ExprId,
-        rhs: ExprId,
-        dest: Place,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
+    fn lower_short_circuit_and(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
         let lhs_local = self.builder.temp(Ty::Bool);
-        self.lower_expr_to_place(lhs, Place::local(lhs_local), body, inference);
+        self.lower_expr(lhs, Place::local(lhs_local), body);
 
         let bb_rhs = self.builder.create_block();
         let bb_false = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        // Branch on lhs
         self.builder
             .branch(Operand::copy_local(lhs_local), bb_rhs, bb_false);
 
         // bb_rhs: evaluate rhs
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr_to_place(rhs, dest.clone(), body, inference);
+        self.lower_expr(rhs, dest.clone(), body);
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -591,27 +1194,18 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             .assign(dest, Rvalue::Use(Operand::Constant(Constant::Bool(false))));
         self.builder.goto(bb_join);
 
-        // Continue from join point
         self.builder.set_current_block(bb_join);
     }
 
     /// Lower short-circuit OR: `a || b`
-    fn lower_short_circuit_or(
-        &mut self,
-        lhs: ExprId,
-        rhs: ExprId,
-        dest: Place,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
+    fn lower_short_circuit_or(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
         let lhs_local = self.builder.temp(Ty::Bool);
-        self.lower_expr_to_place(lhs, Place::local(lhs_local), body, inference);
+        self.lower_expr(lhs, Place::local(lhs_local), body);
 
         let bb_true = self.builder.create_block();
         let bb_rhs = self.builder.create_block();
         let bb_join = self.builder.create_block();
 
-        // Branch on lhs - if true, short circuit
         self.builder
             .branch(Operand::copy_local(lhs_local), bb_true, bb_rhs);
 
@@ -625,12 +1219,11 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         // bb_rhs: evaluate rhs
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr_to_place(rhs, dest, body, inference);
+        self.lower_expr(rhs, dest, body);
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
 
-        // Continue from join point
         self.builder.set_current_block(bb_join);
     }
 
@@ -642,10 +1235,16 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         else_branch: Option<ExprId>,
         dest: Place,
         body: &ExprBody,
-        inference: &InferenceResult<'db>,
     ) {
+        // Check if preceded by a header - if so, emit VizEnter for BranchGroup
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::BranchGroup, &header.name))
+        } else {
+            None
+        };
+
         let cond_local = self.builder.temp(Ty::Bool);
-        self.lower_expr_to_place(condition, Place::local(cond_local), body, inference);
+        self.lower_expr(condition, Place::local(cond_local), body);
 
         let bb_then = self.builder.create_block();
         let bb_else = self.builder.create_block();
@@ -656,7 +1255,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
         // Then branch
         self.builder.set_current_block(bb_then);
-        self.lower_expr_to_place(then_branch, dest.clone(), body, inference);
+        self.lower_expr(then_branch, dest.clone(), body);
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -664,9 +1263,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         // Else branch
         self.builder.set_current_block(bb_else);
         if let Some(else_expr) = else_branch {
-            self.lower_expr_to_place(else_expr, dest, body, inference);
+            self.lower_expr(else_expr, dest, body);
         } else {
-            // No else - result is null
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
         }
@@ -674,395 +1272,58 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             self.builder.goto(bb_join);
         }
 
-        // Continue from join
+        // Join block - emit VizExit if we had a header
         self.builder.set_current_block(bb_join);
-    }
-
-    /// Lower a match expression to MIR.
-    ///
-    /// Match expressions become a series of conditional branches:
-    /// - Evaluate scrutinee to a temp
-    /// - For each arm: check pattern, branch to arm body or next check
-    /// - Final arm (or unreachable) as fallback
-    fn lower_match(
-        &mut self,
-        scrutinee: ExprId,
-        arms: &[MatchArm],
-        dest: &Place,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
-        // 1. Evaluate scrutinee to a local
-        let scrut_ty = inference
-            .expr_types
-            .get(&scrutinee)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        let scrut_local = self.builder.temp(scrut_ty.clone());
-        self.lower_expr_to_place(scrutinee, Place::local(scrut_local), body, inference);
-
-        // 2. Create exit block
-        let exit_block = self.builder.create_block();
-
-        // 3. Generate pattern checks and arm bodies
-        for (i, arm) in arms.iter().enumerate() {
-            let pattern = &body.patterns[arm.pattern];
-            let arm_block = self.builder.create_block();
-            let next_check = if i + 1 < arms.len() {
-                self.builder.create_block()
-            } else {
-                // Last arm's fallthrough is to exit (should be unreachable if exhaustive)
-                exit_block
-            };
-
-            // Generate pattern check - branches to arm_block if match, next_check otherwise
-            self.lower_pattern_check(pattern, scrut_local, arm_block, next_check, body);
-
-            // Generate arm body
-            self.builder.set_current_block(arm_block);
-
-            // Bind pattern variable if applicable
-            self.bind_pattern_local(pattern, scrut_local, &scrut_ty);
-
-            // Handle guard if present
-            if let Some(guard) = arm.guard {
-                let guard_local = self.builder.temp(Ty::Bool);
-                self.lower_expr_to_place(guard, Place::local(guard_local), body, inference);
-
-                let guard_pass = self.builder.create_block();
-                self.builder
-                    .branch(Operand::copy_local(guard_local), guard_pass, next_check);
-                self.builder.set_current_block(guard_pass);
-            }
-
-            // Lower arm body
-            self.lower_expr_to_place(arm.body, dest.clone(), body, inference);
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(exit_block);
-            }
-
-            // If there's a next check block (not the last arm), switch to it
-            if i + 1 < arms.len() {
-                self.builder.set_current_block(next_check);
-            }
-        }
-
-        // 4. Set exit block as current
-        self.builder.set_current_block(exit_block);
-    }
-
-    /// Lower a match expression for effect (discarding result).
-    fn lower_match_for_effect(
-        &mut self,
-        scrutinee: ExprId,
-        arms: &[MatchArm],
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
-        // Same as lower_match but discard the result
-        let scrut_ty = inference
-            .expr_types
-            .get(&scrutinee)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        let scrut_local = self.builder.temp(scrut_ty.clone());
-        self.lower_expr_to_place(scrutinee, Place::local(scrut_local), body, inference);
-
-        let exit_block = self.builder.create_block();
-
-        for (i, arm) in arms.iter().enumerate() {
-            let pattern = &body.patterns[arm.pattern];
-            let arm_block = self.builder.create_block();
-            let next_check = if i + 1 < arms.len() {
-                self.builder.create_block()
-            } else {
-                exit_block
-            };
-
-            self.lower_pattern_check(pattern, scrut_local, arm_block, next_check, body);
-
-            self.builder.set_current_block(arm_block);
-            self.bind_pattern_local(pattern, scrut_local, &scrut_ty);
-
-            if let Some(guard) = arm.guard {
-                let guard_local = self.builder.temp(Ty::Bool);
-                self.lower_expr_to_place(guard, Place::local(guard_local), body, inference);
-
-                let guard_pass = self.builder.create_block();
-                self.builder
-                    .branch(Operand::copy_local(guard_local), guard_pass, next_check);
-                self.builder.set_current_block(guard_pass);
-            }
-
-            // Lower arm body for effect
-            self.lower_expr_for_effect(arm.body, body, inference);
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(exit_block);
-            }
-
-            if i + 1 < arms.len() {
-                self.builder.set_current_block(next_check);
-            }
-        }
-
-        self.builder.set_current_block(exit_block);
-    }
-
-    /// Lower a pattern check, branching to `match_block` if pattern matches,
-    /// or `next_block` if it doesn't.
-    fn lower_pattern_check(
-        &mut self,
-        pattern: &Pattern,
-        scrut_local: Local,
-        match_block: BlockId,
-        next_block: BlockId,
-        body: &ExprBody,
-    ) {
-        match pattern {
-            Pattern::Binding(_) => {
-                // Catch-all binding - always matches
-                self.builder.goto(match_block);
-            }
-
-            Pattern::TypedBinding { name: _, ty } => {
-                // Type check - instanceof style
-                let type_name = Self::extract_type_name(ty);
-                if let Some(class_name) = type_name {
-                    // Simple type comparison for now
-                    // In a full implementation, this would do proper instanceof checking
-                    let is_type = self.builder.temp(Ty::Bool);
-                    self.builder.assign(
-                        Place::local(is_type),
-                        Rvalue::IsType {
-                            operand: Operand::copy_local(scrut_local),
-                            ty: Ty::Named(class_name),
-                        },
-                    );
-                    self.builder
-                        .branch(Operand::copy_local(is_type), match_block, next_block);
-                } else {
-                    // Can't determine type - just match
-                    self.builder.goto(match_block);
-                }
-            }
-
-            Pattern::Literal(lit) => {
-                // Equality check
-                let lit_constant = Self::lower_literal_for_match(lit);
-                let lit_local = self.builder.temp(Self::literal_ty(lit));
-                self.builder.assign(
-                    Place::local(lit_local),
-                    Rvalue::Use(Operand::Constant(lit_constant)),
-                );
-
-                let eq_local = self.builder.temp(Ty::Bool);
-                self.builder.assign(
-                    Place::local(eq_local),
-                    Rvalue::BinaryOp {
-                        op: BinOp::Eq,
-                        left: Operand::copy_local(scrut_local),
-                        right: Operand::copy_local(lit_local),
-                    },
-                );
-
-                self.builder
-                    .branch(Operand::copy_local(eq_local), match_block, next_block);
-            }
-
-            Pattern::EnumVariant { enum_name, variant } => {
-                // For enum variants, we check discriminant or use instanceof
-                // For now, treat as string comparison of variant name
-                let variant_str = format!("{enum_name}.{variant}");
-                let variant_local = self.builder.temp(Ty::String);
-                self.builder.assign(
-                    Place::local(variant_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(variant_str))),
-                );
-
-                // Get discriminant of scrutinee
-                let disc_local = self.builder.temp(Ty::String);
-                self.builder.assign(
-                    Place::local(disc_local),
-                    Rvalue::Discriminant(Place::local(scrut_local)),
-                );
-
-                let eq_local = self.builder.temp(Ty::Bool);
-                self.builder.assign(
-                    Place::local(eq_local),
-                    Rvalue::BinaryOp {
-                        op: BinOp::Eq,
-                        left: Operand::copy_local(disc_local),
-                        right: Operand::copy_local(variant_local),
-                    },
-                );
-
-                self.builder
-                    .branch(Operand::copy_local(eq_local), match_block, next_block);
-            }
-
-            Pattern::Union(sub_patterns) => {
-                // OR of sub-patterns - match if ANY matches
-                // Create a chain: try first, if fail try second, etc.
-                let mut current_block = self.builder.current_block();
-
-                for (j, &sub_pat_id) in sub_patterns.iter().enumerate() {
-                    let sub_pattern = &body.patterns[sub_pat_id];
-                    let sub_next = if j + 1 < sub_patterns.len() {
-                        self.builder.create_block()
-                    } else {
-                        next_block
-                    };
-
-                    self.builder.set_current_block(current_block);
-                    self.lower_pattern_check(sub_pattern, scrut_local, match_block, sub_next, body);
-
-                    if j + 1 < sub_patterns.len() {
-                        current_block = sub_next;
-                    }
-                }
-            }
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
         }
     }
 
-    /// Bind pattern variable to scrutinee local if pattern introduces a binding.
-    fn bind_pattern_local(&mut self, pattern: &Pattern, scrut_local: Local, scrut_ty: &Ty<'db>) {
-        match pattern {
-            Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => {
-                let name_str: &str = name.as_ref();
-                if name_str != "_" {
-                    self.locals.insert(name.clone(), scrut_local);
-                }
-            }
-            Pattern::Literal(_) | Pattern::EnumVariant { .. } | Pattern::Union(_) => {
-                // These patterns don't introduce bindings
-            }
-        }
-        // Suppress unused variable warning
-        let _ = scrut_ty;
-    }
+    /// Lower a while loop.
+    fn lower_while(&mut self, condition: ExprId, loop_body: ExprId, body: &ExprBody) {
+        // Check if preceded by a header - if so, emit VizEnter for Loop
+        let viz_idx = if let Some(header) = self.pending_header.take() {
+            Some(self.viz_enter(VizNodeType::Loop, &header.name))
+        } else {
+            None
+        };
 
-    /// Extract the type name from a `TypeRef` for pattern matching.
-    fn extract_type_name(ty: &baml_hir::TypeRef) -> Option<Name> {
-        match ty {
-            baml_hir::TypeRef::Path(path) => path.last_segment().cloned(),
-            _ => None,
-        }
-    }
+        let bb_cond = self.builder.create_block();
+        let bb_body = self.builder.create_block();
+        let bb_exit = self.builder.create_block();
 
-    /// Lower a literal to a MIR constant for pattern matching.
-    fn lower_literal_for_match(lit: &Literal) -> Constant<'db> {
-        match lit {
-            Literal::Int(n) => Constant::Int(*n),
-            Literal::Float(s) => Constant::Float(s.parse::<f64>().unwrap_or(0.0)),
-            Literal::String(s) => Constant::String(s.clone()),
-            Literal::Bool(b) => Constant::Bool(*b),
-            Literal::Null => Constant::Null,
-        }
-    }
+        self.builder.goto(bb_cond);
 
-    /// Get the type of a literal.
-    fn literal_ty(lit: &Literal) -> Ty<'db> {
-        match lit {
-            Literal::Int(_) => Ty::Int,
-            Literal::Float(_) => Ty::Float,
-            Literal::String(_) => Ty::String,
-            Literal::Bool(_) => Ty::Bool,
-            Literal::Null => Ty::Null,
-        }
-    }
-
-    /// Lower an expression purely for side effects, discarding any result.
-    ///
-    /// Used for void-typed expressions like if-else statements without tail expressions.
-    fn lower_expr_for_effect(
-        &mut self,
-        expr: ExprId,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
-        use baml_hir::Expr;
-
-        let expr_data = &body.exprs[expr];
-
-        match expr_data {
-            Expr::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                self.lower_if_for_effect(*condition, *then_branch, *else_branch, body, inference);
-            }
-
-            Expr::Match { scrutinee, arms } => {
-                self.lower_match_for_effect(*scrutinee, arms, body, inference);
-            }
-
-            Expr::Block { stmts, tail_expr } => {
-                // Lower statements
-                for &stmt_id in stmts {
-                    self.lower_stmt(stmt_id, body, inference);
-                    if self.builder.is_current_terminated() {
-                        return;
-                    }
-                }
-                // If there's a tail expression, lower it for effect too
-                if let Some(tail) = tail_expr {
-                    self.lower_expr_for_effect(*tail, body, inference);
-                }
-                // No null assignment needed - we're discarding the result
-            }
-
-            // For other expressions, fall back to creating a temp and discarding it
-            _ => {
-                let result_ty = inference
-                    .expr_types
-                    .get(&expr)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let temp = self.builder.temp(result_ty);
-                self.lower_expr_to_place(expr, Place::local(temp), body, inference);
-            }
-        }
-    }
-
-    /// Lower an if expression purely for side effects, discarding any result.
-    fn lower_if_for_effect(
-        &mut self,
-        condition: ExprId,
-        then_branch: ExprId,
-        else_branch: Option<ExprId>,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
+        // Condition block
+        self.builder.set_current_block(bb_cond);
         let cond_local = self.builder.temp(Ty::Bool);
-        self.lower_expr_to_place(condition, Place::local(cond_local), body, inference);
-
-        let bb_then = self.builder.create_block();
-        let bb_else = self.builder.create_block();
-        let bb_join = self.builder.create_block();
-
+        self.lower_expr(condition, Place::local(cond_local), body);
         self.builder
-            .branch(Operand::copy_local(cond_local), bb_then, bb_else);
+            .branch(Operand::copy_local(cond_local), bb_body, bb_exit);
 
-        // Then branch - lower for effect
-        self.builder.set_current_block(bb_then);
-        self.lower_expr_for_effect(then_branch, body, inference);
+        // Set up loop context
+        let old_loop_ctx = self.loop_context.replace(LoopContext {
+            break_target: bb_exit,
+            continue_target: bb_cond,
+            watched_locals_depth: self.watched_locals_stack.len(),
+        });
+
+        // Body block
+        self.builder.set_current_block(bb_body);
+        let body_result = self.builder.temp(Ty::Void);
+        self.lower_expr(loop_body, Place::local(body_result), body);
         if !self.builder.is_current_terminated() {
-            self.builder.goto(bb_join);
+            self.builder.goto(bb_cond);
         }
 
-        // Else branch - lower for effect (or just jump to join if no else)
-        self.builder.set_current_block(bb_else);
-        if let Some(else_expr) = else_branch {
-            self.lower_expr_for_effect(else_expr, body, inference);
-        }
-        // No null assignment - we're discarding the result
-        if !self.builder.is_current_terminated() {
-            self.builder.goto(bb_join);
-        }
+        // Restore loop context
+        self.loop_context = old_loop_ctx;
 
-        // Continue from join
-        self.builder.set_current_block(bb_join);
+        // Exit block - emit VizExit if we had a header
+        self.builder.set_current_block(bb_exit);
+        if let Some(idx) = viz_idx {
+            self.viz_exit(idx);
+        }
     }
 
     /// Lower a function call.
@@ -1072,422 +1333,304 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         args: &[ExprId],
         dest: Place,
         body: &ExprBody,
-        inference: &InferenceResult<'db>,
+        _result_ty: &baml_vir::Ty,
     ) {
-        use baml_hir::Expr;
+        let callee_expr = body.expr(callee);
 
-        // Check if this is a method call (callee is FieldAccess)
-        let callee_expr = &body.exprs[callee];
+        // Check if this is a $watch method call (e.g., value.$watch.options(filter))
         if let Expr::FieldAccess { base, field } = callee_expr {
-            // Check if this is a builtin method call
-            if let Some(receiver_ty) = inference.expr_types.get(base) {
-                if let Some((def, _)) =
-                    baml_thir::builtins::lookup_method(receiver_ty, field.as_str())
+            let base_ty = body.ty(*base);
+            if let baml_vir::Ty::WatchAccessor(_) = base_ty {
+                // This is a $watch method call
+                // The base expression is var.$watch, so we need to get the var
+                let watch_accessor_expr = body.expr(*base);
+                if let Expr::FieldAccess {
+                    base: watched_var_base,
+                    field: watch_field,
+                } = watch_accessor_expr
                 {
-                    // Found a builtin method - emit as function call with receiver as first arg
-                    // Lower receiver
-                    let receiver_local = self.builder.temp(receiver_ty.clone());
-                    self.lower_expr_to_place(*base, Place::local(receiver_local), body, inference);
+                    if watch_field.as_str() == "$watch" {
+                        match field.as_str() {
+                            "options" => {
+                                // $watch.options(filter) - emit WatchOptions statement
+                                // First, find the local variable for the watched variable
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
 
-                    // Lower explicit arguments
-                    let mut all_args = vec![Operand::copy_local(receiver_local)];
-                    for &arg in args {
-                        let arg_ty = inference
-                            .expr_types
-                            .get(&arg)
-                            .cloned()
-                            .unwrap_or(Ty::Unknown);
-                        let arg_local = self.builder.temp(arg_ty);
-                        self.lower_expr_to_place(arg, Place::local(arg_local), body, inference);
-                        all_args.push(Operand::copy_local(arg_local));
+                                    // Evaluate the filter argument
+                                    if !args.is_empty() {
+                                        let filter_arg = args[0];
+                                        // We need to extract the 'when' field if it's a struct
+                                        // For now, let's check if it's an Object with 'when' field
+                                        let filter_expr = body.expr(filter_arg);
+                                        if let Expr::Object { fields, .. } = filter_expr {
+                                            // Look for 'when' field
+                                            for (field_name, field_expr_id) in fields {
+                                                if field_name.as_str() == "when" {
+                                                    // Lower the filter expression
+                                                    let filter_ty = Self::lower_typed_ir_ty(
+                                                        body.ty(*field_expr_id),
+                                                    );
+                                                    let filter_local = self.builder.temp(filter_ty);
+                                                    self.lower_expr(
+                                                        *field_expr_id,
+                                                        Place::local(filter_local),
+                                                        body,
+                                                    );
+
+                                                    // Emit WatchOptions statement
+                                                    self.builder.watch_options(
+                                                        local,
+                                                        Operand::copy_local(filter_local),
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            // Direct filter value (function or string)
+                                            let filter_ty =
+                                                Self::lower_typed_ir_ty(body.ty(filter_arg));
+                                            let filter_local = self.builder.temp(filter_ty);
+                                            self.lower_expr(
+                                                filter_arg,
+                                                Place::local(filter_local),
+                                                body,
+                                            );
+
+                                            // Emit WatchOptions statement
+                                            self.builder.watch_options(
+                                                local,
+                                                Operand::copy_local(filter_local),
+                                            );
+                                        }
+                                    }
+                                    // Assign null to dest (options returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            "notify" => {
+                                // $watch.notify() - emit WatchNotify statement
+                                if let Expr::Var(var_name) = body.expr(*watched_var_base) {
+                                    let local =
+                                        *self.locals.get(var_name).expect("variable not found");
+                                    self.builder.watch_notify(local);
+                                    // Assign null to dest (notify returns void)
+                                    self.builder.assign(
+                                        dest,
+                                        Rvalue::Use(Operand::Constant(Constant::Null)),
+                                    );
+                                    return;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
-
-                    // Create continuation block
-                    let continue_block = self.builder.create_block();
-
-                    // Emit call with function name as constant
-                    self.builder.call(
-                        Operand::Constant(Constant::Function(Name::new(def.path))),
-                        all_args,
-                        dest,
-                        continue_block,
-                        None,
-                    );
-
-                    self.builder.set_current_block(continue_block);
-                    return;
                 }
             }
         }
 
-        // Regular function call
-        // Lower callee
-        let callee_ty = inference
-            .expr_types
-            .get(&callee)
-            .cloned()
-            .unwrap_or(Ty::Unknown);
-        let callee_local = self.builder.temp(callee_ty);
-        self.lower_expr_to_place(callee, Place::local(callee_local), body, inference);
+        // Check if this is a method call (callee is FieldAccess)
+        if let Expr::FieldAccess { base, field } = callee_expr {
+            let base_ty = body.ty(*base);
+            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-        // Lower arguments
+            if let Some((def, _)) = baml_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
+            {
+                // Found a builtin method
+                let receiver_local = self.builder.temp(thir_base_ty);
+                self.lower_expr(*base, Place::local(receiver_local), body);
+
+                let mut all_args = vec![Operand::copy_local(receiver_local)];
+                for &arg in args {
+                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
+                    let arg_local = self.builder.temp(arg_ty);
+                    self.lower_expr(arg, Place::local(arg_local), body);
+                    all_args.push(Operand::copy_local(arg_local));
+                }
+
+                let continue_block = self.builder.create_block();
+
+                self.builder.call(
+                    Operand::Constant(Constant::Function(Name::new(def.path))),
+                    all_args,
+                    dest,
+                    continue_block,
+                    None,
+                );
+
+                self.builder.set_current_block(continue_block);
+                return;
+            }
+        }
+
+        // Check if this is a user-defined method call (callee is FieldAccess on class type)
+        // For method calls like `obj.method()`, we need to pass `obj` as the first argument (self)
+        if let Expr::FieldAccess { base, field: _ } = callee_expr {
+            let base_ty = body.ty(*base);
+            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
+
+            // Check if base is a class type (has a class name)
+            if self.class_name_from_ty(&thir_base_ty).is_some() {
+                // This is a method call - pass receiver as first argument
+                let receiver_local = self.builder.temp(thir_base_ty);
+                self.lower_expr(*base, Place::local(receiver_local), body);
+
+                let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
+                let callee_local = self.builder.temp(callee_ty);
+                self.lower_expr(callee, Place::local(callee_local), body);
+
+                let mut all_args = vec![Operand::copy_local(receiver_local)];
+                for &arg in args {
+                    let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
+                    let arg_local = self.builder.temp(arg_ty);
+                    self.lower_expr(arg, Place::local(arg_local), body);
+                    all_args.push(Operand::copy_local(arg_local));
+                }
+
+                let continue_block = self.builder.create_block();
+
+                self.builder.call(
+                    Operand::copy_local(callee_local),
+                    all_args,
+                    dest,
+                    continue_block,
+                    None,
+                );
+
+                self.builder.set_current_block(continue_block);
+                return;
+            }
+        }
+
+        // Regular function call (not a method)
+        let callee_ty = Self::lower_typed_ir_ty(body.ty(callee));
+        let callee_local = self.builder.temp(callee_ty);
+        self.lower_expr(callee, Place::local(callee_local), body);
+
         let arg_operands: Vec<Operand<'db>> = args
             .iter()
             .map(|&arg| {
-                let arg_ty = inference
-                    .expr_types
-                    .get(&arg)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
+                let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
                 let arg_local = self.builder.temp(arg_ty);
-                self.lower_expr_to_place(arg, Place::local(arg_local), body, inference);
+                self.lower_expr(arg, Place::local(arg_local), body);
                 Operand::copy_local(arg_local)
             })
             .collect();
 
-        // Create continuation block
         let continue_block = self.builder.create_block();
 
-        // Emit call
         self.builder.call(
             Operand::copy_local(callee_local),
             arg_operands,
             dest,
             continue_block,
-            None, // No unwind for now
+            None,
         );
 
-        // Continue from after call
         self.builder.set_current_block(continue_block);
     }
 
-    /// Lower a statement.
-    fn lower_stmt(&mut self, stmt_id: StmtId, body: &ExprBody, inference: &InferenceResult<'db>) {
-        use baml_hir::Stmt;
-
-        let stmt = &body.stmts[stmt_id];
-
-        match stmt {
-            Stmt::Let {
-                pattern,
-                initializer,
-                ..
-            } => {
-                // Get the variable name from the pattern
-                let pat = &body.patterns[*pattern];
-                let name = match pat {
-                    Pattern::Binding(n) => n.clone(),
-                    Pattern::TypedBinding { name: n, .. } => n.clone(),
-                    _ => Name::new("_tmp"),
-                };
-
-                // Get the type from the initializer if available
-                let ty = initializer
-                    .and_then(|init| inference.expr_types.get(&init))
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-
-                // Create local
-                let local = self.builder.declare_local(Some(name.clone()), ty, None);
-                self.locals.insert(name, local);
-
-                // Lower initializer if present
-                if let Some(init) = initializer {
-                    self.lower_expr_to_place(*init, Place::local(local), body, inference);
-                }
-            }
-
-            Stmt::Expr(expr) => {
-                // Expression statement - evaluate for side effects
-                let result_ty = inference
-                    .expr_types
-                    .get(expr)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-
-                if result_ty.is_void() {
-                    // Void expression (e.g., if-else without tail exprs) - no destination needed
-                    self.lower_expr_for_effect(*expr, body, inference);
-                } else {
-                    // Non-void expression - need a temp to store result (even if unused)
-                    let temp = self.builder.temp(result_ty);
-                    self.lower_expr_to_place(*expr, Place::local(temp), body, inference);
-                }
-            }
-
-            Stmt::Return(expr) => {
-                if let Some(e) = expr {
-                    self.lower_expr_to_place(*e, Place::local(Local(0)), body, inference);
-                }
-                // Jump to a new exit block
-                let exit = self.builder.create_block();
-                self.builder.goto(exit);
-                self.builder.set_current_block(exit);
-                self.builder.return_();
-            }
-
-            Stmt::While {
-                condition,
-                body: loop_body,
-                after,
-                ..
-            } => {
-                self.lower_while(*condition, *loop_body, *after, body, inference);
-            }
-
-            Stmt::Break => {
-                if let Some(ctx) = &self.loop_context {
-                    let target = ctx.break_target;
-                    self.builder.goto(target);
-                }
-                // If no loop context, this is an error - but we've already type-checked
-            }
-
-            Stmt::Continue => {
-                if let Some(ctx) = &self.loop_context {
-                    let target = ctx.continue_target;
-                    self.builder.goto(target);
-                }
-            }
-
-            Stmt::Assign { target, value } => {
-                // Lower value to a temp, then assign to target
-                // Target could be a variable or field access
-                let value_ty = inference
-                    .expr_types
-                    .get(value)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let value_local = self.builder.temp(value_ty);
-                self.lower_expr_to_place(*value, Place::local(value_local), body, inference);
-
-                let target_place = self.lower_assignable_expr(*target, body, inference);
-                self.builder
-                    .assign(target_place, Rvalue::Use(Operand::copy_local(value_local)));
-            }
-
-            Stmt::AssignOp { target, op, value } => {
-                // `a += b` becomes `a = a + b`
-                let target_place = self.lower_assignable_expr(*target, body, inference);
-
-                // Load current value
-                let current_ty = inference
-                    .expr_types
-                    .get(target)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let current_local = self.builder.temp(current_ty);
-                self.builder.assign(
-                    Place::local(current_local),
-                    Rvalue::Use(Operand::Copy(target_place.clone())),
-                );
-
-                // Load rhs
-                let rhs_ty = inference
-                    .expr_types
-                    .get(value)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let rhs_local = self.builder.temp(rhs_ty);
-                self.lower_expr_to_place(*value, Place::local(rhs_local), body, inference);
-
-                // Compute new value
-                let mir_op = Self::convert_assign_op(*op);
-                let result_ty = inference
-                    .expr_types
-                    .get(target)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
-                let result_local = self.builder.temp(result_ty);
-                self.builder.assign(
-                    Place::local(result_local),
-                    Rvalue::BinaryOp {
-                        op: mir_op,
-                        left: Operand::copy_local(current_local),
-                        right: Operand::copy_local(rhs_local),
-                    },
-                );
-
-                // Store back
-                self.builder
-                    .assign(target_place, Rvalue::Use(Operand::copy_local(result_local)));
-            }
-
-            Stmt::Missing => {}
-        }
-    }
-
-    fn convert_assign_op(op: baml_hir::AssignOp) -> BinOp {
-        match op {
-            baml_hir::AssignOp::Add => BinOp::Add,
-            baml_hir::AssignOp::Sub => BinOp::Sub,
-            baml_hir::AssignOp::Mul => BinOp::Mul,
-            baml_hir::AssignOp::Div => BinOp::Div,
-            baml_hir::AssignOp::Mod => BinOp::Mod,
-            baml_hir::AssignOp::BitAnd => BinOp::BitAnd,
-            baml_hir::AssignOp::BitOr => BinOp::BitOr,
-            baml_hir::AssignOp::BitXor => BinOp::BitXor,
-            baml_hir::AssignOp::Shl => BinOp::Shl,
-            baml_hir::AssignOp::Shr => BinOp::Shr,
-        }
-    }
-
     /// Lower an expression that can be assigned to (lvalue).
-    fn lower_assignable_expr(
-        &mut self,
-        expr_id: ExprId,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) -> Place {
-        use baml_hir::Expr;
-
-        let expr = &body.exprs[expr_id];
+    fn lower_lvalue(&mut self, expr_id: ExprId, body: &ExprBody) -> Place {
+        let expr = body.expr(expr_id);
 
         match expr {
+            Expr::Var(name) => {
+                if let Some(&local) = self.locals.get(name) {
+                    Place::local(local)
+                } else {
+                    panic!("BUG: Variable `{name}` not found in lvalue context");
+                }
+            }
+
             Expr::Path(segments) if segments.len() == 1 => {
                 let name = &segments[0];
                 if let Some(&local) = self.locals.get(name) {
                     Place::local(local)
                 } else {
-                    // Unknown variable - create a temp (will error at runtime)
-                    Place::local(self.builder.temp(Ty::Unknown))
+                    panic!("BUG: Variable `{name}` not found in lvalue context");
                 }
             }
+
             Expr::Path(segments) => {
-                // Field access chain
-                let first = &segments[0];
-                if let Some(&base_local) = self.locals.get(first) {
-                    let segment_types = inference.path_segment_types.get(&expr_id);
-                    let mut place = Place::local(base_local);
-                    for (i, field) in segments[1..].iter().enumerate() {
-                        let field_idx = if let Some(types) = segment_types {
-                            self.field_index_for_type_and_name(&types[i], field)
-                        } else {
-                            i
-                        };
-                        place = Place::field(place, field_idx);
-                    }
-                    place
-                } else {
-                    Place::local(self.builder.temp(Ty::Unknown))
-                }
+                // Multi-segment paths should have been converted to FieldAccess.
+                panic!(
+                    "BUG: Multi-segment path {segments:?} should have been converted to FieldAccess"
+                );
             }
+
             Expr::FieldAccess { base, field } => {
-                let base_place = self.lower_assignable_expr(*base, body, inference);
-                let base_ty = inference
-                    .expr_types
-                    .get(base)
-                    .cloned()
-                    .unwrap_or(Ty::Unknown);
+                let base_place = self.lower_lvalue(*base, body);
+                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
                 let field_idx = self.field_index_for_type_and_name(&base_ty, field);
                 Place::field(base_place, field_idx)
             }
+
             Expr::Index { base, index } => {
-                let base_place = self.lower_assignable_expr(*base, body, inference);
+                let base_place = self.lower_lvalue(*base, body);
+                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
                 let index_local = self.builder.temp(Ty::Int);
-                self.lower_expr_to_place(*index, Place::local(index_local), body, inference);
-                Place::index(base_place, index_local)
+                self.lower_expr(*index, Place::local(index_local), body);
+
+                // Determine index kind based on base type
+                let index_kind = if matches!(base_ty, Ty::Map { .. }) {
+                    crate::IndexKind::Map
+                } else {
+                    crate::IndexKind::Array
+                };
+
+                Place::index(base_place, index_local, index_kind)
             }
+
+            Expr::Call { callee, args } => {
+                // For method calls used as lvalue bases (e.g., `obj.get_field().value = x`),
+                // evaluate the call and store the result in a temp, then use that as base.
+                // This works because objects have reference semantics in the VM.
+                let call_ty = body.ty(expr_id);
+                let mir_ty = Self::lower_typed_ir_ty(call_ty);
+                let temp = self.builder.temp(mir_ty);
+                self.lower_call(*callee, args, Place::local(temp), body, call_ty);
+                Place::local(temp)
+            }
+
             _ => {
-                // Not assignable - return a dummy
-                Place::local(self.builder.temp(Ty::Unknown))
+                panic!(
+                    "BUG: Expression {:?} is not a valid lvalue",
+                    std::mem::discriminant(expr)
+                );
             }
         }
-    }
-
-    /// Lower a while loop.
-    ///
-    /// ```text
-    /// bb_cond:
-    ///     _cond = <condition>
-    ///     branch _cond -> bb_body, bb_exit
-    ///
-    /// bb_body:
-    ///     <body>
-    ///     goto -> bb_after (or bb_cond if no after)
-    ///
-    /// bb_after: (only if after statement exists)
-    ///     <after>
-    ///     goto -> bb_cond
-    ///
-    /// bb_exit:
-    ///     // continue
-    /// ```
-    fn lower_while(
-        &mut self,
-        condition: ExprId,
-        loop_body: ExprId,
-        after: Option<StmtId>,
-        body: &ExprBody,
-        inference: &InferenceResult<'db>,
-    ) {
-        let bb_cond = self.builder.create_block();
-        let bb_body = self.builder.create_block();
-        let bb_after = if after.is_some() {
-            Some(self.builder.create_block())
-        } else {
-            None
-        };
-        let bb_exit = self.builder.create_block();
-
-        // Jump to condition check
-        self.builder.goto(bb_cond);
-
-        // Condition block
-        self.builder.set_current_block(bb_cond);
-        let cond_local = self.builder.temp(Ty::Bool);
-        self.lower_expr_to_place(condition, Place::local(cond_local), body, inference);
-        self.builder
-            .branch(Operand::copy_local(cond_local), bb_body, bb_exit);
-
-        // Set up loop context for break/continue
-        let continue_target = bb_after.unwrap_or(bb_cond);
-        let old_loop_ctx = self.loop_context.replace(LoopContext {
-            break_target: bb_exit,
-            continue_target,
-        });
-
-        // Body block
-        self.builder.set_current_block(bb_body);
-        let body_result = self.builder.temp(Ty::Void);
-        self.lower_expr_to_place(loop_body, Place::local(body_result), body, inference);
-        if !self.builder.is_current_terminated() {
-            self.builder.goto(continue_target);
-        }
-
-        // After block (for C-style for loop update)
-        if let Some(bb_after) = bb_after {
-            self.builder.set_current_block(bb_after);
-            if let Some(after_stmt) = after {
-                self.lower_stmt(after_stmt, body, inference);
-            }
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(bb_cond);
-            }
-        }
-
-        // Restore loop context
-        self.loop_context = old_loop_ctx;
-
-        // Continue from exit
-        self.builder.set_current_block(bb_exit);
     }
 
     /// Get field index for a type and field name.
     fn field_index_for_type_and_name(&self, ty: &Ty<'db>, field: &Name) -> usize {
-        // Extract class name from type and look up field index
         let class_name = self.class_name_from_ty(ty);
 
-        if let Some(class_name) = class_name {
-            if let Some(fields) = self.class_fields.get(&class_name) {
+        if let Some(ref class_name) = class_name {
+            if let Some(fields) = self.class_fields.get(class_name) {
                 if let Some(&idx) = fields.get(&field.to_string()) {
                     return idx;
                 }
+                panic!(
+                    "BUG: Field `{}` not found in class `{}`. Available fields: {:?}",
+                    field,
+                    class_name,
+                    fields.keys().collect::<Vec<_>>()
+                );
             }
+            panic!(
+                "BUG: Class `{}` not found in class_fields map. Available classes: {:?}",
+                class_name,
+                self.class_fields.keys().collect::<Vec<_>>()
+            );
         }
 
-        // Default to 0 if we can't resolve (error case)
-        0
+        panic!("BUG: Cannot extract class name from type {ty:?} for field access `{field}`");
     }
 
     /// Extract class name from a Ty.
@@ -1495,13 +1638,48 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         match ty {
             Ty::Named(name) => Some(name.to_string()),
             Ty::Class(class_id) => {
-                // Look up the class name from the database
                 let file = class_id.file(self.db);
                 let item_tree = baml_hir::file_item_tree(self.db, file);
                 let class_data = &item_tree[class_id.id(self.db)];
                 Some(class_data.name.to_string())
             }
             _ => None,
+        }
+    }
+
+    /// Convert a VIR type to a TIR type for MIR locals.
+    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty<'db> {
+        match ty {
+            baml_vir::Ty::Int => Ty::Int,
+            baml_vir::Ty::Float => Ty::Float,
+            baml_vir::Ty::String => Ty::String,
+            baml_vir::Ty::Bool => Ty::Bool,
+            baml_vir::Ty::Null => Ty::Null,
+            baml_vir::Ty::Image => Ty::Image,
+            baml_vir::Ty::Audio => Ty::Audio,
+            baml_vir::Ty::Video => Ty::Video,
+            baml_vir::Ty::Pdf => Ty::Pdf,
+            baml_vir::Ty::Class(name) | baml_vir::Ty::Enum(name) => Ty::Named(name.clone()),
+            baml_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_vir::Ty::Map { key, value } => Ty::Map {
+                key: Box::new(Self::lower_typed_ir_ty(key)),
+                value: Box::new(Self::lower_typed_ir_ty(value)),
+            },
+            baml_vir::Ty::Union(types) => {
+                Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
+            }
+            baml_vir::Ty::Function { params, ret } => Ty::Function {
+                params: params.iter().map(Self::lower_typed_ir_ty).collect(),
+                ret: Box::new(Self::lower_typed_ir_ty(ret)),
+            },
+            baml_vir::Ty::Unknown => Ty::Unknown,
+            baml_vir::Ty::Error => Ty::Error,
+            baml_vir::Ty::Unit => Ty::Void,
+            baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_vir::Ty::WatchAccessor(inner) => {
+                Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
+            }
         }
     }
 }

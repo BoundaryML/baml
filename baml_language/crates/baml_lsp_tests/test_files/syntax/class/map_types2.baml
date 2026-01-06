@@ -59,12 +59,12 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 
 //----
 //- diagnostics
-// Error: Expected type, found Greater
+// Error: Expected type, found '>'
 //     ╭─[ 0:26:10 ]
 //     │
 //  26 │   d1 map<>
 //     │          ┬  
-//     │          ╰── Expected type, found Greater
+//     │          ╰── Expected type, found '>'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯

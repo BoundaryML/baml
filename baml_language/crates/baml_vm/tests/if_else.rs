@@ -3,7 +3,6 @@
 use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
 
 #[test]
-#[ignore = "if/else codegen issue"]
 fn exec_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -22,7 +21,6 @@ fn exec_if_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "if/else codegen issue"]
 fn exec_else_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "
@@ -41,7 +39,6 @@ fn exec_else_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "if/else codegen issue"]
 fn exec_else_if_branch() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: "

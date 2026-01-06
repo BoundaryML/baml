@@ -1,5 +1,5 @@
-import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio, Pdf, Video } from "@boundaryml/baml"
-import { toBamlError, HTTPRequest } from "@boundaryml/baml"
+import type { BamlRuntime, BamlCtxManager, Image, Audio, Pdf, Video } from "@boundaryml/baml"
+import { toBamlError, HTTPRequest, ClientRegistry } from "@boundaryml/baml"
 import type { Checked, Check } from "./types"
 import type * as types from "./types"
 import type {
@@ -11,6 +11,7 @@ import type * as events from "./events"
 type BamlCallOptions<EventsT = never> = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
+  client?: string
   env?: Record<string, string | undefined>
   events?: EventsT
 }
@@ -30,6 +31,14 @@ export class HttpRequest {
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
       return this.runtime.buildRequestSync(
         "{{func.name}}",
         {
@@ -39,7 +48,7 @@ export class HttpRequest {
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        __clientRegistry__,
         false,
         __env__,
       )
@@ -65,6 +74,14 @@ export class HttpStreamRequest {
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
       return this.runtime.buildRequestSync(
         "{{func.name}}",
         {
@@ -74,7 +91,7 @@ export class HttpStreamRequest {
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        __clientRegistry__,
         true,
         __env__,
       )

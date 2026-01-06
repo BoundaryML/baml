@@ -95,7 +95,7 @@ impl IncrementalTestDb {
     ///     |db| { baml_hir::file_items(db, file); },
     ///     &[
     ///         ("lex_file", 1),        // Should execute once
-    ///         ("file_item_tree", 0),  // Should NOT execute (cached)
+    ///         ("file_lowering", 0),  // Should NOT execute (cached)
     ///     ],
     /// );
     /// ```
@@ -219,7 +219,7 @@ class Bar {
             |db| {
                 let _ = baml_hir::file_items(db, file);
             },
-            &[("lex_file", 1), ("parse_result", 1), ("file_item_tree", 1)],
+            &[("lex_file", 1), ("parse_result", 1), ("file_lowering", 1)],
         );
 
         // Second execution without any changes - everything should be cached
@@ -227,7 +227,7 @@ class Bar {
             |db| {
                 let _ = baml_hir::file_items(db, file);
             },
-            &[("lex_file", 0), ("parse_result", 0), ("file_item_tree", 0)],
+            &[("lex_file", 0), ("parse_result", 0), ("file_lowering", 0)],
         );
     }
 
@@ -263,9 +263,9 @@ class Modified {
                 let _ = baml_hir::file_items(db, file);
             },
             &[
-                ("lex_file", 1),       // Must re-lex
-                ("parse_result", 1),   // Must re-parse
-                ("file_item_tree", 1), // Must rebuild item tree (class name changed)
+                ("lex_file", 1),      // Must re-lex
+                ("parse_result", 1),  // Must re-parse
+                ("file_lowering", 1), // Must rebuild item tree (class name changed)
             ],
         );
     }

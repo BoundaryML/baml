@@ -378,11 +378,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('baml.openBamlPanel')
   }
 
-  setInterval(() => {
-    console.log('requesting baml cli version')
-    publishBamlVersionReport()
-  }, 30_000)
-
   // TODO: Reactivate linter.
   // runDiagnostics()
 }

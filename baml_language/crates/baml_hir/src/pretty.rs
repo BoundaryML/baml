@@ -129,17 +129,56 @@ impl<'a> CodePrinter<'a> {
                 }
                 self.output.push(']');
             }
-            Expr::Object { type_name, fields } => {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => {
                 if let Some(name) = type_name {
                     self.output.push_str(name.as_ref());
                     self.output.push(' ');
                 }
                 self.output.push_str("{ ");
-                for (i, (name, value)) in fields.iter().enumerate() {
+
+                // Build a combined list of elements with their positions
+                // for proper ordering in output
+                let mut elements: Vec<(usize, bool, usize)> = Vec::new();
+                for (i, _) in fields.iter().enumerate() {
+                    // We don't have position info for fields in the current struct,
+                    // so we'll output fields first, then spreads
+                    elements.push((i, false, i));
+                }
+                for (i, spread) in spreads.iter().enumerate() {
+                    elements.push((spread.position, true, i));
+                }
+                elements.sort_by_key(|(pos, _, _)| *pos);
+
+                let mut first = true;
+                for (_, is_spread, idx) in elements {
+                    if !first {
+                        self.output.push_str(", ");
+                    }
+                    first = false;
+
+                    if is_spread {
+                        self.output.push_str("...");
+                        self.print_expr(spreads[idx].expr);
+                    } else {
+                        let (name, value) = &fields[idx];
+                        self.output.push_str(name.as_ref());
+                        self.output.push_str(": ");
+                        self.print_expr(*value);
+                    }
+                }
+                self.output.push_str(" }");
+            }
+            Expr::Map { entries } => {
+                self.output.push_str("{ ");
+                for (i, (key, value)) in entries.iter().enumerate() {
                     if i > 0 {
                         self.output.push_str(", ");
                     }
-                    self.output.push_str(name.as_ref());
+                    self.print_expr(*key);
                     self.output.push_str(": ");
                     self.print_expr(*value);
                 }
@@ -194,9 +233,14 @@ impl<'a> CodePrinter<'a> {
                 pattern,
                 type_annotation,
                 initializer,
+                is_watched,
                 ..
             } => {
-                self.output.push_str("let ");
+                if *is_watched {
+                    self.output.push_str("watch let ");
+                } else {
+                    self.output.push_str("let ");
+                }
                 self.print_pattern(*pattern);
                 if let Some(ty) = type_annotation {
                     write!(self.output, ": {}", type_ref_to_str(ty)).unwrap();
@@ -249,8 +293,21 @@ impl<'a> CodePrinter<'a> {
                 self.print_expr(*value);
                 self.output.push(';');
             }
+            Stmt::Assert { condition } => {
+                self.output.push_str("assert ");
+                self.print_expr(*condition);
+                self.output.push(';');
+            }
             Stmt::Missing => {
                 self.output.push_str("<missing>;");
+            }
+            Stmt::HeaderComment { name, level } => {
+                self.output.push_str("//");
+                for _ in 0..*level {
+                    self.output.push('#');
+                }
+                self.output.push(' ');
+                self.output.push_str(name.as_ref());
             }
         }
     }
@@ -354,6 +411,7 @@ fn binary_op_str(op: BinaryOp) -> &'static str {
         BinaryOp::BitXor => "^",
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
+        BinaryOp::Instanceof => "instanceof",
     }
 }
 

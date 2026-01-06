@@ -333,7 +333,8 @@ dependencies = [
  "baml_hir",
  "baml_mir",
  "baml_tests",
- "baml_thir",
+ "baml_tir",
+ "baml_vir",
  "baml_vm",
  "baml_workspace",
  "insta",
@@ -353,7 +354,8 @@ dependencies = [
  "baml_mir",
  "baml_parser",
  "baml_syntax",
- "baml_thir",
+ "baml_tir",
+ "baml_vir",
  "baml_workspace",
  "rowan",
  "salsa",
@@ -451,7 +453,7 @@ dependencies = [
  "baml_db",
  "baml_diagnostics",
  "baml_hir",
- "baml_thir",
+ "baml_tir",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -479,7 +481,8 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_hir",
- "baml_thir",
+ "baml_tir",
+ "baml_vir",
  "baml_workspace",
  "la-arena",
  "rustc-hash 2.1.1",
@@ -503,7 +506,8 @@ dependencies = [
  "baml_lexer",
  "baml_mir",
  "baml_parser",
- "baml_thir",
+ "baml_tir",
+ "baml_vir",
  "baml_vm",
  "baml_workspace",
  "clap",
@@ -549,8 +553,9 @@ dependencies = [
  "baml_diagnostics",
  "baml_hir",
  "baml_mir",
- "baml_thir",
+ "baml_tir",
  "baml_vm",
+ "baml_workspace",
  "codspeed-divan-compat",
  "indexmap 2.12.0",
  "insta",
@@ -563,7 +568,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_thir"
+name = "baml_tir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
@@ -571,6 +576,23 @@ dependencies = [
  "baml_hir",
  "baml_vm",
  "baml_workspace",
+ "salsa",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
+name = "baml_vir"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_diagnostics",
+ "baml_hir",
+ "baml_tir",
+ "insta",
+ "la-arena",
+ "pretty_assertions",
+ "rustc-hash 2.1.1",
  "salsa",
  "smol_str",
  "text-size",
@@ -1201,6 +1223,12 @@ name = "data-encoding"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
+
+[[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
 name = "digest"
@@ -2844,6 +2872,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
 ]
 
 [[package]]

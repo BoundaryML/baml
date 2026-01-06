@@ -38,7 +38,6 @@ fn mutable_var_in_function() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "variable reassignment not yet implemented"]
 fn mutable_param() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -59,7 +58,6 @@ fn mutable_param() -> anyhow::Result<()> {
 
 // Field assignment operations
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_add_assign() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -78,7 +76,6 @@ fn field_assignment_add_assign() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_sub_assign() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -97,7 +94,6 @@ fn field_assignment_sub_assign() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_mul_assign() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -116,7 +112,6 @@ fn field_assignment_mul_assign() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_div_assign() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -135,7 +130,6 @@ fn field_assignment_div_assign() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_mod_assign() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -154,7 +148,6 @@ fn field_assignment_mod_assign() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -174,7 +167,6 @@ fn field_assignment_simple() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_multiple_ops() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -197,7 +189,6 @@ fn field_assignment_multiple_ops() -> anyhow::Result<()> {
 
 // Nested field assignments
 #[test]
-#[ignore = "nested field assignment not yet implemented"]
 fn nested_field_assignment_simple() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -220,7 +211,6 @@ fn nested_field_assignment_simple() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "nested field assignment not yet implemented"]
 fn nested_field_assignment_compound() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -243,7 +233,6 @@ fn nested_field_assignment_compound() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "field assignment not yet implemented"]
 fn field_assignment_object_field() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -266,7 +255,6 @@ fn field_assignment_object_field() -> anyhow::Result<()> {
 
 // Array element field assignments
 #[test]
-#[ignore = "array element field assignment not yet implemented"]
 fn array_element_field_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -292,7 +280,6 @@ fn array_element_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn array_element_method_field_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -336,7 +323,6 @@ fn array_element_method_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_then_array_access_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -365,7 +351,6 @@ fn method_call_then_array_access_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_field_assignment() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -397,7 +382,6 @@ fn method_call_field_assignment() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "method call field assignment not yet implemented"]
 fn method_call_field_assignment_with_copy() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"

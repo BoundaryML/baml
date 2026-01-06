@@ -8,39 +8,39 @@ template_string WithParams(a: int) #"
 
 //----
 //- diagnostics
-// Error: Expected LParen, found Hash
+// Error: Expected '(', found '#'
 //    ╭─[ 0:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
-//    │                            ╰── Expected LParen, found Hash
+//    │                            ╰── Expected '(', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected parameter name, found Hash
+// Error: Expected parameter name, found '#'
 //    ╭─[ 0:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
-//    │                            ╰── Expected parameter name, found Hash
+//    │                            ╰── Expected parameter name, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected type annotation, found Hash
+// Error: Expected type annotation, found '#'
 //    ╭─[ 0:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
-//    │                            ╰── Expected type annotation, found Hash
+//    │                            ╰── Expected type annotation, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected RParen, found Hash
+// Error: Expected ')', found '#'
 //    ╭─[ 0:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
-//    │                            ╰── Expected RParen, found Hash
+//    │                            ╰── Expected ')', found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

@@ -68,6 +68,15 @@ client<llm> GPT4 {
 
 //----
 //- diagnostics
+// Error: Cannot apply operator '!' to type string?
+//    ╭─[ 0:6:30 ]
+//    │
+//  6 │     let computed_title = if (!title) {
+//    │                              ───┬──  
+//    │                                 ╰──── Cannot apply operator '!' to type string?
+//    │ 
+//    │ Note: Error code: E0004
+// ───╯
 // Error: Cannot apply operator 'Add' to types string | string? and string
 //     ╭─[ 0:17:5 ]
 //     │

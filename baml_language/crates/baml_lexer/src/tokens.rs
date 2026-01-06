@@ -77,6 +77,8 @@ pub enum TokenKind {
     Return,
     #[token("match")]
     Match,
+    #[token("assert")]
+    Assert,
 
     // Other keywords
     #[token("watch")]
@@ -90,6 +92,8 @@ pub enum TokenKind {
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
+    /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
     Word,
 
@@ -138,6 +142,8 @@ pub enum TokenKind {
     Comma,
     #[token(";")]
     Semicolon,
+    #[token("...")]
+    DotDotDot,
     #[token(".")]
     Dot,
     #[token("$")]
@@ -240,6 +246,122 @@ pub enum TokenKind {
 
     // ============ Error token for unrecognized input ============
     Error,
+}
+
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            // Keywords
+            TokenKind::Class => "class",
+            TokenKind::Enum => "enum",
+            TokenKind::Function => "function",
+            TokenKind::Client => "client",
+            TokenKind::Generator => "generator",
+            TokenKind::Test => "test",
+            TokenKind::RetryPolicy => "retry_policy",
+            TokenKind::TemplateString => "template_string",
+            TokenKind::TypeBuilder => "type_builder",
+            TokenKind::If => "if",
+            TokenKind::Else => "else",
+            TokenKind::For => "for",
+            TokenKind::While => "while",
+            TokenKind::Let => "let",
+            TokenKind::In => "in",
+            TokenKind::Break => "break",
+            TokenKind::Continue => "continue",
+            TokenKind::Return => "return",
+            TokenKind::Match => "match",
+            TokenKind::Assert => "assert",
+            TokenKind::Watch => "watch",
+            TokenKind::Instanceof => "instanceof",
+            TokenKind::Env => "env",
+            TokenKind::Dynamic => "dynamic",
+
+            // Identifiers and literals
+            TokenKind::Word => "identifier",
+            TokenKind::Quote => "'\"'",
+            TokenKind::Hash => "'#'",
+            TokenKind::IntegerLiteral => "integer",
+            TokenKind::FloatLiteral => "float",
+
+            // Brackets
+            TokenKind::LBrace => "'{'",
+            TokenKind::RBrace => "'}'",
+            TokenKind::LParen => "'('",
+            TokenKind::RParen => "')'",
+            TokenKind::LBracket => "'['",
+            TokenKind::RBracket => "']'",
+
+            // Punctuation
+            TokenKind::DoubleColon => "'::'",
+            TokenKind::Colon => "':'",
+            TokenKind::Comma => "','",
+            TokenKind::Semicolon => "';'",
+            TokenKind::Dot => "'.'",
+            TokenKind::Dollar => "'$'",
+
+            // Operators
+            TokenKind::Arrow => "'->'",
+            TokenKind::FatArrow => "'=>'",
+            TokenKind::AtAt => "'@@'",
+            TokenKind::At => "'@'",
+            TokenKind::Pipe => "'|'",
+            TokenKind::Question => "'?'",
+
+            // Assignment operators
+            TokenKind::LessLessEquals => "'<<='",
+            TokenKind::GreaterGreaterEquals => "'>>='",
+            TokenKind::PlusEquals => "'+='",
+            TokenKind::MinusEquals => "'-='",
+            TokenKind::StarEquals => "'*='",
+            TokenKind::SlashEquals => "'/='",
+            TokenKind::PercentEquals => "'%='",
+            TokenKind::AndEquals => "'&='",
+            TokenKind::PipeEquals => "'|='",
+            TokenKind::CaretEquals => "'^='",
+            TokenKind::Equals => "'='",
+
+            // Comparison operators
+            TokenKind::EqualsEquals => "'=='",
+            TokenKind::NotEquals => "'!='",
+            TokenKind::LessEquals => "'<='",
+            TokenKind::GreaterEquals => "'>='",
+            TokenKind::LessLess => "'<<'",
+            TokenKind::GreaterGreater => "'>>'",
+            TokenKind::Less => "'<'",
+            TokenKind::Greater => "'>'",
+
+            // Logical operators
+            TokenKind::AndAnd => "'&&'",
+            TokenKind::OrOr => "'||'",
+            TokenKind::Not => "'!'",
+
+            // Bitwise operators
+            TokenKind::And => "'&'",
+            TokenKind::Caret => "'^'",
+            TokenKind::Tilde => "'~'",
+
+            // Arithmetic operators
+            TokenKind::PlusPlus => "'++'",
+            TokenKind::MinusMinus => "'--'",
+            TokenKind::Plus => "'+'",
+            TokenKind::Minus => "'-'",
+            TokenKind::Star => "'*'",
+            TokenKind::Slash => "'/'",
+            TokenKind::Percent => "'%'",
+
+            // Whitespace
+            TokenKind::Whitespace => "whitespace",
+            TokenKind::Newline => "newline",
+
+            // Error
+            TokenKind::Error => "error",
+
+            // Spread/Ellipsis
+            TokenKind::DotDotDot => "'...'",
+        };
+        write!(f, "{s}")
+    }
 }
 
 /// A token with its source text and location.

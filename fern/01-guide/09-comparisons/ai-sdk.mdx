@@ -252,9 +252,6 @@ function ExtractResume(resume_text: string) -> Resume {
   prompt #"
     Extract the following information from the resume.
     
-    Pay attention to the seniority descriptions:
-    {{ ctx.output_format.seniority }}
-    
     Resume:
     ---
     {{ resume_text }}
@@ -313,14 +310,14 @@ function ExtractResume(resume_text: string) -> Resume {
 
 Use it in TypeScript:
 ```typescript
-import { baml } from '@/baml_client';
+import { b } from '@/baml_client';
 
 // Use default model
-const resume = await baml.ExtractResume(resumeText);
+const resume = await b.ExtractResume(resumeText);
 
 // Switch models based on your needs
-const complexResume = await baml.ExtractResume(complexText, { client: "Claude" });
-const simpleResume = await baml.ExtractResume(simpleText, { client: "Llama" });
+const complexResume = await b.ExtractResume(complexText, { client: "Claude" });
+const simpleResume = await b.ExtractResume(simpleText, { client: "Llama" });
 
 // Everything is fully typed!
 console.log(resume.seniority); // TypeScript knows this is SeniorityLevel
@@ -361,8 +358,8 @@ AI SDK is fantastic for building streaming AI applications in Next.js. But for s
 - **Model flexibility** - Never get locked into one provider
 - **Cleaner code** - No wrapper classes or infrastructure code needed
 
-**AI SDK is great for:** Streaming UI, Next.js integration, rapid prototyping
-**BAML is great for:** Production structured extraction, multi-model apps, cost optimization
+**AI SDK is great for:** Rapid prototyping, simple use cases
+**BAML is great for:** Production structured extraction, multi-model apps, cost optimization, streaming UIs with [semantic streaming](/guide/baml-basics/streaming#semantic-streaming)
 
 We built BAML because we were tired of elegant APIs that fall apart when you need production reliability and control.
 
@@ -371,6 +368,5 @@ We built BAML because we were tired of elegant APIs that fall apart when you nee
 BAML does have some limitations:
 1. It's a new language (but learning takes < 10 minutes)
 2. Best experience requires VSCode
-3. Focused on structured extraction, not general AI features
 
-If you're building a Next.js app with streaming UI, use AI SDK. If you want bulletproof structured extraction with full control, [try BAML](https://docs.boundaryml.com).
+Ready for bulletproof structured extraction with full control? [Try BAML](https://docs.boundaryml.com).

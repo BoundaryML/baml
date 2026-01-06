@@ -16,7 +16,8 @@ pub use baml_lexer;
 pub use baml_mir;
 pub use baml_parser;
 pub use baml_syntax;
-pub use baml_thir;
+pub use baml_tir;
+pub use baml_vir;
 pub use baml_workspace;
 pub use salsa::Setter;
 use salsa::Storage;
@@ -31,16 +32,23 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 pub struct RootDatabase {
     storage: salsa::Storage<Self>,
     next_file_id: std::sync::Arc<AtomicU32>,
+    /// The current project. Set via `set_project_root()` or directly.
+    pub project: Option<baml_workspace::Project>,
 }
 
 #[salsa::db]
 impl salsa::Database for RootDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for RootDatabase {}
+impl baml_hir::Db for RootDatabase {
+    fn project(&self) -> baml_workspace::Project {
+        self.project
+            .expect("project must be set before querying - call set_project_root first")
+    }
+}
 
 #[salsa::db]
-impl baml_thir::Db for RootDatabase {}
+impl baml_tir::Db for RootDatabase {}
 
 #[salsa::db]
 impl baml_mir::Db for RootDatabase {}
@@ -51,6 +59,7 @@ impl RootDatabase {
         Self {
             storage: Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
+            project: None,
         }
     }
 
@@ -65,6 +74,7 @@ impl RootDatabase {
         Self {
             storage: Storage::new(Some(callback)),
             next_file_id: Arc::new(AtomicU32::new(0)),
+            project: None,
         }
     }
 
@@ -79,12 +89,15 @@ impl RootDatabase {
         SourceFile::new(self, text.into(), path.into(), file_id)
     }
 
-    /// Create a project root with an empty file list.
+    /// Create and set the project root.
     ///
+    /// This must be called before any queries that require project context.
     /// After creating the project root, use `add_file()` to add source files,
-    /// then update the project root's file list with `root.set_files()`.
+    /// then update the project's file list with `project.set_files()`.
     pub fn set_project_root(&mut self, path: impl Into<PathBuf>) -> baml_workspace::Project {
-        baml_workspace::Project::new(self, path.into(), vec![])
+        let project = baml_workspace::Project::new(self, path.into(), vec![]);
+        self.project = Some(project);
+        project
     }
 }
 

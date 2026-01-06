@@ -27,39 +27,54 @@ enum TestEnum {
 
 //----
 //- diagnostics
-// Error: Expected RParen, found Word
+// Error: Expected ')', found identifier
 //     ╭─[ 0:13:10 ]
 //     │
 //  13 │     User is confused
 //     │          ─┬  
-//     │           ╰── Expected RParen, found Word
+//     │           ╰── Expected ')', found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found RParen
+// Error: Expected Unexpected token in enum body, found ')'
 //     ╭─[ 0:14:3 ]
 //     │
 //  14 │   )
 //     │   ┬  
-//     │   ╰── Expected Unexpected token in enum body, found RParen
+//     │   ╰── Expected Unexpected token in enum body, found ')'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected RParen, found Word
+// Error: Expected ')', found identifier
 //     ╭─[ 0:16:10 ]
 //     │
 //  16 │     User is excited
 //     │          ─┬  
-//     │           ╰── Expected RParen, found Word
+//     │           ╰── Expected ')', found identifier
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Unexpected token in enum body, found RParen
+// Error: Expected Unexpected token in enum body, found ')'
 //     ╭─[ 0:17:3 ]
 //     │
 //  17 │   )
 //     │   ┬  
-//     │   ╰── Expected Unexpected token in enum body, found RParen
+//     │   ╰── Expected Unexpected token in enum body, found ')'
 //     │ 
 //     │ Note: Error code: E0010
+// ────╯
+// Error: Duplicate variant 'is' in enum 'TestEnum'
+//     ╭─[ 0:16:10 ]
+//     │
+//  16 │     User is excited
+//     │          ─┬  
+//     │           ╰── duplicate definition
+//     │
+//     ├─[ 0:16:10 ]
+//     │
+//  13 │     User is confused
+//     │          ─┬  
+//     │           ╰── first definition here
+//     │ 
+//     │ Note: Error code: E0013
 // ────╯

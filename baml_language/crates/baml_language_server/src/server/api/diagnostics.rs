@@ -9,9 +9,9 @@ use std::{
 
 use baml_db::{
     FileId, SourceFile,
-    baml_diagnostics::{NameError, ParseError, TypeError},
-    baml_hir::{self, FunctionBody, ItemId},
-    baml_parser, baml_thir,
+    baml_diagnostics::{HirDiagnostic, NameError, ParseError, TypeError},
+    baml_hir::{self, FunctionBody, ItemId, file_lowering},
+    baml_parser, baml_tir,
 };
 use lsp_server::ErrorCode;
 use lsp_types::{
@@ -188,17 +188,35 @@ pub(super) fn project_diagnostics(
         }
     }
 
-    // 2. Gather name errors (duplicate names)
-    let name_errors = baml_hir::validate_duplicate_names(db, project_root);
-    for error in name_errors {
+    // 2. Gather HIR lowering diagnostics (duplicate fields, attributes, etc.)
+    for source_file in &source_files {
+        let lowering_result = file_lowering(db, *source_file);
+        for error in lowering_result.diagnostics(db) {
+            if let Some(diag) = hir_diagnostic_to_lsp_diagnostic(error, &file_info, session) {
+                add_diagnostic(get_hir_diagnostic_file_id(error), diag);
+            }
+        }
+    }
+
+    // 3. Gather validation errors (duplicate names, reserved names)
+    let validation_result = baml_hir::validate_hir(db, project_root);
+    for diag in &validation_result.hir_diagnostics {
+        if let Some(lsp_diag) = hir_diagnostic_to_lsp_diagnostic(diag, &file_info, session) {
+            add_diagnostic(get_hir_diagnostic_file_id(diag), lsp_diag);
+        }
+    }
+    for error in validation_result.name_errors {
         if let Some((diag, file_id)) = name_error_to_diagnostic(&error, &file_info, session) {
             add_diagnostic(file_id, diag);
         }
     }
 
     // 3. Gather type errors from function inference
-    let globals = baml_thir::build_typing_context_from_files(db, &source_files);
-    let class_fields = baml_thir::build_class_fields_from_files(db, project_root);
+    let globals = baml_tir::typing_context(db, project_root);
+    let class_fields = baml_tir::class_field_types(db, project_root);
+    let type_aliases = baml_tir::type_aliases(db, project_root);
+    let enum_variants_map = baml_tir::enum_variants(db, project_root);
+    let enum_variants = enum_variants_map.enums(db).clone();
 
     for source_file in &source_files {
         let items_struct = baml_hir::file_items(db, *source_file);
@@ -211,14 +229,14 @@ pub(super) fn project_diagnostics(
 
                 // Only infer types for expression functions (not LLM functions)
                 if matches!(*body, FunctionBody::Expr(_)) {
-                    let inference_result = baml_thir::infer_function(
+                    let inference_result = baml_tir::infer_function(
                         db,
                         &signature,
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
-                        None, // type_aliases
-                        None, // enum_variants
+                        Some(type_aliases.clone()),
+                        Some(enum_variants.clone()),
                         *func_loc,
                     );
 
@@ -258,6 +276,7 @@ fn parse_error_to_diagnostic(
             span,
             "E0009",
         ),
+        ParseError::InvalidSyntax { message, span } => (message.clone(), span, "E0010"),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -338,6 +357,63 @@ fn name_error_to_diagnostic(
                 second.file_id,
             ))
         }
+        NameError::DuplicateTestForFunction {
+            test_name,
+            function_name,
+            first,
+            first_path,
+            second,
+            second_path: _,
+        } => {
+            let (_, source_text, line_index) = file_info.get(&second.file_id)?;
+            let range = convert_text_range(second.range).to_range(
+                source_text,
+                line_index,
+                session.position_encoding,
+            );
+
+            let message = format!(
+                "Duplicate test `{}` for function `{}` (first defined in {})",
+                test_name, function_name, first_path
+            );
+
+            // Build related information pointing to the first definition
+            let related_information = file_info.get(&first.file_id).and_then(
+                |(path, first_source_text, first_line_index)| {
+                    let first_range = convert_text_range(first.range).to_range(
+                        first_source_text,
+                        first_line_index,
+                        session.position_encoding,
+                    );
+                    let uri = Url::from_file_path(path).ok()?;
+                    Some(vec![lsp_types::DiagnosticRelatedInformation {
+                        location: lsp_types::Location {
+                            uri,
+                            range: first_range,
+                        },
+                        message: format!(
+                            "First definition of test `{}` for `{}` here",
+                            test_name, function_name
+                        ),
+                    }])
+                },
+            );
+
+            Some((
+                lsp_types::Diagnostic {
+                    range,
+                    severity: Some(DiagnosticSeverity::ERROR),
+                    code: Some(lsp_types::NumberOrString::String("E0012".to_string())),
+                    code_description: None,
+                    source: Some("baml".to_string()),
+                    message,
+                    related_information,
+                    tags: None,
+                    data: None,
+                },
+                second.file_id,
+            ))
+        }
     }
 }
 
@@ -407,6 +483,25 @@ fn type_error_to_diagnostic<T: std::fmt::Display>(
             "E0012",
         ),
         TypeError::UnreachableArm { span } => ("Unreachable match arm".to_string(), span, "E0013"),
+        TypeError::UnknownEnumVariant {
+            enum_name,
+            variant_name,
+            span,
+        } => (
+            format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
+            span,
+            "E0064",
+        ),
+        TypeError::WatchOnNonVariable { span } => (
+            "$watch can only be used on simple variable expressions".to_string(),
+            span,
+            "E0065",
+        ),
+        TypeError::WatchOnUnwatchedVariable { name, span } => (
+            format!("Cannot use $watch on `{name}`: variable must be declared with `watch let`"),
+            span,
+            "E0066",
+        ),
     };
 
     let (_, source_text, line_index) = file_info.get(&span.file_id)?;
@@ -431,6 +526,7 @@ fn get_parse_error_file_id(error: &ParseError) -> FileId {
     match error {
         ParseError::UnexpectedToken { span, .. } => span.file_id,
         ParseError::UnexpectedEof { span, .. } => span.file_id,
+        ParseError::InvalidSyntax { span, .. } => span.file_id,
     }
 }
 
@@ -448,6 +544,353 @@ fn get_type_error_file_id<T>(error: &TypeError<T>) -> FileId {
         TypeError::NotIndexable { span, .. } => span.file_id,
         TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
         TypeError::UnreachableArm { span, .. } => span.file_id,
+        TypeError::UnknownEnumVariant { span, .. } => span.file_id,
+        TypeError::WatchOnNonVariable { span, .. } => span.file_id,
+        TypeError::WatchOnUnwatchedVariable { span, .. } => span.file_id,
+    }
+}
+
+/// Convert an HirDiagnostic to an LSP Diagnostic with related information
+fn hir_diagnostic_to_lsp_diagnostic(
+    error: &HirDiagnostic,
+    file_info: &HashMap<FileId, (PathBuf, String, LineIndex)>,
+    session: &Session,
+) -> Option<lsp_types::Diagnostic> {
+    // Extract message, main span, first span (for related info), and code
+    let (message, span, first_span, code, related_msg) = match error {
+        HirDiagnostic::DuplicateField {
+            class_name,
+            field_name,
+            first_span,
+            second_span,
+        } => (
+            format!("Duplicate field '{}' in class '{}'", field_name, class_name),
+            second_span,
+            Some(first_span),
+            "E0012",
+            format!("'{}' first defined here", field_name),
+        ),
+        HirDiagnostic::DuplicateVariant {
+            enum_name,
+            variant_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Duplicate variant '{}' in enum '{}'",
+                variant_name, enum_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0013",
+            format!("'{}' first defined here", variant_name),
+        ),
+        HirDiagnostic::DuplicateBlockAttribute {
+            item_kind,
+            item_name,
+            attr_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Attribute '{}' can only be defined once on {} '{}'",
+                attr_name, item_kind, item_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0014",
+            format!("'{}' first defined here", attr_name),
+        ),
+        HirDiagnostic::DuplicateFieldAttribute {
+            container_kind,
+            container_name,
+            field_name,
+            attr_name,
+            first_span,
+            second_span,
+        } => (
+            format!(
+                "Attribute '{}' can only be defined once on field '{}' in {} '{}'",
+                attr_name, field_name, container_kind, container_name
+            ),
+            second_span,
+            Some(first_span),
+            "E0014",
+            format!("'{}' first defined here", attr_name),
+        ),
+        HirDiagnostic::UnknownAttribute {
+            attr_name,
+            span,
+            valid_attributes,
+        } => {
+            let suggestions = if valid_attributes.is_empty() {
+                String::new()
+            } else {
+                format!(". Valid attributes: {}", valid_attributes.join(", "))
+            };
+            (
+                format!("Unknown attribute '{}'{}", attr_name, suggestions),
+                span,
+                None,
+                "E0015",
+                String::new(),
+            )
+        }
+        HirDiagnostic::InvalidAttributeContext {
+            attr_name,
+            context,
+            allowed_contexts,
+            span,
+        } => (
+            format!(
+                "Attribute '{}' is not valid on {}. Allowed on: {}",
+                attr_name, context, allowed_contexts
+            ),
+            span,
+            None,
+            "E0016",
+            String::new(),
+        ),
+        HirDiagnostic::UnknownGeneratorProperty {
+            generator_name,
+            property_name,
+            span,
+            valid_properties,
+        } => (
+            format!(
+                "Unknown property '{}' in generator '{}'. Valid properties: {}",
+                property_name,
+                generator_name,
+                valid_properties.join(", ")
+            ),
+            span,
+            None,
+            "E0017",
+            String::new(),
+        ),
+        HirDiagnostic::MissingGeneratorProperty {
+            generator_name,
+            property_name,
+            span,
+        } => (
+            format!(
+                "Generator '{}' is missing required property '{}'",
+                generator_name, property_name
+            ),
+            span,
+            None,
+            "E0018",
+            String::new(),
+        ),
+        HirDiagnostic::InvalidGeneratorPropertyValue {
+            generator_name,
+            property_name,
+            value,
+            span,
+            valid_values,
+            help,
+        } => {
+            let mut msg = format!(
+                "Invalid value '{}' for property '{}' in generator '{}'",
+                value, property_name, generator_name
+            );
+            if let Some(valid) = valid_values {
+                msg.push_str(&format!(". Valid values: {}", valid.join(", ")));
+            }
+            if let Some(h) = help {
+                msg.push_str(&format!(". {}", h));
+            }
+            (msg, span, None, "E0019", String::new())
+        }
+        HirDiagnostic::ReservedFieldName {
+            item_kind,
+            item_name,
+            field_name,
+            span,
+            target_languages,
+        } => (
+            format!(
+                "Field '{}' in {} '{}' is a reserved keyword in {}",
+                field_name,
+                item_kind,
+                item_name,
+                target_languages.join(", ")
+            ),
+            span,
+            None,
+            "E0020",
+            String::new(),
+        ),
+        HirDiagnostic::FieldNameMatchesTypeName {
+            class_name,
+            field_name,
+            type_name,
+            span,
+        } => (
+            format!(
+                "Field '{}' in class '{}' has the same name as its type '{}', which is not supported in generated Python code.",
+                field_name, class_name, type_name
+            ),
+            span,
+            None,
+            "E0021",
+            String::new(),
+        ),
+        HirDiagnostic::InvalidClientResponseType {
+            client_name: _,
+            value,
+            span,
+            valid_values,
+        } => (
+            format!(
+                "client_response_type must be one of {}. Got: {}",
+                valid_values.join(", "),
+                value
+            ),
+            span,
+            None,
+            "E0022",
+            String::new(),
+        ),
+        HirDiagnostic::HttpConfigNotBlock {
+            client_name: _,
+            span,
+        } => (
+            "http must be a configuration block with timeout settings".to_string(),
+            span,
+            None,
+            "E0023",
+            String::new(),
+        ),
+        HirDiagnostic::UnknownHttpConfigField {
+            client_name: _,
+            field_name,
+            span,
+            suggestion,
+            is_composite,
+        } => {
+            let valid_fields = if *is_composite {
+                "total_timeout_ms"
+            } else {
+                "connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms"
+            };
+
+            let mut msg = format!(
+                "Unrecognized field '{}' in http configuration block.",
+                field_name
+            );
+
+            if let Some(suggested) = suggestion {
+                msg.push_str(&format!(" Did you mean '{}'?", suggested));
+            }
+
+            if *is_composite {
+                msg.push_str(&format!(
+                    " Composite clients (fallback/round-robin) only support: {}",
+                    valid_fields
+                ));
+            } else if field_name == "total_timeout_ms" {
+                msg.push_str(&format!(
+                    " 'total_timeout_ms' is only available for composite clients (fallback/round-robin). For regular clients, use: {}",
+                    valid_fields
+                ));
+            }
+
+            (msg, span, None, "E0024", String::new())
+        }
+        HirDiagnostic::NegativeTimeout {
+            client_name: _,
+            field_name,
+            value,
+            span,
+        } => (
+            format!("{} must be non-negative, got: {}ms", field_name, value),
+            span,
+            None,
+            "E0025",
+            String::new(),
+        ),
+        HirDiagnostic::MissingProvider {
+            client_name: _,
+            span,
+        } => (
+            "Missing `provider` field in client. e.g. `provider openai`".to_string(),
+            span,
+            None,
+            "E0026",
+            String::new(),
+        ),
+        HirDiagnostic::UnknownClientProperty {
+            client_name: _,
+            field_name,
+            span,
+        } => (
+            format!(
+                "Unknown field `{}` in client. Only `provider` and `options` are supported.",
+                field_name
+            ),
+            span,
+            None,
+            "E0027",
+            String::new(),
+        ),
+    };
+
+    let (path, source_text, line_index) = file_info.get(&span.file_id)?;
+    let range =
+        convert_text_range(span.range).to_range(source_text, line_index, session.position_encoding);
+
+    // Build related information if we have a first span (for duplicates)
+    let related_information = first_span.and_then(|first| {
+        let (first_path, first_source_text, first_line_index) = file_info.get(&first.file_id)?;
+        let first_range = convert_text_range(first.range).to_range(
+            first_source_text,
+            first_line_index,
+            session.position_encoding,
+        );
+        let uri = Url::from_file_path(first_path).ok()?;
+        Some(vec![lsp_types::DiagnosticRelatedInformation {
+            location: lsp_types::Location {
+                uri,
+                range: first_range,
+            },
+            message: related_msg.clone(),
+        }])
+    });
+
+    Some(lsp_types::Diagnostic {
+        range,
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: Some(lsp_types::NumberOrString::String(code.to_string())),
+        code_description: None,
+        source: Some("baml".to_string()),
+        message,
+        related_information,
+        tags: None,
+        data: None,
+    })
+}
+
+/// Get the FileId from an HirDiagnostic
+fn get_hir_diagnostic_file_id(error: &HirDiagnostic) -> FileId {
+    match error {
+        HirDiagnostic::DuplicateField { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateVariant { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateBlockAttribute { second_span, .. } => second_span.file_id,
+        HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
+        HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
+        HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
+        HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
+        HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
+        HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
+        HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
+        HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
+        HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
+        HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
+        HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
+        HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
+        HirDiagnostic::MissingProvider { span, .. } => span.file_id,
+        HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
     }
 }
 

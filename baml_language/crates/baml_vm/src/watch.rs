@@ -378,7 +378,9 @@ impl Watch {
 
         // For each root that reaches the child, recompute reachability and
         // remove unreachable nodes.
-        for root in self.copy_roots_reaching(child) {
+        let roots_reaching = self.copy_roots_reaching(child);
+
+        for root in roots_reaching {
             let still_reachable = self.breadth_first_search_from(root);
 
             // Get the old reachable set

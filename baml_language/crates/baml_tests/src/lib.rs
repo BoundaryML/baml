@@ -261,6 +261,21 @@ fn format_hir_file(
                 writeln!(result, "}}").unwrap();
                 writeln!(result).unwrap(); // blank line after test
             }
+            ItemId::Generator(gen_id) => {
+                let generator = &item_tree[gen_id.id(db)];
+                writeln!(result, "generator {} {{", generator.name).unwrap();
+                if let Some(ref output_type) = generator.output_type {
+                    writeln!(result, "  output_type: {}", output_type).unwrap();
+                }
+                if let Some(ref output_dir) = generator.output_dir {
+                    writeln!(result, "  output_dir: {}", output_dir).unwrap();
+                }
+                if let Some(ref version) = generator.version {
+                    writeln!(result, "  version: {}", version).unwrap();
+                }
+                writeln!(result, "}}").unwrap();
+                writeln!(result).unwrap(); // blank line after generator
+            }
         }
     }
 

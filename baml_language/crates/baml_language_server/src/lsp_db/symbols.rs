@@ -29,6 +29,7 @@ pub enum SymbolKind {
     TypeAlias,
     Client,
     Test,
+    Generator,
     /// A field within a class.
     Field,
     /// A variant within an enum.
@@ -45,6 +46,7 @@ impl SymbolKind {
             SymbolKind::TypeAlias => lsp_types::SymbolKind::TYPE_PARAMETER,
             SymbolKind::Client => lsp_types::SymbolKind::OBJECT,
             SymbolKind::Test => lsp_types::SymbolKind::METHOD,
+            SymbolKind::Generator => lsp_types::SymbolKind::MODULE,
             SymbolKind::Field => lsp_types::SymbolKind::FIELD,
             SymbolKind::EnumVariant => lsp_types::SymbolKind::ENUM_MEMBER,
         }
@@ -100,7 +102,7 @@ impl LspDatabase {
         let name_to_find = Name::new(name);
 
         // If we have a project, search all project items
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
 
             for item in items.items(&self.db) {
@@ -293,6 +295,27 @@ impl LspDatabase {
                     None
                 }
             }
+            ItemId::Generator(gen_loc) => {
+                let file = gen_loc.file(&self.db);
+                let item_tree = file_item_tree(&self.db, file);
+                let generator = &item_tree[gen_loc.id(&self.db)];
+
+                if &generator.name == name_to_find {
+                    let file_path = file.path(&self.db);
+                    let text = file.text(&self.db);
+                    let span = Span::new(file.file_id(&self.db), TextRange::empty(0.into()));
+                    let range = span_to_lsp_range(text, &span);
+
+                    Some(SymbolLocation {
+                        name: generator.name.to_string(),
+                        kind: SymbolKind::Generator,
+                        file_path,
+                        range,
+                    })
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -326,21 +349,19 @@ impl LspDatabase {
     pub fn list_functions(&self) -> Vec<SymbolLocation> {
         let mut functions = Vec::new();
 
-        if let Some(project) = self.project {
-            let items = project_items(&self.db, project);
-            for item in items.items(&self.db) {
-                if let ItemId::Function(func_loc) = item {
-                    let file = func_loc.file(&self.db);
-                    let item_tree = file_item_tree(&self.db, file);
-                    let func = &item_tree[func_loc.id(&self.db)];
+        if let Some(project) = self.project() {
+            // Get functions with proper spans from HIR
+            let func_list = baml_hir::list_function_names(&self.db, project);
 
-                    let file_path = file.path(&self.db);
-                    let text = file.text(&self.db);
-                    let span = Span::new(file.file_id(&self.db), TextRange::empty(0.into()));
+            for (func_name, span) in func_list {
+                // Get file path and text for range conversion
+                if let Some(source_file) = self.get_file_by_id(span.file_id) {
+                    let file_path = source_file.path(&self.db);
+                    let text = source_file.text(&self.db);
                     let range = span_to_lsp_range(text, &span);
 
                     functions.push(SymbolLocation {
-                        name: func.name.to_string(),
+                        name: func_name,
                         kind: SymbolKind::Function,
                         file_path,
                         range,
@@ -356,7 +377,7 @@ impl LspDatabase {
     pub fn list_classes(&self) -> Vec<SymbolLocation> {
         let mut classes = Vec::new();
 
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
             for item in items.items(&self.db) {
                 if let ItemId::Class(class_loc) = item {
@@ -386,7 +407,7 @@ impl LspDatabase {
     pub fn list_enums(&self) -> Vec<SymbolLocation> {
         let mut enums = Vec::new();
 
-        if let Some(project) = self.project {
+        if let Some(project) = self.project() {
             let items = project_items(&self.db, project);
             for item in items.items(&self.db) {
                 if let ItemId::Enum(enum_loc) = item {
@@ -419,7 +440,7 @@ impl LspDatabase {
         match symbol.kind {
             SymbolKind::Function => {
                 // Try to get function signature
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Function(func_loc) = item {
@@ -438,7 +459,7 @@ impl LspDatabase {
             }
             SymbolKind::Class => {
                 // Get class fields for hover
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Class(class_loc) = item {
@@ -455,7 +476,7 @@ impl LspDatabase {
                 format!("class {}", symbol.name)
             }
             SymbolKind::Enum => {
-                if let Some(project) = self.project {
+                if let Some(project) = self.project() {
                     let items = project_items(&self.db, project);
                     for item in items.items(&self.db) {
                         if let ItemId::Enum(enum_loc) = item {
@@ -474,6 +495,7 @@ impl LspDatabase {
             SymbolKind::TypeAlias => format!("type {}", symbol.name),
             SymbolKind::Client => format!("client {}", symbol.name),
             SymbolKind::Test => format!("test {}", symbol.name),
+            SymbolKind::Generator => format!("generator {}", symbol.name),
             SymbolKind::Field => format!("field {}", symbol.name),
             SymbolKind::EnumVariant => format!("variant {}", symbol.name),
         }

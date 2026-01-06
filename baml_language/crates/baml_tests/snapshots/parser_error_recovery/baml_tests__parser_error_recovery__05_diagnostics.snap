@@ -1,224 +1,234 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [parse] Error: Expected class name, found IntegerLiteral
+  [parse] Error: Expected class name, found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected class name, found IntegerLiteral
+   │        ╰─── Expected class name, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected LBrace, found IntegerLiteral
+  [parse] Error: Expected '{', found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected LBrace, found IntegerLiteral
+   │        ╰─── Expected '{', found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found IntegerLiteral
+  [parse] Error: Expected top-level declaration, found integer
    ╭─[ 0:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
-   │        ╰─── Expected top-level declaration, found IntegerLiteral
+   │        ╰─── Expected top-level declaration, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found identifier
    ╭─[ 0:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
-   │             ╰───── Expected top-level declaration, found Word
+   │             ╰───── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found LBrace
+  [parse] Error: Expected top-level declaration, found '{'
    ╭─[ 0:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
-   │                  ╰── Expected top-level declaration, found LBrace
+   │                  ╰── Expected top-level declaration, found '{'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found identifier
    ╭─[ 0:2:3 ]
    │
  2 │   field string
    │   ──┬──  
-   │     ╰──── Expected top-level declaration, found Word
+   │     ╰──── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found identifier
    ╭─[ 0:2:9 ]
    │
  2 │   field string
    │         ───┬──  
-   │            ╰──── Expected top-level declaration, found Word
+   │            ╰──── Expected top-level declaration, found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found '}'
    ╭─[ 0:3:1 ]
    │
  3 │ }
    │ ┬  
-   │ ╰── Expected top-level declaration, found RBrace
+   │ ╰── Expected top-level declaration, found '}'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found LBrace
+  [parse] Error: Expected type, found '{'
     ╭─[ 0:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
-    │                   ╰── Expected type, found LBrace
+    │                   ╰── Expected type, found '{'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected LLM function missing 'prompt' field, found RBrace
+  [parse] Error: Expected LLM function missing 'prompt' field, found '}'
     ╭─[ 0:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected LLM function missing 'prompt' field, found RBrace
+    │ ╰── Expected LLM function missing 'prompt' field, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected RBrace, found Class
+  [parse] Error: Expected '}', found class
    ╭─[ 1:5:1 ]
    │
  5 │ class Another {  // Should still parse this class
    │ ──┬──  
-   │   ╰──── Expected RBrace, found Class
+   │   ╰──── Expected '}', found class
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found At
-   ╭─[ 2:5:17 ]
+  [parse] Error: field 'field2' is missing a type annotation
+   ╭─[ 2:4:3 ]
    │
- 5 │   field3 string @  // Incomplete attribute
-   │                 ┬  
-   │                 ╰── Expected type, found At
+ 4 │   field2  // Missing type entirely
+   │   ───┬──  
+   │      ╰──── field 'field2' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found At
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ 2:6:10 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected Unexpected token in class body, found '@'
    ╭─[ 2:6:17 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
-   │                 ╰── Expected type, found At
+   │                 ╰── Expected Unexpected token in class body, found '@'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected RParen, found Word
+  [parse] Error: Expected ')', found identifier
    ╭─[ 2:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
-   │             ╰──── Expected RParen, found Word
+   │             ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected type, found RBrace
-   ╭─[ 2:8:1 ]
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ 2:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected type, found RBrace
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected RParen, found Function
+  [parse] Error: Expected ')', found function
     ╭─[ 2:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected RParen, found Function
+    │     ╰───── Expected ')', found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected return type (->), found Function
+  [parse] Error: Expected return type (->), found function
     ╭─[ 2:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected return type (->), found Function
+    │     ╰───── Expected return type (->), found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected function body, found Function
+  [parse] Error: Expected function body, found function
     ╭─[ 2:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
-    │     ╰───── Expected function body, found Function
+    │     ╰───── Expected function body, found function
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected LBrace, found Word
+  [parse] Error: Expected '{', found identifier
     ╭─[ 2:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
-    │      ╰──── Expected LBrace, found Word
+    │      ╰──── Expected '{', found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found Word
+  [parse] Error: Expected top-level declaration, found identifier
     ╭─[ 2:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
-    │      ╰──── Expected top-level declaration, found Word
+    │      ╰──── Expected top-level declaration, found identifier
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected top-level declaration, found RBrace
+  [parse] Error: Expected top-level declaration, found '}'
     ╭─[ 2:20:1 ]
     │
  20 │ }
     │ ┬  
-    │ ╰── Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected RParen, found Word
+  [parse] Error: Expected ')', found identifier
    ╭─[ 3:4:25 ]
    │
  4 │   field3 string @alias("another closed string")  // Should still parse this
    │                         ───┬───  
-   │                            ╰───── Expected RParen, found Word
+   │                            ╰───── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -233,12 +243,28 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected RBrace, found EOF
+  [parse] Error: Expected '}', found EOF
    ╭─[ 3:5:2 ]
    │
  5 │ }
    │  ┬  
-   │  ╰── Expected RBrace, found EOF
+   │  ╰── Expected '}', found EOF
    │ 
    │ Note: Error code: E0010
+───╯
+
+  [hir] Error: Duplicate field 'string' in class 'Partial'
+   ╭─[ 2:7:10 ]
+   │
+ 7 │   field5 string  // This should parse correctly
+   │          ───┬──  
+   │             ╰──── duplicate definition
+   │
+   ├─[ 2:7:10 ]
+   │
+ 6 │   field4 string @alias(  // Unclosed attribute
+   │          ───┬──  
+   │             ╰──── first definition here
+   │ 
+   │ Note: Error code: E0012
 ───╯

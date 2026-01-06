@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -164,112 +164,112 @@ SOURCE_FILE
   R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Greater, found GreaterGreater
+Error: Expected '>', found '>>'
     ╭─[ 0:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
-    │                                                                      ╰── Expected Greater, found GreaterGreater
+    │                                                                      ╰── Expected '>', found '>>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Greater, found GreaterGreater
+Error: Expected '>', found '>>'
     ╭─[ 0:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
-    │                                                                      ╰── Expected Greater, found GreaterGreater
+    │                                                                      ╰── Expected '>', found '>>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected Greater, found GreaterGreater
+Error: Expected '>', found '>>'
     ╭─[ 0:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
-    │                                                                      ╰── Expected Greater, found GreaterGreater
+    │                                                                      ╰── Expected '>', found '>>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected function body, found GreaterGreater
+Error: Expected function body, found '>>'
     ╭─[ 0:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
-    │                                                                      ╰── Expected function body, found GreaterGreater
+    │                                                                      ╰── Expected function body, found '>>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found GreaterGreater
+Error: Expected top-level declaration, found '>>'
     ╭─[ 0:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
-    │                                                                      ╰── Expected top-level declaration, found GreaterGreater
+    │                                                                      ╰── Expected top-level declaration, found '>>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Greater
+Error: Expected top-level declaration, found '>'
     ╭─[ 0:28:71 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                       ┬  
-    │                                                                       ╰── Expected top-level declaration, found Greater
+    │                                                                       ╰── Expected top-level declaration, found '>'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
     ╭─[ 0:28:73 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                         ┬  
-    │                                                                         ╰── Expected top-level declaration, found LBrace
+    │                                                                         ╰── Expected top-level declaration, found '{'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found Return
+Error: Expected top-level declaration, found return
     ╭─[ 0:30:3 ]
     │
  30 │   return {}
     │   ───┬──  
-    │      ╰──── Expected top-level declaration, found Return
+    │      ╰──── Expected top-level declaration, found return
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found LBrace
+Error: Expected top-level declaration, found '{'
     ╭─[ 0:30:10 ]
     │
  30 │   return {}
     │          ┬  
-    │          ╰── Expected top-level declaration, found LBrace
+    │          ╰── Expected top-level declaration, found '{'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
     ╭─[ 0:30:11 ]
     │
  30 │   return {}
     │           ┬  
-    │           ╰── Expected top-level declaration, found RBrace
+    │           ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected top-level declaration, found RBrace
+Error: Expected top-level declaration, found '}'
     ╭─[ 0:31:1 ]
     │
  31 │ }
     │ ┬  
-    │ ╰── Expected top-level declaration, found RBrace
+    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
