@@ -6,7 +6,7 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_node_experimental);
 
-use baml_runtime_wasm::{sam_sandbox::CasingVariants, BamlRuntime};
+use baml_runtime_wasm::{BamlRuntime, sam_sandbox::CasingVariants};
 
 #[wasm_bindgen_test]
 fn test_casing_variants_original() {
@@ -97,6 +97,10 @@ fn test_render_prompt_for_function() {
     // Should succeed (even with stub implementation)
     assert!(result.success());
     assert!(result.prompt().is_some());
+    assert_eq!(
+        result.prompt().unwrap(),
+        "Failed to parse arguments: invalid type: string \"not valid json\", expected a map at line 1 column 1"
+    );
 }
 
 #[wasm_bindgen_test]

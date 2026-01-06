@@ -18,6 +18,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+pretty_assertions.workspace = true
 
 [features]
 default = []

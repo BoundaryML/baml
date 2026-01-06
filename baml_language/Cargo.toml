@@ -68,6 +68,13 @@ reqwest = { version = "0.12.12", features = [
   "stream",
 ] }
 cfg-if = "1.0.0"
+minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [
+    "builtins",
+    "debug",
+    "deserialization",
+    "macros",
+    "serde",
+] }
 
 
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [

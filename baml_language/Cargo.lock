@@ -306,6 +306,7 @@ dependencies = [
  "baml_runtime",
  "console_error_panic_hook",
  "convert_case",
+ "pretty_assertions",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -403,6 +404,7 @@ version = "0.0.0"
 dependencies = [
  "baml_types",
  "indexmap 2.12.0",
+ "minijinja",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -2525,6 +2527,14 @@ checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
 dependencies = [
  "cc",
  "walkdir",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.11.0"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

@@ -339,23 +339,29 @@ impl BamlRuntime {
             args,
             baml_runtime::TypeRef::string(),
             baml_runtime::ClientSpec::new("openai/gpt-4"),
-            baml_runtime::PromptTemplate::new("{{ input }}"),
+            baml_runtime::PromptTemplate::new("{{ input }} and this is more"),
         );
 
         // Render the prompt
         match baml_runtime::render_prompt(&prepared) {
             Ok(prompt) => {
-                let text = prompt.messages.iter()
+                let text = prompt
+                    .messages
+                    .iter()
                     .map(|m| m.text_content())
                     .collect::<Vec<_>>()
                     .join("\n");
 
                 // Serialize messages to JSON for structured access
-                let messages: Vec<serde_json::Value> = prompt.messages.iter()
-                    .map(|m| serde_json::json!({
-                        "role": m.role.as_str(),
-                        "content": m.text_content()
-                    }))
+                let messages: Vec<serde_json::Value> = prompt
+                    .messages
+                    .iter()
+                    .map(|m| {
+                        serde_json::json!({
+                            "role": m.role.as_str(),
+                            "content": m.text_content()
+                        })
+                    })
                     .collect();
 
                 RenderPromptResult {
@@ -473,7 +479,8 @@ impl BamlRuntime {
         match baml_runtime::build_request(&prepared, &ctx, stream) {
             Ok(request) => {
                 // Convert headers to JSON-friendly format
-                let headers: std::collections::HashMap<String, String> = request.headers
+                let headers: std::collections::HashMap<String, String> = request
+                    .headers
                     .iter()
                     .map(|(k, v)| (k.clone(), v.render(false)))
                     .collect();
@@ -506,7 +513,12 @@ fn format_signature(sig: &baml_hir::FunctionSignature) -> String {
         .iter()
         .map(|p| format!("{}: {:?}", p.name, p.type_ref))
         .collect();
-    format!("{}({}) -> {:?}", sig.name, params.join(", "), sig.return_type)
+    format!(
+        "{}({}) -> {:?}",
+        sig.name,
+        params.join(", "),
+        sig.return_type
+    )
 }
 
 /// Result of getting a function's typed body.
