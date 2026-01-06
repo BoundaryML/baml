@@ -1,5 +1,6 @@
-//! Tests for `TypeBuilder`, `TypeDef`, `EnumBuilder`, `EnumValueBuilder`, `ClassBuilder`,
-//! `ClassPropertyBuilder`
+//! Tests for `TypeBuilder`, `TypeDef`, `EnumBuilder`, `EnumValueBuilder`,
+//! `ClassBuilder`, `ClassPropertyBuilder`
+#![allow(clippy::print_stderr)]
 
 mod type_builder {
     use std::collections::HashMap;
@@ -9,7 +10,8 @@ mod type_builder {
         FunctionArgs, TypeBuilder, TypeDef,
     };
 
-    /// Helper to create environment variables `HashMap` from current environment
+    /// Helper to create environment variables `HashMap` from current
+    /// environment
     fn env_vars() -> HashMap<String, String> {
         std::env::vars().collect()
     }
@@ -31,7 +33,7 @@ mod type_builder {
                 .to_string(),
         );
 
-        BamlRuntime::new(".", files, env_vars()).expect("Failed to create test runtime")
+        BamlRuntime::new(".", &files, &env_vars()).expect("Failed to create test runtime")
     }
 
     // =========================================================================
@@ -1254,7 +1256,7 @@ mod type_builder {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         /// Create a runtime with a dynamic enum
@@ -1289,7 +1291,7 @@ mod type_builder {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]
@@ -1466,7 +1468,7 @@ mod type_builder {
             );
 
             let runtime =
-                BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+                BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
             let tb = runtime.new_type_builder();
 
             // Add properties to inner class
@@ -1602,7 +1604,7 @@ mod type_builder {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         /// Create a runtime with a dynamic enum
@@ -1637,7 +1639,7 @@ mod type_builder {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]
@@ -1670,9 +1672,7 @@ mod type_builder {
             // We just verify the call doesn't error due to type builder issues
             // The actual parsing of dynamic types is a separate concern
             if let Err(e) = &result {
-                eprintln!(
-                    "Function call error (may be expected for dynamic types): {e:?}"
-                );
+                eprintln!("Function call error (may be expected for dynamic types): {e:?}");
             }
         }
 
@@ -1917,10 +1917,7 @@ mod type_builder {
             let items = value
                 .get("items")
                 .expect("Result should have 'items' field");
-            assert!(
-                items.is_array(),
-                "Items should be an array, got: {items:?}"
-            );
+            assert!(items.is_array(), "Items should be an array, got: {items:?}");
 
             let items_array = items.as_array().unwrap();
             assert!(
@@ -1987,7 +1984,7 @@ mod type_builder {
             );
 
             let runtime =
-                BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+                BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
             let tb = runtime.new_type_builder();
 
             // Add properties to the Customer class

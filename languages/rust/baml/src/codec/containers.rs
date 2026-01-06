@@ -165,8 +165,7 @@ impl BamlSerializeMapKey for i64 {
     }
 
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        key
-            .parse::<i64>()
+        key.parse::<i64>()
             .map_err(|e| BamlError::internal(format!("failed to parse int map key: {e}")))
     }
 }
@@ -177,8 +176,7 @@ impl BamlSerializeMapKey for bool {
     }
 
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        key
-            .parse::<bool>()
+        key.parse::<bool>()
             .map_err(|e| BamlError::internal(format!("failed to parse bool map key: {e}")))
     }
 }

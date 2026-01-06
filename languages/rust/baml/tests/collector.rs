@@ -1,11 +1,13 @@
 //! Tests for Collector, `FunctionLog`, Usage, and `LogType`
+#![allow(clippy::print_stdout)]
 
 mod collector {
     use std::collections::HashMap;
 
     use baml::{BamlRuntime, Collector, FunctionArgs, LogType};
 
-    /// Helper to create environment variables `HashMap` from current environment
+    /// Helper to create environment variables `HashMap` from current
+    /// environment
     fn env_vars() -> HashMap<String, String> {
         std::env::vars().collect()
     }
@@ -27,7 +29,7 @@ mod collector {
                 .to_string(),
         );
 
-        BamlRuntime::new(".", files, env_vars()).expect("Failed to create test runtime")
+        BamlRuntime::new(".", &files, &env_vars()).expect("Failed to create test runtime")
     }
 
     // =========================================================================
@@ -334,7 +336,7 @@ mod collector {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]
@@ -619,7 +621,7 @@ mod collector {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]
@@ -694,7 +696,7 @@ mod collector {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]
@@ -839,7 +841,7 @@ mod collector {
                 .to_string(),
             );
 
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed")
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed")
         }
 
         #[test]

@@ -115,7 +115,5 @@ pub fn decode_field<T: BamlDecode>(
             };
         }
     }
-    Err(BamlError::internal(format!(
-        "missing field '{field_name}'"
-    )))
+    Err(BamlError::internal(format!("missing field '{field_name}'")))
 }

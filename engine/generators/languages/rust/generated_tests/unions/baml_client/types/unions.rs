@@ -32,14 +32,14 @@ impl Default for Union2IntOrListRecursive1 {
 }
 
 /// Generated from: ("service" | "resource")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2KresourceOrKservice {
-    #[baml(name = "string_service")]
-    Kservice(String),
+    #[baml(name = "string_service", literal_string = "service")]
+    Kservice,
 
-    #[baml(name = "string_resource")]
-    Kresource(String),
+    #[baml(name = "string_resource", literal_string = "resource")]
+    Kresource,
 }
 
 impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
@@ -50,7 +50,7 @@ impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
 
 impl Default for Union2KresourceOrKservice {
     fn default() -> Self {
-        Self::Kservice(Default::default())
+        Self::Kservice
     }
 }
 

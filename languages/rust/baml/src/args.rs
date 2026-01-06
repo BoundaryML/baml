@@ -26,6 +26,7 @@ impl FunctionArgs {
         Self::default()
     }
 
+    #[must_use]
     /// Add a keyword argument
     pub fn arg<V: BamlEncode>(mut self, name: &str, value: V) -> Self {
         self.kwargs.push(HostMapEntry {
@@ -35,6 +36,7 @@ impl FunctionArgs {
         self
     }
 
+    #[must_use]
     /// Add environment variable override
     pub fn with_env(mut self, key: &str, value: &str) -> Self {
         self.env_overrides.push(HostEnvVar {
@@ -44,6 +46,7 @@ impl FunctionArgs {
         self
     }
 
+    #[must_use]
     /// Add a tag
     pub fn with_tag<V: BamlEncode>(mut self, key: &str, value: V) -> Self {
         self.tags.push(HostMapEntry {
@@ -53,18 +56,21 @@ impl FunctionArgs {
         self
     }
 
+    #[must_use]
     /// Add a collector to gather telemetry
     pub fn with_collector(mut self, collector: &Collector) -> Self {
         self.collectors.push(collector.encode_handle());
         self
     }
 
+    #[must_use]
     /// Set type builder for dynamic types
     pub fn with_type_builder(mut self, type_builder: &TypeBuilder) -> Self {
         self.type_builder = Some(type_builder.encode_handle());
         self
     }
 
+    #[must_use]
     /// Set the client registry for runtime client configuration.
     pub fn with_client_registry(mut self, registry: &ClientRegistry) -> Self {
         self.client_registry = Some(registry.clone());
@@ -73,7 +79,10 @@ impl FunctionArgs {
 
     /// Encode to protobuf bytes for FFI
     pub fn encode(&self) -> Result<Vec<u8>, BamlError> {
-        let client_registry = self.client_registry.as_ref().map(super::client_registry::ClientRegistry::encode);
+        let client_registry = self
+            .client_registry
+            .as_ref()
+            .map(super::client_registry::ClientRegistry::encode);
 
         let msg = HostFunctionArguments {
             kwargs: self.kwargs.clone(),

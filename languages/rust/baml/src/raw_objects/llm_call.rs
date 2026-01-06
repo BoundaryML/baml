@@ -9,7 +9,7 @@ use super::{
     collector::{StreamTiming, Timing, Usage},
     http::{HTTPRequest, HTTPResponse, SSEResponse},
 };
-use crate::{baml_unreachable, proto::baml_cffi_v1::BamlObjectType};
+use crate::{baml_unreachable, codec::traits::DecodeHandle, proto::baml_cffi_v1::BamlObjectType};
 
 // =============================================================================
 // LLMCall
@@ -21,18 +21,6 @@ define_raw_object_wrapper! {
 }
 
 impl LLMCall {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract LLMCall handle: {e}"));
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectLlmCall),
-        }
-    }
-
     /// Get the request ID
     pub fn request_id(&self) -> String {
         self.raw.call_method("http_request_id", ())
@@ -51,25 +39,22 @@ impl LLMCall {
     /// Get the HTTP request details
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.raw
-            .call_method_for_object("http_request", ())
-            .ok()
-            .map(|handle| HTTPRequest::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("http_request", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get HTTP request: {e}"))
     }
 
     /// Get the HTTP response details (None for streaming calls)
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.raw
-            .call_method_for_object("http_response", ())
-            .ok()
-            .map(|handle| HTTPResponse::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("http_response", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get HTTP response: {e}"))
     }
 
     /// Get token usage for this call
     pub fn usage(&self) -> Option<Usage> {
         self.raw
-            .call_method_for_object("usage", ())
-            .ok()
-            .map(|handle| Usage::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("usage", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get usage: {e}"))
     }
 
     /// Whether this call was selected for parsing
@@ -79,11 +64,9 @@ impl LLMCall {
 
     /// Get timing information for this call
     pub fn timing(&self) -> Timing {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("timing", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get timing: {e}"));
-        Timing::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get timing: {e}"))
     }
 }
 
@@ -97,18 +80,6 @@ define_raw_object_wrapper! {
 }
 
 impl LLMStreamCall {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract LLMStreamCall handle: {e}"));
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectLlmStreamCall),
-        }
-    }
-
     /// Get the request ID
     pub fn request_id(&self) -> String {
         self.raw.call_method("http_request_id", ())
@@ -127,25 +98,22 @@ impl LLMStreamCall {
     /// Get the HTTP request details
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.raw
-            .call_method_for_object("http_request", ())
-            .ok()
-            .map(|handle| HTTPRequest::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("http_request", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get HTTP request: {e}"))
     }
 
     /// Get the HTTP response details (usually None for streaming)
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.raw
-            .call_method_for_object("http_response", ())
-            .ok()
-            .map(|handle| HTTPResponse::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("http_response", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get HTTP response: {e}"))
     }
 
     /// Get token usage for this call
     pub fn usage(&self) -> Option<Usage> {
         self.raw
-            .call_method_for_object("usage", ())
-            .ok()
-            .map(|handle| Usage::from_handle(handle, self.raw.runtime()))
+            .call_method_for_object_optional("usage", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get usage: {e}"))
     }
 
     /// Whether this call was selected for parsing
@@ -155,24 +123,16 @@ impl LLMStreamCall {
 
     /// Get timing information for this streaming call
     pub fn timing(&self) -> StreamTiming {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("timing", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get timing: {e}"));
-        StreamTiming::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get timing: {e}"))
     }
 
     /// Get the SSE chunks from the streaming response
     pub fn sse_chunks(&self) -> Option<Vec<SSEResponse>> {
         self.raw
-            .call_method_for_objects("sse_chunks", ())
-            .ok()
-            .map(|handles| {
-                handles
-                    .into_iter()
-                    .map(|h| SSEResponse::from_handle(h, self.raw.runtime()))
-                    .collect()
-            })
+            .call_method_for_objects_optional("sse_chunks", ())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get SSE chunks: {e}"))
     }
 }
 
@@ -183,8 +143,8 @@ impl LLMStreamCall {
 /// Either an `LLMCall` or `LLMStreamCall`
 ///
 /// The CFFI layer returns different object types (`OBJECT_LLM_CALL` vs
-/// `OBJECT_LLM_STREAM_CALL`) based on the actual underlying type. We dispatch on
-/// the protobuf oneof discriminator to construct the appropriate variant.
+/// `OBJECT_LLM_STREAM_CALL`) based on the actual underlying type. We dispatch
+/// on the protobuf oneof discriminator to construct the appropriate variant.
 ///
 /// This mirrors how Python uses `Either<LLMCall, LLMStreamCall>` and Go uses
 /// interface embedding where `LLMStreamCall` extends `LLMCall`.
@@ -196,7 +156,7 @@ pub enum LLMCallKind {
     Stream(LLMStreamCall),
 }
 
-impl LLMCallKind {
+impl DecodeHandle for LLMCallKind {
     /// Create from an object handle by dispatching on the object type
     ///
     /// The CFFI layer encodes each object with its actual type:
@@ -204,23 +164,25 @@ impl LLMCallKind {
     ///   (`OBJECT_LLM_CALL` = 6)
     /// - `Either::Right(LLMStreamCall)` -> `BamlObjectHandle.llm_stream_call`
     ///   (`OBJECT_LLM_STREAM_CALL` = 7)
-    pub(crate) fn from_handle(
+    fn decode_handle(
         handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const std::ffi::c_void,
-    ) -> Self {
-        use crate::proto::baml_cffi_v1::BamlObjectType;
-
-        let object_type =
-            super::object_type_from_handle(&handle).unwrap_or(BamlObjectType::ObjectLlmCall);
-
-        match object_type {
-            BamlObjectType::ObjectLlmStreamCall => {
-                LLMCallKind::Stream(LLMStreamCall::from_handle(handle, runtime))
+        runtime: *const c_void,
+    ) -> Result<Self, crate::BamlError> {
+        match super::object_type_from_handle(&handle)? {
+            BamlObjectType::ObjectLlmCall => {
+                Ok(LLMCallKind::Call(LLMCall::decode_handle(handle, runtime)?))
             }
-            _ => LLMCallKind::Call(LLMCall::from_handle(handle, runtime)),
+            BamlObjectType::ObjectLlmStreamCall => Ok(LLMCallKind::Stream(
+                LLMStreamCall::decode_handle(handle, runtime)?,
+            )),
+            other => Err(crate::BamlError::internal(format!(
+                "invalid LLM call kind handle: {other:?}"
+            ))),
         }
     }
+}
 
+impl LLMCallKind {
     /// Get the client name
     pub fn client_name(&self) -> String {
         match self {
@@ -269,7 +231,8 @@ impl LLMCallKind {
         }
     }
 
-    /// Try to get as a streaming `LLMStreamCall` (returns None for regular calls)
+    /// Try to get as a streaming `LLMStreamCall` (returns None for regular
+    /// calls)
     pub fn as_stream(&self) -> Option<&LLMStreamCall> {
         match self {
             LLMCallKind::Call(_) => None,

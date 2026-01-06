@@ -9,14 +9,14 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 /// Generated from: ("light" | "dark")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2KdarkOrKlight {
-    #[baml(name = "string_light")]
-    Klight(String),
+    #[baml(name = "string_light", literal_string = "light")]
+    Klight,
 
-    #[baml(name = "string_dark")]
-    Kdark(String),
+    #[baml(name = "string_dark", literal_string = "dark")]
+    Kdark,
 }
 
 impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
@@ -27,19 +27,19 @@ impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
 
 impl Default for Union2KdarkOrKlight {
     fn default() -> Self {
-        Self::Klight(Default::default())
+        Self::Klight
     }
 }
 
 /// Generated from: ("grid" | "list")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2KgridOrKlist {
-    #[baml(name = "string_grid")]
-    Kgrid(String),
+    #[baml(name = "string_grid", literal_string = "grid")]
+    Kgrid,
 
-    #[baml(name = "string_list")]
-    Klist(String),
+    #[baml(name = "string_list", literal_string = "list")]
+    Klist,
 }
 
 impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
@@ -50,7 +50,7 @@ impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
 
 impl Default for Union2KgridOrKlist {
     fn default() -> Self {
-        Self::Kgrid(Default::default())
+        Self::Kgrid
     }
 }
 
@@ -81,17 +81,17 @@ impl Default for Union3BoolOrIntOrString {
 }
 
 /// Generated from: ("immediate" | "daily" | "weekly")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KdailyOrKimmediateOrKweekly {
-    #[baml(name = "string_immediate")]
-    Kimmediate(String),
+    #[baml(name = "string_immediate", literal_string = "immediate")]
+    Kimmediate,
 
-    #[baml(name = "string_daily")]
-    Kdaily(String),
+    #[baml(name = "string_daily", literal_string = "daily")]
+    Kdaily,
 
-    #[baml(name = "string_weekly")]
-    Kweekly(String),
+    #[baml(name = "string_weekly", literal_string = "weekly")]
+    Kweekly,
 }
 
 impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKweekly {
@@ -102,22 +102,22 @@ impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKwee
 
 impl Default for Union3KdailyOrKimmediateOrKweekly {
     fn default() -> Self {
-        Self::Kimmediate(Default::default())
+        Self::Kimmediate
     }
 }
 
 /// Generated from: ("todo" | "in_progress" | "done")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KdoneOrKin_progressOrKtodo {
-    #[baml(name = "string_todo")]
-    Ktodo(String),
+    #[baml(name = "string_todo", literal_string = "todo")]
+    Ktodo,
 
-    #[baml(name = "string_in_progress")]
-    Kin_progress(String),
+    #[baml(name = "string_in_progress", literal_string = "in_progress")]
+    Kin_progress,
 
-    #[baml(name = "string_done")]
-    Kdone(String),
+    #[baml(name = "string_done", literal_string = "done")]
+    Kdone,
 }
 
 impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtodo {
@@ -128,22 +128,22 @@ impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtod
 
 impl Default for Union3KdoneOrKin_progressOrKtodo {
     fn default() -> Self {
-        Self::Ktodo(Default::default())
+        Self::Ktodo
     }
 }
 
 /// Generated from: ("public" | "private" | "friends")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KfriendsOrKprivateOrKpublic {
-    #[baml(name = "string_public")]
-    Kpublic(String),
+    #[baml(name = "string_public", literal_string = "public")]
+    Kpublic,
 
-    #[baml(name = "string_private")]
-    Kprivate(String),
+    #[baml(name = "string_private", literal_string = "private")]
+    Kprivate,
 
-    #[baml(name = "string_friends")]
-    Kfriends(String),
+    #[baml(name = "string_friends", literal_string = "friends")]
+    Kfriends,
 }
 
 impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpublic {
@@ -154,22 +154,22 @@ impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpub
 
 impl Default for Union3KfriendsOrKprivateOrKpublic {
     fn default() -> Self {
-        Self::Kpublic(Default::default())
+        Self::Kpublic
     }
 }
 
 /// Generated from: ("low" | "medium" | "high")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KhighOrKlowOrKmedium {
-    #[baml(name = "string_low")]
-    Klow(String),
+    #[baml(name = "string_low", literal_string = "low")]
+    Klow,
 
-    #[baml(name = "string_medium")]
-    Kmedium(String),
+    #[baml(name = "string_medium", literal_string = "medium")]
+    Kmedium,
 
-    #[baml(name = "string_high")]
-    Khigh(String),
+    #[baml(name = "string_high", literal_string = "high")]
+    Khigh,
 }
 
 impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
@@ -180,25 +180,25 @@ impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
 
 impl Default for Union3KhighOrKlowOrKmedium {
     fn default() -> Self {
-        Self::Klow(Default::default())
+        Self::Klow
     }
 }
 
 /// Generated from: ("planning" | "active" | "completed" | "cancelled")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4KactiveOrKcancelledOrKcompletedOrKplanning {
-    #[baml(name = "string_planning")]
-    Kplanning(String),
+    #[baml(name = "string_planning", literal_string = "planning")]
+    Kplanning,
 
-    #[baml(name = "string_active")]
-    Kactive(String),
+    #[baml(name = "string_active", literal_string = "active")]
+    Kactive,
 
-    #[baml(name = "string_completed")]
-    Kcompleted(String),
+    #[baml(name = "string_completed", literal_string = "completed")]
+    Kcompleted,
 
-    #[baml(name = "string_cancelled")]
-    Kcancelled(String),
+    #[baml(name = "string_cancelled", literal_string = "cancelled")]
+    Kcancelled,
 }
 
 impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
@@ -211,25 +211,25 @@ impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
 
 impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     fn default() -> Self {
-        Self::Kplanning(Default::default())
+        Self::Kplanning
     }
 }
 
 /// Generated from: ("small" | "medium" | "large" | "enterprise")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
-    #[baml(name = "string_small")]
-    Ksmall(String),
+    #[baml(name = "string_small", literal_string = "small")]
+    Ksmall,
 
-    #[baml(name = "string_medium")]
-    Kmedium(String),
+    #[baml(name = "string_medium", literal_string = "medium")]
+    Kmedium,
 
-    #[baml(name = "string_large")]
-    Klarge(String),
+    #[baml(name = "string_large", literal_string = "large")]
+    Klarge,
 
-    #[baml(name = "string_enterprise")]
-    Kenterprise(String),
+    #[baml(name = "string_enterprise", literal_string = "enterprise")]
+    Kenterprise,
 }
 
 impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
@@ -242,6 +242,6 @@ impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
 
 impl Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     fn default() -> Self {
-        Self::Ksmall(Default::default())
+        Self::Ksmall
     }
 }

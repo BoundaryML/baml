@@ -101,3 +101,10 @@ impl<V1: BamlEncode, V2: BamlEncode> IntoKwargs for ((&str, V1), (&str, V2)) {
         ]
     }
 }
+
+pub(crate) trait DecodeHandle: Sized {
+    fn decode_handle(
+        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
+        runtime: *const std::ffi::c_void,
+    ) -> Result<Self, BamlError>;
+}

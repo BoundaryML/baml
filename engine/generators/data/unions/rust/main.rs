@@ -3,12 +3,12 @@
 
 mod baml_client;
 
-use baml_client::B;
+use baml_client::sync_client::B;
 use baml_client::types::*;
 
 fn main() {
     // Create a union category using the Kservice variant
-    let category = Union2KresourceOrKservice::Kservice("service".to_string());
+    let category = Union2KresourceOrKservice::Kservice;
 
     let input = ExistingSystemComponent {
         id: 1,
@@ -31,7 +31,7 @@ mod tests {
     #[test]
     fn test_json_input_stream() {
         // Create a union category using the Kservice variant
-        let category = Union2KresourceOrKservice::Kservice("service".to_string());
+        let category = Union2KresourceOrKservice::Kservice;
 
         let input = ExistingSystemComponent {
             id: 1,
@@ -43,7 +43,8 @@ mod tests {
 
         let array = vec![input];
 
-        let mut stream = B.JsonInput
+        let mut stream = B
+            .JsonInput
             .stream(&array)
             .expect("Failed to start JsonInput stream");
 
@@ -71,7 +72,7 @@ mod tests {
     #[test]
     fn test_json_input() {
         // Create a union category using the Kservice variant
-        let category = Union2KresourceOrKservice::Kservice("service".to_string());
+        let category = Union2KresourceOrKservice::Kservice;
 
         let input = ExistingSystemComponent {
             id: 1,
@@ -86,6 +87,9 @@ mod tests {
         let result = B.JsonInput.call(&array).expect("Failed to call JsonInput");
 
         // Basic validation - ensure we get a non-empty result
-        assert!(!result.is_empty(), "Expected non-empty result from JsonInput");
+        assert!(
+            !result.is_empty(),
+            "Expected non-empty result from JsonInput"
+        );
     }
 }

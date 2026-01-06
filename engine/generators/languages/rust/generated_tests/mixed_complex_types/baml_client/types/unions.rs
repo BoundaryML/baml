@@ -55,14 +55,14 @@ impl Default for Union2ErrorOrSuccess {
 }
 
 /// Generated from: ("leaf" | "branch")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2KbranchOrKleaf {
-    #[baml(name = "string_leaf")]
-    Kleaf(String),
+    #[baml(name = "string_leaf", literal_string = "leaf")]
+    Kleaf,
 
-    #[baml(name = "string_branch")]
-    Kbranch(String),
+    #[baml(name = "string_branch", literal_string = "branch")]
+    Kbranch,
 }
 
 impl AsRef<Union2KbranchOrKleaf> for Union2KbranchOrKleaf {
@@ -73,19 +73,19 @@ impl AsRef<Union2KbranchOrKleaf> for Union2KbranchOrKleaf {
 
 impl Default for Union2KbranchOrKleaf {
     fn default() -> Self {
-        Self::Kleaf(Default::default())
+        Self::Kleaf
     }
 }
 
 /// Generated from: ("success" | "error")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2KerrorOrKsuccess {
-    #[baml(name = "string_success")]
-    Ksuccess(String),
+    #[baml(name = "string_success", literal_string = "success")]
+    Ksuccess,
 
-    #[baml(name = "string_error")]
-    Kerror(String),
+    #[baml(name = "string_error", literal_string = "error")]
+    Kerror,
 }
 
 impl AsRef<Union2KerrorOrKsuccess> for Union2KerrorOrKsuccess {
@@ -96,7 +96,7 @@ impl AsRef<Union2KerrorOrKsuccess> for Union2KerrorOrKsuccess {
 
 impl Default for Union2KerrorOrKsuccess {
     fn default() -> Self {
-        Self::Ksuccess(Default::default())
+        Self::Ksuccess
     }
 }
 
@@ -179,17 +179,17 @@ impl Default for Union3FloatOrIntOrString {
 }
 
 /// Generated from: ("and" | "or" | "not")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KandOrKnotOrKor {
-    #[baml(name = "string_and")]
-    Kand(String),
+    #[baml(name = "string_and", literal_string = "and")]
+    Kand,
 
-    #[baml(name = "string_or")]
-    Kor(String),
+    #[baml(name = "string_or", literal_string = "or")]
+    Kor,
 
-    #[baml(name = "string_not")]
-    Knot(String),
+    #[baml(name = "string_not", literal_string = "not")]
+    Knot,
 }
 
 impl AsRef<Union3KandOrKnotOrKor> for Union3KandOrKnotOrKor {
@@ -200,22 +200,22 @@ impl AsRef<Union3KandOrKnotOrKor> for Union3KandOrKnotOrKor {
 
 impl Default for Union3KandOrKnotOrKor {
     fn default() -> Self {
-        Self::Kand(Default::default())
+        Self::Kand
     }
 }
 
 /// Generated from: ("draft" | "published" | "archived")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KarchivedOrKdraftOrKpublished {
-    #[baml(name = "string_draft")]
-    Kdraft(String),
+    #[baml(name = "string_draft", literal_string = "draft")]
+    Kdraft,
 
-    #[baml(name = "string_published")]
-    Kpublished(String),
+    #[baml(name = "string_published", literal_string = "published")]
+    Kpublished,
 
-    #[baml(name = "string_archived")]
-    Karchived(String),
+    #[baml(name = "string_archived", literal_string = "archived")]
+    Karchived,
 }
 
 impl AsRef<Union3KarchivedOrKdraftOrKpublished> for Union3KarchivedOrKdraftOrKpublished {
@@ -226,22 +226,22 @@ impl AsRef<Union3KarchivedOrKdraftOrKpublished> for Union3KarchivedOrKdraftOrKpu
 
 impl Default for Union3KarchivedOrKdraftOrKpublished {
     fn default() -> Self {
-        Self::Kdraft(Default::default())
+        Self::Kdraft
     }
 }
 
 /// Generated from: ("image" | "audio" | "document")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KaudioOrKdocumentOrKimage {
-    #[baml(name = "string_image")]
-    Kimage(String),
+    #[baml(name = "string_image", literal_string = "image")]
+    Kimage,
 
-    #[baml(name = "string_audio")]
-    Kaudio(String),
+    #[baml(name = "string_audio", literal_string = "audio")]
+    Kaudio,
 
-    #[baml(name = "string_document")]
-    Kdocument(String),
+    #[baml(name = "string_document", literal_string = "document")]
+    Kdocument,
 }
 
 impl AsRef<Union3KaudioOrKdocumentOrKimage> for Union3KaudioOrKdocumentOrKimage {
@@ -252,22 +252,22 @@ impl AsRef<Union3KaudioOrKdocumentOrKimage> for Union3KaudioOrKdocumentOrKimage 
 
 impl Default for Union3KaudioOrKdocumentOrKimage {
     fn default() -> Self {
-        Self::Kimage(Default::default())
+        Self::Kimage
     }
 }
 
 /// Generated from: ("flex" | "grid" | "stack")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KflexOrKgridOrKstack {
-    #[baml(name = "string_flex")]
-    Kflex(String),
+    #[baml(name = "string_flex", literal_string = "flex")]
+    Kflex,
 
-    #[baml(name = "string_grid")]
-    Kgrid(String),
+    #[baml(name = "string_grid", literal_string = "grid")]
+    Kgrid,
 
-    #[baml(name = "string_stack")]
-    Kstack(String),
+    #[baml(name = "string_stack", literal_string = "stack")]
+    Kstack,
 }
 
 impl AsRef<Union3KflexOrKgridOrKstack> for Union3KflexOrKgridOrKstack {
@@ -278,22 +278,22 @@ impl AsRef<Union3KflexOrKgridOrKstack> for Union3KflexOrKgridOrKstack {
 
 impl Default for Union3KflexOrKgridOrKstack {
     fn default() -> Self {
-        Self::Kflex(Default::default())
+        Self::Kflex
     }
 }
 
 /// Generated from: ("plain" | "markdown" | "html")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KhtmlOrKmarkdownOrKplain {
-    #[baml(name = "string_plain")]
-    Kplain(String),
+    #[baml(name = "string_plain", literal_string = "plain")]
+    Kplain,
 
-    #[baml(name = "string_markdown")]
-    Kmarkdown(String),
+    #[baml(name = "string_markdown", literal_string = "markdown")]
+    Kmarkdown,
 
-    #[baml(name = "string_html")]
-    Khtml(String),
+    #[baml(name = "string_html", literal_string = "html")]
+    Khtml,
 }
 
 impl AsRef<Union3KhtmlOrKmarkdownOrKplain> for Union3KhtmlOrKmarkdownOrKplain {
@@ -304,7 +304,7 @@ impl AsRef<Union3KhtmlOrKmarkdownOrKplain> for Union3KhtmlOrKmarkdownOrKplain {
 
 impl Default for Union3KhtmlOrKmarkdownOrKplain {
     fn default() -> Self {
-        Self::Kplain(Default::default())
+        Self::Kplain
     }
 }
 
@@ -369,20 +369,20 @@ impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
 }
 
 /// Generated from: ("button" | "text" | "image" | "container")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4KbuttonOrKcontainerOrKimageOrKtext {
-    #[baml(name = "string_button")]
-    Kbutton(String),
+    #[baml(name = "string_button", literal_string = "button")]
+    Kbutton,
 
-    #[baml(name = "string_text")]
-    Ktext(String),
+    #[baml(name = "string_text", literal_string = "text")]
+    Ktext,
 
-    #[baml(name = "string_image")]
-    Kimage(String),
+    #[baml(name = "string_image", literal_string = "image")]
+    Kimage,
 
-    #[baml(name = "string_container")]
-    Kcontainer(String),
+    #[baml(name = "string_container", literal_string = "container")]
+    Kcontainer,
 }
 
 impl AsRef<Union4KbuttonOrKcontainerOrKimageOrKtext> for Union4KbuttonOrKcontainerOrKimageOrKtext {
@@ -393,28 +393,28 @@ impl AsRef<Union4KbuttonOrKcontainerOrKimageOrKtext> for Union4KbuttonOrKcontain
 
 impl Default for Union4KbuttonOrKcontainerOrKimageOrKtext {
     fn default() -> Self {
-        Self::Kbutton(Default::default())
+        Self::Kbutton
     }
 }
 
 /// Generated from: (1 | 2 | 3 | 4 | 5)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-    #[baml(name = "int_1")]
-    IntK1(i64),
+    #[baml(name = "int_1", literal_int = 1)]
+    IntK1,
 
-    #[baml(name = "int_2")]
-    IntK2(i64),
+    #[baml(name = "int_2", literal_int = 2)]
+    IntK2,
 
-    #[baml(name = "int_3")]
-    IntK3(i64),
+    #[baml(name = "int_3", literal_int = 3)]
+    IntK3,
 
-    #[baml(name = "int_4")]
-    IntK4(i64),
+    #[baml(name = "int_4", literal_int = 4)]
+    IntK4,
 
-    #[baml(name = "int_5")]
-    IntK5(i64),
+    #[baml(name = "int_5", literal_int = 5)]
+    IntK5,
 }
 
 impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
@@ -425,28 +425,28 @@ impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK
 
 impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     fn default() -> Self {
-        Self::IntK1(Default::default())
+        Self::IntK1
     }
 }
 
 /// Generated from: ("eq" | "ne" | "gt" | "lt" | "contains")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union5KcontainsOrKeqOrKgtOrKltOrKne {
-    #[baml(name = "string_eq")]
-    Keq(String),
+    #[baml(name = "string_eq", literal_string = "eq")]
+    Keq,
 
-    #[baml(name = "string_ne")]
-    Kne(String),
+    #[baml(name = "string_ne", literal_string = "ne")]
+    Kne,
 
-    #[baml(name = "string_gt")]
-    Kgt(String),
+    #[baml(name = "string_gt", literal_string = "gt")]
+    Kgt,
 
-    #[baml(name = "string_lt")]
-    Klt(String),
+    #[baml(name = "string_lt", literal_string = "lt")]
+    Klt,
 
-    #[baml(name = "string_contains")]
-    Kcontains(String),
+    #[baml(name = "string_contains", literal_string = "contains")]
+    Kcontains,
 }
 
 impl AsRef<Union5KcontainsOrKeqOrKgtOrKltOrKne> for Union5KcontainsOrKeqOrKgtOrKltOrKne {
@@ -457,6 +457,6 @@ impl AsRef<Union5KcontainsOrKeqOrKgtOrKltOrKne> for Union5KcontainsOrKeqOrKgtOrK
 
 impl Default for Union5KcontainsOrKeqOrKgtOrKltOrKne {
     fn default() -> Self {
-        Self::Keq(Default::default())
+        Self::Keq
     }
 }

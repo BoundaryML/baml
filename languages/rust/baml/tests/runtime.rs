@@ -1,4 +1,5 @@
 //! Tests for `BamlRuntime` creation and function calls.
+#![allow(clippy::print_stdout, clippy::items_after_statements)]
 
 use std::collections::HashMap;
 
@@ -34,7 +35,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -70,7 +71,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -106,7 +107,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -151,7 +152,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -170,7 +171,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(result.is_err(), "Expected error for invalid BAML");
     }
 
@@ -188,7 +189,7 @@ mod creation {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_err(),
             "Expected error for missing client reference"
@@ -198,7 +199,7 @@ mod creation {
     #[test]
     fn empty_files_does_not_panic() {
         let files: HashMap<String, String> = HashMap::new();
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         // Empty project should fail but not panic
         let _ = result;
     }
@@ -324,7 +325,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -361,7 +362,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -396,7 +397,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -426,7 +427,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -466,7 +467,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -504,7 +505,7 @@ mod complex_scenarios {
                 .to_string(),
         );
 
-        let result = BamlRuntime::new(".", files, env_vars());
+        let result = BamlRuntime::new(".", &files, &env_vars());
         assert!(
             result.is_ok(),
             "Runtime creation failed: {:?}",
@@ -558,7 +559,7 @@ mod function_calls {
             .to_string(),
         );
 
-        let runtime = BamlRuntime::new(".", files, env_vars()).expect("runtime creation failed");
+        let runtime = BamlRuntime::new(".", &files, &env_vars()).expect("runtime creation failed");
         let args = FunctionArgs::new().arg("name", "World");
 
         // This should fail because the API key is invalid, but it proves the call path
@@ -597,7 +598,7 @@ mod function_calls {
 
         // Note: env vars must be passed in FunctionArgs, not just runtime creation
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("name", "World")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -619,14 +620,14 @@ mod function_calls {
     fn call_function_with_derived_types_succeeds() {
         use baml::{BamlDecode, BamlEncode};
 
-        let api_key = require_env!("OPENAI_API_KEY");
-
         #[derive(Debug, PartialEq, BamlEncode, BamlDecode)]
         #[baml(name = "Person")]
         struct Person {
             name: String,
             age: i64,
         }
+
+        let api_key = require_env!("OPENAI_API_KEY");
 
         let mut files = HashMap::new();
         files.insert(
@@ -657,7 +658,7 @@ mod function_calls {
 
         // Note: env vars must be passed in FunctionArgs, not just runtime creation
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("text", "John is 30 years old")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -704,7 +705,7 @@ mod function_calls {
         );
 
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("name", "Alice")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -772,7 +773,7 @@ mod function_calls {
         );
 
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("name", "Alice")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -848,7 +849,7 @@ mod function_calls {
         );
 
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("name", "Bob")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -947,7 +948,7 @@ mod function_calls {
         );
 
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("topic", "rust programming")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -959,7 +960,6 @@ mod function_calls {
             )
             .expect("stream creation failed");
 
-        let mut saw_pending = false;
         let mut saw_started = false;
         let mut saw_done = false;
         let mut partial_count = 0;
@@ -976,7 +976,7 @@ mod function_calls {
                             partial_count, state.state, state.value
                         );
                         match state.state {
-                            StreamingState::Pending => saw_pending = true,
+                            StreamingState::Pending => {}
                             StreamingState::Started => saw_started = true,
                             StreamingState::Done => saw_done = true,
                         }
@@ -1000,9 +1000,7 @@ mod function_calls {
 
         let msg = stream.get_final_response().expect("Expected final result");
         assert!(!msg.content.is_empty(), "Content should not be empty");
-        println!(
-            "Streaming with state test passed with {partial_count} partial updates"
-        );
+        println!("Streaming with state test passed with {partial_count} partial updates");
     }
 
     /// Test streaming function call with valid API key
@@ -1057,7 +1055,7 @@ mod function_calls {
         );
 
         let runtime =
-            BamlRuntime::new(".", files, HashMap::new()).expect("runtime creation failed");
+            BamlRuntime::new(".", &files, &HashMap::new()).expect("runtime creation failed");
         let args = FunctionArgs::new()
             .arg("text", "Alice is 25 years old")
             .with_env("OPENAI_API_KEY", &api_key);
@@ -1102,8 +1100,6 @@ mod function_calls {
         let person = stream.get_final_response().expect("Expected final result");
         assert_eq!(person.name, "Alice");
         assert_eq!(person.age, 25);
-        println!(
-            "Streaming test passed with {partial_count} partial updates"
-        );
+        println!("Streaming test passed with {partial_count} partial updates");
     }
 }

@@ -3,7 +3,7 @@
 
 mod baml_client;
 
-use baml_client::B;
+use baml_client::sync_client::B;
 use baml_client::types::*;
 
 fn main() {
@@ -16,23 +16,24 @@ mod tests {
 
     #[test]
     fn test_string_literals() {
-        let result = B.TestStringLiterals
+        let result = B
+            .TestStringLiterals
             .call("test string literals")
             .expect("Failed to call TestStringLiterals");
 
         // Verify string literal values
         assert!(
-            matches!(result.status, Union3KactiveOrKinactiveOrKpending::Kactive(_)),
+            matches!(result.status, Union3KactiveOrKinactiveOrKpending::Kactive),
             "Expected status to be 'active', got {:?}",
             result.status
         );
         assert!(
-            matches!(result.environment, Union3KdevOrKprodOrKstaging::Kprod(_)),
+            matches!(result.environment, Union3KdevOrKprodOrKstaging::Kprod),
             "Expected environment to be 'prod', got {:?}",
             result.environment
         );
         assert!(
-            matches!(result.method, Union4KDELETEOrKGETOrKPOSTOrKPUT::KPOST(_)),
+            matches!(result.method, Union4KDELETEOrKGETOrKPOSTOrKPUT::KPOST),
             "Expected method to be 'POST', got {:?}",
             result.method
         );
@@ -40,26 +41,30 @@ mod tests {
 
     #[test]
     fn test_integer_literals() {
-        let result = B.TestIntegerLiterals
+        let result = B
+            .TestIntegerLiterals
             .call("test integer literals")
             .expect("Failed to call TestIntegerLiterals");
 
         // Verify integer literal values
         assert!(
-            matches!(result.priority, Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK3(_)),
+            matches!(
+                result.priority,
+                Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK3
+            ),
             "Expected priority to be 3, got {:?}",
             result.priority
         );
         assert!(
             matches!(
                 result.httpStatus,
-                Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK201(_)
+                Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK201
             ),
             "Expected httpStatus to be 201, got {:?}",
             result.httpStatus
         );
         assert!(
-            matches!(result.maxRetries, Union4IntK0OrIntK1OrIntK3OrIntK5::IntK3(_)),
+            matches!(result.maxRetries, Union4IntK0OrIntK1OrIntK3OrIntK5::IntK3),
             "Expected maxRetries to be 3, got {:?}",
             result.maxRetries
         );
@@ -67,7 +72,8 @@ mod tests {
 
     #[test]
     fn test_boolean_literals() {
-        let result = B.TestBooleanLiterals
+        let result = B
+            .TestBooleanLiterals
             .call("test boolean literals")
             .expect("Failed to call TestBooleanLiterals");
 
@@ -81,7 +87,7 @@ mod tests {
             "Expected alwaysFalse to be false, got true"
         );
         assert!(
-            matches!(result.eitherBool, Union2BoolKFalseOrBoolKTrue::BoolKTrue(_)),
+            matches!(result.eitherBool, Union2BoolKFalseOrBoolKTrue::BoolKTrue),
             "Expected eitherBool to be true, got {:?}",
             result.eitherBool
         );
@@ -89,7 +95,8 @@ mod tests {
 
     #[test]
     fn test_mixed_literals() {
-        let result = B.TestMixedLiterals
+        let result = B
+            .TestMixedLiterals
             .call("test mixed literals")
             .expect("Failed to call TestMixedLiterals");
 
@@ -100,22 +107,22 @@ mod tests {
             result.id
         );
         assert!(
-            matches!(result.r#type, Union3KadminOrKguestOrKuser::Kadmin(_)),
+            matches!(result.r#type, Union3KadminOrKguestOrKuser::Kadmin),
             "Expected type to be 'admin', got {:?}",
             result.r#type
         );
         assert!(
-            matches!(result.level, Union3IntK1OrIntK2OrIntK3::IntK2(_)),
+            matches!(result.level, Union3IntK1OrIntK2OrIntK3::IntK2),
             "Expected level to be 2, got {:?}",
             result.level
         );
         assert!(
-            matches!(result.isActive, Union2BoolKFalseOrBoolKTrue::BoolKTrue(_)),
+            matches!(result.isActive, Union2BoolKFalseOrBoolKTrue::BoolKTrue),
             "Expected isActive to be true, got {:?}",
             result.isActive
         );
         assert!(
-            matches!(result.apiVersion, Union3Kv1OrKv2OrKv3::Kv2(_)),
+            matches!(result.apiVersion, Union3Kv1OrKv2OrKv3::Kv2),
             "Expected apiVersion to be 'v2', got {:?}",
             result.apiVersion
         );
@@ -123,7 +130,8 @@ mod tests {
 
     #[test]
     fn test_complex_literals() {
-        let result = B.TestComplexLiterals
+        let result = B
+            .TestComplexLiterals
             .call("test complex literals")
             .expect("Failed to call TestComplexLiterals");
 
@@ -131,7 +139,7 @@ mod tests {
         assert!(
             matches!(
                 result.state,
-                Union4KarchivedOrKdeletedOrKdraftOrKpublished::Kpublished(_)
+                Union4KarchivedOrKdeletedOrKdraftOrKpublished::Kpublished
             ),
             "Expected state to be 'published', got {:?}",
             result.state
@@ -139,16 +147,13 @@ mod tests {
         assert!(
             matches!(
                 result.retryCount,
-                Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK5(_)
+                Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK5
             ),
             "Expected retryCount to be 5, got {:?}",
             result.retryCount
         );
         assert!(
-            matches!(
-                result.response,
-                Union3KerrorOrKsuccessOrKtimeout::Ksuccess(_)
-            ),
+            matches!(result.response, Union3KerrorOrKsuccessOrKtimeout::Ksuccess),
             "Expected response to be 'success', got {:?}",
             result.response
         );

@@ -3,7 +3,7 @@
 
 mod baml_client;
 
-use baml_client::B;
+use baml_client::sync_client::B;
 use baml_client::types::*;
 
 fn main() {
@@ -16,30 +16,41 @@ mod tests {
 
     #[test]
     fn test_kitchen_sink() {
-        let result = B.TestKitchenSink.call("test kitchen sink").expect("Failed to call TestKitchenSink");
+        let result = B
+            .TestKitchenSink
+            .call("test kitchen sink")
+            .expect("Failed to call TestKitchenSink");
 
         // Basic field validations
-        assert!(result.id > 0, "Expected id to be positive, got {}", result.id);
+        assert!(
+            result.id > 0,
+            "Expected id to be positive, got {}",
+            result.id
+        );
         assert!(!result.name.is_empty(), "Expected name to be non-empty");
-        assert!(result.score > 0.0, "Expected score to be positive, got {}", result.score);
+        assert!(
+            result.score > 0.0,
+            "Expected score to be positive, got {}",
+            result.score
+        );
         // nothing field is () which is always "null" in Rust
 
         // Verify literal union fields using match
         let status_valid = matches!(
             result.status,
-            Union3KarchivedOrKdraftOrKpublished::Kdraft(_)
-                | Union3KarchivedOrKdraftOrKpublished::Kpublished(_)
-                | Union3KarchivedOrKdraftOrKpublished::Karchived(_)
+            Union3KarchivedOrKdraftOrKpublished::Kdraft
+                | Union3KarchivedOrKdraftOrKpublished::Kpublished
+                | Union3KarchivedOrKdraftOrKpublished::Karchived
         );
         assert!(status_valid, "Expected status to be a valid literal type");
 
         let priority_valid = matches!(
             result.priority,
-            Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK1(_)
-                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK2(_)
-                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK3(_)
-                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK4(_)
-                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK5(_)
+            Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK1
+                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK2
+                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK3
+                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK4
+                | Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK5
         );
         assert!(priority_valid, "Expected priority to be between 1-5");
 
@@ -65,24 +76,44 @@ mod tests {
         // metadata and scores are HashMap types
 
         // Verify nested objects
-        assert!(result.user.id > 0, "Expected user.id to be positive, got {}", result.user.id);
-        assert!(!result.user.profile.name.is_empty(), "Expected user.profile.name to be non-empty");
-        assert!(!result.user.profile.email.is_empty(), "Expected user.profile.email to be non-empty");
+        assert!(
+            result.user.id > 0,
+            "Expected user.id to be positive, got {}",
+            result.user.id
+        );
+        assert!(
+            !result.user.profile.name.is_empty(),
+            "Expected user.profile.name to be non-empty"
+        );
+        assert!(
+            !result.user.profile.email.is_empty(),
+            "Expected user.profile.email to be non-empty"
+        );
     }
 
     #[test]
     fn test_ultra_complex() {
-        let result = B.TestUltraComplex.call("test ultra complex").expect("Failed to call TestUltraComplex");
+        let result = B
+            .TestUltraComplex
+            .call("test ultra complex")
+            .expect("Failed to call TestUltraComplex");
 
         // Basic validations
-        assert!(result.tree.id > 0, "Expected tree.id to be positive, got {}", result.tree.id);
+        assert!(
+            result.tree.id > 0,
+            "Expected tree.id to be positive, got {}",
+            result.tree.id
+        );
 
         // Verify tree union types using match
         let tree_type_valid = matches!(
             result.tree.r#type,
-            Union2KbranchOrKleaf::Kleaf(_) | Union2KbranchOrKleaf::Kbranch(_)
+            Union2KbranchOrKleaf::Kleaf | Union2KbranchOrKleaf::Kbranch
         );
-        assert!(tree_type_valid, "Expected tree.type to be 'leaf' or 'branch'");
+        assert!(
+            tree_type_valid,
+            "Expected tree.type to be 'leaf' or 'branch'"
+        );
 
         let tree_value_valid = matches!(
             result.tree.value,
@@ -94,41 +125,57 @@ mod tests {
         assert!(tree_value_valid, "Expected tree.value to have a valid type");
 
         // Verify widgets
-        assert!(!result.widgets.is_empty(), "Expected at least 1 widget, got {}", result.widgets.len());
+        assert!(
+            !result.widgets.is_empty(),
+            "Expected at least 1 widget, got {}",
+            result.widgets.len()
+        );
 
         // Verify widget types using match
         for (i, widget) in result.widgets.iter().enumerate() {
             let widget_type_valid = matches!(
                 widget.r#type,
-                Union4KbuttonOrKcontainerOrKimageOrKtext::Kbutton(_)
-                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Ktext(_)
-                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Kimage(_)
-                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Kcontainer(_)
+                Union4KbuttonOrKcontainerOrKimageOrKtext::Kbutton
+                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Ktext
+                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Kimage
+                    | Union4KbuttonOrKcontainerOrKimageOrKtext::Kcontainer
             );
             assert!(widget_type_valid, "Widget {} has invalid type", i);
 
             // Verify appropriate widget fields are populated based on type
             match &widget.r#type {
-                Union4KbuttonOrKcontainerOrKimageOrKtext::Kbutton(_) => {
-                    assert!(widget.button.is_some(), "Button widget {} missing button data", i);
+                Union4KbuttonOrKcontainerOrKimageOrKtext::Kbutton => {
+                    assert!(
+                        widget.button.is_some(),
+                        "Button widget {} missing button data",
+                        i
+                    );
                 }
-                Union4KbuttonOrKcontainerOrKimageOrKtext::Ktext(_) => {
+                Union4KbuttonOrKcontainerOrKimageOrKtext::Ktext => {
                     assert!(widget.text.is_some(), "Text widget {} missing text data", i);
                     if let Some(ref text) = widget.text {
                         let format_valid = matches!(
                             text.format,
-                            Union3KhtmlOrKmarkdownOrKplain::Kplain(_)
-                                | Union3KhtmlOrKmarkdownOrKplain::Kmarkdown(_)
-                                | Union3KhtmlOrKmarkdownOrKplain::Khtml(_)
+                            Union3KhtmlOrKmarkdownOrKplain::Kplain
+                                | Union3KhtmlOrKmarkdownOrKplain::Kmarkdown
+                                | Union3KhtmlOrKmarkdownOrKplain::Khtml
                         );
                         assert!(format_valid, "Text widget {} has invalid format", i);
                     }
                 }
-                Union4KbuttonOrKcontainerOrKimageOrKtext::Kimage(_) => {
-                    assert!(widget.img.is_some(), "Image widget {} missing image data", i);
+                Union4KbuttonOrKcontainerOrKimageOrKtext::Kimage => {
+                    assert!(
+                        widget.img.is_some(),
+                        "Image widget {} missing image data",
+                        i
+                    );
                 }
-                Union4KbuttonOrKcontainerOrKimageOrKtext::Kcontainer(_) => {
-                    assert!(widget.container.is_some(), "Container widget {} missing container data", i);
+                Union4KbuttonOrKcontainerOrKimageOrKtext::Kcontainer => {
+                    assert!(
+                        widget.container.is_some(),
+                        "Container widget {} missing container data",
+                        i
+                    );
                 }
             }
         }
@@ -136,17 +183,27 @@ mod tests {
 
     #[test]
     fn test_recursive_complexity() {
-        let result = B.TestRecursiveComplexity.call("test recursive complexity").expect("Failed to call TestRecursiveComplexity");
+        let result = B
+            .TestRecursiveComplexity
+            .call("test recursive complexity")
+            .expect("Failed to call TestRecursiveComplexity");
 
         // Basic validations
-        assert!(result.id > 0, "Expected node.id to be positive, got {}", result.id);
+        assert!(
+            result.id > 0,
+            "Expected node.id to be positive, got {}",
+            result.id
+        );
 
         // Verify node union types using match
         let node_type_valid = matches!(
             result.r#type,
-            Union2KbranchOrKleaf::Kleaf(_) | Union2KbranchOrKleaf::Kbranch(_)
+            Union2KbranchOrKleaf::Kleaf | Union2KbranchOrKleaf::Kbranch
         );
-        assert!(node_type_valid, "Expected node.type to be 'leaf' or 'branch'");
+        assert!(
+            node_type_valid,
+            "Expected node.type to be 'leaf' or 'branch'"
+        );
 
         let node_value_valid = matches!(
             result.value,

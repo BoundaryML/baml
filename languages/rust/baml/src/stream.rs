@@ -81,7 +81,12 @@ where
             }
         }
     }
+
+    pub fn iter_mut(&mut self) -> Partials<'_, TPartial, TFinal> {
+        <&mut Self as IntoIterator>::into_iter(self)
+    }
 }
+
 
 fn decode_partial<T: BamlDecode>(data: &[u8]) -> Result<T, BamlError> {
     let holder = CffiValueHolder::decode(data)
@@ -126,6 +131,13 @@ where
         Partials { call: self }
     }
 
+    pub fn cancel(&mut self) {
+        #[allow(unsafe_code)]
+        unsafe {
+            let _ = baml_sys::cancel_function_call(self.id);
+        }
+    }
+
     /// Block until final result (discarding partials)
     pub fn get_final_response(mut self) -> Result<TFinal, BamlError> {
         if let Some(res) = self.final_value.take() {
@@ -143,10 +155,10 @@ where
 }
 
 /// Support for iterating over the streaming call
-impl<'a, TPartial, TFinal: Clone> IntoIterator for &'a mut StreamingCall<TPartial, TFinal>
+impl<'a, TPartial, TFinal> IntoIterator for &'a mut StreamingCall<TPartial, TFinal>
 where
     TPartial: BamlDecode,
-    TFinal: BamlDecode,
+    TFinal: Clone + BamlDecode,
 {
     type IntoIter = Partials<'a, TPartial, TFinal>;
     type Item = Result<TPartial, BamlError>;
@@ -156,16 +168,16 @@ where
     }
 }
 
-/// Support for owned for loops
+// Support for owned for loops
 
 pub struct PartialsOwned<TPartial, TFinal: Clone> {
     call: StreamingCall<TPartial, TFinal>,
 }
 
-impl<TPartial, TFinal: Clone> Iterator for PartialsOwned<TPartial, TFinal>
+impl<TPartial, TFinal> Iterator for PartialsOwned<TPartial, TFinal>
 where
     TPartial: BamlDecode,
-    TFinal: BamlDecode,
+    TFinal: Clone + BamlDecode,
 {
     type Item = Result<TPartial, BamlError>;
 

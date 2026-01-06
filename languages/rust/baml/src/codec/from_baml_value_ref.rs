@@ -125,7 +125,8 @@ use crate::{
     types::{Checked, StreamState},
 };
 
-/// Checked ref - returns reference to the Checked wrapper containing `BamlValue`
+/// Checked ref - returns reference to the Checked wrapper containing
+/// `BamlValue`
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a Checked<Box<BamlValue<T, S>>>
 {
@@ -137,8 +138,8 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     }
 }
 
-/// `StreamState` ref - returns reference to the `StreamState` wrapper containing
-/// `BamlValue`
+/// `StreamState` ref - returns reference to the `StreamState` wrapper
+/// containing `BamlValue`
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a StreamState<Box<BamlValue<T, S>>>
 {

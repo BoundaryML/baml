@@ -1,4 +1,5 @@
 //! Tests for `BamlEncode` and `BamlDecode` traits.
+#![allow(clippy::approx_constant, clippy::cast_possible_wrap)]
 
 mod common;
 

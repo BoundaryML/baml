@@ -9,14 +9,14 @@ use super::*;
 use baml::{BamlDecode, BamlEncode};
 
 /// Generated from: (true | false)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union2BoolKFalseOrBoolKTrue {
-    #[baml(name = "bool_true")]
-    BoolKTrue(bool),
+    #[baml(name = "bool_true", literal_bool = true)]
+    BoolKTrue,
 
-    #[baml(name = "bool_false")]
-    BoolKFalse(bool),
+    #[baml(name = "bool_false", literal_bool = false)]
+    BoolKFalse,
 }
 
 impl AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
@@ -27,22 +27,22 @@ impl AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
 
 impl Default for Union2BoolKFalseOrBoolKTrue {
     fn default() -> Self {
-        Self::BoolKTrue(Default::default())
+        Self::BoolKTrue
     }
 }
 
 /// Generated from: (1 | 2 | 3)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3IntK1OrIntK2OrIntK3 {
-    #[baml(name = "int_1")]
-    IntK1(i64),
+    #[baml(name = "int_1", literal_int = 1)]
+    IntK1,
 
-    #[baml(name = "int_2")]
-    IntK2(i64),
+    #[baml(name = "int_2", literal_int = 2)]
+    IntK2,
 
-    #[baml(name = "int_3")]
-    IntK3(i64),
+    #[baml(name = "int_3", literal_int = 3)]
+    IntK3,
 }
 
 impl AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
@@ -53,22 +53,22 @@ impl AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
 
 impl Default for Union3IntK1OrIntK2OrIntK3 {
     fn default() -> Self {
-        Self::IntK1(Default::default())
+        Self::IntK1
     }
 }
 
 /// Generated from: (200 | 404 | 500)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3IntK200OrIntK404OrIntK500 {
-    #[baml(name = "int_200")]
-    IntK200(i64),
+    #[baml(name = "int_200", literal_int = 200)]
+    IntK200,
 
-    #[baml(name = "int_404")]
-    IntK404(i64),
+    #[baml(name = "int_404", literal_int = 404)]
+    IntK404,
 
-    #[baml(name = "int_500")]
-    IntK500(i64),
+    #[baml(name = "int_500", literal_int = 500)]
+    IntK500,
 }
 
 impl AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 {
@@ -79,22 +79,22 @@ impl AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 
 
 impl Default for Union3IntK200OrIntK404OrIntK500 {
     fn default() -> Self {
-        Self::IntK200(Default::default())
+        Self::IntK200
     }
 }
 
 /// Generated from: ("active" | "inactive" | "pending")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KactiveOrKinactiveOrKpending {
-    #[baml(name = "string_active")]
-    Kactive(String),
+    #[baml(name = "string_active", literal_string = "active")]
+    Kactive,
 
-    #[baml(name = "string_inactive")]
-    Kinactive(String),
+    #[baml(name = "string_inactive", literal_string = "inactive")]
+    Kinactive,
 
-    #[baml(name = "string_pending")]
-    Kpending(String),
+    #[baml(name = "string_pending", literal_string = "pending")]
+    Kpending,
 }
 
 impl AsRef<Union3KactiveOrKinactiveOrKpending> for Union3KactiveOrKinactiveOrKpending {
@@ -105,22 +105,22 @@ impl AsRef<Union3KactiveOrKinactiveOrKpending> for Union3KactiveOrKinactiveOrKpe
 
 impl Default for Union3KactiveOrKinactiveOrKpending {
     fn default() -> Self {
-        Self::Kactive(Default::default())
+        Self::Kactive
     }
 }
 
 /// Generated from: ("user" | "admin" | "guest")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KadminOrKguestOrKuser {
-    #[baml(name = "string_user")]
-    Kuser(String),
+    #[baml(name = "string_user", literal_string = "user")]
+    Kuser,
 
-    #[baml(name = "string_admin")]
-    Kadmin(String),
+    #[baml(name = "string_admin", literal_string = "admin")]
+    Kadmin,
 
-    #[baml(name = "string_guest")]
-    Kguest(String),
+    #[baml(name = "string_guest", literal_string = "guest")]
+    Kguest,
 }
 
 impl AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
@@ -131,22 +131,22 @@ impl AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
 
 impl Default for Union3KadminOrKguestOrKuser {
     fn default() -> Self {
-        Self::Kuser(Default::default())
+        Self::Kuser
     }
 }
 
 /// Generated from: ("dev" | "staging" | "prod")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KdevOrKprodOrKstaging {
-    #[baml(name = "string_dev")]
-    Kdev(String),
+    #[baml(name = "string_dev", literal_string = "dev")]
+    Kdev,
 
-    #[baml(name = "string_staging")]
-    Kstaging(String),
+    #[baml(name = "string_staging", literal_string = "staging")]
+    Kstaging,
 
-    #[baml(name = "string_prod")]
-    Kprod(String),
+    #[baml(name = "string_prod", literal_string = "prod")]
+    Kprod,
 }
 
 impl AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
@@ -157,22 +157,22 @@ impl AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
 
 impl Default for Union3KdevOrKprodOrKstaging {
     fn default() -> Self {
-        Self::Kdev(Default::default())
+        Self::Kdev
     }
 }
 
 /// Generated from: ("success" | "error" | "timeout")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3KerrorOrKsuccessOrKtimeout {
-    #[baml(name = "string_success")]
-    Ksuccess(String),
+    #[baml(name = "string_success", literal_string = "success")]
+    Ksuccess,
 
-    #[baml(name = "string_error")]
-    Kerror(String),
+    #[baml(name = "string_error", literal_string = "error")]
+    Kerror,
 
-    #[baml(name = "string_timeout")]
-    Ktimeout(String),
+    #[baml(name = "string_timeout", literal_string = "timeout")]
+    Ktimeout,
 }
 
 impl AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeout {
@@ -183,22 +183,22 @@ impl AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeou
 
 impl Default for Union3KerrorOrKsuccessOrKtimeout {
     fn default() -> Self {
-        Self::Ksuccess(Default::default())
+        Self::Ksuccess
     }
 }
 
 /// Generated from: ("v1" | "v2" | "v3")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union3Kv1OrKv2OrKv3 {
-    #[baml(name = "string_v1")]
-    Kv1(String),
+    #[baml(name = "string_v1", literal_string = "v1")]
+    Kv1,
 
-    #[baml(name = "string_v2")]
-    Kv2(String),
+    #[baml(name = "string_v2", literal_string = "v2")]
+    Kv2,
 
-    #[baml(name = "string_v3")]
-    Kv3(String),
+    #[baml(name = "string_v3", literal_string = "v3")]
+    Kv3,
 }
 
 impl AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
@@ -209,25 +209,25 @@ impl AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
 
 impl Default for Union3Kv1OrKv2OrKv3 {
     fn default() -> Self {
-        Self::Kv1(Default::default())
+        Self::Kv1
     }
 }
 
 /// Generated from: (0 | 1 | 3 | 5)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4IntK0OrIntK1OrIntK3OrIntK5 {
-    #[baml(name = "int_0")]
-    IntK0(i64),
+    #[baml(name = "int_0", literal_int = 0)]
+    IntK0,
 
-    #[baml(name = "int_1")]
-    IntK1(i64),
+    #[baml(name = "int_1", literal_int = 1)]
+    IntK1,
 
-    #[baml(name = "int_3")]
-    IntK3(i64),
+    #[baml(name = "int_3", literal_int = 3)]
+    IntK3,
 
-    #[baml(name = "int_5")]
-    IntK5(i64),
+    #[baml(name = "int_5", literal_int = 5)]
+    IntK5,
 }
 
 impl AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK5 {
@@ -238,25 +238,25 @@ impl AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK
 
 impl Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
     fn default() -> Self {
-        Self::IntK0(Default::default())
+        Self::IntK0
     }
 }
 
 /// Generated from: ("GET" | "POST" | "PUT" | "DELETE")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4KDELETEOrKGETOrKPOSTOrKPUT {
-    #[baml(name = "string_GET")]
-    KGET(String),
+    #[baml(name = "string_GET", literal_string = "GET")]
+    KGET,
 
-    #[baml(name = "string_POST")]
-    KPOST(String),
+    #[baml(name = "string_POST", literal_string = "POST")]
+    KPOST,
 
-    #[baml(name = "string_PUT")]
-    KPUT(String),
+    #[baml(name = "string_PUT", literal_string = "PUT")]
+    KPUT,
 
-    #[baml(name = "string_DELETE")]
-    KDELETE(String),
+    #[baml(name = "string_DELETE", literal_string = "DELETE")]
+    KDELETE,
 }
 
 impl AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPUT {
@@ -267,25 +267,25 @@ impl AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPU
 
 impl Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
     fn default() -> Self {
-        Self::KGET(Default::default())
+        Self::KGET
     }
 }
 
 /// Generated from: ("draft" | "published" | "archived" | "deleted")
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union4KarchivedOrKdeletedOrKdraftOrKpublished {
-    #[baml(name = "string_draft")]
-    Kdraft(String),
+    #[baml(name = "string_draft", literal_string = "draft")]
+    Kdraft,
 
-    #[baml(name = "string_published")]
-    Kpublished(String),
+    #[baml(name = "string_published", literal_string = "published")]
+    Kpublished,
 
-    #[baml(name = "string_archived")]
-    Karchived(String),
+    #[baml(name = "string_archived", literal_string = "archived")]
+    Karchived,
 
-    #[baml(name = "string_deleted")]
-    Kdeleted(String),
+    #[baml(name = "string_deleted", literal_string = "deleted")]
+    Kdeleted,
 }
 
 impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
@@ -298,28 +298,28 @@ impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
 
 impl Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
     fn default() -> Self {
-        Self::Kdraft(Default::default())
+        Self::Kdraft
     }
 }
 
 /// Generated from: (1 | 2 | 3 | 4 | 5)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
-    #[baml(name = "int_1")]
-    IntK1(i64),
+    #[baml(name = "int_1", literal_int = 1)]
+    IntK1,
 
-    #[baml(name = "int_2")]
-    IntK2(i64),
+    #[baml(name = "int_2", literal_int = 2)]
+    IntK2,
 
-    #[baml(name = "int_3")]
-    IntK3(i64),
+    #[baml(name = "int_3", literal_int = 3)]
+    IntK3,
 
-    #[baml(name = "int_4")]
-    IntK4(i64),
+    #[baml(name = "int_4", literal_int = 4)]
+    IntK4,
 
-    #[baml(name = "int_5")]
-    IntK5(i64),
+    #[baml(name = "int_5", literal_int = 5)]
+    IntK5,
 }
 
 impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
@@ -330,28 +330,28 @@ impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK
 
 impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     fn default() -> Self {
-        Self::IntK1(Default::default())
+        Self::IntK1
     }
 }
 
 /// Generated from: (200 | 201 | 400 | 404 | 500)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
-    #[baml(name = "int_200")]
-    IntK200(i64),
+    #[baml(name = "int_200", literal_int = 200)]
+    IntK200,
 
-    #[baml(name = "int_201")]
-    IntK201(i64),
+    #[baml(name = "int_201", literal_int = 201)]
+    IntK201,
 
-    #[baml(name = "int_400")]
-    IntK400(i64),
+    #[baml(name = "int_400", literal_int = 400)]
+    IntK400,
 
-    #[baml(name = "int_404")]
-    IntK404(i64),
+    #[baml(name = "int_404", literal_int = 404)]
+    IntK404,
 
-    #[baml(name = "int_500")]
-    IntK500(i64),
+    #[baml(name = "int_500", literal_int = 500)]
+    IntK500,
 }
 
 impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
@@ -364,34 +364,34 @@ impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
 
 impl Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
     fn default() -> Self {
-        Self::IntK200(Default::default())
+        Self::IntK200
     }
 }
 
 /// Generated from: (0 | 1 | 2 | 3 | 5 | 8 | 13)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
 #[baml(union)]
 pub enum Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
-    #[baml(name = "int_0")]
-    IntK0(i64),
+    #[baml(name = "int_0", literal_int = 0)]
+    IntK0,
 
-    #[baml(name = "int_1")]
-    IntK1(i64),
+    #[baml(name = "int_1", literal_int = 1)]
+    IntK1,
 
-    #[baml(name = "int_2")]
-    IntK2(i64),
+    #[baml(name = "int_2", literal_int = 2)]
+    IntK2,
 
-    #[baml(name = "int_3")]
-    IntK3(i64),
+    #[baml(name = "int_3", literal_int = 3)]
+    IntK3,
 
-    #[baml(name = "int_5")]
-    IntK5(i64),
+    #[baml(name = "int_5", literal_int = 5)]
+    IntK5,
 
-    #[baml(name = "int_8")]
-    IntK8(i64),
+    #[baml(name = "int_8", literal_int = 8)]
+    IntK8,
 
-    #[baml(name = "int_13")]
-    IntK13(i64),
+    #[baml(name = "int_13", literal_int = 13)]
+    IntK13,
 }
 
 impl AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
@@ -404,6 +404,6 @@ impl AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
 
 impl Default for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
     fn default() -> Self {
-        Self::IntK0(Default::default())
+        Self::IntK0
     }
 }

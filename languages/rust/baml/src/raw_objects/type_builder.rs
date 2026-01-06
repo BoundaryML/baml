@@ -18,39 +18,26 @@ define_raw_object_wrapper! {
 }
 
 impl TypeDef {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract TypeDef handle: {e}"));
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectType),
-        }
-    }
-
     /// Get string representation (never fails)
+    #[must_use]
     pub fn print(&self) -> String {
         self.raw.call_method("__display__", ())
     }
 
     /// Wrap this type in a list (infallible)
+    #[must_use]
     pub fn list(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("list", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to create list type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to create list type: {}", e))
     }
 
     /// Make this type optional (infallible)
+    #[must_use]
     pub fn optional(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("optional", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to create optional type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to create optional type: {}", e))
     }
 }
 
@@ -67,19 +54,6 @@ define_raw_object_wrapper! {
 }
 
 impl EnumValueBuilder {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle).unwrap_or_else(|e| {
-            baml_unreachable!("Failed to extract EnumValueBuilder handle: {e}")
-        });
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectEnumValueBuilder),
-        }
-    }
-
     /// Get the value name
     pub fn name(&self) -> Result<String, BamlError> {
         self.raw.try_call_method("name", ())
@@ -130,50 +104,26 @@ define_raw_object_wrapper! {
 }
 
 impl EnumBuilder {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract EnumBuilder handle: {e}"));
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectEnumBuilder),
-        }
-    }
-
     /// Add a value to this enum
     pub fn add_value(&self, value: &str) -> Result<EnumValueBuilder, BamlError> {
-        let handle = self
-            .raw
-            .call_method_for_object("add_value", ("value", value))?;
-        Ok(EnumValueBuilder::from_handle(handle, self.raw.runtime()))
+        self.raw
+            .call_method_for_object("add_value", ("value", value))
     }
 
     /// Get a value by name (if it exists)
     pub fn get_value(&self, name: &str) -> Result<Option<EnumValueBuilder>, BamlError> {
-        match self.raw.call_method_for_object("value", ("name", name)) {
-            Ok(handle) => Ok(Some(EnumValueBuilder::from_handle(
-                handle,
-                self.raw.runtime(),
-            ))),
-            Err(_) => Ok(None), // Not found
-        }
+        self.raw
+            .call_method_for_object_optional("value", ("name", name))
     }
 
     /// List all values
     pub fn list_values(&self) -> Result<Vec<EnumValueBuilder>, BamlError> {
-        let handles = self.raw.call_method_for_objects("list_values", ())?;
-        Ok(handles
-            .into_iter()
-            .map(|h| EnumValueBuilder::from_handle(h, self.raw.runtime()))
-            .collect())
+        self.raw.call_method_for_objects("list_values", ())
     }
 
     /// Get this enum as a Type
     pub fn as_type(&self) -> Result<TypeDef, BamlError> {
-        let handle = self.raw.call_method_for_object("type_", ())?;
-        Ok(TypeDef::from_handle(handle, self.raw.runtime()))
+        self.raw.call_method_for_object("type_", ())
     }
 
     /// Get the enum name
@@ -216,19 +166,6 @@ define_raw_object_wrapper! {
 }
 
 impl ClassPropertyBuilder {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle).unwrap_or_else(|e| {
-            baml_unreachable!("Failed to extract ClassPropertyBuilder handle: {e}")
-        });
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectClassPropertyBuilder),
-        }
-    }
-
     /// Get the property name
     pub fn name(&self) -> Result<String, BamlError> {
         self.raw.try_call_method("name", ())
@@ -242,8 +179,7 @@ impl ClassPropertyBuilder {
 
     /// Get the property type
     pub fn get_type(&self) -> Result<TypeDef, BamlError> {
-        let handle = self.raw.call_method_for_object("type_", ())?;
-        Ok(TypeDef::from_handle(handle, self.raw.runtime()))
+        self.raw.call_method_for_object("type_", ())
     }
 
     /// Set description for LLM
@@ -281,57 +217,30 @@ define_raw_object_wrapper! {
 }
 
 impl ClassBuilder {
-    /// Create from an object handle
-    pub(crate) fn from_handle(
-        handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
-        runtime: *const c_void,
-    ) -> Self {
-        let ptr = super::extract_ptr_from_handle(&handle)
-            .unwrap_or_else(|e| baml_unreachable!("Failed to extract ClassBuilder handle: {e}"));
-        Self {
-            raw: RawObject::from_pointer(ptr, runtime, BamlObjectType::ObjectClassBuilder),
-        }
-    }
-
     /// Add a property to this class
     pub fn add_property(
         &self,
         name: &str,
         field_type: &TypeDef,
     ) -> Result<ClassPropertyBuilder, BamlError> {
-        let handle = self
-            .raw
-            .call_method_for_object("add_property", (("name", name), ("field_type", field_type)))?;
-        Ok(ClassPropertyBuilder::from_handle(
-            handle,
-            self.raw.runtime(),
-        ))
+        self.raw
+            .call_method_for_object("add_property", (("name", name), ("field_type", field_type)))
     }
 
     /// Get a property by name (if it exists)
     pub fn get_property(&self, name: &str) -> Result<Option<ClassPropertyBuilder>, BamlError> {
-        match self.raw.call_method_for_object("property", ("name", name)) {
-            Ok(handle) => Ok(Some(ClassPropertyBuilder::from_handle(
-                handle,
-                self.raw.runtime(),
-            ))),
-            Err(_) => Ok(None), // Not found
-        }
+        self.raw
+            .call_method_for_object_optional("property", ("name", name))
     }
 
     /// List all properties
     pub fn list_properties(&self) -> Result<Vec<ClassPropertyBuilder>, BamlError> {
-        let handles = self.raw.call_method_for_objects("list_properties", ())?;
-        Ok(handles
-            .into_iter()
-            .map(|h| ClassPropertyBuilder::from_handle(h, self.raw.runtime()))
-            .collect())
+        self.raw.call_method_for_objects("list_properties", ())
     }
 
     /// Get this class as a Type
     pub fn as_type(&self) -> Result<TypeDef, BamlError> {
-        let handle = self.raw.call_method_for_object("type_", ())?;
-        Ok(TypeDef::from_handle(handle, self.raw.runtime()))
+        self.raw.call_method_for_object("type_", ())
     }
 
     /// Get the class name
@@ -384,47 +293,37 @@ impl TypeBuilder {
 
     /// Get string type
     pub fn string(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("string", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get string type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get string type: {}", e))
     }
 
     /// Get int type
     pub fn int(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("int", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get int type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get int type: {}", e))
     }
 
     /// Get float type
     pub fn float(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("float", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get float type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get float type: {}", e))
     }
 
     /// Get bool type
     pub fn bool(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("bool", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get bool type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get bool type: {}", e))
     }
 
     /// Get null type
     pub fn null(&self) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("null", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get null type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get null type: {}", e))
     }
 
     // =========================================================================
@@ -433,29 +332,23 @@ impl TypeBuilder {
 
     /// Get a literal string type
     pub fn literal_string(&self, value: &str) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("literal_string", ("value", value))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal string type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal string type: {}", e))
     }
 
     /// Get a literal int type
     pub fn literal_int(&self, value: i64) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("literal_int", ("value", value))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal int type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal int type: {}", e))
     }
 
     /// Get a literal bool type
     pub fn literal_bool(&self, value: bool) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("literal_bool", ("value", value))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal bool type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get literal bool type: {}", e))
     }
 
     // =========================================================================
@@ -464,38 +357,30 @@ impl TypeBuilder {
 
     /// Get a list type containing the given inner type
     pub fn list(&self, inner: &TypeDef) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("list", ("inner", inner))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get list type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get list type: {}", e))
     }
 
     /// Get an optional type containing the given inner type
     pub fn optional(&self, inner: &TypeDef) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("optional", ("inner", inner))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get optional type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get optional type: {}", e))
     }
 
     /// Get a map type with the given key and value types
     pub fn map(&self, key: &TypeDef, value: &TypeDef) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("map", (("key", key), ("value", value)))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get map type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get map type: {}", e))
     }
 
     /// Get a union type of the given types
     pub fn union(&self, types: &[&TypeDef]) -> TypeDef {
-        let handle = self
-            .raw
+        self.raw
             .call_method_for_object("union", ("types", types))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get union type: {}", e));
-        TypeDef::from_handle(handle, self.raw.runtime())
+            .unwrap_or_else(|e| baml_unreachable!("Failed to get union type: {}", e))
     }
 
     // =========================================================================
@@ -518,31 +403,22 @@ impl TypeBuilder {
 
     /// Add a new enum (fallible - name conflicts, invalid names)
     pub fn add_enum(&self, name: &str) -> Result<EnumBuilder, BamlError> {
-        let handle = self
-            .raw
-            .call_method_for_object("add_enum", ("name", name))?;
-        Ok(EnumBuilder::from_handle(handle, self.raw.runtime()))
+        self.raw.call_method_for_object("add_enum", ("name", name))
     }
 
     /// Get an enum by name (nullable - may not exist)
     pub fn get_enum(&self, name: &str) -> Option<EnumBuilder> {
-        let handle = self
-            .raw
-            .call_method_for_object("enum_", ("name", name))
-            .ok()?;
-        Some(EnumBuilder::from_handle(handle, self.raw.runtime()))
+        self.raw
+            .call_method_for_object_optional("enum_", ("name", name))
+            .ok()
+            .flatten()
     }
 
     /// List all enums (infallible)
     pub fn list_enums(&self) -> Vec<EnumBuilder> {
-        let handles = self
-            .raw
+        self.raw
             .call_method_for_objects("list_enums", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to list enums: {}", e));
-        handles
-            .into_iter()
-            .map(|h| EnumBuilder::from_handle(h, self.raw.runtime()))
-            .collect()
+            .unwrap_or_else(|e| baml_unreachable!("Failed to list enums: {}", e))
     }
 
     // =========================================================================
@@ -551,30 +427,21 @@ impl TypeBuilder {
 
     /// Add a new class (fallible - name conflicts, invalid names)
     pub fn add_class(&self, name: &str) -> Result<ClassBuilder, BamlError> {
-        let handle = self
-            .raw
-            .call_method_for_object("add_class", ("name", name))?;
-        Ok(ClassBuilder::from_handle(handle, self.raw.runtime()))
+        self.raw.call_method_for_object("add_class", ("name", name))
     }
 
     /// Get a class by name (nullable - may not exist)
     pub fn get_class(&self, name: &str) -> Option<ClassBuilder> {
-        let handle = self
-            .raw
-            .call_method_for_object("class", ("name", name))
-            .ok()?;
-        Some(ClassBuilder::from_handle(handle, self.raw.runtime()))
+        self.raw
+            .call_method_for_object_optional("class", ("name", name))
+            .ok()
+            .flatten()
     }
 
     /// List all classes (infallible)
     pub fn list_classes(&self) -> Vec<ClassBuilder> {
-        let handles = self
-            .raw
+        self.raw
             .call_method_for_objects("list_classes", ())
-            .unwrap_or_else(|e| baml_unreachable!("Failed to list classes: {}", e));
-        handles
-            .into_iter()
-            .map(|h| ClassBuilder::from_handle(h, self.raw.runtime()))
-            .collect()
+            .unwrap_or_else(|e| baml_unreachable!("Failed to list classes: {}", e))
     }
 }

@@ -39,16 +39,16 @@ impl BamlRuntime {
     /// * `env` - Environment variables
     pub fn new(
         baml_src_dir: &str,
-        files: HashMap<String, String>,
-        env: HashMap<String, String>,
+        files: &HashMap<String, String>,
+        env: &HashMap<String, String>,
     ) -> Result<Self, BamlError> {
         // Initialize callbacks first - now returns Result
         callbacks::initialize_callbacks()
             .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?;
 
         // Encode files and env as JSON (matching CFFI format)
-        let files_json = json_encode_map(&files)?;
-        let env_json = json_encode_map(&env)?;
+        let files_json = json_encode_map(files)?;
+        let env_json = json_encode_map(env)?;
 
         let dir_cstr = CString::new(baml_src_dir)
             .map_err(|_| BamlError::internal("invalid baml_src_dir path (contains null byte)"))?;
@@ -124,14 +124,14 @@ impl BamlRuntime {
     }
 
     /// Call a function with streaming results
-    pub fn call_function_stream<TPartial, TFinal: Clone>(
+    pub fn call_function_stream<TPartial, TFinal>(
         &self,
         name: &str,
         args: &FunctionArgs,
     ) -> Result<StreamingCall<TPartial, TFinal>, BamlError>
     where
         TPartial: BamlDecode + Send + 'static,
-        TFinal: BamlDecode + Send + 'static,
+        TFinal: Clone + BamlDecode + Send + 'static,
     {
         let encoded = args.encode()?;
         let name_cstr =
@@ -221,14 +221,14 @@ impl BamlRuntime {
     }
 
     /// Call a function with async streaming results
-    pub fn call_function_stream_async<TPartial, TFinal: Clone>(
+    pub fn call_function_stream_async<TPartial, TFinal>(
         &self,
         name: &str,
         args: &FunctionArgs,
     ) -> Result<AsyncStreamingCall<TPartial, TFinal>, BamlError>
     where
         TPartial: BamlDecode + Send + 'static,
-        TFinal: BamlDecode + Send + 'static,
+        TFinal: Clone + BamlDecode + Send + 'static,
     {
         let encoded = args.encode()?;
         let name_cstr =
@@ -413,42 +413,23 @@ impl Drop for BamlRuntime {
 
 /// Simple JSON encoding for maps
 ///
-/// This is a minimal implementation to avoid adding `serde_json` as a dependency.
-/// For simplicity, we assume keys and values don't contain problematic
-/// characters that would require complex escaping beyond basic escapes.
+/// This is a minimal implementation to avoid adding `serde_json` as a
+/// dependency. For simplicity, we assume keys and values don't contain
+/// problematic characters that would require complex escaping beyond basic
+/// escapes.
 fn json_encode_map(map: &HashMap<String, String>) -> Result<String, BamlError> {
-    let mut parts = Vec::with_capacity(map.len());
-    for (k, v) in map {
-        let escaped_k = json_escape_string(k);
-        let escaped_v = json_escape_string(v);
-        parts.push(format!("\"{escaped_k}\":\"{escaped_v}\""));
-    }
-    Ok(format!("{{{}}}", parts.join(",")))
-}
-
-/// Escape a string for JSON encoding
-fn json_escape_string(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '"' => result.push_str("\\\""),
-            '\\' => result.push_str("\\\\"),
-            '\n' => result.push_str("\\n"),
-            '\r' => result.push_str("\\r"),
-            '\t' => result.push_str("\\t"),
-            c if c.is_control() => {
-                // Escape control characters as \uXXXX
-                result.push_str(&format!("\\u{:04x}", c as u32));
-            }
-            c => result.push(c),
-        }
-    }
-    result
+    serde_json::to_string(map)
+        .map_err(|e| BamlError::internal(format!("failed to encode map: {e}")))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Escape a string for JSON encoding
+    fn json_escape_string(s: &str) -> String {
+        serde_json::json!(s).to_string()
+    }
 
     #[test]
     fn test_json_encode_empty_map() {

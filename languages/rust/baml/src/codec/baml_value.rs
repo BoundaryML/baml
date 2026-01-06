@@ -115,7 +115,10 @@ impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
             },
             BamlValue::List(items) => HostValue {
                 value: Some(host_value::Value::ListValue(HostListValue {
-                    values: items.iter().map(super::traits::BamlEncode::baml_encode).collect(),
+                    values: items
+                        .iter()
+                        .map(super::traits::BamlEncode::baml_encode)
+                        .collect(),
                 })),
             },
             BamlValue::Map(map) => HostValue {

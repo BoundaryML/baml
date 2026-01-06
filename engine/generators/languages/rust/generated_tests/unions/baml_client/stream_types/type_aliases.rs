@@ -11,12 +11,12 @@ use crate::baml_client::types;
 use crate::baml_client::types::*;
 use std::collections::HashMap;
 
-pub type SystemComponentCategory = Union2KresourceOrKservice;
-
 pub type MyUnion = Option<Union3IntOrRecursive1OrString>;
-
-pub type Recursive1 = Union2IntOrListRecursive1;
 
 pub type Nonrecursive1 = Option<i64>;
 
 pub type Nonrecursive2 = Option<String>;
+
+pub type Recursive1 = Option<Union2IntOrListRecursive1>;
+
+pub type SystemComponentCategory = Option<types::Union2KresourceOrKservice>;

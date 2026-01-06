@@ -3,7 +3,7 @@
 
 mod baml_client;
 
-use baml_client::B;
+use baml_client::sync_client::B;
 use baml_client::new_collector;
 use baml_client::types::*;
 use baml_client::ClientRegistry;

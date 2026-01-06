@@ -21,11 +21,13 @@ macro_rules! define_raw_object_wrapper {
             raw: RawObject,
         }
 
-        impl $name {
-            /// Create from a `RawObject`
-            pub(crate) fn from_raw(raw: RawObject) -> Self {
-                debug_assert_eq!(raw.object_type(), BamlObjectType::$object_type);
-                Self { raw }
+        impl crate::codec::traits::DecodeHandle for $name {
+            fn decode_handle(handle: crate::proto::baml_cffi_v1::BamlObjectHandle, runtime: *const c_void) -> Result<Self, crate::BamlError> {
+                let object_type = crate::raw_objects::object_type_from_handle(&handle)?;
+                let ptr = crate::raw_objects::extract_ptr_from_handle(&handle)?;
+                debug_assert_eq!(object_type, BamlObjectType::$object_type);
+                let raw = RawObject::from_pointer(ptr, runtime, object_type);
+                Ok(Self { raw })
             }
         }
 
@@ -70,8 +72,10 @@ pub use type_builder::{
 
 use crate::{
     baml_unreachable,
-    codec::traits::IntoKwargs,
-    codec::{BamlDecode},
+    codec::{
+        BamlDecode,
+        traits::{DecodeHandle, IntoKwargs},
+    },
     error::BamlError,
     ffi,
     proto::baml_cffi_v1::{
@@ -171,9 +175,9 @@ impl RawObject {
         // Extract pointer from response
         match response.response {
             Some(invocation_response::Response::Success(success)) => {
-                let handle = match success.result {
-                    Some(invocation_response_success::Result::Object(handle)) => handle,
-                    _ => return Err(BamlError::internal("expected object handle in response")),
+                let Some(invocation_response_success::Result::Object(handle)) = success.result
+                else {
+                    return Err(BamlError::internal("expected object handle in response"));
                 };
                 let ptr = extract_ptr_from_handle(&handle)?;
                 Ok(Self {
@@ -212,7 +216,11 @@ impl RawObject {
     /// // Void method (side-effect only)
     /// obj.call_method::<()>("reset", ());
     /// ```
-    pub(crate) fn call_method<T: BamlDecode, K: IntoKwargs>(&self, method_name: &str, kwargs: K) -> T {
+    pub(crate) fn call_method<T: BamlDecode, K: IntoKwargs>(
+        &self,
+        method_name: &str,
+        kwargs: K,
+    ) -> T {
         self.try_call_method(method_name, kwargs)
             .unwrap_or_else(|e| {
                 baml_unreachable!(
@@ -267,40 +275,79 @@ impl RawObject {
     /// Call a method on this object that returns another object handle.
     ///
     /// Use this for methods that return FFI object references (not values).
-    pub(crate) fn call_method_for_object<K: IntoKwargs>(
+    pub(crate) fn call_method_for_object_optional<K: IntoKwargs, Object: DecodeHandle>(
         &self,
         method_name: &str,
         kwargs: K,
-    ) -> Result<BamlObjectHandle, BamlError> {
+    ) -> Result<Option<Object>, BamlError> {
         let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
 
         match response.response {
             Some(invocation_response::Response::Success(success)) => match success.result {
-                Some(invocation_response_success::Result::Object(handle)) => Ok(handle),
+                Some(invocation_response_success::Result::Object(handle)) => {
+                    Object::decode_handle(handle, self.runtime()).map(Some)
+                }
                 _ => Err(BamlError::internal("expected object handle in response")),
             },
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
-            None => Err(BamlError::internal("empty response")),
+            None => Ok(None),
+        }
+    }
+
+    pub(crate) fn call_method_for_object<K: IntoKwargs, Object: DecodeHandle>(
+        &self,
+        method_name: &str,
+        kwargs: K,
+    ) -> Result<Object, BamlError> {
+        match self.call_method_for_object_optional(method_name, kwargs) {
+            Ok(Some(object)) => Ok(object),
+            Ok(None) => Err(BamlError::internal(format!(
+                "expected object handle in response for method {object_type:?}.{method_name}",
+                method_name = method_name,
+                object_type = self.object_type()
+            ))),
+            Err(e) => Err(e),
         }
     }
 
     /// Call a method on this object that returns multiple object handles.
     ///
     /// Use this for methods that return lists of FFI object references.
-    pub(crate) fn call_method_for_objects<K: IntoKwargs>(
+    fn call_method_for_objects_optional<K: IntoKwargs, Object: DecodeHandle>(
         &self,
         method_name: &str,
         kwargs: K,
-    ) -> Result<Vec<BamlObjectHandle>, BamlError> {
+    ) -> Result<Option<Vec<Object>>, BamlError> {
         let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
 
         match response.response {
             Some(invocation_response::Response::Success(success)) => match success.result {
-                Some(invocation_response_success::Result::Objects(handles)) => Ok(handles.objects),
+                Some(invocation_response_success::Result::Objects(handles)) => handles
+                    .objects
+                    .into_iter()
+                    .map(|h| Object::decode_handle(h, self.runtime()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(Some),
                 _ => Err(BamlError::internal("expected object handles in response")),
             },
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
             None => Err(BamlError::internal("empty response")),
+        }
+    }
+
+    pub(crate) fn call_method_for_objects<K: IntoKwargs, Object: DecodeHandle>(
+        &self,
+        method_name: &str,
+        kwargs: K,
+    ) -> Result<Vec<Object>, BamlError> {
+        match self.call_method_for_objects_optional(method_name, kwargs) {
+            Ok(Some(objects)) => Ok(objects),
+            Ok(None) => Err(BamlError::internal(format!(
+                "Expected a list of objects in response for method {object_type:?}.{method_name}",
+                method_name = method_name,
+                object_type = self.object_type()
+            ))),
+            Err(e) => Err(e),
         }
     }
 
@@ -351,11 +398,6 @@ impl RawObject {
     /// Get the object type
     pub(crate) fn object_type(&self) -> BamlObjectType {
         self.inner.object_type
-    }
-
-    /// Get the raw pointer
-    pub(crate) fn ptr(&self) -> i64 {
-        self.inner.ptr
     }
 
     /// Get the runtime pointer
@@ -499,45 +541,5 @@ pub(crate) trait RawObjectTrait: Send + Sync {
     /// Encode to `BamlObjectHandle` for passing to function calls
     fn encode_handle(&self) -> BamlObjectHandle {
         self.raw().encode()
-    }
-}
-
-/// Decode a `BamlObjectHandle` back to a concrete type
-///
-/// This function dispatches to the appropriate concrete type based on the
-/// object type in the handle.
-pub(crate) fn decode_object_handle(
-    handle: &BamlObjectHandle,
-    runtime: *const c_void,
-) -> Result<Box<dyn RawObjectTrait>, BamlError> {
-    let object_type = object_type_from_handle(handle)?;
-    let ptr = extract_ptr_from_handle(handle)?;
-    let raw = RawObject::from_pointer(ptr, runtime, object_type);
-
-    match object_type {
-        BamlObjectType::ObjectCollector => Ok(Box::new(Collector::from_raw(raw))),
-        BamlObjectType::ObjectFunctionLog => Ok(Box::new(FunctionLog::from_raw(raw))),
-        BamlObjectType::ObjectUsage => Ok(Box::new(Usage::from_raw(raw))),
-        BamlObjectType::ObjectMediaImage => Ok(Box::new(Image::from_raw(raw))),
-        BamlObjectType::ObjectMediaAudio => Ok(Box::new(Audio::from_raw(raw))),
-        BamlObjectType::ObjectMediaPdf => Ok(Box::new(Pdf::from_raw(raw))),
-        BamlObjectType::ObjectMediaVideo => Ok(Box::new(Video::from_raw(raw))),
-        BamlObjectType::ObjectTypeBuilder => Ok(Box::new(TypeBuilder::from_raw(raw))),
-        BamlObjectType::ObjectType => Ok(Box::new(TypeDef::from_raw(raw))),
-        BamlObjectType::ObjectEnumBuilder => Ok(Box::new(EnumBuilder::from_raw(raw))),
-        BamlObjectType::ObjectEnumValueBuilder => Ok(Box::new(EnumValueBuilder::from_raw(raw))),
-        BamlObjectType::ObjectClassBuilder => Ok(Box::new(ClassBuilder::from_raw(raw))),
-        BamlObjectType::ObjectClassPropertyBuilder => {
-            Ok(Box::new(ClassPropertyBuilder::from_raw(raw)))
-        }
-        BamlObjectType::ObjectTiming => Ok(Box::new(Timing::from_raw(raw))),
-        BamlObjectType::ObjectStreamTiming => Ok(Box::new(StreamTiming::from_raw(raw))),
-        BamlObjectType::ObjectHttpRequest => Ok(Box::new(HTTPRequest::from_raw(raw))),
-        BamlObjectType::ObjectHttpResponse => Ok(Box::new(HTTPResponse::from_raw(raw))),
-        BamlObjectType::ObjectHttpBody => Ok(Box::new(HTTPBody::from_raw(raw))),
-        BamlObjectType::ObjectSseResponse => Ok(Box::new(SSEResponse::from_raw(raw))),
-        BamlObjectType::ObjectLlmCall => Ok(Box::new(LLMCall::from_raw(raw))),
-        BamlObjectType::ObjectLlmStreamCall => Ok(Box::new(LLMStreamCall::from_raw(raw))),
-        BamlObjectType::ObjectUnspecified => Err(BamlError::internal("unspecified object type")),
     }
 }

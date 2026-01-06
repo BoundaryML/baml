@@ -217,9 +217,7 @@ impl BamlDecode for JsonValue {
         match &holder.value {
             Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(JsonValue::Null),
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(JsonValue::String(s.clone())),
-            Some(cffi_value_holder::Value::IntValue(i)) => {
-                Ok(JsonValue::Number((*i).into()))
-            }
+            Some(cffi_value_holder::Value::IntValue(i)) => Ok(JsonValue::Number((*i).into())),
             Some(cffi_value_holder::Value::FloatValue(f)) => {
                 if let Some(number) = serde_json::Number::from_f64(*f) {
                     Ok(JsonValue::Number(number))

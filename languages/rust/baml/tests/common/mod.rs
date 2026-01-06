@@ -1,4 +1,5 @@
 //! Shared test utilities and fixtures for baml crate tests.
+#![allow(dead_code)]
 
 use baml::__internal::{
     CffiCheckValue, CffiFieldTypeLiteral, CffiLiteralBool, CffiLiteralInt, CffiLiteralString,
@@ -77,7 +78,10 @@ pub(crate) fn make_checked_holder(
 }
 
 /// Create a `CffiValueHolder` containing a streaming state value.
-pub(crate) fn make_stream_state_holder(inner: CffiValueHolder, state: CffiStreamState) -> CffiValueHolder {
+pub(crate) fn make_stream_state_holder(
+    inner: CffiValueHolder,
+    state: CffiStreamState,
+) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::StreamingStateValue(Box::new(
             CffiValueStreamingState {
@@ -109,7 +113,10 @@ pub(crate) fn make_map_holder(entries: Vec<(&str, CffiValueHolder)>) -> CffiValu
 }
 
 /// Create a `CffiValueHolder` containing a class value.
-pub(crate) fn make_class_holder(name: &str, fields: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
+pub(crate) fn make_class_holder(
+    name: &str,
+    fields: Vec<(&str, CffiValueHolder)>,
+) -> CffiValueHolder {
     let field_entries = fields
         .into_iter()
         .map(|(key, value)| CffiMapEntry {

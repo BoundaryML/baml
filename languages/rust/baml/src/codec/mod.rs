@@ -39,6 +39,6 @@ pub use from_baml_value::FromBamlValue;
 pub use from_baml_value_ref::FromBamlValueRef;
 pub use helpers::{decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum};
 pub use known_types::KnownTypes;
-pub use traits::{BamlDecode, BamlEncode, BamlSerializeMapKey, BamlClass, BamlEnum};
+pub use traits::{BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey};
 
 // Re-export protobuf types needed by generated code

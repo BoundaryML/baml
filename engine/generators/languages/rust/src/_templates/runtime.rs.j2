@@ -139,8 +139,8 @@ pub(super) fn get_runtime() -> &'static baml::BamlRuntime {
     RUNTIME.get_or_init(|| {
         baml::BamlRuntime::new(
             std::env::current_dir().unwrap().to_str().unwrap(),
-            get_baml_files().clone(),
-            std::env::vars().collect(),
+            get_baml_files(),
+            &std::env::vars().collect(),
         )
         .unwrap()
     })

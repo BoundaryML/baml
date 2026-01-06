@@ -83,13 +83,11 @@ macro_rules! baml_function_sync {
             }
 
             pub fn parse(&self, response: &str) -> Result<$final_ret, BamlError> {
-                // TODO: Implement parse via runtime
-                todo!("parse not yet implemented")
+                get_runtime().parse(stringify!($name), response, false)
             }
 
             pub fn parse_stream(&self, response: &str) -> Result<$stream_ret, BamlError> {
-                // TODO: Implement parse_stream via runtime
-                todo!("parse_stream not yet implemented")
+                get_runtime().parse(stringify!($name), response, true)
             }
         }
 

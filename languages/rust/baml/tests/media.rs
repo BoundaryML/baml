@@ -29,7 +29,7 @@ fn create_test_runtime() -> BamlRuntime {
             .to_string(),
     );
 
-    BamlRuntime::new(".", files, env_vars()).expect("Failed to create test runtime")
+    BamlRuntime::new(".", &files, &env_vars()).expect("Failed to create test runtime")
 }
 
 // =============================================================================
