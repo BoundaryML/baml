@@ -13,7 +13,9 @@
       "Bash(jj cat:*)",
       "Bash(jj file show:*)",
       "Bash(cat:*)",
-      "Bash(nix develop:*)"
+      "Bash(nix develop:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ]
   }
 }
