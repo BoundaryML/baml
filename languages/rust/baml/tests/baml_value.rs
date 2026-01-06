@@ -1,4 +1,4 @@
-//! Comprehensive tests for BamlValue decoding and FromBamlValue trait.
+//! Comprehensive tests for `BamlValue` decoding and `FromBamlValue` trait.
 
 mod common;
 
@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use baml::{
     __internal::CffiStreamState, BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum,
-    DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, StreamingState,
+    DynamicUnion, KnownTypes, StreamingState,
 };
 use common::{
     make_bool_holder, make_checked_holder, make_class_holder, make_enum_holder, make_float_holder,
@@ -19,8 +19,8 @@ use common::{
 // Mock KnownTypes for testing
 // =============================================================================
 
-/// Empty enum used as a mock for KnownTypes in tests.
-/// In real usage, CodeGen generates Types and StreamTypes enums.
+/// Empty enum used as a mock for `KnownTypes` in tests.
+/// In real usage, `CodeGen` generates Types and `StreamTypes` enums.
 #[derive(Debug, Clone)]
 enum MockTypes {}
 
@@ -482,11 +482,11 @@ mod decode_wrappers {
             assert!(matches!(*checked.value, BamlValue::String(s) if s == "valid"));
             assert_eq!(checked.checks.len(), 2);
             assert_eq!(
-                checked.checks.get("length_check").unwrap().status,
+                checked.checks["length_check"].status,
                 CheckStatus::Passed
             );
             assert_eq!(
-                checked.checks.get("format_check").unwrap().status,
+                checked.checks["format_check"].status,
                 CheckStatus::Passed
             );
         } else {
@@ -508,11 +508,11 @@ mod decode_wrappers {
         if let BamlValue::Checked(checked) = result {
             assert!(matches!(*checked.value, BamlValue::Int(5)));
             assert_eq!(
-                checked.checks.get("min_check").unwrap().status,
+                checked.checks["min_check"].status,
                 CheckStatus::Failed
             );
             assert_eq!(
-                checked.checks.get("type_check").unwrap().status,
+                checked.checks["type_check"].status,
                 CheckStatus::Passed
             );
         } else {
@@ -730,7 +730,7 @@ mod decode_wrappers {
         let result: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         if let BamlValue::Checked(checked) = result {
             assert_eq!(checked.checks.len(), 3);
-            for (_, check) in &checked.checks {
+            for check in checked.checks.values() {
                 assert_eq!(check.status, CheckStatus::Failed);
             }
         } else {
@@ -746,7 +746,7 @@ mod decode_wrappers {
         if let BamlValue::Checked(checked) = result {
             assert!(matches!(*checked.value, BamlValue::Null));
             assert_eq!(
-                checked.checks.get("is_null").unwrap().status,
+                checked.checks["is_null"].status,
                 CheckStatus::Passed
             );
         } else {
@@ -782,8 +782,8 @@ mod decode_containers_extended {
     fn list_deeply_nested() {
         // List of lists of lists
         let level3 = make_list_holder(vec![make_int_holder(1), make_int_holder(2)]);
-        let level2 = make_list_holder(vec![level3.clone(), level3.clone()]);
-        let level1 = make_list_holder(vec![level2.clone(), level2.clone()]);
+        let level2 = make_list_holder(vec![level3.clone(), level3]);
+        let level1 = make_list_holder(vec![level2.clone(), level2]);
 
         let result: TestBamlValue = BamlDecode::baml_decode(&level1).unwrap();
         if let BamlValue::List(outer) = result {

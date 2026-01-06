@@ -1,11 +1,11 @@
-//! TypeBuilder and related types
+//! `TypeBuilder` and related types
 //!
 //! These wrap FFI pointers to type builder objects managed by the BAML runtime.
-//! TypeBuilder enables dynamic type construction at runtime.
+//! `TypeBuilder` enables dynamic type construction at runtime.
 
 use std::ffi::c_void;
 
-use super::{RawObject, RawObjectTrait, define_raw_object_wrapper};
+use super::{RawObject, RawObjectTrait};
 use crate::{baml_unreachable, error::BamlError, proto::baml_cffi_v1::BamlObjectType};
 
 // =============================================================================
@@ -371,7 +371,7 @@ define_raw_object_wrapper! {
 }
 
 impl TypeBuilder {
-    /// Create a new TypeBuilder (infallible)
+    /// Create a new `TypeBuilder` (infallible)
     pub fn new(runtime: *const c_void) -> Self {
         let raw = RawObject::new(runtime, BamlObjectType::ObjectTypeBuilder, ())
             .unwrap_or_else(|e| baml_unreachable!("Failed to create TypeBuilder: {}", e));

@@ -1,11 +1,11 @@
-//! Tests for Collector, FunctionLog, Usage, and LogType
+//! Tests for Collector, `FunctionLog`, Usage, and `LogType`
 
 mod collector {
     use std::collections::HashMap;
 
     use baml::{BamlRuntime, Collector, FunctionArgs, LogType};
 
-    /// Helper to create environment variables HashMap from current environment
+    /// Helper to create environment variables `HashMap` from current environment
     fn env_vars() -> HashMap<String, String> {
         std::env::vars().collect()
     }
@@ -158,13 +158,13 @@ mod collector {
         #[test]
         fn log_type_call_debug_format() {
             let log_type = LogType::Call;
-            assert_eq!(format!("{:?}", log_type), "Call");
+            assert_eq!(format!("{log_type:?}"), "Call");
         }
 
         #[test]
         fn log_type_stream_debug_format() {
             let log_type = LogType::Stream;
-            assert_eq!(format!("{:?}", log_type), "Stream");
+            assert_eq!(format!("{log_type:?}"), "Stream");
         }
 
         #[test]
@@ -364,7 +364,7 @@ mod collector {
             assert!(result.is_ok(), "Function call failed: {:?}", result.err());
 
             let response = result.unwrap();
-            println!("Got response: {}", response);
+            println!("Got response: {response}");
 
             // Verify collector captured the call
             let logs = collector.logs();
@@ -447,7 +447,7 @@ mod collector {
             // Verify tags were captured
             let log = collector.last().expect("Should have a log");
             let tags = log.tags();
-            println!("Captured tags: {:?}", tags);
+            println!("Captured tags: {tags:?}");
 
             assert_eq!(tags.get("environment"), Some(&"test".to_string()));
             assert_eq!(tags.get("version"), Some(&"1.0".to_string()));
@@ -861,7 +861,7 @@ mod collector {
             // cached_input_tokens may be None or Some(0) for non-cached calls
             // The important thing is that the method exists and doesn't panic
             let cached = usage.cached_input_tokens();
-            println!("Cached input tokens: {:?}", cached);
+            println!("Cached input tokens: {cached:?}");
         }
     }
 }

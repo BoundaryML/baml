@@ -106,7 +106,7 @@ impl<T> Checked<T> {
     }
 }
 
-/// Streaming state wrapper for @stream.with_state
+/// Streaming state wrapper for @`stream.with_state`
 #[derive(Debug, Clone)]
 pub struct StreamState<T> {
     pub value: T,
@@ -123,7 +123,7 @@ pub enum StreamingState {
 }
 
 impl<T> StreamState<T> {
-    /// Create a new StreamState with the given value in Pending state.
+    /// Create a new `StreamState` with the given value in Pending state.
     pub fn new(value: T) -> Self {
         Self {
             value,

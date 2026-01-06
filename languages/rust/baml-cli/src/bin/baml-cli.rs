@@ -1,4 +1,4 @@
-/// This crate provides the BAML CLI for Rust.
+//! This crate provides the BAML CLI for Rust.
 
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();

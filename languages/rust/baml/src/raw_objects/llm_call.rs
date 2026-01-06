@@ -7,7 +7,6 @@ use std::ffi::c_void;
 use super::{
     RawObject, RawObjectTrait,
     collector::{StreamTiming, Timing, Usage},
-    define_raw_object_wrapper,
     http::{HTTPRequest, HTTPResponse, SSEResponse},
 };
 use crate::{baml_unreachable, proto::baml_cffi_v1::BamlObjectType};
@@ -39,7 +38,7 @@ impl LLMCall {
         self.raw.call_method("http_request_id", ())
     }
 
-    /// Get the client name (e.g., "GPT4oMini")
+    /// Get the client name (e.g., "`GPT4oMini`")
     pub fn client_name(&self) -> String {
         self.raw.call_method("client_name", ())
     }
@@ -115,7 +114,7 @@ impl LLMStreamCall {
         self.raw.call_method("http_request_id", ())
     }
 
-    /// Get the client name (e.g., "GPT4oMini")
+    /// Get the client name (e.g., "`GPT4oMini`")
     pub fn client_name(&self) -> String {
         self.raw.call_method("client_name", ())
     }
@@ -181,10 +180,10 @@ impl LLMStreamCall {
 // LLMCallKind - Union type for call or stream call
 // =============================================================================
 
-/// Either an LLMCall or LLMStreamCall
+/// Either an `LLMCall` or `LLMStreamCall`
 ///
-/// The CFFI layer returns different object types (OBJECT_LLM_CALL vs
-/// OBJECT_LLM_STREAM_CALL) based on the actual underlying type. We dispatch on
+/// The CFFI layer returns different object types (`OBJECT_LLM_CALL` vs
+/// `OBJECT_LLM_STREAM_CALL`) based on the actual underlying type. We dispatch on
 /// the protobuf oneof discriminator to construct the appropriate variant.
 ///
 /// This mirrors how Python uses `Either<LLMCall, LLMStreamCall>` and Go uses
@@ -202,9 +201,9 @@ impl LLMCallKind {
     ///
     /// The CFFI layer encodes each object with its actual type:
     /// - `Either::Left(LLMCall)` -> `BamlObjectHandle.llm_call`
-    ///   (OBJECT_LLM_CALL = 6)
+    ///   (`OBJECT_LLM_CALL` = 6)
     /// - `Either::Right(LLMStreamCall)` -> `BamlObjectHandle.llm_stream_call`
-    ///   (OBJECT_LLM_STREAM_CALL = 7)
+    ///   (`OBJECT_LLM_STREAM_CALL` = 7)
     pub(crate) fn from_handle(
         handle: crate::proto::baml_cffi_v1::BamlObjectHandle,
         runtime: *const std::ffi::c_void,
@@ -262,7 +261,7 @@ impl LLMCallKind {
         }
     }
 
-    /// Try to get as a regular LLMCall (returns None for streaming calls)
+    /// Try to get as a regular `LLMCall` (returns None for streaming calls)
     pub fn as_call(&self) -> Option<&LLMCall> {
         match self {
             LLMCallKind::Call(c) => Some(c),
@@ -270,7 +269,7 @@ impl LLMCallKind {
         }
     }
 
-    /// Try to get as a streaming LLMStreamCall (returns None for regular calls)
+    /// Try to get as a streaming `LLMStreamCall` (returns None for regular calls)
     pub fn as_stream(&self) -> Option<&LLMStreamCall> {
         match self {
             LLMCallKind::Call(_) => None,

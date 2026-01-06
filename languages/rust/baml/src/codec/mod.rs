@@ -20,7 +20,7 @@
 //!
 //! - [`FromBamlValue`] - Extract concrete types from `BamlValue`
 //! - [`FromBamlValueRef`] - Borrow concrete types from `BamlValue` (zero-copy)
-//! - [`KnownTypes`] - Marker trait for CodeGen'd type enums
+//! - [`KnownTypes`] - Marker trait for `CodeGen`'d type enums
 
 mod baml_value;
 mod containers;
@@ -30,7 +30,7 @@ mod from_baml_value_ref;
 mod helpers;
 mod known_types;
 mod primitives;
-mod traits;
+pub(crate) mod traits;
 
 // Re-export all public items
 pub use baml_value::BamlValue;
@@ -39,9 +39,6 @@ pub use from_baml_value::FromBamlValue;
 pub use from_baml_value_ref::FromBamlValueRef;
 pub use helpers::{decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum};
 pub use known_types::KnownTypes;
-pub use traits::{BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey, IntoKwargs};
+pub use traits::{BamlDecode, BamlEncode, BamlSerializeMapKey, BamlClass, BamlEnum};
 
 // Re-export protobuf types needed by generated code
-pub use crate::proto::baml_cffi_v1::{
-    CffiMapEntry, CffiValueClass, CffiValueHolder, HostMapEntry, HostValue,
-};

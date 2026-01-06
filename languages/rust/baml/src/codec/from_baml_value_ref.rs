@@ -1,12 +1,12 @@
-//! Trait for zero-copy borrowing from BamlValue.
+//! Trait for zero-copy borrowing from `BamlValue`.
 
 use super::{baml_value::BamlValue, known_types::KnownTypes};
 use crate::error::BamlError;
 
-/// Trait for zero-copy borrowing from BamlValue.
+/// Trait for zero-copy borrowing from `BamlValue`.
 ///
 /// Use for primitives (&str, i64, f64, bool) and references to known types.
-/// Note: Does NOT work for converted containers (use get() for Vec<Person>).
+/// Note: Does NOT work for converted containers (use `get()` for Vec<Person>).
 pub trait FromBamlValueRef<'a, T: KnownTypes, S: KnownTypes>: Sized {
     fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError>;
 }
@@ -58,7 +58,7 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for bool {
 
 use std::collections::HashMap;
 
-/// Raw list ref - returns slice of BamlValue, NOT converted types
+/// Raw list ref - returns slice of `BamlValue`, NOT converted types
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a [BamlValue<T, S>] {
     fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -68,7 +68,7 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a [BamlV
     }
 }
 
-/// Raw map ref - returns ref to HashMap of BamlValue, NOT converted values
+/// Raw map ref - returns ref to `HashMap` of `BamlValue`, NOT converted values
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a HashMap<String, BamlValue<T, S>>
 {
@@ -86,7 +86,7 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
 
 use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
 
-/// DynamicClass ref
+/// `DynamicClass` ref
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicClass<T, S> {
     fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -96,7 +96,7 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a Dynami
     }
 }
 
-/// DynamicEnum ref
+/// `DynamicEnum` ref
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicEnum {
     fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -106,7 +106,7 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a Dynami
     }
 }
 
-/// DynamicUnion ref
+/// `DynamicUnion` ref
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S> for &'a DynamicUnion<T, S> {
     fn from_baml_value_ref(value: &'a BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -125,7 +125,7 @@ use crate::{
     types::{Checked, StreamState},
 };
 
-/// Checked ref - returns reference to the Checked wrapper containing BamlValue
+/// Checked ref - returns reference to the Checked wrapper containing `BamlValue`
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a Checked<Box<BamlValue<T, S>>>
 {
@@ -137,8 +137,8 @@ impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     }
 }
 
-/// StreamState ref - returns reference to the StreamState wrapper containing
-/// BamlValue
+/// `StreamState` ref - returns reference to the `StreamState` wrapper containing
+/// `BamlValue`
 impl<'a, T: KnownTypes, S: KnownTypes> FromBamlValueRef<'a, T, S>
     for &'a StreamState<Box<BamlValue<T, S>>>
 {

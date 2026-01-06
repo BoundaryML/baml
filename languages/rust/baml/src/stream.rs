@@ -99,7 +99,7 @@ pub struct Partials<'a, TPartial, TFinal: Clone> {
     call: &'a mut StreamingCall<TPartial, TFinal>,
 }
 
-impl<'a, TPartial, TFinal: Clone> Iterator for Partials<'a, TPartial, TFinal>
+impl<TPartial, TFinal: Clone> Iterator for Partials<'_, TPartial, TFinal>
 where
     TPartial: BamlDecode,
     TFinal: BamlDecode,

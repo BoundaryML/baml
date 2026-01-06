@@ -1,10 +1,10 @@
-//! Collector and related types (FunctionLog, Usage)
+//! Collector and related types (`FunctionLog`, Usage)
 //!
 //! These wrap FFI pointers to collector objects managed by the BAML runtime.
 
 use std::{collections::HashMap, ffi::c_void};
 
-use super::{RawObject, RawObjectTrait, define_raw_object_wrapper, llm_call::LLMCallKind};
+use super::{RawObject, RawObjectTrait, llm_call::LLMCallKind};
 use crate::{
     baml_unreachable,
     codec::BamlDecode,
@@ -303,7 +303,7 @@ impl Collector {
         Some(FunctionLog::from_handle(handle, self.raw.runtime()))
     }
 
-    /// Get the internal raw object (for use with FunctionArgs)
+    /// Get the internal raw object (for use with `FunctionArgs`)
     pub(crate) fn raw(&self) -> &RawObject {
         &self.raw
     }

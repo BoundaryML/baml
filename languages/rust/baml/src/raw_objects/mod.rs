@@ -1,13 +1,15 @@
-//! FFI-backed BAML objects (RawObject infrastructure)
+//! FFI-backed BAML objects (`RawObject` infrastructure)
 //!
 //! This module contains all types that wrap FFI pointers managed by the Rust
 //! runtime. Each type holds a `RawObject` which handles method calls, encoding,
 //! and cleanup.
 
+#![allow(unsafe_code)]
+
 /// Macro to define a wrapper type around `RawObject`.
 ///
 /// This reduces boilerplate for all FFI-backed object types.
-/// Generates: struct, from_raw, RawObjectTrait impl, and BamlEncode impl.
+/// Generates: struct, `from_raw`, `RawObjectTrait` impl, and `BamlEncode` impl.
 macro_rules! define_raw_object_wrapper {
     (
         $(#[$meta:meta])*
@@ -46,7 +48,6 @@ macro_rules! define_raw_object_wrapper {
 }
 
 // Make macro available to submodules
-pub(crate) use define_raw_object_wrapper;
 
 // Submodules for specific object types (Phase 11-13)
 mod collector;
@@ -69,7 +70,8 @@ pub use type_builder::{
 
 use crate::{
     baml_unreachable,
-    codec::{BamlDecode, IntoKwargs},
+    codec::traits::IntoKwargs,
+    codec::{BamlDecode},
     error::BamlError,
     ffi,
     proto::baml_cffi_v1::{
@@ -90,12 +92,14 @@ struct RawObjectInner {
 }
 
 // Safety: The underlying Rust runtime is thread-safe
+#[allow(unsafe_code)]
 unsafe impl Send for RawObjectInner {}
+#[allow(unsafe_code)]
 unsafe impl Sync for RawObjectInner {}
 
 /// A handle to a FFI-backed BAML object.
 ///
-/// This is the base type for Media, Collector, TypeBuilder, etc.
+/// This is the base type for Media, Collector, `TypeBuilder`, etc.
 /// It wraps a raw pointer managed by the Rust runtime.
 /// Uses Arc internally to enable cloning while ensuring the destructor
 /// is only called once when the last reference is dropped.
@@ -208,7 +212,7 @@ impl RawObject {
     /// // Void method (side-effect only)
     /// obj.call_method::<()>("reset", ());
     /// ```
-    pub fn call_method<T: BamlDecode, K: IntoKwargs>(&self, method_name: &str, kwargs: K) -> T {
+    pub(crate) fn call_method<T: BamlDecode, K: IntoKwargs>(&self, method_name: &str, kwargs: K) -> T {
         self.try_call_method(method_name, kwargs)
             .unwrap_or_else(|e| {
                 baml_unreachable!(
@@ -226,7 +230,7 @@ impl RawObject {
     /// explicitly. Most callers should use `call_method` instead.
     ///
     /// Use `T = ()` for void methods (side-effect only).
-    pub fn try_call_method<T: BamlDecode, K: IntoKwargs>(
+    pub(crate) fn try_call_method<T: BamlDecode, K: IntoKwargs>(
         &self,
         method_name: &str,
         kwargs: K,
@@ -300,7 +304,7 @@ impl RawObject {
         }
     }
 
-    /// Low-level method call that returns the raw InvocationResponse
+    /// Low-level method call that returns the raw `InvocationResponse`
     fn call_method_raw_internal(
         &self,
         method_name: &str,

@@ -1,4 +1,4 @@
-//! Tests for BamlEncode and BamlDecode traits.
+//! Tests for `BamlEncode` and `BamlDecode` traits.
 
 mod common;
 

@@ -1,4 +1,4 @@
 mod bindings;
 pub mod callbacks;
 
-pub use bindings::*;
+pub(crate) use bindings::*;

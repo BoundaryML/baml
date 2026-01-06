@@ -396,7 +396,7 @@ impl BamlRuntime {
     // TypeBuilder Factory Methods
     // =========================================================================
 
-    /// Create a new TypeBuilder for dynamic type construction
+    /// Create a new `TypeBuilder` for dynamic type construction
     pub fn new_type_builder(&self) -> TypeBuilder {
         TypeBuilder::new(self.ptr)
     }
@@ -413,7 +413,7 @@ impl Drop for BamlRuntime {
 
 /// Simple JSON encoding for maps
 ///
-/// This is a minimal implementation to avoid adding serde_json as a dependency.
+/// This is a minimal implementation to avoid adding `serde_json` as a dependency.
 /// For simplicity, we assume keys and values don't contain problematic
 /// characters that would require complex escaping beyond basic escapes.
 fn json_encode_map(map: &HashMap<String, String>) -> Result<String, BamlError> {

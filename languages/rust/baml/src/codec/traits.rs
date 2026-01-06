@@ -9,13 +9,13 @@ use crate::{
 
 /// Trait for decoding from CFFI protobuf format (BAML -> Rust)
 pub trait BamlDecode: Sized {
-    /// Decode from a CffiValueHolder (outbound schema)
+    /// Decode from a `CffiValueHolder` (outbound schema)
     fn baml_decode(holder: &CffiValueHolder) -> Result<Self, BamlError>;
 }
 
 /// Trait for encoding to CFFI protobuf format (Rust -> BAML)
 pub trait BamlEncode {
-    /// Encode to a HostValue (inbound schema)
+    /// Encode to a `HostValue` (inbound schema)
     fn baml_encode(&self) -> HostValue;
 }
 
@@ -46,7 +46,7 @@ pub trait BamlEnum: Sized {
 ///
 /// This allows ergonomic method calls without manually constructing
 /// `HostMapEntry` vectors.
-pub trait IntoKwargs {
+pub(crate) trait IntoKwargs {
     fn into_kwargs(self) -> Vec<HostMapEntry>;
 }
 

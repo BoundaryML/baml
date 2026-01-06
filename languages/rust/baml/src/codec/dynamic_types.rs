@@ -8,7 +8,7 @@ use super::{
 };
 use crate::error::{BamlError, FullTypeName};
 
-/// A fully dynamic class - all fields accessed via .get()
+/// A fully dynamic class - all fields accessed via .`get()`
 #[derive(Debug, Clone)]
 pub struct DynamicClass<T: KnownTypes, S: KnownTypes> {
     pub name: String,
@@ -16,7 +16,7 @@ pub struct DynamicClass<T: KnownTypes, S: KnownTypes> {
 }
 
 impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
-    /// Create a new DynamicClass
+    /// Create a new `DynamicClass`
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -39,7 +39,7 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
         self.fields.contains_key(field_name)
     }
 
-    /// Get the class name (e.g., "PersonInfo", "OrderDetails").
+    /// Get the class name (e.g., "`PersonInfo`", "`OrderDetails`").
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -50,7 +50,7 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
         let value = self
             .fields
             .get(field_name)
-            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?
+            .ok_or_else(|| BamlError::internal(format!("missing field '{field_name}'")))?
             .clone();
         V::from_baml_value(value)
     }
@@ -63,7 +63,7 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
         let value = self
             .fields
             .get(field_name)
-            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?;
+            .ok_or_else(|| BamlError::internal(format!("missing field '{field_name}'")))?;
         V::from_baml_value_ref(value)
     }
 
@@ -72,11 +72,11 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
         let value = self
             .fields
             .remove(field_name)
-            .ok_or_else(|| BamlError::internal(format!("missing field '{}'", field_name)))?;
+            .ok_or_else(|| BamlError::internal(format!("missing field '{field_name}'")))?;
         V::from_baml_value(value)
     }
 
-    /// Consume this DynamicClass and return the remaining fields.
+    /// Consume this `DynamicClass` and return the remaining fields.
     /// Useful for `@@dynamic` classes: pop known fields first, then call this
     /// to get remaining dynamic fields.
     pub fn into_fields(self) -> HashMap<String, BamlValue<T, S>> {
@@ -107,7 +107,7 @@ pub struct DynamicUnion<T: KnownTypes, S: KnownTypes> {
 }
 
 impl<T: KnownTypes, S: KnownTypes> DynamicUnion<T, S> {
-    /// Get the union name (e.g., "FooOrBar", "ResultOrError").
+    /// Get the union name (e.g., "`FooOrBar`", "`ResultOrError`").
     pub fn name(&self) -> &str {
         &self.name
     }

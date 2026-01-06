@@ -1,10 +1,10 @@
-//! Tests for BamlRuntime creation and function calls.
+//! Tests for `BamlRuntime` creation and function calls.
 
 use std::collections::HashMap;
 
 use baml::{BamlRuntime, FunctionArgs, StreamState, StreamingState};
 
-/// Helper to create environment variables HashMap from current environment
+/// Helper to create environment variables `HashMap` from current environment
 fn env_vars() -> HashMap<String, String> {
     std::env::vars().collect()
 }
@@ -570,7 +570,7 @@ mod function_calls {
     }
 
     /// Test successful function call with valid API key (requires
-    /// OPENAI_API_KEY env var)
+    /// `OPENAI_API_KEY` env var)
     #[test]
     fn call_function_succeeds_with_valid_api_key() {
         let api_key = require_env!("OPENAI_API_KEY");
@@ -611,7 +611,7 @@ mod function_calls {
         );
         let response = result.unwrap();
         assert!(!response.is_empty(), "Response should not be empty");
-        println!("Got response: {}", response);
+        println!("Got response: {response}");
     }
 
     /// Test calling with derive macro types and valid API key
@@ -672,7 +672,7 @@ mod function_calls {
         let person = result.unwrap();
         assert_eq!(person.name, "John");
         assert_eq!(person.age, 30);
-        println!("Got person: {:?}", person);
+        println!("Got person: {person:?}");
     }
 
     /// Test function call that returns Checked<T> with @check constraints
@@ -799,7 +799,7 @@ mod function_calls {
         // The check should pass whether it's Some(reasonable_age) or None
         match checked.value {
             Some(age) => {
-                println!("Got age: {}", age);
+                println!("Got age: {age}");
                 if age > 0 && age < 150 {
                     assert_eq!(
                         check.status,
@@ -897,8 +897,8 @@ mod function_calls {
         }
     }
 
-    /// Test streaming function call that returns StreamState<T> with
-    /// @stream.with_state
+    /// Test streaming function call that returns `StreamState`<T> with
+    /// @`stream.with_state`
     #[test]
     fn call_function_stream_with_state_succeeds() {
         use baml::BamlDecode;
@@ -983,7 +983,7 @@ mod function_calls {
                     }
                 }
                 Err(e) => {
-                    println!("Stream error (may be expected for early partials): {:?}", e);
+                    println!("Stream error (may be expected for early partials): {e:?}");
                 }
             }
         }
@@ -1001,8 +1001,7 @@ mod function_calls {
         let msg = stream.get_final_response().expect("Expected final result");
         assert!(!msg.content.is_empty(), "Content should not be empty");
         println!(
-            "Streaming with state test passed with {} partial updates",
-            partial_count
+            "Streaming with state test passed with {partial_count} partial updates"
         );
     }
 
@@ -1085,8 +1084,7 @@ mod function_calls {
                     // the partial type has required fields that haven't arrived yet.
                     error_count += 1;
                     println!(
-                        "Stream decode error {} (expected for incomplete partials): {:?}",
-                        error_count, e
+                        "Stream decode error {error_count} (expected for incomplete partials): {e:?}"
                     );
                 }
             }
@@ -1105,8 +1103,7 @@ mod function_calls {
         assert_eq!(person.name, "Alice");
         assert_eq!(person.age, 25);
         println!(
-            "Streaming test passed with {} partial updates",
-            partial_count
+            "Streaming test passed with {partial_count} partial updates"
         );
     }
 }

@@ -129,7 +129,7 @@ impl<TPartial, TFinal> Drop for AsyncStreamingCall<TPartial, TFinal> {
             // Cancel the FFI operation
             #[allow(unsafe_code)]
             unsafe {
-                ffi::cancel_function_call(self.id);
+                let _ = ffi::cancel_function_call(self.id);
             }
         }
     }

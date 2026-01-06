@@ -1,5 +1,5 @@
-//! Tests for TypeBuilder, TypeDef, EnumBuilder, EnumValueBuilder, ClassBuilder,
-//! ClassPropertyBuilder
+//! Tests for `TypeBuilder`, `TypeDef`, `EnumBuilder`, `EnumValueBuilder`, `ClassBuilder`,
+//! `ClassPropertyBuilder`
 
 mod type_builder {
     use std::collections::HashMap;
@@ -9,12 +9,12 @@ mod type_builder {
         FunctionArgs, TypeBuilder, TypeDef,
     };
 
-    /// Helper to create environment variables HashMap from current environment
+    /// Helper to create environment variables `HashMap` from current environment
     fn env_vars() -> HashMap<String, String> {
         std::env::vars().collect()
     }
 
-    /// Create a minimal runtime for testing TypeBuilder types
+    /// Create a minimal runtime for testing `TypeBuilder` types
     fn create_test_runtime() -> BamlRuntime {
         let mut files = HashMap::new();
         files.insert(
@@ -829,8 +829,7 @@ mod type_builder {
             // Empty builder should have TypeBuilder prefix
             assert!(
                 repr.contains("TypeBuilder"),
-                "Expected 'TypeBuilder' in output, got: {}",
-                repr
+                "Expected 'TypeBuilder' in output, got: {repr}"
             );
         }
 
@@ -844,18 +843,15 @@ mod type_builder {
             let repr = tb.print();
             assert!(
                 repr.contains("Status"),
-                "Expected 'Status' in output, got: {}",
-                repr
+                "Expected 'Status' in output, got: {repr}"
             );
             assert!(
                 repr.contains("Priority"),
-                "Expected 'Priority' in output, got: {}",
-                repr
+                "Expected 'Priority' in output, got: {repr}"
             );
             assert!(
                 repr.contains("Enums:"),
-                "Expected 'Enums:' section in output, got: {}",
-                repr
+                "Expected 'Enums:' section in output, got: {repr}"
             );
         }
 
@@ -869,18 +865,15 @@ mod type_builder {
             let repr = tb.print();
             assert!(
                 repr.contains("Person"),
-                "Expected 'Person' in output, got: {}",
-                repr
+                "Expected 'Person' in output, got: {repr}"
             );
             assert!(
                 repr.contains("Address"),
-                "Expected 'Address' in output, got: {}",
-                repr
+                "Expected 'Address' in output, got: {repr}"
             );
             assert!(
                 repr.contains("Classes:"),
-                "Expected 'Classes:' section in output, got: {}",
-                repr
+                "Expected 'Classes:' section in output, got: {repr}"
             );
         }
 
@@ -1026,9 +1019,8 @@ mod type_builder {
             // Union format: (type1 | type2)
             let repr = union_type.print();
             assert!(
-                repr.contains("string") && repr.contains("int") && repr.contains("|"),
-                "Expected union format with string, int, and |, got: {}",
-                repr
+                repr.contains("string") && repr.contains("int") && repr.contains('|'),
+                "Expected union format with string, int, and |, got: {repr}"
             );
         }
 
@@ -1212,7 +1204,7 @@ mod type_builder {
                     thread::spawn(move || {
                         // Each thread creates a type
                         let _string_type = tb_clone.string();
-                        eprintln!("Thread {} created string type", i);
+                        eprintln!("Thread {i} created string type");
                     })
                 })
                 .collect();
@@ -1679,8 +1671,7 @@ mod type_builder {
             // The actual parsing of dynamic types is a separate concern
             if let Err(e) = &result {
                 eprintln!(
-                    "Function call error (may be expected for dynamic types): {:?}",
-                    e
+                    "Function call error (may be expected for dynamic types): {e:?}"
                 );
             }
         }
@@ -1729,7 +1720,7 @@ mod type_builder {
             assert!(result.is_ok(), "Function call failed: {:?}", result.err());
 
             let result_str = result.unwrap();
-            eprintln!("Extracted person (raw): {}", result_str);
+            eprintln!("Extracted person (raw): {result_str}");
 
             // Parse the string as JSON
             let value: serde_json::Value =
@@ -1742,21 +1733,18 @@ mod type_builder {
             // Verify the result contains expected fields
             assert!(
                 value.get("name").is_some(),
-                "Result should have 'name' field: {:?}",
-                value
+                "Result should have 'name' field: {value:?}"
             );
             assert!(
                 value.get("age").is_some(),
-                "Result should have 'age' field: {:?}",
-                value
+                "Result should have 'age' field: {value:?}"
             );
 
             // Verify the values are reasonable
             let name = value.get("name").unwrap().as_str().unwrap_or("");
             assert!(
                 name.to_lowercase().contains("alice"),
-                "Name should contain 'Alice', got: {}",
-                name
+                "Name should contain 'Alice', got: {name}"
             );
 
             let age = value.get("age").unwrap();
@@ -1764,7 +1752,7 @@ mod type_builder {
             let age_num = age
                 .as_i64()
                 .or_else(|| age.as_str().and_then(|s| s.parse::<i64>().ok()));
-            assert!(age_num == Some(25), "Age should be 25, got: {:?}", age);
+            assert!(age_num == Some(25), "Age should be 25, got: {age:?}");
         }
 
         #[test]
@@ -1816,15 +1804,14 @@ mod type_builder {
             assert!(result.is_ok(), "Function call failed: {:?}", result.err());
 
             let status = result.unwrap();
-            eprintln!("Extracted status: {}", status);
+            eprintln!("Extracted status: {status}");
 
             // The LLM should return "Completed" since the text indicates the project is
             // finished
             assert!(
                 status.to_lowercase().contains("completed")
                     || status.to_lowercase().contains("complete"),
-                "Status should be 'Completed' for finished project, got: {}",
-                status
+                "Status should be 'Completed' for finished project, got: {status}"
             );
         }
 
@@ -1871,23 +1858,20 @@ mod type_builder {
             // Verify email is present
             assert!(
                 value.get("email").is_some(),
-                "Result should have 'email' field: {:?}",
-                value
+                "Result should have 'email' field: {value:?}"
             );
 
             let email = value.get("email").unwrap().as_str().unwrap_or("");
             assert!(
                 email.contains("john@example.com") || email.contains("example"),
-                "Email should contain the email address, got: {}",
-                email
+                "Email should contain the email address, got: {email}"
             );
 
             // Phone should be null or not present since it wasn't in the text
             if let Some(phone) = value.get("phone") {
                 assert!(
-                    phone.is_null() || phone.as_str().map(|s| s.is_empty()).unwrap_or(false),
-                    "Phone should be null or empty since not provided, got: {:?}",
-                    phone
+                    phone.is_null() || phone.as_str().map(str::is_empty).unwrap_or(false),
+                    "Phone should be null or empty since not provided, got: {phone:?}"
                 );
             }
         }
@@ -1935,8 +1919,7 @@ mod type_builder {
                 .expect("Result should have 'items' field");
             assert!(
                 items.is_array(),
-                "Items should be an array, got: {:?}",
-                items
+                "Items should be an array, got: {items:?}"
             );
 
             let items_array = items.as_array().unwrap();
@@ -1950,18 +1933,16 @@ mod type_builder {
             let items_lower: Vec<String> = items_array
                 .iter()
                 .filter_map(|v| v.as_str())
-                .map(|s| s.to_lowercase())
+                .map(str::to_lowercase)
                 .collect();
 
             assert!(
                 items_lower.iter().any(|s| s.contains("milk")),
-                "Items should contain 'milk': {:?}",
-                items_lower
+                "Items should contain 'milk': {items_lower:?}"
             );
             assert!(
                 items_lower.iter().any(|s| s.contains("egg")),
-                "Items should contain 'eggs': {:?}",
-                items_lower
+                "Items should contain 'eggs': {items_lower:?}"
             );
         }
 
@@ -2055,28 +2036,24 @@ mod type_builder {
             // Verify nested structure
             assert!(
                 value.get("orderId").is_some() || value.get("order_id").is_some(),
-                "Result should have 'orderId' field: {:?}",
-                value
+                "Result should have 'orderId' field: {value:?}"
             );
 
             let customer = value.get("customer");
             assert!(
                 customer.is_some(),
-                "Result should have 'customer' field: {:?}",
-                value
+                "Result should have 'customer' field: {value:?}"
             );
 
             if let Some(customer) = customer {
                 assert!(
                     customer.get("name").is_some(),
-                    "Customer should have 'name' field: {:?}",
-                    customer
+                    "Customer should have 'name' field: {customer:?}"
                 );
                 let name = customer.get("name").unwrap().as_str().unwrap_or("");
                 assert!(
                     name.to_lowercase().contains("jane"),
-                    "Customer name should contain 'Jane', got: {}",
-                    name
+                    "Customer name should contain 'Jane', got: {name}"
                 );
             }
         }

@@ -8,9 +8,9 @@ use crate::{error::BamlError, ffi::bindings};
 
 /// Result sent via callback channel
 pub enum CallbackResult {
-    /// Partial streaming result (is_done = 0)
+    /// Partial streaming result (`is_done` = 0)
     Partial(Vec<u8>),
-    /// Final result (is_done = 1)
+    /// Final result (`is_done` = 1)
     Final(Vec<u8>),
     /// Error occurred
     Error(BamlError),
@@ -83,11 +83,9 @@ fn allocate_callback_id(callbacks: &mut HashMap<u32, CallbackData>) -> u32 {
             break;
         }
         id = id.wrapping_add(1);
-        if id == *next_id {
-            // We've wrapped all the way around - this should never happen
-            // as it would require 2^32 simultaneous pending callbacks
-            panic!("callback ID space exhausted");
-        }
+        // We've wrapped all the way around - this should never happen
+        // as it would require 2^32 simultaneous pending callbacks
+        assert!(id != *next_id, "callback ID space exhausted");
     }
     *next_id = id.wrapping_add(1);
     id

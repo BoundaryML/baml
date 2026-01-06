@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use baml::BamlRuntime;
 
-/// Helper to create environment variables HashMap from current environment
+/// Helper to create environment variables `HashMap` from current environment
 fn env_vars() -> HashMap<String, String> {
     std::env::vars().collect()
 }

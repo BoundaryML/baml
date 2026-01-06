@@ -1,4 +1,4 @@
-//! Primitive type BamlDecode and BamlEncode implementations.
+//! Primitive type `BamlDecode` and `BamlEncode` implementations.
 
 use std::collections::HashMap;
 
@@ -168,14 +168,14 @@ impl<T: BamlEncode> BamlEncode for &T {
     }
 }
 
-/// HostValue is already encoded, return as-is
+/// `HostValue` is already encoded, return as-is
 impl BamlEncode for HostValue {
     fn baml_encode(&self) -> HostValue {
         self.clone()
     }
 }
 
-/// Encode arbitrary JSON values for ClientRegistry options
+/// Encode arbitrary JSON values for `ClientRegistry` options
 impl BamlEncode for JsonValue {
     fn baml_encode(&self) -> HostValue {
         let inner = match self {
@@ -218,7 +218,7 @@ impl BamlDecode for JsonValue {
             Some(cffi_value_holder::Value::NullValue(_)) | None => Ok(JsonValue::Null),
             Some(cffi_value_holder::Value::StringValue(s)) => Ok(JsonValue::String(s.clone())),
             Some(cffi_value_holder::Value::IntValue(i)) => {
-                Ok(JsonValue::Number(i64::from(*i).into()))
+                Ok(JsonValue::Number((*i).into()))
             }
             Some(cffi_value_holder::Value::FloatValue(f)) => {
                 if let Some(number) = serde_json::Number::from_f64(*f) {
@@ -325,7 +325,7 @@ impl BamlDecode for JsonValue {
                         Ok(JsonValue::String(s.value.clone()))
                     }
                     Some(cffi_field_type_literal::Literal::IntLiteral(i)) => {
-                        Ok(JsonValue::Number(i64::from(i.value).into()))
+                        Ok(JsonValue::Number(i.value.into()))
                     }
                     Some(cffi_field_type_literal::Literal::BoolLiteral(b)) => {
                         Ok(JsonValue::Bool(b.value))

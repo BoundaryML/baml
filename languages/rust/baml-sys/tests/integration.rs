@@ -1,4 +1,5 @@
 //! Integration tests for baml-sys library loading.
+#![allow(clippy::print_stderr)]
 
 use std::env;
 
@@ -32,7 +33,7 @@ fn test_version_when_library_available() {
     }
 }
 
-/// Test that ensure_library returns a valid path when library is available.
+/// Test that `ensure_library` returns a valid path when library is available.
 #[test]
 fn test_ensure_library_returns_path() {
     if env::var(ENV_LIBRARY_PATH).is_err() && env::var("CI").is_err() {

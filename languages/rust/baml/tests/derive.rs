@@ -1,4 +1,4 @@
-//! Tests for BamlEncode and BamlDecode derive macros.
+//! Tests for `BamlEncode` and `BamlDecode` derive macros.
 
 mod common;
 

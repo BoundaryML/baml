@@ -36,7 +36,7 @@ pub(crate) fn variant_name(v: &cffi_value_holder::Value) -> &'static str {
 // Note: BamlEnum doesn't auto-impl BamlDecode because enums need special
 // handling in generated code to support both regular and dynamic enums
 
-/// Decode an enum from a CffiValueHolder
+/// Decode an enum from a `CffiValueHolder`
 pub fn decode_enum<T: BamlEnum>(holder: &CffiValueHolder) -> Result<T, BamlError> {
     match &holder.value {
         Some(cffi_value_holder::Value::EnumValue(e)) => T::from_variant_name(&e.value),
@@ -48,7 +48,7 @@ pub fn decode_enum<T: BamlEnum>(holder: &CffiValueHolder) -> Result<T, BamlError
     }
 }
 
-/// Encode a class to HostValue
+/// Encode a class to `HostValue`
 pub fn encode_class(name: &str, fields: Vec<(&str, HostValue)>) -> HostValue {
     let entries = fields
         .into_iter()
@@ -85,7 +85,7 @@ pub fn encode_class_dynamic(name: &str, fields: Vec<(&str, HostValue)>) -> HostV
     }
 }
 
-/// Encode an enum to HostValue
+/// Encode an enum to `HostValue`
 pub fn encode_enum(enum_name: &str, variant: &str) -> HostValue {
     HostValue {
         value: Some(host_value::Value::EnumValue(HostEnumValue {
@@ -106,19 +106,16 @@ pub fn decode_field<T: BamlDecode>(
                 Some(holder) => match T::baml_decode(holder) {
                     Ok(value) => Ok(value),
                     Err(e) => Err(BamlError::internal(format!(
-                        "error decoding field '{}': {}",
-                        field_name, e
+                        "error decoding field '{field_name}': {e}"
                     ))),
                 },
                 None => Err(BamlError::internal(format!(
-                    "field '{}' has no value",
-                    field_name
+                    "field '{field_name}' has no value"
                 ))),
             };
         }
     }
     Err(BamlError::internal(format!(
-        "missing field '{}'",
-        field_name
+        "missing field '{field_name}'"
     )))
 }

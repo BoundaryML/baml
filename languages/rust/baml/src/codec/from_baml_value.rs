@@ -1,9 +1,9 @@
-//! Trait for extracting concrete types from BamlValue (owned).
+//! Trait for extracting concrete types from `BamlValue` (owned).
 
 use super::{baml_value::BamlValue, known_types::KnownTypes};
 use crate::error::BamlError;
 
-/// Trait for extracting concrete types from BamlValue.
+/// Trait for extracting concrete types from `BamlValue`.
 ///
 /// Primitives are implemented in the baml crate.
 /// Known types are implemented by generated code.
@@ -66,14 +66,14 @@ impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for () {
 
 use super::dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion};
 
-/// Identity impl - extract BamlValue from BamlValue
+/// Identity impl - extract `BamlValue` from `BamlValue`
 impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for BamlValue<T, S> {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         Ok(value)
     }
 }
 
-/// DynamicClass extraction
+/// `DynamicClass` extraction
 impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for DynamicClass<T, S> {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -83,7 +83,7 @@ impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for DynamicClass<T, S> {
     }
 }
 
-/// DynamicEnum extraction
+/// `DynamicEnum` extraction
 impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for DynamicEnum {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -93,7 +93,7 @@ impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for DynamicEnum {
     }
 }
 
-/// DynamicUnion extraction
+/// `DynamicUnion` extraction
 impl<T: KnownTypes, S: KnownTypes> FromBamlValue<T, S> for DynamicUnion<T, S> {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -112,7 +112,7 @@ use std::collections::HashMap;
 use crate::error::BamlTypeName;
 
 /// Option<V> - handles nullable fields (string?, int?, etc.)
-/// Note: BamlTypeName bound is for consistency with Vec/HashMap, even though
+/// Note: `BamlTypeName` bound is for consistency with Vec/HashMap, even though
 /// Option never produces type errors itself (it delegates to V or returns None
 /// for Null).
 impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBamlValue<T, S>
@@ -138,7 +138,7 @@ impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBa
     }
 }
 
-/// HashMap<String, V> - handles map types (map<string, int>, etc.)
+/// `HashMap`<String, V> - handles map types (map<string, int>, etc.)
 impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBamlValue<T, S>
     for HashMap<String, V>
 {
@@ -159,7 +159,7 @@ impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S> + BamlTypeName> FromBa
 
 use crate::types::{Checked, StreamState, StreamingState};
 
-/// Checked<V> blanket impl - works for any V: FromBamlValue
+/// Checked<V> blanket impl - works for any V: `FromBamlValue`
 impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S>> FromBamlValue<T, S> for Checked<V> {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {
@@ -183,7 +183,7 @@ impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S>> FromBamlValue<T, S> f
     }
 }
 
-/// StreamState<V> blanket impl - works for any V: FromBamlValue
+/// `StreamState`<V> blanket impl - works for any V: `FromBamlValue`
 impl<T: KnownTypes, S: KnownTypes, V: FromBamlValue<T, S>> FromBamlValue<T, S> for StreamState<V> {
     fn from_baml_value(value: BamlValue<T, S>) -> Result<Self, BamlError> {
         match value {

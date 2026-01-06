@@ -1,4 +1,4 @@
-//! Container type BamlDecode and BamlEncode implementations.
+//! Container type `BamlDecode` and `BamlEncode` implementations.
 
 use std::collections::HashMap;
 
@@ -62,7 +62,7 @@ impl<T: BamlDecode> BamlDecode for Option<T> {
                 let inner = union
                     .value
                     .as_ref()
-                    .map(|b| b.as_ref())
+                    .map(std::convert::AsRef::as_ref)
                     .ok_or_else(|| BamlError::internal(format!(
                         "Option: union variant missing inner value (name={:?}, variant={}, is_single_pattern={})",
                         union.name.as_ref().map(|n| &n.name),
@@ -165,9 +165,9 @@ impl BamlSerializeMapKey for i64 {
     }
 
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        Ok(key
+        key
             .parse::<i64>()
-            .map_err(|e| BamlError::internal(format!("failed to parse int map key: {}", e)))?)
+            .map_err(|e| BamlError::internal(format!("failed to parse int map key: {e}")))
     }
 }
 
@@ -177,9 +177,9 @@ impl BamlSerializeMapKey for bool {
     }
 
     fn baml_decode_map_key(key: &str) -> Result<Self, BamlError> {
-        Ok(key
+        key
             .parse::<bool>()
-            .map_err(|e| BamlError::internal(format!("failed to parse bool map key: {}", e)))?)
+            .map_err(|e| BamlError::internal(format!("failed to parse bool map key: {e}")))
     }
 }
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 /// BAML runtime errors
 ///
 /// Note: This is intentionally minimal. Expand with specific variants
-/// (InitError, CallError, etc.) once the core functionality works.
+/// (`InitError`, `CallError`, etc.) once the core functionality works.
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum BamlError {
     /// Internal/unexpected errors - bugs in BAML that should never happen
@@ -16,7 +16,7 @@ pub enum BamlError {
 }
 
 /// Trait for types that can report their full type name for error messages.
-/// Used by BamlValue variants to provide descriptive "got" values.
+/// Used by `BamlValue` variants to provide descriptive "got" values.
 pub trait FullTypeName {
     fn full_type_name(&self) -> String;
 }
@@ -58,7 +58,7 @@ impl BamlError {
 /// Type names should be descriptive:
 /// - Primitives: "String", "Int", "Float", "Bool", "Null"
 /// - Containers: "List<String>", "Map<String, Int>", "Optional<Person>"
-/// - Wrappers: "Checked<String>", "StreamState<Person>"
+/// - Wrappers: "Checked<String>", "`StreamState`<Person>"
 /// - Dynamic: "DynamicClass(PersonInfo)", "DynamicEnum(Sentiment)",
 ///   "DynamicUnion(unknown)"
 pub trait BamlTypeName {
@@ -68,7 +68,7 @@ pub trait BamlTypeName {
     const BASE_TYPE_NAME: &'static str;
 
     /// Get the full type name including generic parameters.
-    /// Default implementation returns BASE_TYPE_NAME for non-generic types.
+    /// Default implementation returns `BASE_TYPE_NAME` for non-generic types.
     fn baml_type_name() -> String {
         Self::BASE_TYPE_NAME.to_string()
     }
@@ -155,7 +155,7 @@ impl<T: BamlTypeName> BamlTypeName for Box<T> {
 /// Marker type for unknown/dynamic inner types.
 /// Use this when the inner type of a container is not known at compile time.
 /// Example: `Checked<Unknown>` represents "Checked<?>"
-pub struct Unknown;
+pub(crate) struct Unknown;
 
 impl BamlTypeName for Unknown {
     const BASE_TYPE_NAME: &'static str = "?";

@@ -73,14 +73,14 @@ impl FunctionArgs {
 
     /// Encode to protobuf bytes for FFI
     pub fn encode(&self) -> Result<Vec<u8>, BamlError> {
-        let client_registry = self.client_registry.as_ref().map(|r| r.encode());
+        let client_registry = self.client_registry.as_ref().map(super::client_registry::ClientRegistry::encode);
 
         let msg = HostFunctionArguments {
             kwargs: self.kwargs.clone(),
             client_registry,
             env: self.env_overrides.clone(),
             collectors: self.collectors.clone(),
-            type_builder: self.type_builder.clone(),
+            type_builder: self.type_builder,
             tags: self.tags.clone(),
         };
 

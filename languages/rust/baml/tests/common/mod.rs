@@ -8,35 +8,35 @@ use baml::__internal::{
 };
 
 /// Create a `CffiValueHolder` containing a string value.
-pub fn make_string_holder(s: &str) -> CffiValueHolder {
+pub(crate) fn make_string_holder(s: &str) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::StringValue(s.to_string())),
     }
 }
 
 /// Create a `CffiValueHolder` containing an integer value.
-pub fn make_int_holder(i: i64) -> CffiValueHolder {
+pub(crate) fn make_int_holder(i: i64) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::IntValue(i)),
     }
 }
 
 /// Create a `CffiValueHolder` containing a float value.
-pub fn make_float_holder(f: f64) -> CffiValueHolder {
+pub(crate) fn make_float_holder(f: f64) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::FloatValue(f)),
     }
 }
 
 /// Create a `CffiValueHolder` containing a boolean value.
-pub fn make_bool_holder(b: bool) -> CffiValueHolder {
+pub(crate) fn make_bool_holder(b: bool) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::BoolValue(b)),
     }
 }
 
 /// Create a `CffiValueHolder` containing a list of values.
-pub fn make_list_holder(items: Vec<CffiValueHolder>) -> CffiValueHolder {
+pub(crate) fn make_list_holder(items: Vec<CffiValueHolder>) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::ListValue(CffiValueList {
             item_type: None,
@@ -46,12 +46,12 @@ pub fn make_list_holder(items: Vec<CffiValueHolder>) -> CffiValueHolder {
 }
 
 /// Create an empty/null `CffiValueHolder`.
-pub fn make_null_holder() -> CffiValueHolder {
+pub(crate) fn make_null_holder() -> CffiValueHolder {
     CffiValueHolder { value: None }
 }
 
 /// Create a `CffiValueHolder` containing a checked value with checks.
-pub fn make_checked_holder(
+pub(crate) fn make_checked_holder(
     inner: CffiValueHolder,
     checks: Vec<(&str, &str, &str)>,
 ) -> CffiValueHolder {
@@ -77,7 +77,7 @@ pub fn make_checked_holder(
 }
 
 /// Create a `CffiValueHolder` containing a streaming state value.
-pub fn make_stream_state_holder(inner: CffiValueHolder, state: CffiStreamState) -> CffiValueHolder {
+pub(crate) fn make_stream_state_holder(inner: CffiValueHolder, state: CffiStreamState) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::StreamingStateValue(Box::new(
             CffiValueStreamingState {
@@ -90,7 +90,7 @@ pub fn make_stream_state_holder(inner: CffiValueHolder, state: CffiStreamState) 
 }
 
 /// Create a `CffiValueHolder` containing a map value.
-pub fn make_map_holder(entries: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
+pub(crate) fn make_map_holder(entries: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
     let map_entries = entries
         .into_iter()
         .map(|(key, value)| CffiMapEntry {
@@ -109,7 +109,7 @@ pub fn make_map_holder(entries: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder
 }
 
 /// Create a `CffiValueHolder` containing a class value.
-pub fn make_class_holder(name: &str, fields: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
+pub(crate) fn make_class_holder(name: &str, fields: Vec<(&str, CffiValueHolder)>) -> CffiValueHolder {
     let field_entries = fields
         .into_iter()
         .map(|(key, value)| CffiMapEntry {
@@ -130,7 +130,7 @@ pub fn make_class_holder(name: &str, fields: Vec<(&str, CffiValueHolder)>) -> Cf
 }
 
 /// Create a `CffiValueHolder` containing an enum value.
-pub fn make_enum_holder(enum_name: &str, value: &str) -> CffiValueHolder {
+pub(crate) fn make_enum_holder(enum_name: &str, value: &str) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::EnumValue(CffiValueEnum {
             name: Some(CffiTypeName {
@@ -144,7 +144,7 @@ pub fn make_enum_holder(enum_name: &str, value: &str) -> CffiValueHolder {
 }
 
 /// Create a `CffiValueHolder` containing a union variant value.
-pub fn make_union_holder(
+pub(crate) fn make_union_holder(
     union_name: &str,
     variant_name: &str,
     inner: CffiValueHolder,
@@ -167,7 +167,7 @@ pub fn make_union_holder(
 }
 
 /// Create a `CffiValueHolder` containing a string literal value.
-pub fn make_literal_string_holder(s: &str) -> CffiValueHolder {
+pub(crate) fn make_literal_string_holder(s: &str) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::LiteralValue(
             CffiFieldTypeLiteral {
@@ -182,7 +182,7 @@ pub fn make_literal_string_holder(s: &str) -> CffiValueHolder {
 }
 
 /// Create a `CffiValueHolder` containing an int literal value.
-pub fn make_literal_int_holder(i: i64) -> CffiValueHolder {
+pub(crate) fn make_literal_int_holder(i: i64) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::LiteralValue(
             CffiFieldTypeLiteral {
@@ -195,7 +195,7 @@ pub fn make_literal_int_holder(i: i64) -> CffiValueHolder {
 }
 
 /// Create a `CffiValueHolder` containing a bool literal value.
-pub fn make_literal_bool_holder(b: bool) -> CffiValueHolder {
+pub(crate) fn make_literal_bool_holder(b: bool) -> CffiValueHolder {
     CffiValueHolder {
         value: Some(cffi_value_holder::Value::LiteralValue(
             CffiFieldTypeLiteral {

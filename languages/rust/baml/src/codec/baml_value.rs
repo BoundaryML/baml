@@ -1,4 +1,4 @@
-//! BamlValue - a dynamically-typed BAML value.
+//! `BamlValue` - a dynamically-typed BAML value.
 
 use std::collections::HashMap;
 
@@ -43,8 +43,8 @@ pub enum BamlValue<T: KnownTypes, S: KnownTypes> {
     DynamicUnion(DynamicUnion<T, S>),
 }
 
-/// Implement FullTypeName for BamlValue so it can be used with
-/// BamlError::type_check
+/// Implement `FullTypeName` for `BamlValue` so it can be used with
+/// `BamlError::type_check`
 impl<T: KnownTypes, S: KnownTypes> FullTypeName for BamlValue<T, S> {
     /// Get the full type name for error messages.
     /// Returns descriptive names like:
@@ -76,12 +76,12 @@ impl<T: KnownTypes, S: KnownTypes> FullTypeName for BamlValue<T, S> {
 }
 
 impl<T: KnownTypes, S: KnownTypes> BamlValue<T, S> {
-    /// Convert this BamlValue to the specified type.
+    /// Convert this `BamlValue` to the specified type.
     pub fn get<V: FromBamlValue<T, S>>(self) -> Result<V, BamlError> {
         V::from_baml_value(self)
     }
 
-    /// Borrow this BamlValue as the specified type (zero-copy).
+    /// Borrow this `BamlValue` as the specified type (zero-copy).
     pub fn get_ref<'a, V: FromBamlValueRef<'a, T, S>>(&'a self) -> Result<V, BamlError> {
         V::from_baml_value_ref(self)
     }
@@ -115,7 +115,7 @@ impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
             },
             BamlValue::List(items) => HostValue {
                 value: Some(host_value::Value::ListValue(HostListValue {
-                    values: items.iter().map(|v| v.baml_encode()).collect(),
+                    values: items.iter().map(super::traits::BamlEncode::baml_encode).collect(),
                 })),
             },
             BamlValue::Map(map) => HostValue {
