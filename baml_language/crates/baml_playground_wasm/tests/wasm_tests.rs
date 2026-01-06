@@ -81,6 +81,78 @@ fn test_baml_runtime_function_names_empty() {
     // Empty BAML source should return empty function names (plus debug injection)
     let rt = BamlRuntime::new("".to_string());
     let names = rt.function_names();
-    // Currently includes "injected-hot-reload2" debug value
-    assert!(names.contains(&"injected-hot-reload2".to_string()));
+    // Currently includes "injected-hot-reload4" debug value
+    assert!(names.contains(&"injected-hot-reload4".to_string()));
+}
+
+// ============================================================================
+// Runtime Execution Binding Tests
+// ============================================================================
+
+#[wasm_bindgen_test]
+fn test_render_prompt_for_function() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.render_prompt_for_function("TestFunc", r#"{"input": "hello"}"#);
+
+    // Should succeed (even with stub implementation)
+    assert!(result.success());
+    assert!(result.prompt().is_some());
+}
+
+#[wasm_bindgen_test]
+fn test_render_prompt_for_function_invalid_json() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.render_prompt_for_function("TestFunc", "not valid json");
+
+    // Should fail with parse error
+    assert!(!result.success());
+    assert!(result.error().is_some());
+    assert!(result.error().unwrap().contains("parse"));
+}
+
+#[wasm_bindgen_test]
+fn test_render_curl_for_function() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.render_curl_for_function("TestFunc", r#"{"input": "hello"}"#, false);
+
+    assert!(result.success());
+    let curl = result.curl().unwrap();
+    assert!(curl.contains("curl"));
+    assert!(curl.contains("-X POST"));
+    assert!(curl.contains("[REDACTED]")); // API key should be masked
+}
+
+#[wasm_bindgen_test]
+fn test_render_curl_for_function_expose_secrets() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.render_curl_for_function("TestFunc", r#"{"input": "hello"}"#, true);
+
+    assert!(result.success());
+    let curl = result.curl().unwrap();
+    assert!(curl.contains("curl"));
+    // When expose_secrets=true, no [REDACTED] (though key will be empty)
+    assert!(curl.contains("Bearer")); // Authorization header present
+}
+
+#[wasm_bindgen_test]
+fn test_build_request_for_function() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.build_request_for_function("TestFunc", r#"{"input": "hello"}"#, false);
+
+    assert!(result.success());
+    assert_eq!(result.method(), Some("POST".to_string()));
+    assert!(result.url().unwrap().contains("chat/completions"));
+    assert!(result.headers_json().is_some());
+    assert!(result.body_json().is_some());
+}
+
+#[wasm_bindgen_test]
+fn test_build_request_for_function_streaming() {
+    let rt = BamlRuntime::new("".to_string());
+    let result = rt.build_request_for_function("TestFunc", r#"{"input": "hello"}"#, true);
+
+    assert!(result.success());
+    // Body should contain stream: true
+    let body = result.body_json().unwrap();
+    assert!(body.contains("\"stream\":true") || body.contains("\"stream\": true"));
 }

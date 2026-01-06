@@ -148,23 +148,27 @@ impl BamlRuntime {
             func_loc,
         );
 
-        // Step 6: Render the tree
+        // Step 6: Create resolution context for rendering
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project);
+
+        // Step 7: Render the tree
         let tree = baml_tir::render_function_tree(
             &self.db,
+            &resolution_ctx,
             function_name,
             &signature,
             &body,
             &inference_result,
         );
 
-        // Step 7: Format type errors
+        // Step 8: Format type errors
         let type_errors: Vec<String> = inference_result
             .errors
             .iter()
             .map(baml_tir::short_display)
             .collect();
 
-        // Step 8: Format signature
+        // Step 9: Format signature
         let signature_str = format_signature(&signature);
 
         FunctionTypedBodyResult {
@@ -194,6 +198,304 @@ impl BamlRuntime {
             }
         }
         None
+    }
+}
+
+// ============================================================================
+// Runtime Execution Bindings
+// ============================================================================
+
+/// Result from rendering a prompt.
+#[wasm_bindgen]
+pub struct RenderPromptResult {
+    success: bool,
+    error: Option<String>,
+    prompt: Option<String>,
+    messages_json: Option<String>,
+}
+
+#[wasm_bindgen]
+impl RenderPromptResult {
+    #[wasm_bindgen(getter)]
+    pub fn success(&self) -> bool {
+        self.success
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn error(&self) -> Option<String> {
+        self.error.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn prompt(&self) -> Option<String> {
+        self.prompt.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn messages_json(&self) -> Option<String> {
+        self.messages_json.clone()
+    }
+}
+
+/// Result from rendering a curl command.
+#[wasm_bindgen]
+pub struct RenderCurlResult {
+    success: bool,
+    error: Option<String>,
+    curl: Option<String>,
+}
+
+#[wasm_bindgen]
+impl RenderCurlResult {
+    #[wasm_bindgen(getter)]
+    pub fn success(&self) -> bool {
+        self.success
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn error(&self) -> Option<String> {
+        self.error.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn curl(&self) -> Option<String> {
+        self.curl.clone()
+    }
+}
+
+/// Result from building a request.
+#[wasm_bindgen]
+pub struct BuildRequestResult {
+    success: bool,
+    error: Option<String>,
+    url: Option<String>,
+    method: Option<String>,
+    headers_json: Option<String>,
+    body_json: Option<String>,
+}
+
+#[wasm_bindgen]
+impl BuildRequestResult {
+    #[wasm_bindgen(getter)]
+    pub fn success(&self) -> bool {
+        self.success
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn error(&self) -> Option<String> {
+        self.error.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn url(&self) -> Option<String> {
+        self.url.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn method(&self) -> Option<String> {
+        self.method.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn headers_json(&self) -> Option<String> {
+        self.headers_json.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn body_json(&self) -> Option<String> {
+        self.body_json.clone()
+    }
+}
+
+#[wasm_bindgen]
+impl BamlRuntime {
+    /// Render a prompt for a function without executing.
+    ///
+    /// Takes a function name and JSON-encoded arguments.
+    #[wasm_bindgen]
+    pub fn render_prompt_for_function(
+        &self,
+        function_name: &str,
+        args_json: &str,
+    ) -> RenderPromptResult {
+        // Parse arguments
+        let args: baml_runtime::BamlMap<String, baml_runtime::BamlValue> =
+            match serde_json::from_str(args_json) {
+                Ok(args) => args,
+                Err(e) => {
+                    return RenderPromptResult {
+                        success: false,
+                        error: Some(format!("Failed to parse arguments: {}", e)),
+                        prompt: None,
+                        messages_json: None,
+                    };
+                }
+            };
+
+        // Create a stub prepared function
+        // TODO: Get actual prompt template from function definition
+        let prepared = baml_runtime::PreparedFunction::new_stub(
+            function_name,
+            args,
+            baml_runtime::TypeRef::string(),
+            baml_runtime::ClientSpec::new("openai/gpt-4"),
+            baml_runtime::PromptTemplate::new("{{ input }}"),
+        );
+
+        // Render the prompt
+        match baml_runtime::render_prompt(&prepared) {
+            Ok(prompt) => {
+                let text = prompt.messages.iter()
+                    .map(|m| m.text_content())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // Serialize messages to JSON for structured access
+                let messages: Vec<serde_json::Value> = prompt.messages.iter()
+                    .map(|m| serde_json::json!({
+                        "role": m.role.as_str(),
+                        "content": m.text_content()
+                    }))
+                    .collect();
+
+                RenderPromptResult {
+                    success: true,
+                    error: None,
+                    prompt: Some(text),
+                    messages_json: serde_json::to_string(&messages).ok(),
+                }
+            }
+            Err(e) => RenderPromptResult {
+                success: false,
+                error: Some(e.to_string()),
+                prompt: None,
+                messages_json: None,
+            },
+        }
+    }
+
+    /// Generate a curl command for a function.
+    ///
+    /// Takes a function name, JSON-encoded arguments, and whether to expose secrets.
+    #[wasm_bindgen]
+    pub fn render_curl_for_function(
+        &self,
+        function_name: &str,
+        args_json: &str,
+        expose_secrets: bool,
+    ) -> RenderCurlResult {
+        // Parse arguments
+        let args: baml_runtime::BamlMap<String, baml_runtime::BamlValue> =
+            match serde_json::from_str(args_json) {
+                Ok(args) => args,
+                Err(e) => {
+                    return RenderCurlResult {
+                        success: false,
+                        error: Some(format!("Failed to parse arguments: {}", e)),
+                        curl: None,
+                    };
+                }
+            };
+
+        // Create a stub prepared function
+        let prepared = baml_runtime::PreparedFunction::new_stub(
+            function_name,
+            args,
+            baml_runtime::TypeRef::string(),
+            baml_runtime::ClientSpec::new("openai/gpt-4"),
+            baml_runtime::PromptTemplate::new("{{ input }}"),
+        );
+
+        // Create context
+        let ctx = baml_runtime::context::PerCallContext::new();
+
+        // Create render options
+        let options = if expose_secrets {
+            baml_runtime::RenderOptions::for_execution()
+        } else {
+            baml_runtime::RenderOptions::default()
+        };
+
+        // Render the curl command
+        match baml_runtime::render_raw_curl(&prepared, &ctx, &options) {
+            Ok(curl) => RenderCurlResult {
+                success: true,
+                error: None,
+                curl: Some(curl),
+            },
+            Err(e) => RenderCurlResult {
+                success: false,
+                error: Some(e.to_string()),
+                curl: None,
+            },
+        }
+    }
+
+    /// Build a provider-specific request for a function.
+    ///
+    /// Returns the request details as structured data.
+    #[wasm_bindgen]
+    pub fn build_request_for_function(
+        &self,
+        function_name: &str,
+        args_json: &str,
+        stream: bool,
+    ) -> BuildRequestResult {
+        // Parse arguments
+        let args: baml_runtime::BamlMap<String, baml_runtime::BamlValue> =
+            match serde_json::from_str(args_json) {
+                Ok(args) => args,
+                Err(e) => {
+                    return BuildRequestResult {
+                        success: false,
+                        error: Some(format!("Failed to parse arguments: {}", e)),
+                        url: None,
+                        method: None,
+                        headers_json: None,
+                        body_json: None,
+                    };
+                }
+            };
+
+        // Create a stub prepared function
+        let prepared = baml_runtime::PreparedFunction::new_stub(
+            function_name,
+            args,
+            baml_runtime::TypeRef::string(),
+            baml_runtime::ClientSpec::new("openai/gpt-4"),
+            baml_runtime::PromptTemplate::new("{{ input }}"),
+        );
+
+        // Create context
+        let ctx = baml_runtime::context::PerCallContext::new();
+
+        // Build the request
+        match baml_runtime::build_request(&prepared, &ctx, stream) {
+            Ok(request) => {
+                // Convert headers to JSON-friendly format
+                let headers: std::collections::HashMap<String, String> = request.headers
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.render(false)))
+                    .collect();
+
+                BuildRequestResult {
+                    success: true,
+                    error: None,
+                    url: Some(request.url),
+                    method: Some(request.method.as_str().to_string()),
+                    headers_json: serde_json::to_string(&headers).ok(),
+                    body_json: serde_json::to_string(&request.body).ok(),
+                }
+            }
+            Err(e) => BuildRequestResult {
+                success: false,
+                error: Some(e.to_string()),
+                url: None,
+                method: None,
+                headers_json: None,
+                body_json: None,
+            },
+        }
     }
 }
 

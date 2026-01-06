@@ -12,6 +12,9 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = { version = "0.1", optional = true }
 wee_alloc = { version = "0.4", optional = true }
 baml_db = { path = "../baml_db" }
+baml_runtime = { path = "../baml_runtime", default-features = false, features = ["wasm"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

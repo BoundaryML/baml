@@ -26,6 +26,7 @@ baml_lexer = { path = "crates/baml_lexer" }
 baml_mir = { path = "crates/baml_mir" }
 baml_parser = { path = "crates/baml_parser" }
 baml_onionskin = { path = "crates/baml_onionskin" }
+baml_runtime = { path = "crates/baml_runtime" }
 baml_syntax = { path = "crates/baml_syntax" }
 baml_tests = { path = "crates/baml_tests" }
 baml_tir = { path = "crates/baml_tir" }
@@ -34,10 +35,16 @@ baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_language_server = { path = "crates/baml_language_server" }
+ir_stub = { path = "crates/ir_stub" }
+baml_types = { path = "crates/baml_types" }
+baml_jsonish = { path = "crates/baml_jsonish" }
+baml_jinja_runtime = { path = "crates/baml_jinja_runtime" }
 
 # external dependencies
 anyhow = { version = "1" }
 ariadne = { version = "0.6" }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
 ignore = { version = "0.4.22" }
 jod-thread = { version = "0.1.2" }
@@ -104,9 +111,10 @@ filetime = "0.2.25"
 simple-logging = "2.0.2"
 url = "2.5.2"
 tokio = { version = "1.36", features = ["full", "tracing"] }
+tokio-stream = { version = "0.1" }
+tokio-util = { version = "0.7", features = ["rt"] }
 console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
 axum = { version = "0.8.4", features = ["ws"] }
-tokio-stream.workspace = true
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
 webbrowser = "1.0.5"
