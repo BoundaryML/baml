@@ -361,7 +361,7 @@ pub enum Instruction {
     /// it indicates a bug in the compiler or type system (e.g., a non-exhaustive
     /// match expression that the compiler incorrectly marked as exhaustive).
     ///
-    /// Throws [`RuntimeError::Unreachable`].
+    /// Throws [`super::RuntimeError::Unreachable`].
     Unreachable,
 }
 

@@ -64,6 +64,15 @@ function Go3(x:int) -> int {
 
 //----
 //- diagnostics
+// Error: Unknown variable a
+//    ╭─[ 0:2:13 ]
+//    │
+//  2 │     let y = a;
+//    │             ┬  
+//    │             ╰── Unknown variable a
+//    │ 
+//    │ Note: Error code: E0003
+// ───╯
 // Error: Unknown variable Unknown
 //     ╭─[ 0:13:5 ]
 //     │

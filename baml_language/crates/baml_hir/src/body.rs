@@ -2401,7 +2401,8 @@ impl LoweringContext {
                                 )
                             }
                             SyntaxKind::WORD => {
-                                // Handle boolean and null literals (parsed as WORD tokens)
+                                // Handle boolean/null literals (parsed as WORD tokens)
+                                // and variable references
                                 match token.text() {
                                     "true" => {
                                         self.alloc_expr(Expr::Literal(Literal::Bool(true)), span)
@@ -2410,7 +2411,10 @@ impl LoweringContext {
                                         self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
                                     }
                                     "null" => self.alloc_expr(Expr::Literal(Literal::Null), span),
-                                    _ => self.alloc_expr(Expr::Missing, span),
+                                    // Other WORD tokens are variable references
+                                    name => {
+                                        self.alloc_expr(Expr::Path(vec![Name::new(name)]), span)
+                                    }
                                 }
                             }
                             _ => self.alloc_expr(Expr::Missing, span),

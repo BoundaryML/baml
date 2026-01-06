@@ -925,20 +925,31 @@ impl LetStmt {
         })
     }
 
-    /// Get the initializer as a token (for direct literals like integers, bools, null).
-    /// Returns the literal token if the initializer is a simple literal.
+    /// Get the initializer as a token (for direct literals like integers, bools, null,
+    /// or simple variable references).
+    /// Returns the literal/identifier token if the initializer is a simple token.
     pub fn initializer_token(&self) -> Option<SyntaxToken> {
+        // We need to find tokens AFTER the '=' sign, since the first WORD is the variable name
+        let mut seen_equals = false;
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| {
+                if token.kind() == SyntaxKind::EQUALS {
+                    seen_equals = true;
+                    return false;
+                }
+                // Only consider tokens after the '='
+                if !seen_equals {
+                    return false;
+                }
                 match token.kind() {
                     SyntaxKind::INTEGER_LITERAL
                     | SyntaxKind::FLOAT_LITERAL
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL => true,
-                    // Boolean and null literals are parsed as WORD tokens
-                    SyntaxKind::WORD => matches!(token.text(), "true" | "false" | "null"),
+                    // WORD tokens can be boolean/null literals or variable references
+                    SyntaxKind::WORD => true,
                     _ => false,
                 }
             })
