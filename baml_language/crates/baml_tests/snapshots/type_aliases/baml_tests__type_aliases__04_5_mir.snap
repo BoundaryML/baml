@@ -66,10 +66,10 @@ fn EchoJSON(i: Named("JSON")) -> Named("JSON") {
 
 }
 
-fn MakeJSON(i: Class(ClassId(..), "NotJSON")) -> Named("JSON") {
+fn MakeJSON(i: Class("NotJSON")) -> Named("JSON") {
     // Locals:
     let _0: Named("JSON") // return
-    let _1: Class(ClassId(..), "NotJSON") // i // param
+    let _1: Class("NotJSON") // i // param
     let _2: Named("NotJSON")
 
     bb0: {

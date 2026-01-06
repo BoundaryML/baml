@@ -9,10 +9,10 @@ fn AnotherLLM:
 fn Ambiguous:
   (no MIR due to errors: MissingBody)
 
-fn ProcessData(data: Class(ClassId(..), "JsonData")) -> String {
+fn ProcessData(data: Class("JsonData")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class(ClassId(..), "JsonData") // data // param
+    let _1: Class("JsonData") // data // param
     let _2: Int // result
     let _3: Int
     let _4: Named("JsonData")
@@ -99,10 +99,10 @@ fn SimpleCalc(a: Int, b: Int) -> Int {
 
 }
 
-fn ProcessAnalysis(analysis: Class(ClassId(..), "Analysis")) -> String {
+fn ProcessAnalysis(analysis: Class("Analysis")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class(ClassId(..), "Analysis") // analysis // param
+    let _1: Class("Analysis") // analysis // param
     let _2: Float // score
     let _3: Named("Analysis")
     let _4: Bool

@@ -36,17 +36,17 @@ use crate::{
 };
 
 /// Builder for constructing MIR functions.
-pub struct MirBuilder<'db> {
+pub struct MirBuilder {
     name: String,
     arity: usize,
-    blocks: Vec<BasicBlock<'db>>,
-    locals: Vec<LocalDecl<'db>>,
+    blocks: Vec<BasicBlock>,
+    locals: Vec<LocalDecl>,
     current_block: Option<BlockId>,
     span: Option<TextRange>,
     viz_nodes: Vec<VizNode>,
 }
 
-impl<'db> MirBuilder<'db> {
+impl MirBuilder {
     /// Create a new MIR builder for a function.
     pub fn new(name: impl Into<String>, arity: usize) -> Self {
         Self {
@@ -78,7 +78,7 @@ impl<'db> MirBuilder<'db> {
     pub fn declare_local(
         &mut self,
         name: Option<Name>,
-        ty: Ty<'db>,
+        ty: Ty,
         span: Option<TextRange>,
         is_watched: bool,
     ) -> Local {
@@ -93,7 +93,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Allocate a temporary (unnamed local).
-    pub fn temp(&mut self, ty: Ty<'db>) -> Local {
+    pub fn temp(&mut self, ty: Ty) -> Local {
         self.declare_local(None, ty, None, false)
     }
 
@@ -131,12 +131,12 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Get a reference to a block.
-    pub fn get_block(&self, id: BlockId) -> &BasicBlock<'db> {
+    pub fn get_block(&self, id: BlockId) -> &BasicBlock {
         &self.blocks[id.0]
     }
 
     /// Get a mutable reference to a block.
-    pub fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock<'db> {
+    pub fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
         &mut self.blocks[id.0]
     }
 
@@ -144,13 +144,13 @@ impl<'db> MirBuilder<'db> {
     // Statement Emission
     // ========================================================================
 
-    fn current_block_mut(&mut self) -> &mut BasicBlock<'db> {
+    fn current_block_mut(&mut self) -> &mut BasicBlock {
         let id = self.current_block.expect("no current block set");
         &mut self.blocks[id.0]
     }
 
     /// Push a statement to the current block.
-    pub fn push_statement(&mut self, kind: StatementKind<'db>, span: Option<TextRange>) {
+    pub fn push_statement(&mut self, kind: StatementKind, span: Option<TextRange>) {
         let block = self.current_block_mut();
         assert!(
             block.terminator.is_none(),
@@ -160,12 +160,12 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Emit an assignment: `dest = value`
-    pub fn assign(&mut self, destination: Place, value: Rvalue<'db>) {
+    pub fn assign(&mut self, destination: Place, value: Rvalue) {
         self.push_statement(StatementKind::Assign { destination, value }, None);
     }
 
     /// Emit an assignment with span.
-    pub fn assign_with_span(&mut self, destination: Place, value: Rvalue<'db>, span: TextRange) {
+    pub fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: TextRange) {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
@@ -185,7 +185,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Emit a `watch_options` statement to update the filter for a watched local.
-    pub fn watch_options(&mut self, local: Local, filter: Operand<'db>) {
+    pub fn watch_options(&mut self, local: Local, filter: Operand) {
         self.push_statement(StatementKind::WatchOptions { local, filter }, None);
     }
 
@@ -195,7 +195,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Emit an assert statement.
-    pub fn assert(&mut self, condition: Operand<'db>) {
+    pub fn assert(&mut self, condition: Operand) {
         self.push_statement(StatementKind::Assert(condition), None);
     }
 
@@ -203,7 +203,7 @@ impl<'db> MirBuilder<'db> {
     // Terminator Emission
     // ========================================================================
 
-    fn set_terminator(&mut self, terminator: Terminator<'db>) {
+    fn set_terminator(&mut self, terminator: Terminator) {
         let block = self.current_block_mut();
         assert!(block.terminator.is_none(), "block already has a terminator");
         block.terminator = Some(terminator);
@@ -215,7 +215,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Emit a conditional branch.
-    pub fn branch(&mut self, condition: Operand<'db>, then_block: BlockId, else_block: BlockId) {
+    pub fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
         self.set_terminator(Terminator::Branch {
             condition,
             then_block,
@@ -224,12 +224,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Emit a multi-way switch.
-    pub fn switch(
-        &mut self,
-        discriminant: Operand<'db>,
-        arms: Vec<(i64, BlockId)>,
-        otherwise: BlockId,
-    ) {
+    pub fn switch(&mut self, discriminant: Operand, arms: Vec<(i64, BlockId)>, otherwise: BlockId) {
         self.set_terminator(Terminator::Switch {
             discriminant,
             arms,
@@ -245,8 +240,8 @@ impl<'db> MirBuilder<'db> {
     /// Emit a function call.
     pub fn call(
         &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
+        callee: Operand,
+        args: Vec<Operand>,
         destination: Place,
         target: BlockId,
         unwind: Option<BlockId>,
@@ -268,8 +263,8 @@ impl<'db> MirBuilder<'db> {
     /// Emit a dispatch future (for LLM calls).
     pub fn dispatch_future(
         &mut self,
-        callee: Operand<'db>,
-        args: Vec<Operand<'db>>,
+        callee: Operand,
+        args: Vec<Operand>,
         future: Place,
         resume: BlockId,
     ) {
@@ -302,7 +297,7 @@ impl<'db> MirBuilder<'db> {
     // ========================================================================
 
     /// Assign a constant to a place.
-    pub fn assign_const(&mut self, dest: Place, constant: Constant<'db>) {
+    pub fn assign_const(&mut self, dest: Place, constant: Constant) {
         self.assign(dest, Rvalue::Use(Operand::Constant(constant)));
     }
 
@@ -335,7 +330,7 @@ impl<'db> MirBuilder<'db> {
     /// Panics if:
     /// - No blocks were created
     /// - Any block is unterminated
-    pub fn build(self) -> MirFunction<'db> {
+    pub fn build(self) -> MirFunction {
         assert!(!self.blocks.is_empty(), "function has no blocks");
 
         // Verify all blocks are terminated
@@ -355,7 +350,7 @@ impl<'db> MirBuilder<'db> {
     }
 
     /// Build without checking termination (for incremental construction).
-    pub fn build_unchecked(self) -> MirFunction<'db> {
+    pub fn build_unchecked(self) -> MirFunction {
         MirFunction {
             name: self.name,
             arity: self.arity,

@@ -12,7 +12,7 @@ expression: output
   Function Baz:
     Return: String
   Function EchoJSON:
-    Return: Class(ClassId(..), "NotJSON")
+    Return: Class("NotJSON")
     Errors:
       - Expected JSON. Found NotJSON
   Function MakeJSON:

@@ -55,10 +55,10 @@ fn Calculate() -> Int {
 
 }
 
-fn FieldAccess(user: Class(ClassId(..), "User")) -> String {
+fn FieldAccess(user: Class("User")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class(ClassId(..), "User") // user // param
+    let _1: Class("User") // user // param
     let _2: String // name
     let _3: Named("User")
     let _4: String // bio
@@ -102,10 +102,10 @@ fn FieldAccess(user: Class(ClassId(..), "User")) -> String {
 
 }
 
-fn IndexAccess(users: List(Class(ClassId(..), "IndexUser"))) -> String {
+fn IndexAccess(users: List(Class("IndexUser"))) -> String {
     // Locals:
     let _0: String // return
-    let _1: List(Class(ClassId(..), "IndexUser")) // users // param
+    let _1: List(Class("IndexUser")) // users // param
     let _2: Named("IndexUser") // first
     let _3: List(Named("IndexUser"))
     let _4: Int

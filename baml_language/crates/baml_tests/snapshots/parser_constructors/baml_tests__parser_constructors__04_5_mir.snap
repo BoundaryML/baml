@@ -45,9 +45,9 @@ fn stringArray() -> List(String) {
 
 }
 
-fn pointArray() -> List(Class(ClassId(..), "Point")) {
+fn pointArray() -> List(Class("Point")) {
     // Locals:
-    let _0: List(Class(ClassId(..), "Point")) // return
+    let _0: List(Class("Point")) // return
     let _1: Named("Point")
     let _2: Int
     let _3: Int
@@ -120,9 +120,9 @@ fn intArray() -> List(Int) {
 
 }
 
-fn point() -> Class(ClassId(..), "Point") {
+fn point() -> Class("Point") {
     // Locals:
-    let _0: Class(ClassId(..), "Point") // return
+    let _0: Class("Point") // return
     let _1: Int
     let _2: Int
 
@@ -139,9 +139,9 @@ fn point() -> Class(ClassId(..), "Point") {
 
 }
 
-fn vec2d() -> Class(ClassId(..), "Vec2D") {
+fn vec2d() -> Class("Vec2D") {
     // Locals:
-    let _0: Class(ClassId(..), "Vec2D") // return
+    let _0: Class("Vec2D") // return
     let _1: Named("Point")
     let _2: Int
     let _3: Int

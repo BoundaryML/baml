@@ -78,11 +78,11 @@ impl std::error::Error for LoweringError {}
 ///
 /// Note: Takes `baml_tir::Db` instead of `baml_vir::Db` for broader compatibility.
 /// This allows callers with `baml_mir::Db` to use this function directly.
-pub fn lower_from_hir<'db>(
-    db: &'db dyn baml_tir::Db,
+pub fn lower_from_hir(
+    db: &dyn baml_tir::Db,
     body: &FunctionBody,
-    inference: &InferenceResult<'db>,
-    resolution_ctx: &TypeResolutionContext<'db>,
+    inference: &InferenceResult,
+    resolution_ctx: &TypeResolutionContext,
 ) -> Result<ExprBody, LoweringError> {
     match body {
         FunctionBody::Expr(hir_body) => {
@@ -163,19 +163,19 @@ impl ExprBodyBuilder {
 }
 
 /// Context for lowering HIR to VIR.
-struct LoweringContext<'a, 'db> {
+struct LoweringContext<'a> {
     #[allow(dead_code)]
-    db: &'db dyn baml_tir::Db,
-    inference: &'db InferenceResult<'db>,
-    resolution_ctx: &'a TypeResolutionContext<'db>,
+    db: &'a dyn baml_tir::Db,
+    inference: &'a InferenceResult,
+    resolution_ctx: &'a TypeResolutionContext,
     builder: ExprBodyBuilder,
 }
 
-impl<'a, 'db> LoweringContext<'a, 'db> {
+impl<'a> LoweringContext<'a> {
     fn new(
-        db: &'db dyn baml_tir::Db,
-        inference: &'db InferenceResult<'db>,
-        resolution_ctx: &'a TypeResolutionContext<'db>,
+        db: &'a dyn baml_tir::Db,
+        inference: &'a InferenceResult,
+        resolution_ctx: &'a TypeResolutionContext,
     ) -> Self {
         Self {
             db,
@@ -208,7 +208,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
             .inference
             .expr_types
             .get(&hir_id)
-            .map(|t| self.lower_ty(t))
+            .map(Self::lower_ty)
             .unwrap_or(Ty::Unknown);
 
         match hir_expr {
@@ -237,7 +237,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
                     // Start with the variable (first segment)
                     let first_ty = segment_types
                         .first()
-                        .map(|t| self.lower_ty(t))
+                        .map(Self::lower_ty)
                         .unwrap_or_else(|| {
                             panic!("BUG: path_segment_types is empty for path {segments:?}")
                         });
@@ -250,7 +250,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
                         // Type after this field access is segment_types[i+1]
                         let result_ty = segment_types
                             .get(i + 1)
-                            .map(|t| self.lower_ty(t))
+                            .map(Self::lower_ty)
                             .unwrap_or_else(|| {
                                 panic!(
                                     "BUG: path_segment_types missing type at index {} for path {:?}",
@@ -604,7 +604,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
                     self.inference
                         .expr_types
                         .get(init)
-                        .map(|t| self.lower_ty(t))
+                        .map(Self::lower_ty)
                         .unwrap_or(Ty::Unknown)
                 } else {
                     Ty::Unknown
@@ -726,7 +726,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
     }
 
     /// Lower a TIR type to VIR type, resolving all IDs.
-    fn lower_ty(&self, thir_ty: &baml_tir::Ty<'db>) -> Ty {
+    fn lower_ty(thir_ty: &baml_tir::Ty) -> Ty {
         match thir_ty {
             baml_tir::Ty::Int => Ty::Int,
             baml_tir::Ty::Float => Ty::Float,
@@ -740,36 +740,24 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
 
             baml_tir::Ty::Named(name) => Ty::Class(name.clone()),
 
-            baml_tir::Ty::Class(class_id, _) => {
-                let file = class_id.file(self.db);
-                let item_tree = baml_hir::file_item_tree(self.db, file);
-                let class_data = &item_tree[class_id.id(self.db)];
-                Ty::Class(class_data.name.clone())
-            }
+            baml_tir::Ty::Class(name) => Ty::Class(name.clone()),
 
-            baml_tir::Ty::Enum(enum_id, _) => {
-                let file = enum_id.file(self.db);
-                let item_tree = baml_hir::file_item_tree(self.db, file);
-                let enum_data = &item_tree[enum_id.id(self.db)];
-                Ty::Enum(enum_data.name.clone())
-            }
+            baml_tir::Ty::Enum(name) => Ty::Enum(name.clone()),
 
-            baml_tir::Ty::Optional(inner) => Ty::Optional(Box::new(self.lower_ty(inner))),
+            baml_tir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_ty(inner))),
 
-            baml_tir::Ty::List(inner) => Ty::List(Box::new(self.lower_ty(inner))),
+            baml_tir::Ty::List(inner) => Ty::List(Box::new(Self::lower_ty(inner))),
 
             baml_tir::Ty::Map { key, value } => Ty::Map {
-                key: Box::new(self.lower_ty(key)),
-                value: Box::new(self.lower_ty(value)),
+                key: Box::new(Self::lower_ty(key)),
+                value: Box::new(Self::lower_ty(value)),
             },
 
-            baml_tir::Ty::Union(types) => {
-                Ty::Union(types.iter().map(|t| self.lower_ty(t)).collect())
-            }
+            baml_tir::Ty::Union(types) => Ty::Union(types.iter().map(Self::lower_ty).collect()),
 
             baml_tir::Ty::Function { params, ret } => Ty::Function {
-                params: params.iter().map(|t| self.lower_ty(t)).collect(),
-                ret: Box::new(self.lower_ty(ret)),
+                params: params.iter().map(Self::lower_ty).collect(),
+                ret: Box::new(Self::lower_ty(ret)),
             },
 
             baml_tir::Ty::Unknown => Ty::Unknown,
@@ -783,7 +771,9 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
                 baml_tir::LiteralValue::Bool(_) => Ty::Bool,
             },
             // WatchAccessor is a special type that wraps another type
-            baml_tir::Ty::WatchAccessor(inner) => Ty::WatchAccessor(Box::new(self.lower_ty(inner))),
+            baml_tir::Ty::WatchAccessor(inner) => {
+                Ty::WatchAccessor(Box::new(Self::lower_ty(inner)))
+            }
         }
     }
 
@@ -792,7 +782,7 @@ impl<'a, 'db> LoweringContext<'a, 'db> {
         let (thir_ty, _) = self
             .resolution_ctx
             .lower_type_ref(type_ref, Span::default());
-        self.lower_ty(&thir_ty)
+        Self::lower_ty(&thir_ty)
     }
 
     /// Lower an HIR pattern to VIR pattern.

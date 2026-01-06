@@ -37,23 +37,23 @@ enum FieldSource {
 /// Lower a function from VIR to MIR.
 ///
 /// This is the main entry point for VIR → MIR lowering.
-pub fn lower<'db, 'ctx>(
+pub fn lower<'ctx>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
-    db: &'db dyn crate::Db,
+    db: &dyn crate::Db,
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
-    resolution_ctx: &'ctx TypeResolutionContext<'db>,
-) -> MirFunction<'db> {
+    resolution_ctx: &'ctx TypeResolutionContext,
+) -> MirFunction {
     let mut ctx = LoweringContext::new(db, signature.params.len(), class_fields, resolution_ctx);
     ctx.lower_function(signature, typed_body);
     ctx.finish()
 }
 
 /// Context for lowering VIR to MIR.
-struct LoweringContext<'db, 'ctx> {
+struct LoweringContext<'a, 'ctx> {
     #[allow(dead_code)]
-    db: &'db dyn crate::Db,
-    builder: MirBuilder<'db>,
+    db: &'a dyn crate::Db,
+    builder: MirBuilder,
     /// Map from variable names to MIR locals.
     locals: HashMap<Name, Local>,
     /// Current loop context for break/continue.
@@ -61,7 +61,7 @@ struct LoweringContext<'db, 'ctx> {
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Type resolution context for lowering type refs.
-    resolution_ctx: &'ctx TypeResolutionContext<'db>,
+    resolution_ctx: &'ctx TypeResolutionContext,
     /// Stack of watched locals for tracking scope exit.
     watched_locals_stack: Vec<Local>,
     /// Viz context for control flow visualization.
@@ -113,12 +113,12 @@ struct LoopContext {
     watched_locals_depth: usize,
 }
 
-impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
+impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     fn new(
-        db: &'db dyn crate::Db,
+        db: &'a dyn crate::Db,
         arity: usize,
         class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
-        resolution_ctx: &'ctx TypeResolutionContext<'db>,
+        resolution_ctx: &'ctx TypeResolutionContext,
     ) -> Self {
         Self {
             db,
@@ -138,7 +138,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         }
     }
 
-    fn finish(self) -> MirFunction<'db> {
+    fn finish(self) -> MirFunction {
         self.builder.build()
     }
 
@@ -605,7 +605,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
 
             // ========== Data Structures ==========
             Expr::Array { elements } => {
-                let elem_operands: Vec<Operand<'db>> = elements
+                let elem_operands: Vec<Operand> = elements
                     .iter()
                     .map(|&elem| {
                         let elem_ty = Self::lower_typed_ir_ty(body.ty(elem));
@@ -625,7 +625,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             } => {
                 // If there are no spreads, use the simple aggregate approach
                 if spreads.is_empty() {
-                    let field_operands: Vec<Operand<'db>> = fields
+                    let field_operands: Vec<Operand> = fields
                         .iter()
                         .map(|(_, value)| {
                             let value_ty = Self::lower_typed_ir_ty(body.ty(*value));
@@ -703,7 +703,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
                         .collect();
 
                     // For each class field, determine the source and generate operand
-                    let field_operands: Vec<Operand<'db>> = class_fields_ordered
+                    let field_operands: Vec<Operand> = class_fields_ordered
                         .iter()
                         .map(|(field_idx, field_name)| {
                             // Find the highest-positioned source for this field
@@ -760,7 +760,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             }
 
             Expr::Map { entries } => {
-                let entry_operands: Vec<(Operand<'db>, Operand<'db>)> = entries
+                let entry_operands: Vec<(Operand, Operand)> = entries
                     .iter()
                     .map(|(key, value)| {
                         let key_ty = Self::lower_typed_ir_ty(body.ty(*key));
@@ -957,7 +957,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         &mut self,
         pat_id: PatId,
         scrutinee_local: Local,
-        scrutinee_ty: &Ty<'db>,
+        scrutinee_ty: &Ty,
         success_block: BlockId,
         fail_block: BlockId,
         body: &ExprBody,
@@ -1075,7 +1075,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Lower a literal to a constant.
-    fn lower_literal(lit: &Literal) -> Constant<'db> {
+    fn lower_literal(lit: &Literal) -> Constant {
         match lit {
             Literal::Int(n) => Constant::Int(*n),
             Literal::Float(s) => Constant::Float(s.parse().unwrap_or(0.0)),
@@ -1484,7 +1484,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
             let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
             // Check if base is a class type (has a class name)
-            if self.class_name_from_ty(&thir_base_ty).is_some() {
+            if Self::class_name_from_ty(&thir_base_ty).is_some() {
                 // This is a method call - pass receiver as first argument
                 let receiver_local = self.builder.temp(thir_base_ty);
                 self.lower_expr(*base, Place::local(receiver_local), body);
@@ -1521,7 +1521,7 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
         let callee_local = self.builder.temp(callee_ty);
         self.lower_expr(callee, Place::local(callee_local), body);
 
-        let arg_operands: Vec<Operand<'db>> = args
+        let arg_operands: Vec<Operand> = args
             .iter()
             .map(|&arg| {
                 let arg_ty = Self::lower_typed_ir_ty(body.ty(arg));
@@ -1617,8 +1617,8 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Get field index for a type and field name.
-    fn field_index_for_type_and_name(&self, ty: &Ty<'db>, field: &Name) -> usize {
-        let class_name = self.class_name_from_ty(ty);
+    fn field_index_for_type_and_name(&self, ty: &Ty, field: &Name) -> usize {
+        let class_name = Self::class_name_from_ty(ty);
 
         if let Some(ref class_name) = class_name {
             if let Some(fields) = self.class_fields.get(class_name) {
@@ -1643,21 +1643,15 @@ impl<'db, 'ctx> LoweringContext<'db, 'ctx> {
     }
 
     /// Extract class name from a Ty.
-    fn class_name_from_ty(&self, ty: &Ty<'db>) -> Option<String> {
+    fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::Named(name) => Some(name.to_string()),
-            Ty::Class(class_id, _) => {
-                let file = class_id.file(self.db);
-                let item_tree = baml_hir::file_item_tree(self.db, file);
-                let class_data = &item_tree[class_id.id(self.db)];
-                Some(class_data.name.to_string())
-            }
+            Ty::Named(name) | Ty::Class(name) => Some(name.to_string()),
             _ => None,
         }
     }
 
     /// Convert a VIR type to a TIR type for MIR locals.
-    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty<'db> {
+    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty {
         match ty {
             baml_vir::Ty::Int => Ty::Int,
             baml_vir::Ty::Float => Ty::Float,

@@ -28,13 +28,13 @@ use crate::{InferenceResult, TypeResolutionContext};
 ///    │     └─ Path(x): int
 ///    └─ Path(y): int
 /// ```
-pub fn render_function_tree<'db>(
-    db: &'db dyn baml_hir::Db,
-    resolution_ctx: &TypeResolutionContext<'db>,
+pub fn render_function_tree(
+    db: &dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext,
     func_name: &str,
     signature: &FunctionSignature,
     body: &FunctionBody,
-    result: &InferenceResult<'db>,
+    result: &InferenceResult,
 ) -> String {
     let mut output = String::new();
     let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
@@ -43,11 +43,11 @@ pub fn render_function_tree<'db>(
 }
 
 /// Renders just a function body's TIR as a tree.
-pub fn render_body_tree<'db>(
-    db: &'db dyn baml_hir::Db,
-    resolution_ctx: &TypeResolutionContext<'db>,
+pub fn render_body_tree(
+    db: &dyn baml_hir::Db,
+    resolution_ctx: &TypeResolutionContext,
     body: &FunctionBody,
-    result: &InferenceResult<'db>,
+    result: &InferenceResult,
 ) -> String {
     let mut output = String::new();
     let mut renderer = TreeRenderer::new(db, resolution_ctx, &mut output);
@@ -56,20 +56,20 @@ pub fn render_body_tree<'db>(
 }
 
 /// Internal tree renderer.
-struct TreeRenderer<'a, 'db> {
+struct TreeRenderer<'a> {
     #[allow(dead_code)]
-    db: &'db dyn baml_hir::Db,
-    resolution_ctx: &'a TypeResolutionContext<'db>,
+    db: &'a dyn baml_hir::Db,
+    resolution_ctx: &'a TypeResolutionContext,
     output: &'a mut String,
     /// Tracks whether each depth level has more siblings coming.
     /// `true` means there are more siblings (draw │), `false` means it was the last child (draw space).
     continuation: Vec<bool>,
 }
 
-impl<'a, 'db> TreeRenderer<'a, 'db> {
+impl<'a> TreeRenderer<'a> {
     fn new(
-        db: &'db dyn baml_hir::Db,
-        resolution_ctx: &'a TypeResolutionContext<'db>,
+        db: &'a dyn baml_hir::Db,
+        resolution_ctx: &'a TypeResolutionContext,
         output: &'a mut String,
     ) -> Self {
         Self {
@@ -85,7 +85,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         func_name: &str,
         signature: &FunctionSignature,
         body: &FunctionBody,
-        result: &InferenceResult<'db>,
+        result: &InferenceResult,
     ) {
         // Function header
         let return_type = self
@@ -137,7 +137,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         }
     }
 
-    fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult<'_>) {
+    fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult) {
         match body {
             FunctionBody::Expr(expr_body) => {
                 if let Some(root_expr) = expr_body.root_expr {
@@ -166,7 +166,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         &mut self,
         expr_id: ExprId,
         body: &ExprBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult,
         is_last: bool,
     ) {
         let expr = &body.exprs[expr_id];
@@ -243,7 +243,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         }
     }
 
-    fn render_expr_children(&mut self, expr: &Expr, body: &ExprBody, result: &InferenceResult<'_>) {
+    fn render_expr_children(&mut self, expr: &Expr, body: &ExprBody, result: &InferenceResult) {
         match expr {
             Expr::Binary { lhs, rhs, .. } => {
                 self.render_expr(*lhs, body, result, false);
@@ -374,7 +374,7 @@ impl<'a, 'db> TreeRenderer<'a, 'db> {
         &mut self,
         stmt_id: StmtId,
         body: &ExprBody,
-        result: &InferenceResult<'_>,
+        result: &InferenceResult,
         is_last: bool,
     ) {
         let stmt = &body.stmts[stmt_id];
@@ -624,7 +624,7 @@ fn unary_op_to_str(op: UnaryOp) -> &'static str {
     }
 }
 
-pub fn short_display(error: &TypeError<Ty<'_>>) -> String {
+pub fn short_display(error: &TypeError<Ty>) -> String {
     match error {
         TypeError::TypeMismatch {
             expected, found, ..

@@ -38,10 +38,10 @@ fn array_length() -> Int {
 
 }
 
-fn Greeting(self: Class(ClassId(..), "Baz")) -> String {
+fn Greeting(self: Class("Baz")) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class(ClassId(..), "Baz") // self // param
+    let _1: Class("Baz") // self // param
     let _2: String
     let _3: String
     let _4: String

@@ -15,36 +15,36 @@ use text_size::TextRange;
 
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
-pub struct MirFunction<'db> {
+pub struct MirFunction {
     /// Function name for debugging.
     pub name: String,
     /// Parameter count.
     pub arity: usize,
     /// All basic blocks in the function.
-    pub blocks: Vec<BasicBlock<'db>>,
+    pub blocks: Vec<BasicBlock>,
     /// Entry block index (always 0 by convention).
     pub entry: BlockId,
     /// Local variable declarations.
-    pub locals: Vec<LocalDecl<'db>>,
+    pub locals: Vec<LocalDecl>,
     /// Source span for error reporting.
     pub span: Option<TextRange>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
 }
 
-impl<'db> MirFunction<'db> {
+impl MirFunction {
     /// Get a basic block by ID.
-    pub fn block(&self, id: BlockId) -> &BasicBlock<'db> {
+    pub fn block(&self, id: BlockId) -> &BasicBlock {
         &self.blocks[id.0]
     }
 
     /// Get a mutable reference to a basic block by ID.
-    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock<'db> {
+    pub fn block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
         &mut self.blocks[id.0]
     }
 
     /// Get a local declaration by ID.
-    pub fn local(&self, id: Local) -> &LocalDecl<'db> {
+    pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
     }
 }
@@ -79,11 +79,11 @@ impl fmt::Display for Local {
 
 /// Declaration of a local variable or temporary.
 #[derive(Debug, Clone)]
-pub struct LocalDecl<'db> {
+pub struct LocalDecl {
     /// Variable name (None for compiler temporaries).
     pub name: Option<Name>,
     /// Type of this local.
-    pub ty: Ty<'db>,
+    pub ty: Ty,
     /// Source span (for diagnostics).
     pub span: Option<TextRange>,
     /// Whether this local is being watched for changes.
@@ -99,18 +99,18 @@ pub struct LocalDecl<'db> {
 /// Basic blocks are the fundamental unit of control flow in MIR. Each block
 /// executes its statements in order, then transfers control via its terminator.
 #[derive(Debug, Clone)]
-pub struct BasicBlock<'db> {
+pub struct BasicBlock {
     /// Unique identifier.
     pub id: BlockId,
     /// Statements executed in order.
-    pub statements: Vec<Statement<'db>>,
+    pub statements: Vec<Statement>,
     /// How this block exits (required after construction).
-    pub terminator: Option<Terminator<'db>>,
+    pub terminator: Option<Terminator>,
     /// Source span covering this block.
     pub span: Option<TextRange>,
 }
 
-impl BasicBlock<'_> {
+impl BasicBlock {
     /// Create a new empty basic block.
     pub fn new(id: BlockId) -> Self {
         Self {
@@ -133,19 +133,16 @@ impl BasicBlock<'_> {
 
 /// A single MIR statement (does not transfer control).
 #[derive(Debug, Clone)]
-pub struct Statement<'db> {
-    pub kind: StatementKind<'db>,
+pub struct Statement {
+    pub kind: StatementKind,
     pub span: Option<TextRange>,
 }
 
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
-pub enum StatementKind<'db> {
+pub enum StatementKind {
     /// Assign a value to a place: `_1 = <rvalue>`
-    Assign {
-        destination: Place,
-        value: Rvalue<'db>,
-    },
+    Assign { destination: Place, value: Rvalue },
 
     /// Drop a value (run destructor if any).
     Drop(Place),
@@ -169,7 +166,7 @@ pub enum StatementKind<'db> {
         /// The watched local variable
         local: Local,
         /// The new filter (function, "manual", "never", etc.)
-        filter: Operand<'db>,
+        filter: Operand,
     },
 
     /// Manually trigger notification for a watched variable.
@@ -189,7 +186,7 @@ pub enum StatementKind<'db> {
 
     /// Assert that a condition is true.
     /// Evaluates the operand and panics if it's false.
-    Assert(Operand<'db>),
+    Assert(Operand),
 }
 
 // ============================================================================
@@ -201,20 +198,20 @@ pub enum StatementKind<'db> {
 /// Every basic block must end with exactly one terminator. Terminators are
 /// the only way control can flow between blocks.
 #[derive(Debug, Clone)]
-pub enum Terminator<'db> {
+pub enum Terminator {
     /// Unconditional jump to another block.
     Goto { target: BlockId },
 
     /// Conditional branch based on a boolean.
     Branch {
-        condition: Operand<'db>,
+        condition: Operand,
         then_block: BlockId,
         else_block: BlockId,
     },
 
     /// Multi-way branch based on integer discriminant.
     Switch {
-        discriminant: Operand<'db>,
+        discriminant: Operand,
         /// Arms: (value, target block)
         arms: Vec<(i64, BlockId)>,
         /// Default target if no arm matches.
@@ -229,9 +226,9 @@ pub enum Terminator<'db> {
     /// Call a function.
     Call {
         /// The function to call.
-        callee: Operand<'db>,
+        callee: Operand,
         /// Arguments to pass.
-        args: Vec<Operand<'db>>,
+        args: Vec<Operand>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -251,9 +248,9 @@ pub enum Terminator<'db> {
     /// This is a suspend point - control returns to the embedder.
     DispatchFuture {
         /// The LLM function to call.
-        callee: Operand<'db>,
+        callee: Operand,
         /// Arguments to the function.
-        args: Vec<Operand<'db>>,
+        args: Vec<Operand>,
         /// Where to store the future handle.
         future: Place,
         /// Block to resume at after dispatch.
@@ -275,7 +272,7 @@ pub enum Terminator<'db> {
     },
 }
 
-impl Terminator<'_> {
+impl Terminator {
     /// Get all successor block IDs.
     pub fn successors(&self) -> Vec<BlockId> {
         match self {
@@ -396,31 +393,31 @@ impl fmt::Display for Place {
 /// Rvalues are computations that produce values. They appear on the right-hand
 /// side of assignments.
 #[derive(Debug, Clone)]
-pub enum Rvalue<'db> {
+pub enum Rvalue {
     /// Use an operand directly.
-    Use(Operand<'db>),
+    Use(Operand),
 
     /// Binary operation: `_1 + _2`
     BinaryOp {
         op: BinOp,
-        left: Operand<'db>,
-        right: Operand<'db>,
+        left: Operand,
+        right: Operand,
     },
 
     /// Unary operation: `!_1`, `-_1`
-    UnaryOp { op: UnaryOp, operand: Operand<'db> },
+    UnaryOp { op: UnaryOp, operand: Operand },
 
     /// Create an array: `[_1, _2, _3]`
-    Array(Vec<Operand<'db>>),
+    Array(Vec<Operand>),
 
     /// Create a map: `{ key1: value1, key2: value2, ... }`
     /// Each entry is a (key, value) pair.
-    Map(Vec<(Operand<'db>, Operand<'db>)>),
+    Map(Vec<(Operand, Operand)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {
         kind: AggregateKind,
-        fields: Vec<Operand<'db>>,
+        fields: Vec<Operand>,
     },
 
     /// Read discriminant of enum/union: `discriminant(_1)`
@@ -430,7 +427,7 @@ pub enum Rvalue<'db> {
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
-    IsType { operand: Operand<'db>, ty: Ty<'db> },
+    IsType { operand: Operand, ty: Ty },
 }
 
 /// The kind of aggregate being constructed.
@@ -450,7 +447,7 @@ pub enum AggregateKind {
 
 /// An operand: either a place (read) or a constant.
 #[derive(Debug, Clone)]
-pub enum Operand<'db> {
+pub enum Operand {
     /// Copy value from place.
     Copy(Place),
 
@@ -458,10 +455,10 @@ pub enum Operand<'db> {
     Move(Place),
 
     /// A constant value.
-    Constant(Constant<'db>),
+    Constant(Constant),
 }
 
-impl<'db> Operand<'db> {
+impl Operand {
     /// Create a copy operand from a local.
     pub fn copy_local(local: Local) -> Self {
         Operand::Copy(Place::Local(local))
@@ -473,7 +470,7 @@ impl<'db> Operand<'db> {
     }
 
     /// Create a constant operand.
-    pub fn constant(c: Constant<'db>) -> Self {
+    pub fn constant(c: Constant) -> Self {
         Operand::Constant(c)
     }
 }
@@ -484,7 +481,7 @@ impl<'db> Operand<'db> {
 
 /// A constant value in MIR.
 #[derive(Debug, Clone)]
-pub enum Constant<'db> {
+pub enum Constant {
     Int(i64),
     Float(f64),
     String(String),
@@ -499,7 +496,7 @@ pub enum Constant<'db> {
     },
     /// Placeholder for type info when needed.
     #[allow(dead_code)]
-    Ty(Ty<'db>),
+    Ty(Ty),
 }
 
 // ============================================================================

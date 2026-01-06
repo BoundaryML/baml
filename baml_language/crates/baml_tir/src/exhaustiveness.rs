@@ -23,7 +23,7 @@
 //!
 //! match (s) {
 //!   Status.Active => ...    // ValueSet::EnumVariant("Status", "Active")
-//!   Status.Inactive => ...  // ValueSet::EnumVariant("Status", "Inactive")  
+//!   Status.Inactive => ...  // ValueSet::EnumVariant("Status", "Inactive")
 //!   Status.Pending => ...   // ValueSet::EnumVariant("Status", "Pending")
 //! }
 //! ```
@@ -33,7 +33,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
-use baml_hir::{ClassId, EnumId, ExprBody, Literal, MatchArm, Pattern};
+use baml_hir::{ExprBody, Literal, MatchArm, Pattern};
 
 use crate::{LiteralValue, Ty, lower_type_ref_validated_resolved};
 
@@ -153,18 +153,18 @@ impl std::fmt::Display for ValueSet {
 ///
 /// This struct holds the context needed to expand types into their
 /// constituent values and check coverage.
-pub struct ExhaustivenessChecker<'a, 'db> {
+pub struct ExhaustivenessChecker<'a> {
     /// Enum definitions: `enum_name` -> [`variant_names`]
     enum_variants: &'a HashMap<Name, Vec<Name>>,
 
     /// Type alias definitions: `alias_name` -> `underlying_type`
-    type_aliases: &'a HashMap<Name, Ty<'db>>,
+    type_aliases: &'a HashMap<Name, Ty>,
 
-    /// Class IDs for type resolution
-    class_ids: &'a HashMap<Name, ClassId<'db>>,
+    /// Class names for type resolution
+    class_names: &'a HashSet<Name>,
 
-    /// Enum IDs for type resolution
-    enum_ids: &'a HashMap<Name, EnumId<'db>>,
+    /// Enum names for type resolution
+    enum_names: &'a HashSet<Name>,
 
     /// Known types for validation
     known_types: &'a HashSet<Name>,
@@ -183,20 +183,20 @@ pub struct ExhaustivenessResult {
     pub unreachable_arms: Vec<usize>,
 }
 
-impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
+impl<'a> ExhaustivenessChecker<'a> {
     /// Create a new exhaustiveness checker.
     pub fn new(
         enum_variants: &'a HashMap<Name, Vec<Name>>,
-        type_aliases: &'a HashMap<Name, Ty<'db>>,
-        class_ids: &'a HashMap<Name, ClassId<'db>>,
-        enum_ids: &'a HashMap<Name, EnumId<'db>>,
+        type_aliases: &'a HashMap<Name, Ty>,
+        class_names: &'a HashSet<Name>,
+        enum_names: &'a HashSet<Name>,
         known_types: &'a HashSet<Name>,
     ) -> Self {
         Self {
             enum_variants,
             type_aliases,
-            class_ids,
-            enum_ids,
+            class_names,
+            enum_names,
             known_types,
         }
     }
@@ -212,7 +212,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     /// An `ExhaustivenessResult` with coverage info and any issues found.
     pub fn check(
         &self,
-        scrutinee_ty: &Ty<'db>,
+        scrutinee_ty: &Ty,
         arms: &[MatchArm],
         body: &ExprBody,
     ) -> ExhaustivenessResult {
@@ -281,7 +281,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     ///
     /// For finite types (enums, bool), this produces individual value sets.
     /// For infinite types, this produces a single `OfType` value set.
-    fn expand_type_to_values(&self, ty: &Ty<'db>) -> Vec<ValueSet> {
+    fn expand_type_to_values(&self, ty: &Ty) -> Vec<ValueSet> {
         match ty {
             // Union types: expand each member
             Ty::Union(members) => members
@@ -382,12 +382,12 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
             Ty::Video => vec![ValueSet::OfType(Name::new("video"))],
             Ty::Pdf => vec![ValueSet::OfType(Name::new("pdf"))],
 
-            // User-defined class and enum types with resolved IDs.
-            Ty::Class(_, name) => {
+            // User-defined class and enum types (resolved by name).
+            Ty::Class(name) => {
                 // Class types are treated like named types for exhaustiveness
                 vec![ValueSet::OfType(name.clone())]
             }
-            Ty::Enum(_, name) => {
+            Ty::Enum(name) => {
                 // Enum types: look up variants for exhaustiveness checking
                 if let Some(variants) = self.enum_variants.get(name) {
                     variants
@@ -441,8 +441,8 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
                 let (lowered_ty, _) = lower_type_ref_validated_resolved(
                     ty,
                     self.known_types,
-                    self.class_ids,
-                    self.enum_ids,
+                    self.class_names,
+                    self.enum_names,
                     Span::default(),
                 );
                 Self::ty_to_value_set(&lowered_ty)
@@ -477,7 +477,7 @@ impl<'a, 'db> ExhaustivenessChecker<'a, 'db> {
     }
 
     /// Convert a type to a value set (for typed bindings).
-    fn ty_to_value_set(ty: &Ty<'db>) -> ValueSet {
+    fn ty_to_value_set(ty: &Ty) -> ValueSet {
         match ty {
             Ty::Union(members) => {
                 let sub_sets: Vec<ValueSet> = members.iter().map(Self::ty_to_value_set).collect();

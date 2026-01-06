@@ -7,7 +7,6 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-use baml_hir::{ClassId, EnumId};
 
 use crate::types::{LiteralValue, Ty};
 
@@ -16,11 +15,7 @@ use crate::types::{LiteralValue, Ty};
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
-pub(crate) fn is_subtype_of<'db>(
-    sub: &Ty<'db>,
-    sup: &Ty<'db>,
-    aliases: &HashMap<Name, Ty<'db>>,
-) -> bool {
+pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
     let recursive = find_recursive_aliases(aliases);
     let sub_norm = normalize(sub, aliases, &recursive);
     let sup_norm = normalize(sup, aliases, &recursive);
@@ -33,7 +28,7 @@ pub(crate) fn is_subtype_of<'db>(
 
 /// Normalized structural type. All aliases resolved, recursion explicit.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum StructuralTy<'db> {
+enum StructuralTy {
     // Primitives
     Int,
     Float,
@@ -47,40 +42,40 @@ enum StructuralTy<'db> {
     Pdf,
     // Literal
     Literal(LiteralValue),
-    // User-defined (resolved)
-    Class(ClassId<'db>),
-    Enum(EnumId<'db>),
+    // User-defined (resolved by name)
+    Class(Name),
+    Enum(Name),
     // Constructors
-    Optional(Box<StructuralTy<'db>>),
-    List(Box<StructuralTy<'db>>),
+    Optional(Box<StructuralTy>),
+    List(Box<StructuralTy>),
     Map {
-        key: Box<StructuralTy<'db>>,
-        value: Box<StructuralTy<'db>>,
+        key: Box<StructuralTy>,
+        value: Box<StructuralTy>,
     },
-    Union(Vec<StructuralTy<'db>>),
+    Union(Vec<StructuralTy>),
     Function {
-        params: Vec<StructuralTy<'db>>,
-        ret: Box<StructuralTy<'db>>,
+        params: Vec<StructuralTy>,
+        ret: Box<StructuralTy>,
     },
     // Recursion
     Mu {
         var: Name,
-        body: Box<StructuralTy<'db>>,
+        body: Box<StructuralTy>,
     },
     TyVar(Name),
     // Special
     Unknown,
     Error,
     Void,
-    WatchAccessor(Box<StructuralTy<'db>>),
+    WatchAccessor(Box<StructuralTy>),
 }
 
-impl<'db> StructuralTy<'db> {
+impl StructuralTy {
     /// Equirecursive subtyping with co-inductive assumptions.
     fn is_subtype_of(
         &self,
-        other: &StructuralTy<'db>,
-        assumptions: &mut HashSet<(StructuralTy<'db>, StructuralTy<'db>)>,
+        other: &StructuralTy,
+        assumptions: &mut HashSet<(StructuralTy, StructuralTy)>,
     ) -> bool {
         // Co-inductive: if we've assumed this pair, it holds
         let pair = (self.clone(), other.clone());
@@ -163,11 +158,7 @@ impl<'db> StructuralTy<'db> {
 }
 
 /// Substitute `TyVar` with replacement in type.
-fn substitute<'db>(
-    ty: &StructuralTy<'db>,
-    var: &Name,
-    replacement: &StructuralTy<'db>,
-) -> StructuralTy<'db> {
+fn substitute(ty: &StructuralTy, var: &Name, replacement: &StructuralTy) -> StructuralTy {
     match ty {
         StructuralTy::TyVar(v) if v == var => replacement.clone(),
         StructuralTy::Optional(inner) => {
@@ -208,21 +199,17 @@ fn substitute<'db>(
 // NORMALIZATION (private)
 // ═══════════════════════════════════════════════════════════════════════════
 
-fn normalize<'db>(
-    ty: &Ty<'db>,
-    aliases: &HashMap<Name, Ty<'db>>,
-    recursive: &HashSet<Name>,
-) -> StructuralTy<'db> {
+fn normalize(ty: &Ty, aliases: &HashMap<Name, Ty>, recursive: &HashSet<Name>) -> StructuralTy {
     let mut expanding = HashSet::new();
     normalize_impl(ty, aliases, recursive, &mut expanding)
 }
 
-fn normalize_impl<'db>(
-    ty: &Ty<'db>,
-    aliases: &HashMap<Name, Ty<'db>>,
+fn normalize_impl(
+    ty: &Ty,
+    aliases: &HashMap<Name, Ty>,
     recursive: &HashSet<Name>,
     expanding: &mut HashSet<Name>,
-) -> StructuralTy<'db> {
+) -> StructuralTy {
     match ty {
         // Direct conversions
         Ty::Int => StructuralTy::Int,
@@ -238,8 +225,8 @@ fn normalize_impl<'db>(
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(id, _) => StructuralTy::Class(*id),
-        Ty::Enum(id, _) => StructuralTy::Enum(*id),
+        Ty::Class(name) => StructuralTy::Class(name.clone()),
+        Ty::Enum(name) => StructuralTy::Enum(name.clone()),
         Ty::WatchAccessor(inner) => StructuralTy::WatchAccessor(Box::new(normalize_impl(
             inner, aliases, recursive, expanding,
         ))),
@@ -305,7 +292,7 @@ fn normalize_impl<'db>(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Find all recursive type aliases via DFS.
-fn find_recursive_aliases(aliases: &HashMap<Name, Ty<'_>>) -> HashSet<Name> {
+fn find_recursive_aliases(aliases: &HashMap<Name, Ty>) -> HashSet<Name> {
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
         let mut visited = HashSet::new();
@@ -319,7 +306,7 @@ fn find_recursive_aliases(aliases: &HashMap<Name, Ty<'_>>) -> HashSet<Name> {
 
 fn has_cycle(
     name: &Name,
-    aliases: &HashMap<Name, Ty<'_>>,
+    aliases: &HashMap<Name, Ty>,
     visited: &mut HashSet<Name>,
     stack: &mut HashSet<Name>,
 ) -> bool {
@@ -338,9 +325,9 @@ fn has_cycle(
     result
 }
 
-fn ty_has_cycle<'db>(
-    ty: &Ty<'db>,
-    aliases: &HashMap<Name, Ty<'db>>,
+fn ty_has_cycle(
+    ty: &Ty,
+    aliases: &HashMap<Name, Ty>,
     visited: &mut HashSet<Name>,
     stack: &mut HashSet<Name>,
 ) -> bool {
@@ -464,8 +451,8 @@ mod tests {
     #[test]
     fn test_void_not_subtype_of_map() {
         let aliases = HashMap::new();
-        let void_ty: Ty<'_> = Ty::Void;
-        let map_ty: Ty<'_> = Ty::Map {
+        let void_ty = Ty::Void;
+        let map_ty = Ty::Map {
             key: Box::new(Ty::String),
             value: Box::new(Ty::Bool),
         };

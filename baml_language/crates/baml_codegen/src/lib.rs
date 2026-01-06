@@ -306,11 +306,11 @@ pub fn compile_files(
 /// Build typing context from source files.
 ///
 /// Maps function names to their arrow types for use during type inference.
-fn build_typing_context<'db>(
-    db: &'db dyn baml_mir::Db,
+fn build_typing_context(
+    db: &dyn baml_mir::Db,
     files: &[SourceFile],
-    resolution_ctx: &TypeResolutionContext<'db>,
-) -> HashMap<Name, baml_tir::Ty<'db>> {
+    resolution_ctx: &TypeResolutionContext,
+) -> HashMap<Name, baml_tir::Ty> {
     let mut context = HashMap::new();
 
     for file in files {
@@ -320,7 +320,7 @@ fn build_typing_context<'db>(
                 let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_tir::Ty<'db>> = signature
+                let param_types: Vec<baml_tir::Ty> = signature
                     .params
                     .iter()
                     .map(|p| {

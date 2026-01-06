@@ -12,7 +12,7 @@ use crate::Ty;
 /// Type variable bindings from pattern matching.
 ///
 /// Maps type variable names (e.g., "T", "K", "V") to their bound types.
-pub type Bindings<'db> = HashMap<&'static str, Ty<'db>>;
+pub type Bindings = HashMap<&'static str, Ty>;
 
 /// Match a `TypePattern` against a concrete `Ty`, extracting type variable bindings.
 ///
@@ -30,7 +30,7 @@ pub type Bindings<'db> = HashMap<&'static str, Ty<'db>>;
 /// let bindings = match_pattern(&pattern, &concrete);
 /// assert_eq!(bindings.unwrap().get("T"), Some(&Ty::Int));
 /// ```
-pub fn match_pattern<'db>(pattern: &TypePattern, ty: &Ty<'db>) -> Option<Bindings<'db>> {
+pub fn match_pattern(pattern: &TypePattern, ty: &Ty) -> Option<Bindings> {
     let mut bindings = HashMap::new();
     if match_pattern_inner(pattern, ty, &mut bindings) {
         Some(bindings)
@@ -39,11 +39,7 @@ pub fn match_pattern<'db>(pattern: &TypePattern, ty: &Ty<'db>) -> Option<Binding
     }
 }
 
-fn match_pattern_inner<'db>(
-    pattern: &TypePattern,
-    ty: &Ty<'db>,
-    bindings: &mut Bindings<'db>,
-) -> bool {
+fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) -> bool {
     match (pattern, ty) {
         // Type variable: bind or check consistency
         (TypePattern::Var(name), ty) => {
@@ -112,7 +108,7 @@ fn match_pattern_inner<'db>(
 /// let result = substitute(&pattern, &bindings);
 /// assert_eq!(result, Ty::Int);
 /// ```
-pub fn substitute<'db>(pattern: &TypePattern, bindings: &Bindings<'db>) -> Ty<'db> {
+pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
     match pattern {
         TypePattern::Var(name) => bindings
             .get(name)
@@ -138,7 +134,7 @@ pub fn substitute<'db>(pattern: &TypePattern, bindings: &Bindings<'db>) -> Ty<'d
 ///
 /// This is useful for builtin function calls where we don't have concrete type bindings
 /// (e.g., `baml.Array.length(arr)` where we don't know the element type yet).
-pub fn substitute_unknown<'db>(pattern: &TypePattern) -> Ty<'db> {
+pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
     match pattern {
         TypePattern::Var(_) => Ty::Unknown,
         TypePattern::Int => Ty::Int,
@@ -166,10 +162,10 @@ pub fn substitute_unknown<'db>(pattern: &TypePattern) -> Ty<'db> {
 /// // result = Some((FunctionDef for Array.length, {"T" => int}))
 /// // Return type: substitute(&def.returns, &bindings) => Ty::Int
 /// ```
-pub fn lookup_method<'db>(
-    receiver_ty: &Ty<'db>,
+pub fn lookup_method(
+    receiver_ty: &Ty,
     method_name: &str,
-) -> Option<(&'static FunctionDef, Bindings<'db>)> {
+) -> Option<(&'static FunctionDef, Bindings)> {
     for def in baml_vm::find_method(method_name) {
         if let Some(ref receiver_pattern) = def.receiver {
             if let Some(bindings) = match_pattern(receiver_pattern, receiver_ty) {
@@ -209,7 +205,7 @@ pub fn lookup_builtin_by_path(path: &str) -> Option<&'static FunctionDef> {
 /// let return_ty = method_return_type(&Ty::List(Box::new(Ty::Int)), "push");
 /// assert_eq!(return_ty, Some(Ty::Null));
 /// ```
-pub fn method_return_type<'db>(receiver_ty: &Ty<'db>, method_name: &str) -> Option<Ty<'db>> {
+pub fn method_return_type(receiver_ty: &Ty, method_name: &str) -> Option<Ty> {
     let (def, bindings) = lookup_method(receiver_ty, method_name)?;
     Some(substitute(&def.returns, &bindings))
 }
@@ -217,10 +213,7 @@ pub fn method_return_type<'db>(receiver_ty: &Ty<'db>, method_name: &str) -> Opti
 /// Get the expected parameter types of a built-in method for a specific receiver type.
 ///
 /// Returns the parameter types after substituting type variables.
-pub fn method_param_types<'db>(
-    receiver_ty: &Ty<'db>,
-    method_name: &str,
-) -> Option<Vec<(&'static str, Ty<'db>)>> {
+pub fn method_param_types(receiver_ty: &Ty, method_name: &str) -> Option<Vec<(&'static str, Ty)>> {
     let (def, bindings) = lookup_method(receiver_ty, method_name)?;
     let params = def
         .params
@@ -262,7 +255,7 @@ mod tests {
             key: Box::new(TypePattern::Var("K")),
             value: Box::new(TypePattern::Var("V")),
         };
-        let ty: Ty<'_> = Ty::Map {
+        let ty = Ty::Map {
             key: Box::new(Ty::String),
             value: Box::new(Ty::Int),
         };
@@ -293,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_lookup_array_length() {
-        let arr_ty: Ty<'_> = Ty::List(Box::new(Ty::Int));
+        let arr_ty = Ty::List(Box::new(Ty::Int));
         let result = lookup_method(&arr_ty, "length");
 
         assert!(result.is_some());
@@ -317,7 +310,7 @@ mod tests {
 
     #[test]
     fn test_method_return_type() {
-        let arr_ty: Ty<'_> = Ty::List(Box::new(Ty::Float));
+        let arr_ty = Ty::List(Box::new(Ty::Float));
 
         // length returns int regardless of element type
         assert_eq!(method_return_type(&arr_ty, "length"), Some(Ty::Int));
@@ -328,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_method_param_types() {
-        let arr_ty: Ty<'_> = Ty::List(Box::new(Ty::String));
+        let arr_ty = Ty::List(Box::new(Ty::String));
 
         // push takes the element type
         let params = method_param_types(&arr_ty, "push").unwrap();
@@ -338,7 +331,7 @@ mod tests {
 
     #[test]
     fn test_no_such_method() {
-        let arr_ty: Ty<'_> = Ty::List(Box::new(Ty::Int));
+        let arr_ty = Ty::List(Box::new(Ty::Int));
         assert!(lookup_method(&arr_ty, "nonexistent").is_none());
     }
 }
