@@ -296,6 +296,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
+            jump_tables: Vec::new(),
         },
         kind: baml_vm::FunctionKind::Exec,
         locals_in_scope: {

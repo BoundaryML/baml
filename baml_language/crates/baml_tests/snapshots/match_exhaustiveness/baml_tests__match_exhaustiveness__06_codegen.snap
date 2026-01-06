@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 80
-Objects: 228
+Objects: 256
 Globals: 98
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Exec):
@@ -52,23 +52,27 @@ Function BoolWithCatchAll (arity: 1, kind: Exec):
 
 Function DeeplyNestedLiterals (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +12               (to 16)
-     5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +7                (to 16)
-     10   LOAD_VAR 1             (x)
-     11   LOAD_CONST 2           (204)
-     12   CMP_OP ==              
-     13   POP_JUMP_IF_FALSE +3   (to 16)
-     14   JUMP +2                (to 16)
-     15   JUMP +1                (to 16)
-     16   LOAD_CONST 3           (all success codes)
-     17   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +14               (to 20)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (201)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +8                (to 20)
+     13   COPY 0                 
+     14   LOAD_CONST 2           (204)
+     15   CMP_OP ==              
+     16   POP_JUMP_IF_FALSE +3   (to 19)
+     17   POP 1                  
+     18   JUMP +2                (to 20)
+     19   POP 1                  
+     20   LOAD_CONST 3           (all success codes)
+     21   RETURN                 
 
 Function DuplicateBoolLiteral (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (b)
@@ -129,25 +133,56 @@ Function DuplicateEnumVariant (arity: 1, kind: Exec):
 
 Function DuplicateIntLiteral (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
-     1    LOAD_CONST 0           (1)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +10               (to 14)
-     5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 0           (1)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +3                (to 12)
-     10   LOAD_CONST 1           (other)
-     11   JUMP +4                (to 15)
-     12   LOAD_CONST 2           (second one)
-     13   JUMP +2                (to 15)
-     14   LOAD_CONST 3           (first one)
-     15   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (1)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +12               (to 18)
+     7    COPY 0                 
+     8    LOAD_CONST 0           (1)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +4                (to 16)
+     13   POP 1                  
+     14   LOAD_CONST 1           (other)
+     15   JUMP +4                (to 19)
+     16   LOAD_CONST 2           (second one)
+     17   JUMP +2                (to 19)
+     18   LOAD_CONST 3           (first one)
+     19   RETURN                 
 
 Function DuplicateStringLiteral (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (first user)
-     1   RETURN         
+     0    LOAD_VAR 1              (role)
+     1    LOAD_CONST 0            (user)
+     2    CMP_OP ==               
+     3    POP_JUMP_IF_FALSE +2    (to 5)
+     4    JUMP +23                (to 27)
+     5    LOAD_VAR 1              (role)
+     6    LOAD_CONST 1            (user)
+     7    CMP_OP ==               
+     8    POP_JUMP_IF_FALSE +2    (to 10)
+     9    JUMP +16                (to 25)
+     10   LOAD_VAR 1              (role)
+     11   LOAD_CONST 2            (assistant)
+     12   CMP_OP ==               
+     13   POP_JUMP_IF_FALSE +2    (to 15)
+     14   JUMP +9                 (to 23)
+     15   LOAD_VAR 1              (role)
+     16   LOAD_CONST 3            (system)
+     17   CMP_OP ==               
+     18   POP_JUMP_IF_FALSE +10   (to 28)
+     19   JUMP +2                 (to 21)
+     20   JUMP +8                 (to 28)
+     21   LOAD_CONST 4            (system)
+     22   JUMP +6                 (to 28)
+     23   LOAD_CONST 5            (assistant)
+     24   JUMP +4                 (to 28)
+     25   LOAD_CONST 6            (second user)
+     26   JUMP +2                 (to 28)
+     27   LOAD_CONST 7            (first user)
+     28   RETURN                  
 
 Function EnumVariantAfterTypedEnum (arity: 1, kind: Exec):
      0    LOAD_CONST 0           (null)
@@ -212,20 +247,23 @@ Function EnumVariantUnionWithCatchAll (arity: 1, kind: Exec):
 
 Function ExhaustiveAliasOfLiterals (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (code)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +9                (to 13)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +6   (to 14)
-     9    JUMP +2                (to 11)
-     10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (created)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +10               (to 16)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (201)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (ok)
-     14   RETURN                 
+     13   POP 1                  
+     14   LOAD_CONST 2           (created)
+     15   JUMP +2                (to 17)
+     16   LOAD_CONST 3           (ok)
+     17   RETURN                 
 
 Function ExhaustiveBool (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (b)
@@ -365,27 +403,31 @@ Function ExhaustiveFalseType (arity: 1, kind: Exec):
 
 Function ExhaustiveIntLiterals (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (code)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +16               (to 20)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +9                (to 18)
-     10   LOAD_VAR 1             (code)
-     11   LOAD_CONST 2           (204)
-     12   CMP_OP ==              
-     13   POP_JUMP_IF_FALSE +8   (to 21)
-     14   JUMP +2                (to 16)
-     15   JUMP +6                (to 21)
-     16   LOAD_CONST 3           (No Content)
-     17   JUMP +4                (to 21)
-     18   LOAD_CONST 4           (Created)
-     19   JUMP +2                (to 21)
-     20   LOAD_CONST 5           (OK)
-     21   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +18               (to 24)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (201)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +10               (to 22)
+     13   COPY 0                 
+     14   LOAD_CONST 2           (204)
+     15   CMP_OP ==              
+     16   POP_JUMP_IF_FALSE +3   (to 19)
+     17   POP 1                  
+     18   JUMP +2                (to 20)
+     19   POP 1                  
+     20   LOAD_CONST 3           (No Content)
+     21   JUMP +4                (to 25)
+     22   LOAD_CONST 4           (Created)
+     23   JUMP +2                (to 25)
+     24   LOAD_CONST 5           (OK)
+     25   RETURN                 
 
 Function ExhaustiveLiteralWithBaseType (arity: 1, kind: Exec):
      0    LOAD_CONST 0           (null)
@@ -406,15 +448,28 @@ Function ExhaustiveLiteralWithBaseType (arity: 1, kind: Exec):
      15   RETURN                 
 
 Function ExhaustiveMixedLiterals (arity: 1, kind: Exec):
-     0   LOAD_VAR 1             (x)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +2   (to 5)
-     4   JUMP +3                (to 7)
-     5   LOAD_CONST 1           (string success)
-     6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (http ok)
-     8   RETURN                 
+     0    LOAD_VAR 1             (x)
+     1    LOAD_CONST 0           (200)
+     2    CMP_OP ==              
+     3    POP_JUMP_IF_FALSE +2   (to 5)
+     4    JUMP +16               (to 20)
+     5    LOAD_VAR 1             (x)
+     6    LOAD_CONST 1           (success)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +9                (to 18)
+     10   LOAD_VAR 1             (x)
+     11   LOAD_CONST 2           (true)
+     12   CMP_OP ==              
+     13   POP_JUMP_IF_FALSE +8   (to 21)
+     14   JUMP +2                (to 16)
+     15   JUMP +6                (to 21)
+     16   LOAD_CONST 3           (boolean true)
+     17   JUMP +4                (to 21)
+     18   LOAD_CONST 4           (string success)
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 5           (http ok)
+     21   RETURN                 
 
 Function ExhaustiveNullableEnum (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (s)
@@ -504,17 +559,39 @@ Function ExhaustiveOptionalSingleton (arity: 1, kind: Exec):
 
 Function ExhaustiveSingletonInt (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (code)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +3   (to 6)
-     4   JUMP +2                (to 6)
-     5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (OK)
-     7   RETURN                 
+     1   COPY 0                 
+     2   LOAD_CONST 0           (200)
+     3   CMP_OP ==              
+     4   POP_JUMP_IF_FALSE +3   (to 7)
+     5   POP 1                  
+     6   JUMP +2                (to 8)
+     7   POP 1                  
+     8   LOAD_CONST 1           (OK)
+     9   RETURN                 
 
 Function ExhaustiveStringLiterals (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (User)
-     1   RETURN         
+     0    LOAD_VAR 1             (role)
+     1    LOAD_CONST 0           (user)
+     2    CMP_OP ==              
+     3    POP_JUMP_IF_FALSE +2   (to 5)
+     4    JUMP +16               (to 20)
+     5    LOAD_VAR 1             (role)
+     6    LOAD_CONST 1           (assistant)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +9                (to 18)
+     10   LOAD_VAR 1             (role)
+     11   LOAD_CONST 2           (system)
+     12   CMP_OP ==              
+     13   POP_JUMP_IF_FALSE +8   (to 21)
+     14   JUMP +2                (to 16)
+     15   JUMP +6                (to 21)
+     16   LOAD_CONST 3           (System)
+     17   JUMP +4                (to 21)
+     18   LOAD_CONST 4           (Assistant)
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 5           (User)
+     21   RETURN                 
 
 Function ExhaustiveTrueType (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (t)
@@ -559,34 +636,41 @@ Function ExhaustiveTypeAliasWithCatchAll (arity: 1, kind: Exec):
 
 Function ExhaustiveWithNamedCatchAll (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
-     1    LOAD_CONST 0           (1)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +5                (to 9)
-     5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 0           (1)
-     7    BIN_OP +               
-     8    JUMP +2                (to 10)
-     9    LOAD_CONST 1           (100)
-     10   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (1)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +6                (to 12)
+     7    POP 1                  
+     8    LOAD_VAR 1             (x)
+     9    LOAD_CONST 0           (1)
+     10   BIN_OP +               
+     11   JUMP +2                (to 13)
+     12   LOAD_CONST 1           (100)
+     13   RETURN                 
 
 Function ExhaustiveWithUnderscore (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
-     1    LOAD_CONST 0           (1)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +10               (to 14)
-     5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 1           (2)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +3                (to 12)
-     10   LOAD_CONST 2           (0)
-     11   JUMP +4                (to 15)
-     12   LOAD_CONST 3           (200)
-     13   JUMP +2                (to 15)
-     14   LOAD_CONST 4           (100)
-     15   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (1)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +12               (to 18)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (2)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +4                (to 16)
+     13   POP 1                  
+     14   LOAD_CONST 2           (0)
+     15   JUMP +4                (to 19)
+     16   LOAD_CONST 3           (200)
+     17   JUMP +2                (to 19)
+     18   LOAD_CONST 4           (100)
+     19   RETURN                 
 
 Function GuardedOnlyNonExhaustive (arity: 1, kind: Exec):
      0    LOAD_CONST 0            (null)
@@ -654,25 +738,29 @@ Function HighLineNumberNonExhaustive (arity: 1, kind: Exec):
 
 Function IntLiteralUnionPattern (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (code)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +14               (to 18)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +9                (to 18)
-     10   LOAD_VAR 1             (code)
-     11   LOAD_CONST 2           (204)
-     12   CMP_OP ==              
-     13   POP_JUMP_IF_FALSE +6   (to 19)
-     14   JUMP +2                (to 16)
-     15   JUMP +4                (to 19)
-     16   LOAD_CONST 3           (no content)
-     17   JUMP +2                (to 19)
-     18   LOAD_CONST 4           (success with body)
-     19   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +16               (to 22)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (201)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +10               (to 22)
+     13   COPY 0                 
+     14   LOAD_CONST 2           (204)
+     15   CMP_OP ==              
+     16   POP_JUMP_IF_FALSE +3   (to 19)
+     17   POP 1                  
+     18   JUMP +2                (to 20)
+     19   POP 1                  
+     20   LOAD_CONST 3           (no content)
+     21   JUMP +2                (to 23)
+     22   LOAD_CONST 4           (success with body)
+     23   RETURN                 
 
 Function LiteralAfterTypedPattern (arity: 1, kind: Exec):
      0    LOAD_CONST 0           (null)
@@ -693,32 +781,42 @@ Function LiteralAfterTypedPattern (arity: 1, kind: Exec):
      15   RETURN                 
 
 Function LiteralUnionWithCatchAll (arity: 1, kind: Exec):
-     0    LOAD_VAR 1             (code)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +20               (to 24)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +15               (to 24)
-     10   LOAD_VAR 1             (code)
-     11   LOAD_CONST 2           (400)
-     12   CMP_OP ==              
-     13   POP_JUMP_IF_FALSE +2   (to 15)
-     14   JUMP +8                (to 22)
-     15   LOAD_VAR 1             (code)
-     16   LOAD_CONST 3           (404)
-     17   CMP_OP ==              
-     18   POP_JUMP_IF_FALSE +2   (to 20)
-     19   JUMP +3                (to 22)
-     20   LOAD_CONST 4           (other)
-     21   JUMP +4                (to 25)
-     22   LOAD_CONST 5           (client error)
-     23   JUMP +2                (to 25)
-     24   LOAD_CONST 6           (success)
-     25   RETURN                 
+     0    LOAD_VAR 1              (code)
+     1    COPY 0                  
+     2    LOAD_CONST 0            (400)
+     3    CMP_OP ==               
+     4    POP_JUMP_IF_FALSE +3    (to 7)
+     5    POP 1                   
+     6    JUMP +26                (to 32)
+     7    COPY 0                  
+     8    LOAD_CONST 0            (400)
+     9    CMP_OP <                
+     10   POP_JUMP_IF_FALSE +13   (to 23)
+     11   COPY 0                  
+     12   LOAD_CONST 1            (200)
+     13   CMP_OP ==               
+     14   POP_JUMP_IF_FALSE +3    (to 17)
+     15   POP 1                   
+     16   JUMP +18                (to 34)
+     17   COPY 0                  
+     18   LOAD_CONST 2            (201)
+     19   CMP_OP ==               
+     20   POP_JUMP_IF_FALSE +3    (to 23)
+     21   POP 1                   
+     22   JUMP +12                (to 34)
+     23   COPY 0                  
+     24   LOAD_CONST 3            (404)
+     25   CMP_OP ==               
+     26   POP_JUMP_IF_FALSE +3    (to 29)
+     27   POP 1                   
+     28   JUMP +4                 (to 32)
+     29   POP 1                   
+     30   LOAD_CONST 4            (other)
+     31   JUMP +4                 (to 35)
+     32   LOAD_CONST 5            (client error)
+     33   JUMP +2                 (to 35)
+     34   LOAD_CONST 6            (success)
+     35   RETURN                  
 
 Function MixedPatterns (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (x)
@@ -813,87 +911,113 @@ Function NestedEnumVariantUnions (arity: 1, kind: Exec):
      19   RETURN                 
 
 Function NestedLiteralUnions (arity: 1, kind: Exec):
-     0    LOAD_VAR 1             (code)
-     1    LOAD_CONST 0           (200)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +45               (to 49)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +40               (to 49)
-     10   LOAD_VAR 1             (code)
-     11   LOAD_CONST 2           (202)
-     12   CMP_OP ==              
-     13   POP_JUMP_IF_FALSE +2   (to 15)
-     14   JUMP +35               (to 49)
-     15   LOAD_VAR 1             (code)
-     16   LOAD_CONST 3           (204)
-     17   CMP_OP ==              
-     18   POP_JUMP_IF_FALSE +2   (to 20)
-     19   JUMP +30               (to 49)
-     20   LOAD_VAR 1             (code)
-     21   LOAD_CONST 4           (400)
-     22   CMP_OP ==              
-     23   POP_JUMP_IF_FALSE +2   (to 25)
-     24   JUMP +23               (to 47)
-     25   LOAD_VAR 1             (code)
-     26   LOAD_CONST 5           (404)
-     27   CMP_OP ==              
-     28   POP_JUMP_IF_FALSE +2   (to 30)
-     29   JUMP +18               (to 47)
-     30   LOAD_VAR 1             (code)
-     31   LOAD_CONST 6           (405)
-     32   CMP_OP ==              
-     33   POP_JUMP_IF_FALSE +2   (to 35)
-     34   JUMP +13               (to 47)
-     35   LOAD_VAR 1             (code)
-     36   LOAD_CONST 7           (406)
-     37   CMP_OP ==              
-     38   POP_JUMP_IF_FALSE +2   (to 40)
-     39   JUMP +8                (to 47)
-     40   LOAD_VAR 1             (code)
-     41   LOAD_CONST 8           (409)
-     42   CMP_OP ==              
-     43   POP_JUMP_IF_FALSE +2   (to 45)
-     44   JUMP +3                (to 47)
-     45   LOAD_CONST 9           (other)
-     46   JUMP +4                (to 50)
-     47   LOAD_CONST 10          (client error)
-     48   JUMP +2                (to 50)
-     49   LOAD_CONST 11          (success)
-     50   RETURN                 
+     0    LOAD_VAR 1              (code)
+     1    COPY 0                  
+     2    LOAD_CONST 0            (400)
+     3    CMP_OP ==               
+     4    POP_JUMP_IF_FALSE +3    (to 7)
+     5    POP 1                   
+     6    JUMP +64                (to 70)
+     7    COPY 0                  
+     8    LOAD_CONST 0            (400)
+     9    CMP_OP <                
+     10   POP_JUMP_IF_FALSE +29   (to 39)
+     11   COPY 0                  
+     12   LOAD_CONST 1            (202)
+     13   CMP_OP ==               
+     14   POP_JUMP_IF_FALSE +3    (to 17)
+     15   POP 1                   
+     16   JUMP +56                (to 72)
+     17   COPY 0                  
+     18   LOAD_CONST 1            (202)
+     19   CMP_OP <                
+     20   POP_JUMP_IF_FALSE +13   (to 33)
+     21   COPY 0                  
+     22   LOAD_CONST 2            (200)
+     23   CMP_OP ==               
+     24   POP_JUMP_IF_FALSE +3    (to 27)
+     25   POP 1                   
+     26   JUMP +46                (to 72)
+     27   COPY 0                  
+     28   LOAD_CONST 3            (201)
+     29   CMP_OP ==               
+     30   POP_JUMP_IF_FALSE +3    (to 33)
+     31   POP 1                   
+     32   JUMP +40                (to 72)
+     33   COPY 0                  
+     34   LOAD_CONST 4            (204)
+     35   CMP_OP ==               
+     36   POP_JUMP_IF_FALSE +3    (to 39)
+     37   POP 1                   
+     38   JUMP +34                (to 72)
+     39   COPY 0                  
+     40   LOAD_CONST 5            (406)
+     41   CMP_OP ==               
+     42   POP_JUMP_IF_FALSE +3    (to 45)
+     43   POP 1                   
+     44   JUMP +26                (to 70)
+     45   COPY 0                  
+     46   LOAD_CONST 5            (406)
+     47   CMP_OP <                
+     48   POP_JUMP_IF_FALSE +13   (to 61)
+     49   COPY 0                  
+     50   LOAD_CONST 6            (404)
+     51   CMP_OP ==               
+     52   POP_JUMP_IF_FALSE +3    (to 55)
+     53   POP 1                   
+     54   JUMP +16                (to 70)
+     55   COPY 0                  
+     56   LOAD_CONST 7            (405)
+     57   CMP_OP ==               
+     58   POP_JUMP_IF_FALSE +3    (to 61)
+     59   POP 1                   
+     60   JUMP +10                (to 70)
+     61   COPY 0                  
+     62   LOAD_CONST 8            (409)
+     63   CMP_OP ==               
+     64   POP_JUMP_IF_FALSE +3    (to 67)
+     65   POP 1                   
+     66   JUMP +4                 (to 70)
+     67   POP 1                   
+     68   LOAD_CONST 9            (other)
+     69   JUMP +4                 (to 73)
+     70   LOAD_CONST 10           (client error)
+     71   JUMP +2                 (to 73)
+     72   LOAD_CONST 11           (success)
+     73   RETURN                  
 
 Function NestedMatchSpans (arity: 2, kind: Exec):
      0    LOAD_VAR 1             (x)
-     1    LOAD_CONST 0           (0)
-     2    CMP_OP ==              
-     3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +3                (to 7)
-     5    LOAD_CONST 1           (other)
-     6    JUMP +21               (to 27)
-     7    LOAD_VAR 2             (y)
-     8    LOAD_CONST 2           (true)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +15               (to 26)
-     12   LOAD_VAR 2             (y)
-     13   LOAD_CONST 3           (false)
-     14   CMP_OP ==              
-     15   POP_JUMP_IF_FALSE +2   (to 17)
-     16   JUMP +8                (to 24)
-     17   LOAD_VAR 2             (y)
-     18   LOAD_CONST 2           (true)
-     19   CMP_OP ==              
-     20   POP_JUMP_IF_FALSE +2   (to 22)
-     21   JUMP +1                (to 22)
-     22   LOAD_CONST 4           (unreachable nested)
-     23   JUMP +4                (to 27)
-     24   LOAD_CONST 5           (zero false)
-     25   JUMP +2                (to 27)
-     26   LOAD_CONST 6           (zero true)
-     27   RETURN                 
+     1    COPY 0                 
+     2    LOAD_CONST 0           (0)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +4                (to 10)
+     7    POP 1                  
+     8    LOAD_CONST 1           (other)
+     9    JUMP +21               (to 30)
+     10   LOAD_VAR 2             (y)
+     11   LOAD_CONST 2           (true)
+     12   CMP_OP ==              
+     13   POP_JUMP_IF_FALSE +2   (to 15)
+     14   JUMP +15               (to 29)
+     15   LOAD_VAR 2             (y)
+     16   LOAD_CONST 3           (false)
+     17   CMP_OP ==              
+     18   POP_JUMP_IF_FALSE +2   (to 20)
+     19   JUMP +8                (to 27)
+     20   LOAD_VAR 2             (y)
+     21   LOAD_CONST 2           (true)
+     22   CMP_OP ==              
+     23   POP_JUMP_IF_FALSE +2   (to 25)
+     24   JUMP +1                (to 25)
+     25   LOAD_CONST 4           (unreachable nested)
+     26   JUMP +4                (to 30)
+     27   LOAD_CONST 5           (zero false)
+     28   JUMP +2                (to 30)
+     29   LOAD_CONST 6           (zero true)
+     30   RETURN                 
 
 Function NestedTypeAlias (arity: 1, kind: Exec):
      0    LOAD_VAR 1              (mr)
@@ -945,13 +1069,15 @@ Function NestedTypeBindings (arity: 1, kind: Exec):
 
 Function NonExhaustiveAliasOfLiterals (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (code)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +3   (to 6)
-     4   JUMP +2                (to 6)
-     5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (ok)
-     7   RETURN                 
+     1   COPY 0                 
+     2   LOAD_CONST 0           (200)
+     3   CMP_OP ==              
+     4   POP_JUMP_IF_FALSE +3   (to 7)
+     5   POP 1                  
+     6   JUMP +2                (to 8)
+     7   POP 1                  
+     8   LOAD_CONST 1           (ok)
+     9   RETURN                 
 
 Function NonExhaustiveBoolMissingFalse (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (b)
@@ -975,13 +1101,15 @@ Function NonExhaustiveBoolMissingTrue (arity: 1, kind: Exec):
 
 Function NonExhaustiveClassPlusLiteralMissingClass (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (x)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +3   (to 6)
-     4   JUMP +2                (to 6)
-     5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (http ok)
-     7   RETURN                 
+     1   COPY 0                 
+     2   LOAD_CONST 0           (200)
+     3   CMP_OP ==              
+     4   POP_JUMP_IF_FALSE +3   (to 7)
+     5   POP 1                  
+     6   JUMP +2                (to 8)
+     7   POP 1                  
+     8   LOAD_CONST 1           (http ok)
+     9   RETURN                 
 
 Function NonExhaustiveClassPlusLiteralMissingLiteral (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (x)
@@ -1074,31 +1202,40 @@ Function NonExhaustiveFullResultMissingOne (arity: 1, kind: Exec):
 
 Function NonExhaustiveIntLiteral (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (code)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +3   (to 7)
+     5    POP 1                  
+     6    JUMP +10               (to 16)
+     7    COPY 0                 
+     8    LOAD_CONST 1           (201)
+     9    CMP_OP ==              
+     10   POP_JUMP_IF_FALSE +3   (to 13)
+     11   POP 1                  
+     12   JUMP +2                (to 14)
+     13   POP 1                  
+     14   LOAD_CONST 2           (Created)
+     15   JUMP +2                (to 17)
+     16   LOAD_CONST 3           (OK)
+     17   RETURN                 
+
+Function NonExhaustiveMixedLiterals (arity: 1, kind: Exec):
+     0    LOAD_VAR 1             (x)
      1    LOAD_CONST 0           (200)
      2    CMP_OP ==              
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +9                (to 13)
-     5    LOAD_VAR 1             (code)
-     6    LOAD_CONST 1           (201)
+     5    LOAD_VAR 1             (x)
+     6    LOAD_CONST 1           (success)
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +6   (to 14)
      9    JUMP +2                (to 11)
      10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (Created)
+     11   LOAD_CONST 2           (string success)
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (OK)
+     13   LOAD_CONST 3           (http ok)
      14   RETURN                 
-
-Function NonExhaustiveMixedLiterals (arity: 1, kind: Exec):
-     0   LOAD_VAR 1             (x)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +2   (to 5)
-     4   JUMP +3                (to 7)
-     5   LOAD_CONST 1           (string success)
-     6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (http ok)
-     8   RETURN                 
 
 Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (s)
@@ -1155,13 +1292,15 @@ Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Exec):
 
 Function NonExhaustiveOptionalMissingNull (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (code)
-     1   LOAD_CONST 0           (200)
-     2   CMP_OP ==              
-     3   POP_JUMP_IF_FALSE +3   (to 6)
-     4   JUMP +2                (to 6)
-     5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (OK)
-     7   RETURN                 
+     1   COPY 0                 
+     2   LOAD_CONST 0           (200)
+     3   CMP_OP ==              
+     4   POP_JUMP_IF_FALSE +3   (to 7)
+     5   POP 1                  
+     6   JUMP +2                (to 8)
+     7   POP 1                  
+     8   LOAD_CONST 1           (OK)
+     9   RETURN                 
 
 Function NonExhaustiveOptionalMissingValue (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (code)
@@ -1174,8 +1313,21 @@ Function NonExhaustiveOptionalMissingValue (arity: 1, kind: Exec):
      7   RETURN                 
 
 Function NonExhaustiveStringLiteral (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (User)
-     1   RETURN         
+     0    LOAD_VAR 1             (role)
+     1    LOAD_CONST 0           (user)
+     2    CMP_OP ==              
+     3    POP_JUMP_IF_FALSE +2   (to 5)
+     4    JUMP +9                (to 13)
+     5    LOAD_VAR 1             (role)
+     6    LOAD_CONST 1           (assistant)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +6   (to 14)
+     9    JUMP +2                (to 11)
+     10   JUMP +4                (to 14)
+     11   LOAD_CONST 2           (Assistant)
+     12   JUMP +2                (to 14)
+     13   LOAD_CONST 3           (User)
+     14   RETURN                 
 
 Function NonExhaustiveTrueTypeWrongLiteral (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (t)
@@ -1297,21 +1449,58 @@ Function StringLiteralAfterStringType (arity: 1, kind: Exec):
      1    LOAD_VAR 1             (s)
      2    LOAD_CONST 1           (false)
      3    POP_JUMP_IF_FALSE +2   (to 5)
-     4    JUMP +3                (to 7)
-     5    LOAD_CONST 2           (unreachable)
-     6    JUMP +4                (to 10)
-     7    LOAD_VAR 1             (s)
-     8    STORE_VAR 2            (x)
-     9    LOAD_CONST 3           (any string)
-     10   RETURN                 
+     4    JUMP +8                (to 12)
+     5    LOAD_VAR 1             (s)
+     6    LOAD_CONST 2           (hello)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +1                (to 10)
+     10   LOAD_CONST 3           (unreachable)
+     11   JUMP +4                (to 15)
+     12   LOAD_VAR 1             (s)
+     13   STORE_VAR 2            (x)
+     14   LOAD_CONST 4           (any string)
+     15   RETURN                 
 
 Function StringLiteralUnionPattern (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (chat participant)
-     1   RETURN         
+     0    LOAD_VAR 1             (role)
+     1    LOAD_CONST 0           (user)
+     2    CMP_OP ==              
+     3    POP_JUMP_IF_FALSE +2   (to 5)
+     4    JUMP +14               (to 18)
+     5    LOAD_VAR 1             (role)
+     6    LOAD_CONST 1           (assistant)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +9                (to 18)
+     10   LOAD_VAR 1             (role)
+     11   LOAD_CONST 2           (system)
+     12   CMP_OP ==              
+     13   POP_JUMP_IF_FALSE +6   (to 19)
+     14   JUMP +2                (to 16)
+     15   JUMP +4                (to 19)
+     16   LOAD_CONST 3           (system)
+     17   JUMP +2                (to 19)
+     18   LOAD_CONST 4           (chat participant)
+     19   RETURN                 
 
 Function StringLiteralWithCatchAll (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (User message)
-     1   RETURN         
+     0    LOAD_VAR 1             (role)
+     1    LOAD_CONST 0           (user)
+     2    CMP_OP ==              
+     3    POP_JUMP_IF_FALSE +2   (to 5)
+     4    JUMP +10               (to 14)
+     5    LOAD_VAR 1             (role)
+     6    LOAD_CONST 1           (assistant)
+     7    CMP_OP ==              
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +3                (to 12)
+     10   LOAD_CONST 2           (Other)
+     11   JUMP +4                (to 15)
+     12   LOAD_CONST 3           (Assistant message)
+     13   JUMP +2                (to 15)
+     14   LOAD_CONST 4           (User message)
+     15   RETURN                 
 
 Function UnionPatternCoversAll (arity: 1, kind: Exec):
      0   LOAD_CONST 0           (null)
@@ -1338,14 +1527,22 @@ Function UnreachableMultiple (arity: 1, kind: Exec):
 
 Function WrongLiteralTypeBoolWithInt (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (b)
-     1   LOAD_CONST 0           (42)
+     1   COPY 0                 
+     2   LOAD_CONST 0           (42)
+     3   CMP_OP ==              
+     4   POP_JUMP_IF_FALSE +3   (to 7)
+     5   POP 1                  
+     6   JUMP +2                (to 8)
+     7   POP 1                  
+     8   LOAD_CONST 1           (wrong type)
+     9   RETURN                 
+
+Function WrongLiteralTypeIntWithString (arity: 1, kind: Exec):
+     0   LOAD_VAR 1             (x)
+     1   LOAD_CONST 0           (hello)
      2   CMP_OP ==              
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
      6   LOAD_CONST 1           (wrong type)
-     7   RETURN                 
-
-Function WrongLiteralTypeIntWithString (arity: 1, kind: Exec):
-     0   LOAD_CONST 0   (wrong type)
-     1   RETURN
+     7   RETURN

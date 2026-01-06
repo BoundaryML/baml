@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -83,28 +83,6 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:348:26 ]
-     │
- 348 │ ╭─▶         "user" => "User",
- 349 │ ├─▶         "assistant" => "Assistant",
-     │ │                                         
-     │ ╰───────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:349:36 ]
-     │
- 349 │ ╭─▶         "assistant" => "Assistant",
- 350 │ ├─▶         "system" => "System"
-     │ │                                  
-     │ ╰────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
      ╭─[ 0:488:26 ]
      │
  488 │ ╭─▶         1 => "first one",
@@ -137,17 +115,6 @@ expression: output
      │ ╰─────────── Non-exhaustive match: type Result not fully covered. Missing: Failure
      │     
      │     Note: Error code: E0062
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:365:52 ]
-     │
- 365 │ ╭─▶         "user" | "assistant" => "chat participant",
- 366 │ ├─▶         "system" => "system"
-     │ │                                  
-     │ ╰────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match: type DoubleMaybe not fully covered. Missing: null
@@ -204,17 +171,6 @@ expression: output
  868 │ ├─▶         Status.Active => "duplicate 2",
      │ │                                             
      │ ╰───────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:553:39 ]
-     │
- 553 │ ╭─▶         "success" => "string success",
- 554 │ ├─▶         true => "boolean true"
-     │ │                                    
-     │ ╰──────────────────────────────────── Unreachable match arm: previous arms already cover all cases
      │     
      │     Note: Error code: E0063
 ─────╯
@@ -278,6 +234,18 @@ expression: output
      │     Note: Error code: E0062
 ─────╯
 
+  [type] Error: Non-exhaustive match: type int not fully covered. Missing: int
+     ╭─[ 0:751:59 ]
+     │
+ 751 │ ╭─▶ function WrongLiteralTypeIntWithString(x: int) -> string {
+     ┆ ┆   
+ 754 │ ├─▶     }
+     │ │           
+     │ ╰─────────── Non-exhaustive match: type int not fully covered. Missing: int
+     │     
+     │     Note: Error code: E0062
+─────╯
+
   [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
      ╭─[ 0:875:60 ]
      │
@@ -337,28 +305,6 @@ expression: output
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:507:33 ]
-     │
- 507 │ ╭─▶         "user" => "second user",
- 508 │ ├─▶         "assistant" => "assistant",
-     │ │                                         
-     │ ╰───────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:508:36 ]
-     │
- 508 │ ╭─▶         "assistant" => "assistant",
- 509 │ ├─▶         "system" => "system"
-     │ │                                  
-     │ ╰────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
   [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Pending
      ╭─[ 0:456:60 ]
      │
@@ -379,6 +325,18 @@ expression: output
  305 │ ├─▶     }
      │ │           
      │ ╰─────────── Non-exhaustive match: type CustomBool not fully covered. Missing: false
+     │     
+     │     Note: Error code: E0062
+─────╯
+
+  [type] Error: Non-exhaustive match: type MixedLiterals not fully covered. Missing: true
+     ╭─[ 0:559:66 ]
+     │
+ 559 │ ╭─▶ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+     ┆ ┆   
+ 563 │ ├─▶     }
+     │ │           
+     │ ╰─────────── Non-exhaustive match: type MixedLiterals not fully covered. Missing: true
      │     
      │     Note: Error code: E0062
 ─────╯
@@ -417,6 +375,17 @@ expression: output
      │     Note: Error code: E0063
 ─────╯
 
+  [type] Error: Unreachable match arm: previous arms already cover all cases
+     ╭─[ 0:642:35 ]
+     │
+ 642 │ ╭─▶         x: string => "any string",
+ 643 │ ├─▶         "hello" => "unreachable"
+     │ │                                      
+     │ ╰────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │     
+     │     Note: Error code: E0063
+─────╯
+
   [type] Error: Non-exhaustive match: type FullResult not fully covered. Missing: Pending
      ╭─[ 0:763:64 ]
      │
@@ -429,37 +398,16 @@ expression: output
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:357:26 ]
+  [type] Error: Non-exhaustive match: type Role not fully covered. Missing: "system"
+     ╭─[ 0:355:60 ]
      │
- 357 │ ╭─▶         "user" => "User",
- 358 │ ├─▶         "assistant" => "Assistant"
-     │ │                                        
-     │ ╰──────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+ 355 │ ╭─▶ function NonExhaustiveStringLiteral(role: Role) -> string {
+     ┆ ┆   
+ 359 │ ├─▶     }
+     │ │           
+     │ ╰─────────── Non-exhaustive match: type Role not fully covered. Missing: "system"
      │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:339:34 ]
-     │
- 339 │ ╭─▶         "user" => "User message",
- 340 │ ├─▶         "assistant" => "Assistant message",
-     │ │                                                 
-     │ ╰───────────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
-─────╯
-
-  [type] Error: Unreachable match arm: previous arms already cover all cases
-     ╭─[ 0:340:44 ]
-     │
- 340 │ ╭─▶         "assistant" => "Assistant message",
- 341 │ ├─▶         _ => "Other"
-     │ │                          
-     │ ╰────────────────────────── Unreachable match arm: previous arms already cover all cases
-     │     
-     │     Note: Error code: E0063
+     │     Note: Error code: E0062
 ─────╯
 
   [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending

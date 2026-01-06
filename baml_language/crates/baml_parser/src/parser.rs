@@ -1812,8 +1812,21 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Check for literals first
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+        // Check for literals first (including negative literals)
+        // Handle negative numeric literals: -42, -3.14
+        if self.at(TokenKind::Minus) {
+            // Peek ahead to see if this is a negative numeric literal
+            let is_negative_number = self.peek(1).is_some_and(|t| {
+                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+            });
+            if is_negative_number {
+                self.bump(); // consume the minus
+                self.bump(); // consume the number
+            } else {
+                self.error_unexpected_token("pattern".to_string());
+                self.bump();
+            }
+        } else if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
             self.bump();
         } else if self.parse_any_string() {
             // String literal handled

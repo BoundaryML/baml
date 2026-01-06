@@ -2,6 +2,60 @@
 
 use crate::{GlobalIndex, ObjectIndex, types::Value};
 
+// ============================================================================
+// Jump Table Data Structure
+// ============================================================================
+
+/// Jump table data for O(1) switch dispatch.
+///
+/// Maps a contiguous range of integer values to jump offsets.
+/// Values outside the range or "holes" jump to the default offset.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JumpTableData {
+    /// Minimum discriminant value (maps to index 0).
+    pub min: i64,
+    /// Jump offsets for each value from min to min+len-1.
+    /// None means "hole" - should jump to default.
+    pub offsets: Vec<Option<isize>>,
+}
+
+impl JumpTableData {
+    /// Create a new jump table covering the range [min, max].
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn new(min: i64, max: i64) -> Self {
+        // Safety: We limit jump tables to 256 entries max in codegen,
+        // and max >= min is guaranteed by construction.
+        let size = (max - min + 1) as usize;
+        Self {
+            min,
+            offsets: vec![None; size],
+        }
+    }
+
+    /// Set the offset for a specific value.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn set(&mut self, value: i64, offset: isize) {
+        // Safety: We only call this with value >= min, so index is non-negative
+        // and bounded by the table size.
+        let index = (value - self.min) as usize;
+        if index < self.offsets.len() {
+            self.offsets[index] = Some(offset);
+        }
+    }
+
+    /// Lookup the offset for a value.
+    /// Returns None if value is out of range or is a hole.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn lookup(&self, value: i64) -> Option<isize> {
+        if value < self.min {
+            return None;
+        }
+        // Safety: value >= min, so index is non-negative.
+        let index = (value - self.min) as usize;
+        self.offsets.get(index).copied().flatten()
+    }
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -264,6 +318,42 @@ pub enum Instruction {
     /// Format: `VIZ_EXIT i` where `i` is the index into the current
     /// function's `viz_nodes` array.
     VizExit(usize),
+
+    /// Jump through a table based on integer discriminant.
+    ///
+    /// Stack: `[discriminant: Int]` -> `[]` (jumps)
+    ///
+    /// Pops discriminant, looks up in jump table at `table_idx`.
+    /// If value is in range and not a hole, jumps to that offset.
+    /// Otherwise jumps to `default` offset.
+    ///
+    /// Format: `JUMP_TABLE table_idx, default` where:
+    /// - `table_idx` is the index into `Bytecode::jump_tables`
+    /// - `default` is the offset to jump to for out-of-range or hole values
+    JumpTable {
+        /// Index into `Bytecode::jump_tables`.
+        table_idx: usize,
+        /// Offset to jump to for out-of-range or hole values.
+        default: isize,
+    },
+
+    /// Extract the variant index from an enum value.
+    ///
+    /// Stack: `[enum_value: Variant]` -> `[discriminant: Int]`
+    ///
+    /// Used to convert enum values to integers for jump table dispatch.
+    /// Example: `Status.Active -> 0`, `Status.Inactive -> 1`, `Status.Pending -> 2`
+    Discriminant,
+
+    /// Extract the runtime type tag from any value.
+    ///
+    /// Stack: `[any_value]` -> `[type_tag: Int]`
+    ///
+    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Type tags are global constants:
+    /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
+    /// - Classes: assigned unique IDs starting at 100
+    TypeTag,
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -456,6 +546,11 @@ impl std::fmt::Display for Instruction {
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
             Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
+            Instruction::JumpTable { table_idx, default } => {
+                write!(f, "JUMP_TABLE {table_idx}, {default:+}")
+            }
+            Instruction::Discriminant => f.write_str("DISCRIMINANT"),
+            Instruction::TypeTag => f.write_str("TYPE_TAG"),
         }
     }
 }
@@ -470,6 +565,9 @@ pub struct Bytecode {
 
     /// Constant pool.
     pub constants: Vec<Value>,
+
+    /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
+    pub jump_tables: Vec<JumpTableData>,
 
     /// Source line mapping.
     ///
@@ -491,6 +589,7 @@ impl Bytecode {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            jump_tables: Vec::new(),
             source_lines: Vec::new(),
             scopes: Vec::new(),
         }
@@ -504,5 +603,147 @@ impl std::fmt::Display for Bytecode {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // JumpTableData Tests
+    // ========================================================================
+
+    #[test]
+    fn jump_table_new_creates_correct_size() {
+        let table = JumpTableData::new(0, 4);
+        assert_eq!(table.min, 0);
+        assert_eq!(table.offsets.len(), 5); // 0, 1, 2, 3, 4
+
+        let table = JumpTableData::new(10, 15);
+        assert_eq!(table.min, 10);
+        assert_eq!(table.offsets.len(), 6); // 10, 11, 12, 13, 14, 15
+
+        let table = JumpTableData::new(-5, 5);
+        assert_eq!(table.min, -5);
+        assert_eq!(table.offsets.len(), 11); // -5 to 5 inclusive
+    }
+
+    #[test]
+    fn jump_table_set_and_lookup() {
+        let mut table = JumpTableData::new(0, 4);
+
+        // Initially all entries are holes (None)
+        for i in 0..5 {
+            assert_eq!(table.lookup(i), None);
+        }
+
+        // Set some entries
+        table.set(0, 10);
+        table.set(2, 20);
+        table.set(4, 40);
+
+        // Verify lookup works
+        assert_eq!(table.lookup(0), Some(10));
+        assert_eq!(table.lookup(1), None); // Hole
+        assert_eq!(table.lookup(2), Some(20));
+        assert_eq!(table.lookup(3), None); // Hole
+        assert_eq!(table.lookup(4), Some(40));
+    }
+
+    #[test]
+    fn jump_table_out_of_range_returns_none() {
+        let mut table = JumpTableData::new(5, 10);
+        table.set(5, 50);
+        table.set(10, 100);
+
+        // Values below min return None
+        assert_eq!(table.lookup(4), None);
+        assert_eq!(table.lookup(0), None);
+        assert_eq!(table.lookup(-1), None);
+
+        // Values above max return None
+        assert_eq!(table.lookup(11), None);
+        assert_eq!(table.lookup(100), None);
+
+        // Values in range work
+        assert_eq!(table.lookup(5), Some(50));
+        assert_eq!(table.lookup(10), Some(100));
+    }
+
+    #[test]
+    fn jump_table_negative_values() {
+        let mut table = JumpTableData::new(-3, 3);
+        table.set(-3, -30);
+        table.set(-1, -10);
+        table.set(0, 0);
+        table.set(2, 20);
+        table.set(3, 30);
+
+        assert_eq!(table.lookup(-3), Some(-30));
+        assert_eq!(table.lookup(-2), None); // Hole
+        assert_eq!(table.lookup(-1), Some(-10));
+        assert_eq!(table.lookup(0), Some(0));
+        assert_eq!(table.lookup(1), None); // Hole
+        assert_eq!(table.lookup(2), Some(20));
+        assert_eq!(table.lookup(3), Some(30));
+
+        // Out of range
+        assert_eq!(table.lookup(-4), None);
+        assert_eq!(table.lookup(4), None);
+    }
+
+    #[test]
+    fn jump_table_single_value() {
+        let mut table = JumpTableData::new(42, 42);
+        assert_eq!(table.offsets.len(), 1);
+
+        table.set(42, 100);
+        assert_eq!(table.lookup(42), Some(100));
+        assert_eq!(table.lookup(41), None);
+        assert_eq!(table.lookup(43), None);
+    }
+
+    #[test]
+    fn jump_table_set_out_of_range_ignored() {
+        let mut table = JumpTableData::new(0, 2);
+        table.set(0, 10);
+        table.set(5, 50); // Out of range, should be ignored
+        table.set(-1, -10); // Out of range, should be ignored
+
+        assert_eq!(table.lookup(0), Some(10));
+        assert_eq!(table.lookup(1), None);
+        assert_eq!(table.lookup(2), None);
+    }
+
+    // ========================================================================
+    // Instruction Display Tests
+    // ========================================================================
+
+    #[test]
+    fn instruction_display_jump_table() {
+        let inst = Instruction::JumpTable {
+            table_idx: 0,
+            default: 10,
+        };
+        assert_eq!(format!("{inst}"), "JUMP_TABLE 0, +10");
+
+        let inst = Instruction::JumpTable {
+            table_idx: 3,
+            default: -5,
+        };
+        assert_eq!(format!("{inst}"), "JUMP_TABLE 3, -5");
+    }
+
+    #[test]
+    fn instruction_display_discriminant() {
+        let inst = Instruction::Discriminant;
+        assert_eq!(format!("{inst}"), "DISCRIMINANT");
+    }
+
+    #[test]
+    fn instruction_display_type_tag() {
+        let inst = Instruction::TypeTag;
+        assert_eq!(format!("{inst}"), "TYPE_TAG");
     }
 }

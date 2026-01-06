@@ -335,4 +335,7 @@ pub enum Instruction {
     NotifyBlock(usize),
     VizEnter(usize),
     VizExit(usize),
+    JumpTable { table_idx: usize, default: isize },
+    Discriminant,
+    TypeTag,
 }

@@ -852,6 +852,26 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // Create join block
                 let join_block = self.builder.create_block();
 
+                // Try switch optimization for integer literal patterns
+                // This enables jump table or binary search codegen
+                if let Some((switch_values, wildcard_arm_idx)) =
+                    self.try_extract_switch_arms(arms, body)
+                {
+                    self.lower_match_as_switch(
+                        scrutinee_local,
+                        &scrutinee_ty,
+                        arms,
+                        switch_values,
+                        wildcard_arm_idx,
+                        join_block,
+                        dest,
+                        body,
+                    );
+                    return;
+                }
+
+                // Fall back to if-else chain lowering for complex patterns
+
                 // For exhaustive matches, the last arm's failure path is unreachable.
                 // We create a single unreachable block to use as that target, avoiding
                 // the creation of an empty fallthrough block that would need to be emitted.
@@ -949,6 +969,147 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             }
         }
+    }
+
+    /// Try to extract integer literal values from arms for switch optimization.
+    ///
+    /// Returns Some(vec of (value, `arm_index`)) if all non-wildcard arms are integer literals
+    /// without guards, and there's at most one wildcard arm at the end.
+    /// Returns None if the match cannot be optimized as a switch.
+    #[allow(clippy::unused_self, clippy::type_complexity)]
+    fn try_extract_switch_arms(
+        &self,
+        arms: &[baml_vir::MatchArm],
+        body: &ExprBody,
+    ) -> Option<(Vec<(i64, usize)>, Option<usize>)> {
+        let mut switch_arms = Vec::new();
+        let mut wildcard_arm = None;
+
+        for (i, arm) in arms.iter().enumerate() {
+            // Guards prevent switch optimization (need runtime evaluation)
+            if arm.guard.is_some() {
+                return None;
+            }
+
+            let pat = body.pattern(arm.pattern);
+            match pat {
+                Pattern::Literal(Literal::Int(value)) => {
+                    // Simple integer literal - can be part of switch
+                    switch_arms.push((*value, i));
+                }
+                Pattern::Binding(name) => {
+                    // Wildcard/binding pattern - must be the last arm
+                    if name.as_str() == "_" || i == arms.len() - 1 {
+                        if wildcard_arm.is_some() {
+                            // Multiple wildcards - can't optimize
+                            return None;
+                        }
+                        wildcard_arm = Some(i);
+                    } else {
+                        // Binding in the middle - can't optimize as pure switch
+                        return None;
+                    }
+                }
+                Pattern::Union(sub_pats) => {
+                    // Union of integer literals - extract each value
+                    for sub_pat_id in sub_pats {
+                        let sub_pat = body.pattern(*sub_pat_id);
+                        match sub_pat {
+                            Pattern::Literal(Literal::Int(value)) => {
+                                switch_arms.push((*value, i));
+                            }
+                            _ => return None, // Non-integer in union
+                        }
+                    }
+                }
+                _ => {
+                    // Non-integer pattern (typed binding, enum, etc.) - can't optimize
+                    return None;
+                }
+            }
+        }
+
+        // Need at least one integer arm for switch optimization
+        if switch_arms.is_empty() {
+            return None;
+        }
+
+        Some((switch_arms, wildcard_arm))
+    }
+
+    /// Lower a match expression as a Switch terminator.
+    ///
+    /// This emits a single Switch instruction with all integer arms,
+    /// enabling jump table or binary search optimization in the codegen.
+    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+    fn lower_match_as_switch(
+        &mut self,
+        scrutinee_local: Local,
+        scrutinee_ty: &Ty,
+        arms: &[baml_vir::MatchArm],
+        switch_values: Vec<(i64, usize)>,
+        wildcard_arm_idx: Option<usize>,
+        join_block: BlockId,
+        dest: Place,
+        body: &ExprBody,
+    ) {
+        // Create body blocks for each arm
+        let arm_blocks: Vec<BlockId> = arms.iter().map(|_| self.builder.create_block()).collect();
+
+        // Create otherwise block (for values not in switch arms)
+        let otherwise_block = if let Some(idx) = wildcard_arm_idx {
+            arm_blocks[idx]
+        } else {
+            // No wildcard - create unreachable block
+            let saved_block = self.builder.current_block();
+            let block = self.builder.create_block();
+            self.builder.set_current_block(block);
+            self.builder.unreachable();
+            self.builder.set_current_block(saved_block);
+            block
+        };
+
+        // Build switch arms: (value, target block)
+        let switch_arms: Vec<(i64, BlockId)> = switch_values
+            .iter()
+            .map(|(value, arm_idx)| (*value, arm_blocks[*arm_idx]))
+            .collect();
+
+        // Emit the switch terminator
+        self.builder.switch(
+            Operand::copy_local(scrutinee_local),
+            switch_arms,
+            otherwise_block,
+        );
+
+        // Lower each arm's body
+        for (i, arm) in arms.iter().enumerate() {
+            self.builder.set_current_block(arm_blocks[i]);
+
+            // If this is a binding arm (wildcard), bind the variable
+            let pat = body.pattern(arm.pattern);
+            if let Pattern::Binding(name) = pat {
+                if name.as_str() != "_" {
+                    let local = self.builder.declare_local(
+                        Some(name.clone()),
+                        scrutinee_ty.clone(),
+                        None,
+                        false,
+                    );
+                    self.builder.assign(
+                        Place::local(local),
+                        Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                    );
+                    self.locals.insert(name.clone(), local);
+                }
+            }
+
+            // Lower the arm body
+            self.lower_expr(arm.body, dest.clone(), body);
+            self.builder.goto(join_block);
+        }
+
+        self.builder.set_current_block(join_block);
     }
 
     /// Lower a pattern match test, branching to `success_block` if the pattern matches,

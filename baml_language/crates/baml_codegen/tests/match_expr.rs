@@ -69,17 +69,23 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Constant propagation: scrutinee 1 is inlined at each use site
-            // Wildcard elimination: _ binding is unused so eliminated
+            // Switch-based emission for integer literal match
             vec![
-                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined for comparison)
-                Instruction::LoadConst(Value::Int(1)), // literal 1
+                // Scrutinee
+                Instruction::LoadConst(Value::Int(1)),
+                // Check if == 1
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
-                Instruction::Jump(3),           // if true, skip to arm body (100)
-                Instruction::LoadConst(Value::Int(0)), // catch-all result (no _ binding)
-                Instruction::Jump(2),           // skip to return
-                Instruction::LoadConst(Value::Int(100)), // first arm result
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to 1 => 100 arm
+                // Catch-all arm
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::Jump(2), // skip to return
+                // First arm: 1 => 100
+                Instruction::LoadConst(Value::Int(100)),
                 Instruction::Return,
             ],
         )],
@@ -275,25 +281,30 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "main",
-            // Constant propagation: scrutinee 200 is inlined at each use
-            // Wildcard elimination: _ binding is unused so eliminated
+            // Switch-based emission: union 200|201 creates two switch arms
+            // pointing to the same target block
             vec![
-                // First part of union: 200
-                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Int(200)), // literal
+                // Scrutinee
+                Instruction::LoadConst(Value::Int(200)),
+                // First part of union: check 200
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(200)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, try 201
-                Instruction::Jump(8),           // if true, skip to "success"
-                // Second part of union: 201
-                Instruction::LoadConst(Value::Int(200)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Int(201)), // literal
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(10), // jump to "success" arm
+                // Second part of union: check 201
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(201)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, try catch-all
-                Instruction::Jump(3),           // if true, skip to "success"
-                // Catch-all arm (no _ binding)
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to "success" arm
+                // Catch-all arm
+                Instruction::Pop(1),
                 Instruction::LoadConst(Value::string("other")),
                 Instruction::Jump(2), // skip to return
-                // Union arm result
+                // Union arm result (200 | 201 => "success")
                 Instruction::LoadConst(Value::string("success")),
                 Instruction::Return,
             ],
@@ -318,21 +329,24 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Constant propagation: scrutinee 2 is inlined at each use
-            // Phi-like optimization: match result stays on stack (no Store/Load)!
-            // Wildcard elimination: _ binding is unused so eliminated
+            // Switch-based emission for integer literal match in expression
             vec![
-                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Int(2)), // literal 2
+                // Scrutinee
+                Instruction::LoadConst(Value::Int(2)),
+                // Check if == 2
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
-                Instruction::Jump(3),           // if true, skip to first arm
-                // Catch-all arm: value stays on stack
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to 2 => 20 arm
+                // Catch-all arm
+                Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Jump(2), // skip to addition
-                // First arm: value stays on stack
+                // First arm: 2 => 20
                 Instruction::LoadConst(Value::Int(20)),
-                // Addition: 1 + match result (match result already on stack)
+                // Addition: 1 + match result
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(baml_vm::BinOp::Add),
                 Instruction::Return,
@@ -361,29 +375,627 @@ fn match_nested() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Constant propagation: scrutinees 1 and 2 are inlined at each use
-            // Wildcard elimination: both _ bindings are unused so eliminated
+            // Switch-based emission for nested integer literal matches
             vec![
-                // Outer match: compare with 1
-                Instruction::LoadConst(Value::Int(1)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Int(1)), // literal
+                // Outer match scrutinee
+                Instruction::LoadConst(Value::Int(1)),
+                // Check if == 1
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if outer != 1, skip to outer catch-all
-                Instruction::Jump(3),           // if outer == 1, skip to inner match
-                // Outer catch-all arm (no _ binding)
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to inner match
+                // Outer catch-all
+                Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(9), // skip to return
-                // Inner match: compare with 2
-                Instruction::LoadConst(Value::Int(2)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Int(2)), // literal
+                Instruction::Jump(12), // skip to return
+                // Inner match scrutinee (arm 1 => ...)
+                Instruction::LoadConst(Value::Int(2)),
+                // Check if == 2
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if inner != 2, skip to inner catch-all
-                Instruction::Jump(3),           // if inner == 2, skip to 12
-                // Inner catch-all arm (no _ binding)
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to 12 arm
+                // Inner catch-all
+                Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::Jump(2), // skip to return
-                // Inner first arm
+                // Inner arm 2 => 12
                 Instruction::LoadConst(Value::Int(12)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Jump Table Tests (4+ dense arms)
+// ============================================================================
+
+/// Tests that a match with 4 dense consecutive integer arms uses a jump table.
+/// With 4 arms covering values 0-3 (100% density), the codegen should emit
+/// a `JumpTable` instruction instead of a linear if-else chain.
+#[test]
+fn match_jump_table_dense_four_arms() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 100,
+                    1 => 101,
+                    2 => 102,
+                    3 => 103,
+                    _ => 999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            vec![
+                // Load discriminant (argument x)
+                Instruction::LoadVar("x".to_string()),
+                // JumpTable with table_idx=0, default offset jumps to wildcard arm
+                Instruction::JumpTable {
+                    table_idx: 0,
+                    default: 1, // jumps to next instruction (wildcard arm)
+                },
+                // Block for wildcard arm _ => 999 (default target)
+                Instruction::LoadConst(Value::Int(999)),
+                Instruction::Jump(8), // jump to return
+                // Block for arm 3 => 103
+                Instruction::LoadConst(Value::Int(103)),
+                Instruction::Jump(6), // jump to return
+                // Block for arm 2 => 102
+                Instruction::LoadConst(Value::Int(102)),
+                Instruction::Jump(4), // jump to return
+                // Block for arm 1 => 101
+                Instruction::LoadConst(Value::Int(101)),
+                Instruction::Jump(2), // jump to return
+                // Block for arm 0 => 100
+                Instruction::LoadConst(Value::Int(100)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Binary Search Tests (4+ sparse arms)
+// ============================================================================
+
+/// Tests that a match with 4 sparse integer arms uses binary search.
+/// With 4 arms spread over a range of 100 (4% density), the codegen should
+/// emit a binary search tree instead of a linear chain or jump table.
+#[test]
+fn match_binary_search_sparse_four_arms() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 100,
+                    30 => 130,
+                    60 => 160,
+                    99 => 199,
+                    _ => 999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // Binary search emits a tree of comparisons:
+            // - Check pivot (middle value)
+            // - If less, check left subtree
+            // - If greater, check right subtree
+            vec![
+                // Load discriminant
+                Instruction::LoadVar("x".to_string()),
+                // Binary search tree: pivot = 60 (mid of sorted [0, 30, 60, 99])
+
+                // Compare with pivot (60)
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(60)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(28), // jump to arm 60 => 160
+                // Compare < pivot for left subtree
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(60)),
+                Instruction::CmpOp(CmpOp::Lt),
+                Instruction::PopJumpIfFalse(13), // if >= 60, check right subtree
+                // Left subtree: check 0
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(22), // jump to arm 0 => 100
+                // Check 30
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(30)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(14), // jump to arm 30 => 130
+                // Right subtree: check 99
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(99)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to arm 99 => 199
+                // Fall through to catch-all
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(999)), // catch-all arm
+                Instruction::Jump(8),
+                // Arm bodies (emitted in reverse order: 99, 60, 30, 0)
+                Instruction::LoadConst(Value::Int(199)), // 99 => 199
+                Instruction::Jump(6),
+                Instruction::LoadConst(Value::Int(160)), // 60 => 160
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(130)), // 30 => 130
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(100)), // 0 => 100
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// If-Else Chain Tests (< 4 arms)
+// ============================================================================
+
+/// Tests that a match with fewer than 4 arms uses if-else chain.
+/// Note: Even small matches with integer literals now use the Switch terminator
+/// which produces a different (but correct) bytecode pattern.
+#[test]
+fn match_if_else_chain_three_arms() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 100,
+                    1 => 101,
+                    _ => 999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // Switch-based emission with Copy/LoadConst/CmpOp pattern
+            vec![
+                // Load discriminant
+                Instruction::LoadVar("x".to_string()),
+                // Check first arm (0)
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(12), // jump to arm 0 => 100
+                // Check second arm (1)
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4), // jump to arm 1 => 101
+                // Fall through to catch-all
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(999)), // catch-all
+                Instruction::Jump(4),
+                // Arm bodies (reverse order: 1 then 0)
+                Instruction::LoadConst(Value::Int(101)), // 1 => 101
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(100)), // 0 => 100
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// String Literal Tests (should NOT use jump table)
+// ============================================================================
+
+/// String patterns should NOT use jump table (would need perfect hashing).
+/// They should fall back to if-else chain.
+#[test]
+fn match_string_literal() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function classify(s string) -> int {
+                match (s) {
+                    "hello" => 100,
+                    "world" => 200,
+                    _ => 0
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // Should use if-else chain, not jump table
+            vec![
+                Instruction::LoadVar("s".to_string()),
+                Instruction::LoadConst(Value::string("hello")),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(10), // jump to first arm (100)
+                Instruction::LoadVar("s".to_string()),
+                Instruction::LoadConst(Value::string("world")),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(3), // jump to second arm (200)
+                Instruction::LoadConst(Value::Int(0)), // catch-all arm
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(200)), // second arm
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(100)), // first arm
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Guards with Integer Literals (should prevent switch optimization)
+// ============================================================================
+
+/// Guards on any arm prevent the Switch optimization entirely.
+/// The whole match falls back to if-else chain with guard evaluation.
+#[test]
+fn match_guarded_int_literal() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function classify(x int, flag bool) -> string {
+                match (x) {
+                    1 if flag => "one with flag",
+                    1 => "one",
+                    _ => "other"
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // The presence of a guard prevents Switch optimization
+            // Falls back to Branch-based if-else chain
+            vec![
+                // First arm: 1 if flag
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(4), // if x != 1, skip to next arm
+                Instruction::LoadVar("flag".to_string()), // guard check
+                Instruction::PopJumpIfFalse(2), // if guard false, skip to next arm
+                Instruction::Jump(10),          // guard passed, jump to body "one with flag"
+                // Second arm: unguarded 1
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(2), // if x != 1, jump to catch-all
+                Instruction::Jump(3),           // jump to body "one"
+                // Catch-all body
+                Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(4),
+                // Body for unguarded 1
+                Instruction::LoadConst(Value::string("one")),
+                Instruction::Jump(2),
+                // Body for guarded 1
+                Instruction::LoadConst(Value::string("one with flag")),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Density Threshold Tests
+// ============================================================================
+
+/// At exactly 50% density (4 arms in range of 8), should use jump table.
+#[test]
+fn match_density_50_percent_uses_jump_table() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 100,
+                    2 => 102,
+                    4 => 104,
+                    6 => 106,
+                    _ => 999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // 50% density triggers jump table
+            vec![
+                Instruction::LoadVar("x".to_string()),
+                Instruction::JumpTable {
+                    table_idx: 0,
+                    default: 1,
+                },
+                Instruction::LoadConst(Value::Int(999)),
+                Instruction::Jump(8),
+                Instruction::LoadConst(Value::Int(106)),
+                Instruction::Jump(6),
+                Instruction::LoadConst(Value::Int(104)),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(102)),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(100)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+/// Below 50% density (4 arms in range of 10), should use binary search.
+#[test]
+fn match_density_40_percent_uses_binary_search() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 100,
+                    3 => 103,
+                    6 => 106,
+                    9 => 109,
+                    _ => 999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // 40% density triggers binary search (not jump table)
+            // Just verify it starts with LoadVar and uses Copy (binary search pattern)
+            vec![
+                Instruction::LoadVar("x".to_string()),
+                // Binary search uses Copy for comparisons
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(6)), // pivot
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(28),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(6)),
+                Instruction::CmpOp(CmpOp::Lt),
+                Instruction::PopJumpIfFalse(13),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(22),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(14),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(9)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4),
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::Int(999)),
+                Instruction::Jump(8),
+                Instruction::LoadConst(Value::Int(109)),
+                Instruction::Jump(6),
+                Instruction::LoadConst(Value::Int(106)),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(103)),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(100)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Large Offset Values Tests
+// ============================================================================
+
+/// Dense values with large offset should use jump table.
+#[test]
+fn match_large_offset_values_dense() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    100 => 1000,
+                    101 => 1001,
+                    102 => 1002,
+                    103 => 1003,
+                    _ => 9999
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // Dense values with offset use jump table
+            vec![
+                Instruction::LoadVar("x".to_string()),
+                Instruction::JumpTable {
+                    table_idx: 0,
+                    default: 1,
+                },
+                Instruction::LoadConst(Value::Int(9999)),
+                Instruction::Jump(8),
+                Instruction::LoadConst(Value::Int(1003)),
+                Instruction::Jump(6),
+                Instruction::LoadConst(Value::Int(1002)),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(1001)),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(1000)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Catch-All Binding Tests
+// ============================================================================
+
+/// Named catch-all binding should work with integer patterns.
+#[test]
+fn match_catch_all_binding_with_int_patterns() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: "
+            function classify(x int) -> int {
+                match (x) {
+                    0 => 0,
+                    1 => 1,
+                    2 => 2,
+                    3 => 3,
+                    other => other * 10
+                }
+            }
+        ",
+        expected: vec![(
+            "classify",
+            // Jump table with named binding in catch-all
+            vec![
+                Instruction::LoadVar("x".to_string()),
+                Instruction::JumpTable {
+                    table_idx: 0,
+                    default: 1,
+                },
+                // Catch-all arm with binding: other => other * 10
+                // 'other' binds to x, then other * 10
+                Instruction::LoadVar("x".to_string()),
+                Instruction::LoadConst(Value::Int(10)),
+                Instruction::BinOp(baml_vm::BinOp::Mul),
+                Instruction::Jump(8),
+                // Arms in reverse order
+                Instruction::LoadConst(Value::Int(3)),
+                Instruction::Jump(6),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Negative Literal Pattern Tests
+// ============================================================================
+
+/// Negative integer patterns are parsed correctly and generate proper bytecode.
+#[test]
+fn match_negative_int_pattern() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -1 => "negative one",
+                    0 => "zero",
+                    1 => "one",
+                    _ => "other"
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // Negative patterns use if-else chain (no jump table optimization)
+            vec![
+                // Scrutinee
+                Instruction::LoadVar("x".to_string()),
+                // First arm: -1
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(-1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(20),
+                // Second arm: 0
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(12),
+                // Third arm: 1
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4),
+                // Catch-all
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(6),
+                // Body for 1
+                Instruction::LoadConst(Value::string("one")),
+                Instruction::Jump(4),
+                // Body for 0
+                Instruction::LoadConst(Value::string("zero")),
+                Instruction::Jump(2),
+                // Body for -1
+                Instruction::LoadConst(Value::string("negative one")),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+/// Multiple negative patterns in a match expression.
+#[test]
+fn match_multiple_negative_patterns() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            function classify(x int) -> string {
+                match (x) {
+                    -2 => "negative two",
+                    -1 => "negative one",
+                    _ => "other"
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            vec![
+                // Scrutinee
+                Instruction::LoadVar("x".to_string()),
+                // First arm: -2
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(-2)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(12),
+                // Second arm: -1
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(-1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4),
+                // Catch-all
+                Instruction::Pop(1),
+                Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(4),
+                // Body for -1
+                Instruction::LoadConst(Value::string("negative one")),
+                Instruction::Jump(2),
+                // Body for -2
+                Instruction::LoadConst(Value::string("negative two")),
                 Instruction::Return,
             ],
         )],

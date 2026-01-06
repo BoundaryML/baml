@@ -8,6 +8,43 @@ use crate::{
     indexable::{GlobalPool, ObjectIndex, ObjectPool},
 };
 
+// ============================================================================
+// Type Tags for Jump Table Dispatch
+// ============================================================================
+
+/// Global type tag constants for runtime type identification.
+///
+/// These are used by the `TypeTag` instruction to extract a type identifier
+/// from any value for jump table dispatch on union types.
+///
+/// Primitives have fixed tags (0-9 reserved), classes start at 100.
+pub mod type_tags {
+    /// Integer type tag.
+    pub const INT: i64 = 0;
+    /// String type tag.
+    pub const STRING: i64 = 1;
+    /// Boolean type tag.
+    pub const BOOL: i64 = 2;
+    /// Null type tag.
+    pub const NULL: i64 = 3;
+    /// Float type tag.
+    pub const FLOAT: i64 = 4;
+    /// Enum variant type tag (all variants share this).
+    pub const ENUM: i64 = 5;
+    /// List/array type tag.
+    pub const LIST: i64 = 6;
+    /// Map type tag.
+    pub const MAP: i64 = 7;
+    /// Function type tag.
+    pub const FUNCTION: i64 = 8;
+    /// Future type tag.
+    pub const FUTURE: i64 = 9;
+    /// Base value for class type tags (classes start at 100).
+    pub const CLASS_BASE: i64 = 100;
+    /// Unknown/invalid type tag.
+    pub const UNKNOWN: i64 = -1;
+}
+
 /// Compiled program ready for execution.
 ///
 /// This is what `baml_codegen` produces. It contains all the objects and globals
@@ -22,6 +59,12 @@ pub struct Program {
 
     /// Maps function names to their object indices.
     pub function_indices: HashMap<String, usize>,
+
+    /// Global type tag mapping for classes (assigned during codegen).
+    ///
+    /// Maps class name -> type tag (`CLASS_BASE` + index).
+    /// Used by the `TypeTag` instruction for jump table dispatch on unions.
+    pub class_type_tags: HashMap<String, i64>,
 }
 
 impl Default for Program {
@@ -30,6 +73,7 @@ impl Default for Program {
             objects: ObjectPool::new(),
             globals: GlobalPool::new(),
             function_indices: HashMap::new(),
+            class_type_tags: HashMap::new(),
         }
     }
 }
@@ -514,5 +558,99 @@ impl From<&Future> for FutureType {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // Type Tags Tests
+    // ========================================================================
+
+    #[test]
+    fn type_tags_are_distinct() {
+        // Ensure all primitive type tags are unique
+        let tags = [
+            type_tags::INT,
+            type_tags::STRING,
+            type_tags::BOOL,
+            type_tags::NULL,
+            type_tags::FLOAT,
+            type_tags::ENUM,
+            type_tags::LIST,
+            type_tags::MAP,
+            type_tags::FUNCTION,
+            type_tags::FUTURE,
+        ];
+
+        // Check no duplicates
+        for i in 0..tags.len() {
+            for j in (i + 1)..tags.len() {
+                assert_ne!(
+                    tags[i], tags[j],
+                    "Type tags at indices {i} and {j} should be different"
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn type_tags_primitive_range() {
+        // Primitives should be in 0-9 range
+        assert!(type_tags::INT >= 0 && type_tags::INT < 10);
+        assert!(type_tags::STRING >= 0 && type_tags::STRING < 10);
+        assert!(type_tags::BOOL >= 0 && type_tags::BOOL < 10);
+        assert!(type_tags::NULL >= 0 && type_tags::NULL < 10);
+        assert!(type_tags::FLOAT >= 0 && type_tags::FLOAT < 10);
+        assert!(type_tags::ENUM >= 0 && type_tags::ENUM < 10);
+        assert!(type_tags::LIST >= 0 && type_tags::LIST < 10);
+        assert!(type_tags::MAP >= 0 && type_tags::MAP < 10);
+        assert!(type_tags::FUNCTION >= 0 && type_tags::FUNCTION < 10);
+        assert!(type_tags::FUTURE >= 0 && type_tags::FUTURE < 10);
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn type_tags_class_base_above_primitives() {
+        // Class base should be above all primitive tags
+        assert!(type_tags::CLASS_BASE > type_tags::INT);
+        assert!(type_tags::CLASS_BASE > type_tags::STRING);
+        assert!(type_tags::CLASS_BASE > type_tags::BOOL);
+        assert!(type_tags::CLASS_BASE > type_tags::NULL);
+        assert!(type_tags::CLASS_BASE > type_tags::FLOAT);
+        assert!(type_tags::CLASS_BASE > type_tags::ENUM);
+        assert!(type_tags::CLASS_BASE > type_tags::LIST);
+        assert!(type_tags::CLASS_BASE > type_tags::MAP);
+        assert!(type_tags::CLASS_BASE > type_tags::FUNCTION);
+        assert!(type_tags::CLASS_BASE > type_tags::FUTURE);
+
+        // Class base should be 100
+        assert_eq!(type_tags::CLASS_BASE, 100);
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn type_tags_unknown_is_negative() {
+        // Unknown should be negative to distinguish from valid tags
+        assert!(type_tags::UNKNOWN < 0);
+        assert_eq!(type_tags::UNKNOWN, -1);
+    }
+
+    #[test]
+    fn type_tags_expected_values() {
+        // Verify the exact values match the documentation
+        assert_eq!(type_tags::INT, 0);
+        assert_eq!(type_tags::STRING, 1);
+        assert_eq!(type_tags::BOOL, 2);
+        assert_eq!(type_tags::NULL, 3);
+        assert_eq!(type_tags::FLOAT, 4);
+        assert_eq!(type_tags::ENUM, 5);
+        assert_eq!(type_tags::LIST, 6);
+        assert_eq!(type_tags::MAP, 7);
+        assert_eq!(type_tags::FUNCTION, 8);
+        assert_eq!(type_tags::FUTURE, 9);
     }
 }

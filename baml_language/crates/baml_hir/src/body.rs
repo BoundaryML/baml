@@ -1003,6 +1003,8 @@ impl LoweringContext {
         // We need to handle both cases, similar to lower_binary_expr.
         let mut op = None;
         let mut operand = None;
+        // Track double operators like -- and ++ which need special handling
+        let mut double_op = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1016,6 +1018,17 @@ impl LoweringContext {
                         // Operators
                         SyntaxKind::NOT => op = Some(UnaryOp::Not),
                         SyntaxKind::MINUS => op = Some(UnaryOp::Neg),
+                        // Double operators: -- is double negation, ++ is double... nothing useful
+                        // but we handle it for consistency
+                        SyntaxKind::MINUS_MINUS => {
+                            op = Some(UnaryOp::Neg);
+                            double_op = true;
+                        }
+                        SyntaxKind::PLUS_PLUS => {
+                            // ++x in this context just returns x (no-op for values)
+                            // We'll treat it as identity by not setting any op
+                            // Actually, let's just skip it - operand will be returned as-is
+                        }
 
                         // Literals and identifiers - convert to expressions
                         SyntaxKind::INTEGER_LITERAL => {
@@ -1047,10 +1060,22 @@ impl LoweringContext {
             }
         }
 
-        let op = op.unwrap_or(UnaryOp::Not);
         let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
-        self.alloc_expr(Expr::Unary { op, expr }, node.text_range())
+        // If no operator was set (e.g., ++x), just return the operand
+        let Some(op) = op else {
+            return expr;
+        };
+
+        // Create the first unary expression
+        let result = self.alloc_expr(Expr::Unary { op, expr }, node.text_range());
+
+        // For double operators like --, wrap in another unary operation
+        if double_op {
+            self.alloc_expr(Expr::Unary { op, expr: result }, node.text_range())
+        } else {
+            result
+        }
     }
 
     fn lower_if_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
@@ -1201,7 +1226,49 @@ impl LoweringContext {
                         }
                         SyntaxKind::MATCH_GUARD => {
                             // MATCH_GUARD contains: KW_IF, then the guard expression
-                            guard = child.children().next().map(|n| self.lower_expr(&n));
+                            // The guard expression can be either:
+                            // 1. A child node (for complex expressions like `a && b`)
+                            // 2. A token (for simple identifiers like `flag`)
+                            if let Some(expr_node) = child.children().next() {
+                                guard = Some(self.lower_expr(&expr_node));
+                            } else {
+                                // No child node - look for tokens after KW_IF
+                                for tok in child.children_with_tokens() {
+                                    if let rowan::NodeOrToken::Token(t) = tok {
+                                        match t.kind() {
+                                            SyntaxKind::KW_IF => continue, // skip the 'if' keyword
+                                            SyntaxKind::WORD => {
+                                                let text = t.text();
+                                                let expr = match text {
+                                                    "true" => self
+                                                        .exprs
+                                                        .alloc(Expr::Literal(Literal::Bool(true))),
+                                                    "false" => self
+                                                        .exprs
+                                                        .alloc(Expr::Literal(Literal::Bool(false))),
+                                                    "null" => self
+                                                        .exprs
+                                                        .alloc(Expr::Literal(Literal::Null)),
+                                                    _ => self
+                                                        .exprs
+                                                        .alloc(Expr::Path(vec![Name::new(text)])),
+                                                };
+                                                guard = Some(expr);
+                                                break;
+                                            }
+                                            SyntaxKind::INTEGER_LITERAL => {
+                                                let value = t.text().parse::<i64>().unwrap_or(0);
+                                                guard = Some(
+                                                    self.exprs
+                                                        .alloc(Expr::Literal(Literal::Int(value))),
+                                                );
+                                                break;
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                            }
                         }
                         // Handle string literals as nodes (parser wraps them)
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
@@ -1296,6 +1363,8 @@ impl LoweringContext {
         // Collect pattern elements separated by PIPE
         let mut elements: Vec<PatId> = Vec::new();
         let mut current_element: Option<PatternElement> = None;
+        // Track if we've seen a minus sign that should negate the next numeric literal
+        let mut pending_negation = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1369,11 +1438,19 @@ impl LoweringContext {
                                 current_element = Some(PatternElement::TypedBindingStart(name));
                             }
                         }
+                        SyntaxKind::MINUS => {
+                            // Track negation for the next numeric literal
+                            pending_negation = true;
+                        }
                         SyntaxKind::INTEGER_LITERAL => {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
-                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            let mut value = token.text().parse::<i64>().unwrap_or(0);
+                            if pending_negation {
+                                value = -value;
+                                pending_negation = false;
+                            }
                             elements
                                 .push(self.patterns.alloc(Pattern::Literal(Literal::Int(value))));
                         }
@@ -1382,6 +1459,12 @@ impl LoweringContext {
                                 elements.push(self.finalize_pattern_element(el));
                             }
                             let text = token.text().to_string();
+                            let text = if pending_negation {
+                                pending_negation = false;
+                                format!("-{text}")
+                            } else {
+                                text
+                            };
                             elements
                                 .push(self.patterns.alloc(Pattern::Literal(Literal::Float(text))));
                         }
@@ -1407,6 +1490,28 @@ impl LoweringContext {
                 }
                 rowan::NodeOrToken::Node(child_node) => {
                     match child_node.kind() {
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                            // Handle string literals as nodes (parser wraps them in nodes)
+                            if let Some(el) = current_element.take() {
+                                elements.push(self.finalize_pattern_element(el));
+                            }
+                            // Extract the string content from the node
+                            // Trim whitespace trivia first, then remove quotes
+                            let text = child_node.text().to_string();
+                            let trimmed = text.trim();
+                            let content = if trimmed.starts_with("#\"") && trimmed.ends_with("\"#")
+                            {
+                                trimmed[2..trimmed.len() - 2].to_string()
+                            } else if trimmed.starts_with('"') && trimmed.ends_with('"') {
+                                trimmed[1..trimmed.len() - 1].to_string()
+                            } else {
+                                trimmed.to_string()
+                            };
+                            elements.push(
+                                self.patterns
+                                    .alloc(Pattern::Literal(Literal::String(content))),
+                            );
+                        }
                         SyntaxKind::TYPE_EXPR => {
                             // Complete typed binding: ident: Type
                             if let Some(PatternElement::TypedBindingStart(name)) =

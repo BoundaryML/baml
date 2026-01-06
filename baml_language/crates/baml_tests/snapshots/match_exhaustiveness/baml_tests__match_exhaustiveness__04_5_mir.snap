@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1e9ee45736f74339/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -8,21 +8,10 @@ fn NestedLiteralUnions(code: Int) -> String {
     let _0: String // return
     let _1: Int // code // param
     let _2: Int
-    let _3: Bool
-    let _4: Bool
-    let _5: Bool
-    let _6: Bool
-    let _7: Bool
-    let _8: Bool
-    let _9: Bool
-    let _10: Bool
-    let _11: Bool
-    let _12: Int // _
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb4, bb6];
+        switch copy _2 [200: bb3, 201: bb3, 202: bb3, 204: bb3, 400: bb4, 404: bb4, 405: bb4, 406: bb4, 409: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -34,65 +23,16 @@ fn NestedLiteralUnions(code: Int) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "success";
         goto -> bb2;
     }
 
-    bb5: {
-        _7 = copy _2 == const 400_i64;
-        branch copy _7 -> [bb9, bb11];
-    }
-
-    bb6: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb4, bb7];
-    }
-
-    bb7: {
-        _5 = copy _2 == const 202_i64;
-        branch copy _5 -> [bb4, bb8];
-    }
-
-    bb8: {
-        _6 = copy _2 == const 204_i64;
-        branch copy _6 -> [bb4, bb5];
-    }
-
-    bb9: {
+    bb4: {
         _0 = const "client error";
         goto -> bb2;
     }
 
-    bb10: {
-        _12 = copy _2;
-        goto -> bb15;
-    }
-
-    bb11: {
-        _8 = copy _2 == const 404_i64;
-        branch copy _8 -> [bb9, bb12];
-    }
-
-    bb12: {
-        _9 = copy _2 == const 405_i64;
-        branch copy _9 -> [bb9, bb13];
-    }
-
-    bb13: {
-        _10 = copy _2 == const 406_i64;
-        branch copy _10 -> [bb9, bb14];
-    }
-
-    bb14: {
-        _11 = copy _2 == const 409_i64;
-        branch copy _11 -> [bb9, bb10];
-    }
-
-    bb15: {
+    bb5: {
         _0 = const "other";
         goto -> bb2;
     }
@@ -250,12 +190,10 @@ fn WrongLiteralTypeBoolWithInt(b: Bool) -> String {
     let _0: String // return
     let _1: Bool // b // param
     let _2: Bool
-    let _3: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 42_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [42: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -272,7 +210,7 @@ fn WrongLiteralTypeBoolWithInt(b: Bool) -> String {
     }
 
     bb4: {
-        goto -> bb2;
+        unreachable;
     }
 
 }
@@ -713,16 +651,10 @@ fn LiteralUnionWithCatchAll(code: Int) -> String {
     let _0: String // return
     let _1: Int // code // param
     let _2: Int
-    let _3: Bool
-    let _4: Bool
-    let _5: Bool
-    let _6: Bool
-    let _7: Int // _
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb4, bb6];
+        switch copy _2 [200: bb3, 201: bb3, 400: bb4, 404: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -734,40 +666,16 @@ fn LiteralUnionWithCatchAll(code: Int) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "success";
         goto -> bb2;
     }
 
-    bb5: {
-        _5 = copy _2 == const 400_i64;
-        branch copy _5 -> [bb7, bb9];
-    }
-
-    bb6: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb4, bb5];
-    }
-
-    bb7: {
+    bb4: {
         _0 = const "client error";
         goto -> bb2;
     }
 
-    bb8: {
-        _7 = copy _2;
-        goto -> bb10;
-    }
-
-    bb9: {
-        _6 = copy _2 == const 404_i64;
-        branch copy _6 -> [bb7, bb8];
-    }
-
-    bb10: {
+    bb5: {
         _0 = const "other";
         goto -> bb2;
     }
@@ -779,14 +687,10 @@ fn ExhaustiveIntLiterals(code: Named("SuccessCode")) -> String {
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
     let _2: Named("SuccessCode")
-    let _3: Bool
-    let _4: Bool
-    let _5: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, 201: bb4, 204: bb5, otherwise: bb6];
     }
 
     bb1: {
@@ -803,27 +707,17 @@ fn ExhaustiveIntLiterals(code: Named("SuccessCode")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb5, bb6];
-    }
-
-    bb5: {
         _0 = const "Created";
         goto -> bb2;
     }
 
-    bb6: {
-        _5 = copy _2 == const 204_i64;
-        branch copy _5 -> [bb7, bb8];
-    }
-
-    bb7: {
+    bb5: {
         _0 = const "No Content";
         goto -> bb2;
     }
 
-    bb8: {
-        goto -> bb2;
+    bb6: {
+        unreachable;
     }
 
 }
@@ -833,14 +727,14 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
     let _0: String // return
     let _1: Named("Role") // role // param
     let _2: Named("Role")
-    let _3: Named("Role") // _
-    let _4: Named("Role") // _
-    let _5: Named("Role") // _
+    let _3: Bool
+    let _4: Bool
+    let _5: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "user";
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb1: {
@@ -852,31 +746,31 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "User";
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+    bb4: {
+        _4 = copy _2 == const "assistant";
+        branch copy _4 -> [bb5, bb6];
     }
 
-    bb6: {
+    bb5: {
         _0 = const "Assistant";
         goto -> bb2;
     }
 
+    bb6: {
+        _5 = copy _2 == const "system";
+        branch copy _5 -> [bb7, bb8];
+    }
+
     bb7: {
-        _5 = copy _2;
-        goto -> bb8;
+        _0 = const "System";
+        goto -> bb2;
     }
 
     bb8: {
-        _0 = const "System";
         goto -> bb2;
     }
 
@@ -938,14 +832,10 @@ fn DuplicateIntLiteral(x: Int) -> String {
     let _0: String // return
     let _1: Int // x // param
     let _2: Int
-    let _3: Bool
-    let _4: Bool
-    let _5: Int // _
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 1_i64;
-        branch copy _3 -> [bb4, bb5];
+        switch copy _2 [1: bb3, 1: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -957,30 +847,16 @@ fn DuplicateIntLiteral(x: Int) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "first one";
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2 == const 1_i64;
-        branch copy _4 -> [bb6, bb7];
-    }
-
-    bb6: {
+    bb4: {
         _0 = const "second one";
         goto -> bb2;
     }
 
-    bb7: {
-        _5 = copy _2;
-        goto -> bb8;
-    }
-
-    bb8: {
+    bb5: {
         _0 = const "other";
         goto -> bb2;
     }
@@ -1224,13 +1100,14 @@ fn StringLiteralUnionPattern(role: Named("Role")) -> String {
     let _0: String // return
     let _1: Named("Role") // role // param
     let _2: Named("Role")
-    let _3: Named("Role") // _
-    let _4: Named("Role") // _
+    let _3: Bool
+    let _4: Bool
+    let _5: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "user";
+        branch copy _3 -> [bb3, bb5];
     }
 
     bb1: {
@@ -1242,21 +1119,26 @@ fn StringLiteralUnionPattern(role: Named("Role")) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "chat participant";
         goto -> bb2;
     }
 
+    bb4: {
+        _5 = copy _2 == const "system";
+        branch copy _5 -> [bb6, bb7];
+    }
+
     bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+        _4 = copy _2 == const "assistant";
+        branch copy _4 -> [bb3, bb4];
     }
 
     bb6: {
         _0 = const "system";
+        goto -> bb2;
+    }
+
+    bb7: {
         goto -> bb2;
     }
 
@@ -1642,14 +1524,10 @@ fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
     let _2: Named("SuccessCode")
-    let _3: Bool
-    let _4: Bool
-    let _5: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb5];
+        switch copy _2 [200: bb3, 201: bb3, 204: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -1666,22 +1544,12 @@ fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
     }
 
     bb4: {
-        _5 = copy _2 == const 204_i64;
-        branch copy _5 -> [bb6, bb7];
-    }
-
-    bb5: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb3, bb4];
-    }
-
-    bb6: {
         _0 = const "no content";
         goto -> bb2;
     }
 
-    bb7: {
-        goto -> bb2;
+    bb5: {
+        unreachable;
     }
 
 }
@@ -1811,13 +1679,13 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     let _1: Named("MixedLiterals") // x // param
     let _2: Named("MixedLiterals")
     let _3: Bool
-    let _4: Named("MixedLiterals") // _
+    let _4: Bool
     let _5: Bool
 
     bb0: {
         _2 = copy _1;
         _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb4, bb5];
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb1: {
@@ -1829,31 +1697,31 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "http ok";
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+    bb4: {
+        _4 = copy _2 == const "success";
+        branch copy _4 -> [bb5, bb6];
     }
 
-    bb6: {
+    bb5: {
         _0 = const "string success";
         goto -> bb2;
     }
 
-    bb7: {
+    bb6: {
         _5 = copy _2 == const true;
-        branch copy _5 -> [bb8, bb3];
+        branch copy _5 -> [bb7, bb8];
+    }
+
+    bb7: {
+        _0 = const "boolean true";
+        goto -> bb2;
     }
 
     bb8: {
-        _0 = const "boolean true";
         goto -> bb2;
     }
 
@@ -1956,13 +1824,10 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     let _5: Bool
     let _6: Bool
     let _7: Bool
-    let _8: Bool
-    let _9: Int // _
 
     bb0: {
         _3 = copy _1;
-        _4 = copy _3 == const 0_i64;
-        branch copy _4 -> [bb4, bb5];
+        switch copy _3 [0: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -1974,56 +1839,47 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
     }
 
     bb3: {
-        unreachable;
+        _4 = copy _2;
+        _5 = copy _4 == const true;
+        branch copy _5 -> [bb7, bb8];
     }
 
     bb4: {
-        _5 = copy _2;
-        _6 = copy _5 == const true;
-        branch copy _6 -> [bb8, bb9];
+        _0 = const "other";
+        goto -> bb2;
     }
 
     bb5: {
-        _9 = copy _3;
-        goto -> bb13;
+        goto -> bb2;
     }
 
     bb6: {
-        goto -> bb2;
-    }
-
-    bb7: {
         unreachable;
     }
 
-    bb8: {
+    bb7: {
         _0 = const "zero true";
-        goto -> bb6;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _6 = copy _4 == const false;
+        branch copy _6 -> [bb9, bb10];
     }
 
     bb9: {
-        _7 = copy _5 == const false;
-        branch copy _7 -> [bb10, bb11];
+        _0 = const "zero false";
+        goto -> bb5;
     }
 
     bb10: {
-        _0 = const "zero false";
-        goto -> bb6;
+        _7 = copy _4 == const true;
+        branch copy _7 -> [bb11, bb6];
     }
 
     bb11: {
-        _8 = copy _5 == const true;
-        branch copy _8 -> [bb12, bb7];
-    }
-
-    bb12: {
         _0 = const "unreachable nested";
-        goto -> bb6;
-    }
-
-    bb13: {
-        _0 = const "other";
-        goto -> bb2;
+        goto -> bb5;
     }
 
 }
@@ -2216,12 +2072,10 @@ fn NonExhaustiveOptionalMissingNull(code: Named("MaybeOk")) -> String {
     let _0: String // return
     let _1: Named("MaybeOk") // code // param
     let _2: Named("MaybeOk")
-    let _3: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2238,7 +2092,7 @@ fn NonExhaustiveOptionalMissingNull(code: Named("MaybeOk")) -> String {
     }
 
     bb4: {
-        goto -> bb2;
+        unreachable;
     }
 
 }
@@ -2280,15 +2134,13 @@ fn ExhaustiveWithNamedCatchAll(x: Int) -> Int {
     let _0: Int // return
     let _1: Int // x // param
     let _2: Int
-    let _3: Bool
-    let _4: Int // other
+    let _3: Int // other
+    let _4: Int
     let _5: Int
-    let _6: Int
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 1_i64;
-        branch copy _3 -> [bb4, bb5];
+        switch copy _2 [1: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2300,23 +2152,15 @@ fn ExhaustiveWithNamedCatchAll(x: Int) -> Int {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const 100_i64;
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _5 = copy _4;
-        _6 = const 1_i64;
-        _0 = copy _5 + copy _6;
+    bb4: {
+        _3 = copy _2;
+        _4 = copy _3;
+        _5 = const 1_i64;
+        _0 = copy _4 + copy _5;
         goto -> bb2;
     }
 
@@ -2382,12 +2226,10 @@ fn NonExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     let _0: String // return
     let _1: Named("OkOrCreated") // code // param
     let _2: Named("OkOrCreated")
-    let _3: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2404,7 +2246,7 @@ fn NonExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     }
 
     bb4: {
-        goto -> bb2;
+        unreachable;
     }
 
 }
@@ -2414,13 +2256,10 @@ fn ExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     let _0: String // return
     let _1: Named("OkOrCreated") // code // param
     let _2: Named("OkOrCreated")
-    let _3: Bool
-    let _4: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, 201: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -2437,17 +2276,12 @@ fn ExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb5, bb6];
-    }
-
-    bb5: {
         _0 = const "created";
         goto -> bb2;
     }
 
-    bb6: {
-        goto -> bb2;
+    bb5: {
+        unreachable;
     }
 
 }
@@ -2457,12 +2291,12 @@ fn WrongLiteralTypeIntWithString(x: Int) -> String {
     let _0: String // return
     let _1: Int // x // param
     let _2: Int
-    let _3: Int // _
+    let _3: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "hello";
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2474,11 +2308,11 @@ fn WrongLiteralTypeIntWithString(x: Int) -> String {
     }
 
     bb3: {
-        unreachable;
+        _0 = const "wrong type";
+        goto -> bb2;
     }
 
     bb4: {
-        _0 = const "wrong type";
         goto -> bb2;
     }
 
@@ -2681,14 +2515,10 @@ fn DeeplyNestedLiterals(x: Named("SuccessCode")) -> String {
     let _0: String // return
     let _1: Named("SuccessCode") // x // param
     let _2: Named("SuccessCode")
-    let _3: Bool
-    let _4: Bool
-    let _5: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb5];
+        switch copy _2 [200: bb3, 201: bb3, 204: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2705,17 +2535,7 @@ fn DeeplyNestedLiterals(x: Named("SuccessCode")) -> String {
     }
 
     bb4: {
-        goto -> bb2;
-    }
-
-    bb5: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb3, bb6];
-    }
-
-    bb6: {
-        _5 = copy _2 == const 204_i64;
-        branch copy _5 -> [bb3, bb4];
+        unreachable;
     }
 
 }
@@ -2784,12 +2604,10 @@ fn ExhaustiveSingletonInt(code: Named("HttpOk")) -> String {
     let _0: String // return
     let _1: Named("HttpOk") // code // param
     let _2: Named("HttpOk")
-    let _3: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2806,7 +2624,7 @@ fn ExhaustiveSingletonInt(code: Named("HttpOk")) -> String {
     }
 
     bb4: {
-        goto -> bb2;
+        unreachable;
     }
 
 }
@@ -2905,15 +2723,15 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     let _0: String // return
     let _1: Named("Role") // role // param
     let _2: Named("Role")
-    let _3: Named("Role") // _
-    let _4: Named("Role") // _
-    let _5: Named("Role") // _
-    let _6: Named("Role") // _
+    let _3: Bool
+    let _4: Bool
+    let _5: Bool
+    let _6: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "user";
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb1: {
@@ -2925,41 +2743,41 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "first user";
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+    bb4: {
+        _4 = copy _2 == const "user";
+        branch copy _4 -> [bb5, bb6];
     }
 
-    bb6: {
+    bb5: {
         _0 = const "second user";
         goto -> bb2;
     }
 
-    bb7: {
-        _5 = copy _2;
-        goto -> bb8;
+    bb6: {
+        _5 = copy _2 == const "assistant";
+        branch copy _5 -> [bb7, bb8];
     }
 
-    bb8: {
+    bb7: {
         _0 = const "assistant";
         goto -> bb2;
     }
 
+    bb8: {
+        _6 = copy _2 == const "system";
+        branch copy _6 -> [bb9, bb10];
+    }
+
     bb9: {
-        _6 = copy _2;
-        goto -> bb10;
+        _0 = const "system";
+        goto -> bb2;
     }
 
     bb10: {
-        _0 = const "system";
         goto -> bb2;
     }
 
@@ -3095,49 +2913,7 @@ fn NonExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
     let _1: Named("MixedLiterals") // x // param
     let _2: Named("MixedLiterals")
     let _3: Bool
-    let _4: Named("MixedLiterals") // _
-
-    bb0: {
-        _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb4, bb5];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        unreachable;
-    }
-
-    bb4: {
-        _0 = const "http ok";
-        goto -> bb2;
-    }
-
-    bb5: {
-        _4 = copy _2;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _0 = const "string success";
-        goto -> bb2;
-    }
-
-}
-
-fn NonExhaustiveClassPlusLiteralMissingClass(x: Named("SuccessOr200")) -> String {
-    // Locals:
-    let _0: String // return
-    let _1: Named("SuccessOr200") // x // param
-    let _2: Named("SuccessOr200")
-    let _3: Bool
+    let _4: Bool
 
     bb0: {
         _2 = copy _1;
@@ -3159,7 +2935,47 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: Named("SuccessOr200")) -> String
     }
 
     bb4: {
+        _4 = copy _2 == const "success";
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _0 = const "string success";
         goto -> bb2;
+    }
+
+    bb6: {
+        goto -> bb2;
+    }
+
+}
+
+fn NonExhaustiveClassPlusLiteralMissingClass(x: Named("SuccessOr200")) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Named("SuccessOr200") // x // param
+    let _2: Named("SuccessOr200")
+
+    bb0: {
+        _2 = copy _1;
+        switch copy _2 [200: bb3, otherwise: bb4];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = const "http ok";
+        goto -> bb2;
+    }
+
+    bb4: {
+        unreachable;
     }
 
 }
@@ -3372,7 +3188,7 @@ fn StringLiteralAfterStringType(s: String) -> String {
     let _2: String
     let _3: Bool
     let _4: String // x
-    let _5: String // _
+    let _5: Bool
 
     bb0: {
         _2 = copy _1;
@@ -3398,8 +3214,8 @@ fn StringLiteralAfterStringType(s: String) -> String {
     }
 
     bb5: {
-        _5 = copy _2;
-        goto -> bb7;
+        _5 = copy _2 == const "hello";
+        branch copy _5 -> [bb7, bb3];
     }
 
     bb6: {
@@ -3501,14 +3317,10 @@ fn ExhaustiveWithUnderscore(x: Int) -> Int {
     let _0: Int // return
     let _1: Int // x // param
     let _2: Int
-    let _3: Bool
-    let _4: Bool
-    let _5: Int // _
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 1_i64;
-        branch copy _3 -> [bb4, bb5];
+        switch copy _2 [1: bb3, 2: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -3520,30 +3332,16 @@ fn ExhaustiveWithUnderscore(x: Int) -> Int {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const 100_i64;
         goto -> bb2;
     }
 
-    bb5: {
-        _4 = copy _2 == const 2_i64;
-        branch copy _4 -> [bb6, bb7];
-    }
-
-    bb6: {
+    bb4: {
         _0 = const 200_i64;
         goto -> bb2;
     }
 
-    bb7: {
-        _5 = copy _2;
-        goto -> bb8;
-    }
-
-    bb8: {
+    bb5: {
         _0 = const 0_i64;
         goto -> bb2;
     }
@@ -3593,13 +3391,13 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
     let _0: String // return
     let _1: Named("Role") // role // param
     let _2: Named("Role")
-    let _3: Named("Role") // _
-    let _4: Named("Role") // _
+    let _3: Bool
+    let _4: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "user";
+        branch copy _3 -> [bb3, bb4];
     }
 
     bb1: {
@@ -3611,21 +3409,21 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "User";
         goto -> bb2;
     }
 
+    bb4: {
+        _4 = copy _2 == const "assistant";
+        branch copy _4 -> [bb5, bb6];
+    }
+
     bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+        _0 = const "Assistant";
+        goto -> bb2;
     }
 
     bb6: {
-        _0 = const "Assistant";
         goto -> bb2;
     }
 
@@ -3636,14 +3434,14 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
     let _0: String // return
     let _1: Named("Role") // role // param
     let _2: Named("Role")
-    let _3: Named("Role") // _
-    let _4: Named("Role") // _
+    let _3: Bool
+    let _4: Bool
     let _5: Named("Role") // _
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2;
-        goto -> bb4;
+        _3 = copy _2 == const "user";
+        branch copy _3 -> [bb4, bb5];
     }
 
     bb1: {
@@ -3664,8 +3462,8 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
     }
 
     bb5: {
-        _4 = copy _2;
-        goto -> bb6;
+        _4 = copy _2 == const "assistant";
+        branch copy _4 -> [bb6, bb7];
     }
 
     bb6: {
@@ -3803,13 +3601,10 @@ fn NonExhaustiveIntLiteral(code: Named("SuccessCode")) -> String {
     let _0: String // return
     let _1: Named("SuccessCode") // code // param
     let _2: Named("SuccessCode")
-    let _3: Bool
-    let _4: Bool
 
     bb0: {
         _2 = copy _1;
-        _3 = copy _2 == const 200_i64;
-        branch copy _3 -> [bb3, bb4];
+        switch copy _2 [200: bb3, 201: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -3826,17 +3621,12 @@ fn NonExhaustiveIntLiteral(code: Named("SuccessCode")) -> String {
     }
 
     bb4: {
-        _4 = copy _2 == const 201_i64;
-        branch copy _4 -> [bb5, bb6];
-    }
-
-    bb5: {
         _0 = const "Created";
         goto -> bb2;
     }
 
-    bb6: {
-        goto -> bb2;
+    bb5: {
+        unreachable;
     }
 
 }

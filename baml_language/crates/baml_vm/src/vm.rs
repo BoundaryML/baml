@@ -195,6 +195,12 @@ pub struct Vm {
     pub watched_vars: HashMap<StackIndex, (String, String)>,
 
     pub interrupt_frame: Option<usize>,
+
+    /// Global type tag mapping for classes.
+    ///
+    /// Moved from `Program` during `Vm::from_program()`.
+    /// Maps class name -> type tag for jump table dispatch on unions.
+    pub class_type_tags: HashMap<String, i64>,
 }
 
 /// VM execution state.
@@ -263,6 +269,7 @@ impl Vm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
+            class_type_tags: HashMap::new(),
         }
     }
 
@@ -278,6 +285,42 @@ impl Vm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
+            class_type_tags: program.class_type_tags,
+        }
+    }
+
+    /// Get the type tag for any runtime value.
+    ///
+    /// Used by the `TypeTag` instruction for jump table dispatch on union types.
+    pub fn type_tag(&self, value: &Value) -> i64 {
+        use crate::types::type_tags;
+
+        match value {
+            Value::Int(_) => type_tags::INT,
+            Value::Float(_) => type_tags::FLOAT,
+            Value::Bool(_) => type_tags::BOOL,
+            Value::Null => type_tags::NULL,
+            Value::Object(object_idx) => match &self.objects[*object_idx] {
+                Object::String(_) => type_tags::STRING,
+                Object::Variant(_) => type_tags::ENUM,
+                Object::Array(_) => type_tags::LIST,
+                Object::Map(_) => type_tags::MAP,
+                Object::Function(_) => type_tags::FUNCTION,
+                Object::Future(_) => type_tags::FUTURE,
+                Object::Enum(_) => type_tags::ENUM,
+                Object::Class(_) => type_tags::UNKNOWN, // Class objects themselves
+                Object::Instance(instance) => {
+                    // Get class name from the Class object
+                    if let Object::Class(class) = &self.objects[instance.class] {
+                        self.class_type_tags
+                            .get(&class.name)
+                            .copied()
+                            .unwrap_or(type_tags::UNKNOWN)
+                    } else {
+                        type_tags::UNKNOWN
+                    }
+                }
+            },
         }
     }
 
@@ -1880,6 +1923,94 @@ impl Vm {
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
+                }
+
+                // ============================================================
+                // Jump Table Instructions
+                // ============================================================
+                Instruction::JumpTable { table_idx, default } => {
+                    // Pop discriminant from stack
+                    let discriminant = self.stack.ensure_pop()?;
+
+                    // Must be an integer
+                    let Value::Int(value) = discriminant else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.objects.type_of(&discriminant),
+                        }
+                        .into());
+                    };
+
+                    // Lookup in jump table
+                    let table = &function.bytecode.jump_tables[table_idx];
+                    let offset = table.lookup(value).unwrap_or(default);
+
+                    // Jump
+                    frame.instruction_ptr = instruction_ptr + offset;
+                }
+
+                Instruction::Discriminant => {
+                    // Pop value from stack
+                    let value = self.stack.ensure_pop()?;
+
+                    // Must be an object (variants are heap-allocated)
+                    let Value::Object(object_idx) = value else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Variant.into(),
+                            got: self.objects.type_of(&value),
+                        }
+                        .into());
+                    };
+
+                    // Must be a Variant object
+                    let Object::Variant(variant) = &self.objects[object_idx] else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Variant.into(),
+                            got: ObjectType::of(&self.objects[object_idx]).into(),
+                        }
+                        .into());
+                    };
+
+                    // Variant.index is the discriminant we need
+                    #[allow(clippy::cast_possible_wrap)]
+                    self.stack.push(Value::Int(variant.index as i64));
+                }
+
+                Instruction::TypeTag => {
+                    use crate::types::type_tags;
+
+                    // Pop value from stack
+                    let value = self.stack.ensure_pop()?;
+
+                    // Inline type tag computation to avoid borrow checker issues
+                    let tag = match value {
+                        Value::Int(_) => type_tags::INT,
+                        Value::Float(_) => type_tags::FLOAT,
+                        Value::Bool(_) => type_tags::BOOL,
+                        Value::Null => type_tags::NULL,
+                        Value::Object(object_idx) => match &self.objects[object_idx] {
+                            Object::String(_) => type_tags::STRING,
+                            Object::Variant(_) => type_tags::ENUM,
+                            Object::Array(_) => type_tags::LIST,
+                            Object::Map(_) => type_tags::MAP,
+                            Object::Function(_) => type_tags::FUNCTION,
+                            Object::Future(_) => type_tags::FUTURE,
+                            Object::Enum(_) => type_tags::ENUM,
+                            Object::Class(_) => type_tags::UNKNOWN,
+                            Object::Instance(instance) => {
+                                if let Object::Class(class) = &self.objects[instance.class] {
+                                    self.class_type_tags
+                                        .get(&class.name)
+                                        .copied()
+                                        .unwrap_or(type_tags::UNKNOWN)
+                                } else {
+                                    type_tags::UNKNOWN
+                                }
+                            }
+                        },
+                    };
+
+                    self.stack.push(Value::Int(tag));
                 }
             }
         }
