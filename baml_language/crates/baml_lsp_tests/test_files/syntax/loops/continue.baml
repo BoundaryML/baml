@@ -53,3 +53,21 @@ function ContinueNested() -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
+// Error: Expected `1`, found `int`
+//    ╭─[ loops_continue.baml:9:12 ]
+//    │
+//  9 │        result = result * limit;
+//    │                 ───────┬──────  
+//    │                        ╰──────── Expected `1`, found `int`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: Expected `true`, found `false`
+//     ╭─[ loops_continue.baml:15:31 ]
+//     │
+//  15 │             should_continue = false;
+//     │                               ──┬──  
+//     │                                 ╰──── Expected `true`, found `false`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

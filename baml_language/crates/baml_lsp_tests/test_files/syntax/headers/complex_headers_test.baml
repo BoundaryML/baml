@@ -66,12 +66,30 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
+// Error: Expected `0`, found `1`
 //    ╭─[ headers_complex_headers_test.baml:1:1 ]
 //    │
 //  1 │ //# Main Function
 //    │ │ 
-//    │ ╰─ Expected `string`, found `int`
+//    │ ╰─ Expected `0`, found `1`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: Expected `string`, found `int`
+//     ╭─[ headers_complex_headers_test.baml:43:5 ]
+//     │
+//  43 │     final_result
+//     │     ──────┬─────  
+//     │           ╰─────── Expected `string`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: Expected `0`, found `1`
+//    ╭─[ headers_complex_headers_test.baml:1:1 ]
+//    │
+//  1 │ //# Main Function
+//    │ │ 
+//    │ ╰─ Expected `0`, found `1`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

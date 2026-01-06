@@ -63,30 +63,30 @@ function ClassAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `Person`, found `string`
+// Error: Expected `Person`, found `"not a person"`
 //     ╭─[ invalid_assignment_classes.baml:33:6 ]
 //     │
 //  33 │     p3 = "not a person";
 //     │         ───────┬───────  
-//     │                ╰───────── Expected `Person`, found `string`
+//     │                ╰───────── Expected `Person`, found `"not a person"`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `Person`, found `int`
+// Error: Expected `Person`, found `42`
 //     ╭─[ invalid_assignment_classes.baml:37:7 ]
 //     │
 //  37 │     p4 = 42;
 //     │          ─┬  
-//     │           ╰── Expected `Person`, found `int`
+//     │           ╰── Expected `Person`, found `42`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `int`, found `Person`
+// Error: Expected `100`, found `Person`
 //     ╭─[ invalid_assignment_classes.baml:41:6 ]
 //     │
 //  41 │     n = Person { name: "Grace", age: 32 };
 //     │         ────────────────┬────────────────  
-//     │                         ╰────────────────── Expected `int`, found `Person`
+//     │                         ╰────────────────── Expected `100`, found `Person`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

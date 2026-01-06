@@ -39,33 +39,33 @@ function BadFunction2(i: string) -> bool {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `int.$watch`
+// Error: Expected `10`, found `10.$watch`
 //    ╭─[ expr_watch_when.baml:2:20 ]
 //    │
 //  2 │ ╭─▶   watch let x = 10;
 //  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
+//    │ ╰────────────────────────────────────────────────────────────────── Expected `10`, found `10.$watch`
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: Expected `int`, found `int.$watch`
+// Error: Expected `10`, found `10.$watch`
 //    ╭─[ expr_watch_when.baml:3:61 ]
 //    │
 //  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
+//    │ ╰────────────────────────────────────────────────────────────────── Expected `10`, found `10.$watch`
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
-// Error: Expected `int`, found `int.$watch`
+// Error: Expected `10`, found `10.$watch`
 //    ╭─[ expr_watch_when.baml:4:61 ]
 //    │
 //  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
 //    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
+//    │ ╰────────────────────────────────────────────────────────────────── Expected `10`, found `10.$watch`
 //    │     
 //    │     Note: Error code: E0001
 // ───╯

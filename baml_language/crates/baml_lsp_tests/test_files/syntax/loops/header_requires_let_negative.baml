@@ -110,6 +110,15 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
+// Error: Cannot apply operator 'Lt' to types `unknown` and `int`
+//    ╭─[ loops_header_requires_let_negative.baml:4:14 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │                 ──┬──  
+//    │                   ╰──── Cannot apply operator 'Lt' to types `unknown` and `int`
+//    │ 
+//    │ Note: Error code: E0004
+// ───╯
 // Error: Unknown variable `i`
 //    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
 //    │

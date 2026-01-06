@@ -43,4 +43,39 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Type `Foo | Bar` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:13:15 ]
+//     │
+//  13 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── Type `Foo | Bar` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: Type `Foo | Bar | Baz` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:36:15 ]
+//     │
+//  36 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: Type `Foo | Bar | Baz` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:38:15 ]
+//     │
+//  38 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: Type `Foo | null` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     │
+//  23 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── Type `Foo | null` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯

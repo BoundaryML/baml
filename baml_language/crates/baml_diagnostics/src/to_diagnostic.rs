@@ -53,12 +53,19 @@ impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
                 expected,
                 found,
                 span,
-            } => Diagnostic::error(
-                DiagnosticId::TypeMismatch,
-                format!("Expected `{expected}`, found `{found}`"),
-            )
-            .with_primary_span(*span),
-
+                info_span,
+            } => {
+                let diag = Diagnostic::error(
+                    DiagnosticId::TypeMismatch,
+                    format!("Expected `{expected}`, found `{found}`"),
+                )
+                .with_primary_span(*span);
+                if let Some(info_span) = info_span {
+                    diag.with_related(*info_span, "Type defined here")
+                } else {
+                    diag
+                }
+            }
             TypeError::UnknownType { name, span } => {
                 Diagnostic::error(DiagnosticId::UnknownType, format!("Unknown type `{name}`"))
                     .with_primary_span(*span)
@@ -505,6 +512,7 @@ mod tests {
             expected: "int".to_string(),
             found: "string".to_string(),
             span: test_span(),
+            info_span: None,
         };
 
         let diag = error.to_diagnostic();

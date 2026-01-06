@@ -16,7 +16,9 @@
       "Bash(nix develop:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "WebFetch(domain:docs.rs)"
+      "WebFetch(domain:docs.rs)",
+      "WebSearch",
+      "Bash(cargo run:*)"
     ]
   }
 }

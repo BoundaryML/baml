@@ -8,7 +8,15 @@ use baml_base::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeError<T> {
     /// Type mismatch between expected and found types.
-    TypeMismatch { expected: T, found: T, span: Span },
+    ///
+    /// - `span`: Location of the expression with the wrong type
+    /// - `info_span`: Optional location of the type constraint source (e.g., return type annotation)
+    TypeMismatch {
+        expected: T,
+        found: T,
+        span: Span,
+        info_span: Option<Span>,
+    },
     /// Reference to an unknown type name.
     UnknownType { name: String, span: Span },
     /// Reference to an unknown variable.
@@ -62,10 +70,12 @@ impl<T> TypeError<T> {
                 expected,
                 found,
                 span,
+                info_span,
             } => TypeError::TypeMismatch {
                 expected: f(expected),
                 found: f(found),
                 span: *span,
+                info_span: *info_span,
             },
             TypeError::UnknownType { name, span } => TypeError::UnknownType {
                 name: name.clone(),

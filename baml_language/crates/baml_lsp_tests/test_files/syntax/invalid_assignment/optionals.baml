@@ -43,21 +43,21 @@ function OptionalAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int?`, found `string`
+// Error: Expected `int?`, found `"not an int"`
 //     ╭─[ invalid_assignment_optionals.baml:31:5 ]
 //     │
 //  31 │     c = "not an int";
 //     │        ──────┬──────  
-//     │              ╰──────── Expected `int?`, found `string`
+//     │              ╰──────── Expected `int?`, found `"not an int"`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `string?`, found `int`
+// Error: Expected `string?`, found `42`
 //     ╭─[ invalid_assignment_optionals.baml:35:6 ]
 //     │
 //  35 │     d = 42;
 //     │         ─┬  
-//     │          ╰── Expected `string?`, found `int`
+//     │          ╰── Expected `string?`, found `42`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

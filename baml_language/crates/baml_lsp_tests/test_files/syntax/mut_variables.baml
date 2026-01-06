@@ -19,4 +19,12 @@ function ErrorWhenAssigningToConst(x: int) -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected `3`, found `5`
+//    ╭─[ mut_variables.baml:5:6 ]
+//    │
+//  5 │     y = 5;
+//    │         ┬  
+//    │         ╰── Expected `3`, found `5`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

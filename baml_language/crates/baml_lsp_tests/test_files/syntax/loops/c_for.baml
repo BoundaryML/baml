@@ -110,6 +110,15 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
+// Error: Cannot apply operator 'Le' to types `unknown` and `int`
+//     ╭─[ loops_c_for.baml:21:9 ]
+//     │
+//  21 │     for (; i <= 10; i += 1) {
+//     │            ───┬───  
+//     │               ╰───── Cannot apply operator 'Le' to types `unknown` and `int`
+//     │ 
+//     │ Note: Error code: E0004
+// ────╯
 // Error: Unknown variable `i`
 //     ╭─[ loops_c_for.baml:22:8 ]
 //     │
@@ -127,4 +136,22 @@ function BreakContinue() -> int {
 //     │                     ╰── Unknown variable `i`
 //     │ 
 //     │ Note: Error code: E0003
+// ────╯
+// Error: Expected `0`, found `1`
+//    ╭─[ loops_c_for.baml:5:8 ]
+//    │
+//  5 │        s += i;
+//    │             ┬  
+//    │             ╰── Expected `0`, found `1`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: Expected `0`, found `1`
+//     ╭─[ loops_c_for.baml:42:32 ]
+//     │
+//  42 │     for (let i = 0; i <= 10; i += x) {
+//     │                                   ┬  
+//     │                                   ╰── Expected `0`, found `1`
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯

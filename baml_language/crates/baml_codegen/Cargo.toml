@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+log = { workspace = true }
 salsa = { workspace = true }
 baml_base = { workspace = true }
 baml_hir = { workspace = true }

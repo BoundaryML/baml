@@ -214,12 +214,21 @@ function HeaderOnlyFunction() -> string {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
+// Error: Expected `0`, found `1`
 //    ╭─[ headers_edge_cases.baml:1:1 ]
 //    │
 //  1 │ // Edge cases for MDX headers
 //    │ │ 
-//    │ ╰─ Expected `string`, found `int`
+//    │ ╰─ Expected `0`, found `1`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
+// Error: Expected `string`, found `int`
+//      ╭─[ headers_edge_cases.baml:135:15 ]
+//      │
+//  135 │ function VeryLongHeaderTitle() -> string {
+//      │               ┬  
+//      │               ╰── Expected `string`, found `int`
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

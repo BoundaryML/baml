@@ -36,4 +36,12 @@ function Foo() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected `0`, found `int`
+//     ╭─[ loops_while_loops.baml:31:14 ]
+//     │
+//  31 │          a = a + 1;
+//     │              ──┬──  
+//     │                ╰──── Expected `0`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

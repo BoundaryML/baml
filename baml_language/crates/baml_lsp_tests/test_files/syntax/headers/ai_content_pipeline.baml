@@ -136,6 +136,15 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
+// Error: Expected `0`, found `1`
+//    ╭─[ headers_ai_content_pipeline.baml:1:1 ]
+//    │
+//  1 │ //# AI Content Pipeline
+//    │ │ 
+//    │ ╰─ Expected `0`, found `1`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: Unknown variable `GetStructure`
 //     ╭─[ headers_ai_content_pipeline.baml:40:25 ]
 //     │

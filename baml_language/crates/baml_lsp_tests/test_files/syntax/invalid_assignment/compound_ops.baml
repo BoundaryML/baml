@@ -35,48 +35,57 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `string`
+// Error: Expected `10`, found `5`
+//    ╭─[ invalid_assignment_compound_ops.baml:6:7 ]
+//    │
+//  6 │     a += 5;
+//    │          ┬  
+//    │          ╰── Expected `10`, found `5`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: Expected `10`, found `"five"`
 //     ╭─[ invalid_assignment_compound_ops.baml:15:6 ]
 //     │
 //  15 │     c += "five";
 //     │         ───┬───  
-//     │            ╰───── Expected `int`, found `string`
+//     │            ╰───── Expected `10`, found `"five"`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `string`, found `int`
+// Error: Expected `"start"`, found `100`
 //     ╭─[ invalid_assignment_compound_ops.baml:19:7 ]
 //     │
 //  19 │     d += 100;
 //     │          ─┬─  
-//     │           ╰─── Expected `string`, found `int`
+//     │           ╰─── Expected `"start"`, found `100`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `int`, found `bool`
+// Error: Expected `20`, found `true`
 //     ╭─[ invalid_assignment_compound_ops.baml:23:7 ]
 //     │
 //  23 │     e += true;
 //     │          ──┬─  
-//     │            ╰─── Expected `int`, found `bool`
+//     │            ╰─── Expected `20`, found `true`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `bool`, found `int`
+// Error: Expected `true`, found `1`
 //     ╭─[ invalid_assignment_compound_ops.baml:27:7 ]
 //     │
 //  27 │     f += 1;
 //     │          ┬  
-//     │          ╰── Expected `bool`, found `int`
+//     │          ╰── Expected `true`, found `1`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `float`, found `string`
+// Error: Expected `3.5`, found `"add"`
 //     ╭─[ invalid_assignment_compound_ops.baml:31:6 ]
 //     │
 //  31 │     g += "add";
 //     │         ───┬──  
-//     │            ╰──── Expected `float`, found `string`
+//     │            ╰──── Expected `3.5`, found `"add"`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

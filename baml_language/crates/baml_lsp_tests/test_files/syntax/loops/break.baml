@@ -43,4 +43,30 @@ function Nested() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected `5`, found `int`
+//     ╭─[ loops_break.baml:28:17 ]
+//     │
+//  28 │             a = a + 1;
+//     │                 ──┬──  
+//     │                   ╰──── Expected `5`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: Expected `5`, found `int`
+//     ╭─[ loops_break.baml:31:13 ]
+//     │
+//  31 │         a = a + 1;
+//     │             ──┬──  
+//     │               ╰──── Expected `5`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: Expected `1`, found `int`
+//     ╭─[ loops_break.baml:10:12 ]
+//     │
+//  10 │        result = result * limit;
+//     │                 ───────┬──────  
+//     │                        ╰──────── Expected `1`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

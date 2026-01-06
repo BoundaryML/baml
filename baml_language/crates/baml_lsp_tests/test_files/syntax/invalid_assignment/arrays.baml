@@ -60,39 +60,39 @@ function ArrayAssignments() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `int`, found `int[]`
+// Error: Expected `5`, found `int[]`
 //     ╭─[ invalid_assignment_arrays.baml:26:5 ]
 //     │
 //  26 │     f = [1, 2, 3];
 //     │        ─────┬────  
-//     │             ╰────── Expected `int`, found `int[]`
+//     │             ╰────── Expected `5`, found `int[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `int[]`, found `int`
+// Error: Expected `int[]`, found `42`
 //     ╭─[ invalid_assignment_arrays.baml:30:6 ]
 //     │
 //  30 │     g = 42;
 //     │         ─┬  
-//     │          ╰── Expected `int[]`, found `int`
+//     │          ╰── Expected `int[]`, found `42`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `int[]`, found `string`
+// Error: Expected `int[]`, found `"array"`
 //     ╭─[ invalid_assignment_arrays.baml:34:5 ]
 //     │
 //  34 │     h = "array";
 //     │        ────┬───  
-//     │            ╰───── Expected `int[]`, found `string`
+//     │            ╰───── Expected `int[]`, found `"array"`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `string`, found `int[]`
+// Error: Expected `"list"`, found `int[]`
 //     ╭─[ invalid_assignment_arrays.baml:38:5 ]
 //     │
 //  38 │     i = [4, 5, 6];
 //     │        ─────┬────  
-//     │             ╰────── Expected `string`, found `int[]`
+//     │             ╰────── Expected `"list"`, found `int[]`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
