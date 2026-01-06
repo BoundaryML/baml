@@ -29,7 +29,7 @@ pub use builtins::{
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::{TypeLoweringContext, lower_type_ref, lower_type_ref_validated};
-pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
+pub use pretty::{expr_to_string, render_body_tree, render_function_tree, short_display};
 use text_size::TextRange;
 pub use types::*;
 
