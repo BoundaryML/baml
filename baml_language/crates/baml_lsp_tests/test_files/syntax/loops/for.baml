@@ -60,6 +60,15 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
+// Error: Expected int, found string
+//     ╭─[ 0:16:12 ]
+//     │
+//  16 │        result = x;
+//     │                 ┬  
+//     │                 ╰── Expected int, found string
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
 // Error: Type int has no field 'length'
 //    ╭─[ 0:1:1 ]
 //    │

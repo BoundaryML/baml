@@ -111,3 +111,5 @@ Find the base-case that makes syntax fail and add that to baml_test with a good 
 A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
 
 BEFORE you run these lsp tests with update_expect, make sure to just run without it and figure out if the new results are what you expect.
+
+Just because the existing file may say 'no diagnostics expected' doesn't mean it is correct by the way. We haven't finished implementing all diagnostics. You have to see if we added some other comments elsewhere in the file to see what we should sort of expect, or just inspect the behavior manually.

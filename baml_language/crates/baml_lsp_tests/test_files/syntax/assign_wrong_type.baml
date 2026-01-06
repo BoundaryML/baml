@@ -18,4 +18,12 @@ function AssignWrongType(x: int) -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected int, found string
+//    ╭─[ 0:5:5 ]
+//    │
+//  5 │     y = "hello";
+//    │        ────┬───  
+//    │            ╰───── Expected int, found string
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

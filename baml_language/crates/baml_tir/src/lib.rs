@@ -2048,10 +2048,17 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
 
         Stmt::Assign { target, value } => {
             // Type-check both the target and value expressions
-            infer_expr(ctx, *target, body);
-            infer_expr(ctx, *value, body);
-            // TODO: Check that target is assignable (variable or field access)
-            // TODO: Check that value type is compatible with target type
+            let target_ty = infer_expr(ctx, *target, body);
+            let value_ty = infer_expr(ctx, *value, body);
+            // Check that value type is compatible with target type
+            if !ctx.is_subtype_of(&value_ty, &target_ty) {
+                let span = body.get_expr_span(*value).unwrap_or_default();
+                ctx.push_error(TypeError::TypeMismatch {
+                    expected: target_ty,
+                    found: value_ty,
+                    span,
+                });
+            }
         }
 
         Stmt::AssignOp {
@@ -2060,10 +2067,17 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             value,
         } => {
             // Type-check both the target and value expressions
-            infer_expr(ctx, *target, body);
-            infer_expr(ctx, *value, body);
-            // TODO: Check that target is assignable
-            // TODO: Check that the operation is valid for the types
+            let target_ty = infer_expr(ctx, *target, body);
+            let value_ty = infer_expr(ctx, *value, body);
+            // Check that value type is compatible with target type
+            if !ctx.is_subtype_of(&value_ty, &target_ty) {
+                let span = body.get_expr_span(*value).unwrap_or_default();
+                ctx.push_error(TypeError::TypeMismatch {
+                    expected: target_ty,
+                    found: value_ty,
+                    span,
+                });
+            }
         }
 
         Stmt::Assert { condition } => {
