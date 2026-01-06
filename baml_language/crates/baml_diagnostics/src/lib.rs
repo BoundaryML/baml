@@ -3,7 +3,7 @@
 //! This crate provides:
 //! - A unified `Diagnostic` type that can represent any compiler error
 //! - The `ToDiagnostic` trait for converting error types to `Diagnostic`
-//! - Multi-format rendering (Ariadne for CLI, LSP types for editors)
+//! - Multi-format rendering (Ariadne for CLI)
 //!
 //! ## Architecture
 //!
@@ -14,10 +14,14 @@
 //! - Centralized diagnostic collection via `Project::check()`
 //! - Multi-format rendering without duplication
 //! - Consistent error handling across all compiler phases
+//!
+//! ## LSP Conversion
+//!
+//! LSP-specific conversion (to `lsp_types::Diagnostic`) lives in the
+//! `baml_language_server` crate, keeping this crate free of LSP dependencies.
 
 pub mod compiler_error;
 pub mod diagnostic;
-pub mod lsp;
 pub mod render;
 pub mod to_diagnostic;
 
@@ -29,7 +33,5 @@ pub use compiler_error::{
     render_report_to_string, render_type_error,
 };
 pub use diagnostic::{Annotation, Diagnostic, DiagnosticId, RelatedInfo, Severity, ToDiagnostic};
-// Re-export LSP conversion utilities
-pub use lsp::{LspConversionConfig, compute_line_starts};
 // Re-export the rendering functions
 pub use render::{DiagnosticFormat, RenderConfig, render_diagnostic, render_diagnostics};

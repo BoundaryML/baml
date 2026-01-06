@@ -23,7 +23,7 @@ use baml_db::{
     baml_tir::{self, class_field_types, enum_variants, type_aliases, typing_context},
     baml_workspace::Project,
 };
-use baml_diagnostics::{Diagnostic, LspConversionConfig, ToDiagnostic, compute_line_starts};
+use baml_diagnostics::{Diagnostic, ToDiagnostic};
 
 use crate::LspDatabase;
 
@@ -34,42 +34,8 @@ pub struct CheckResult {
     pub diagnostics: Vec<Diagnostic>,
     /// Maps FileId to source text (for Ariadne rendering).
     pub sources: HashMap<FileId, String>,
-    /// Maps FileId to file path (for LSP URL generation).
+    /// Maps FileId to file path (for URL generation).
     pub file_paths: HashMap<FileId, PathBuf>,
-    /// Maps FileId to (source_text, line_starts) for LSP range conversion.
-    pub file_sources: HashMap<FileId, (String, Vec<u32>)>,
-}
-
-impl CheckResult {
-    /// Get an LSP conversion configuration from this result.
-    pub fn lsp_config(&self) -> LspConversionConfig<'_> {
-        LspConversionConfig {
-            file_paths: &self.file_paths,
-            file_sources: &self.file_sources,
-        }
-    }
-
-    /// Convert all diagnostics to LSP diagnostics, grouped by file URL.
-    pub fn to_lsp_diagnostics(&self) -> HashMap<lsp_types::Url, Vec<lsp_types::Diagnostic>> {
-        let config = self.lsp_config();
-        let mut result: HashMap<lsp_types::Url, Vec<lsp_types::Diagnostic>> = HashMap::new();
-
-        // Initialize empty diagnostics for all files (so files with no errors get cleared)
-        for path in self.file_paths.values() {
-            if let Ok(url) = lsp_types::Url::from_file_path(path) {
-                result.entry(url).or_default();
-            }
-        }
-
-        // Add diagnostics
-        for diag in &self.diagnostics {
-            if let Some((url, lsp_diag)) = diag.to_lsp(&config) {
-                result.entry(url).or_default().push(lsp_diag);
-            }
-        }
-
-        result
-    }
 }
 
 impl LspDatabase {
@@ -86,25 +52,21 @@ impl LspDatabase {
                 diagnostics: Vec::new(),
                 sources: HashMap::new(),
                 file_paths: HashMap::new(),
-                file_sources: HashMap::new(),
             };
         };
 
         let source_files: Vec<SourceFile> = self.files().collect();
         let mut sources: HashMap<FileId, String> = HashMap::new();
         let mut file_paths: HashMap<FileId, PathBuf> = HashMap::new();
-        let mut file_sources: HashMap<FileId, (String, Vec<u32>)> = HashMap::new();
 
         // Build all maps
         for source_file in &source_files {
             let file_id = source_file.file_id(db);
             let text = source_file.text(db).to_string();
             let path = source_file.path(db);
-            let line_starts = compute_line_starts(&text);
 
-            sources.insert(file_id, text.clone());
+            sources.insert(file_id, text);
             file_paths.insert(file_id, path);
-            file_sources.insert(file_id, (text, line_starts));
         }
 
         let diagnostics = self.check_project(db, project, &source_files);
@@ -113,7 +75,6 @@ impl LspDatabase {
             diagnostics,
             sources,
             file_paths,
-            file_sources,
         }
     }
 
@@ -249,18 +210,5 @@ mod tests {
         // Should be a parse error
         let first = &result.diagnostics[0];
         assert!(first.code().starts_with("E00"));
-    }
-
-    #[test]
-    fn test_to_lsp_diagnostics() {
-        let mut db = LspDatabase::new();
-        db.set_project_root(Path::new("/tmp"));
-        db.add_or_update_file(Path::new("/tmp/test.baml"), "class Foo {");
-
-        let result = db.check();
-        let lsp_diags = result.to_lsp_diagnostics();
-
-        // Should have diagnostics for test.baml
-        assert!(!lsp_diags.is_empty());
     }
 }

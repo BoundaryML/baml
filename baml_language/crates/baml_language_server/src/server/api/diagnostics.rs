@@ -11,7 +11,10 @@ use lsp_types::{
 };
 use parking_lot::Mutex;
 
-use super::ResultExt;
+use super::{
+    ResultExt,
+    lsp_diagnostic::{LspConversionConfig, compute_line_starts, to_lsp_diagnostic},
+};
 use crate::{
     Session,
     baml_project::Project,
@@ -113,8 +116,37 @@ fn project_diagnostics(project: Arc<Mutex<Project>>) -> HashMap<Url, Vec<lsp_typ
     // Use the centralized check() method - this replaces ~150 lines of manual collection!
     let check_result = lsp_db.check();
 
-    // Convert to LSP diagnostics
-    check_result.to_lsp_diagnostics()
+    // Build file_sources map with line_starts for LSP conversion
+    let file_sources: HashMap<baml_db::FileId, (String, Vec<u32>)> = check_result
+        .sources
+        .iter()
+        .map(|(file_id, text)| {
+            let line_starts = compute_line_starts(text);
+            (*file_id, (text.clone(), line_starts))
+        })
+        .collect();
+
+    let config = LspConversionConfig {
+        file_paths: &check_result.file_paths,
+        file_sources: &file_sources,
+    };
+
+    // Initialize empty diagnostics for all files (so files with no errors get cleared)
+    let mut result: HashMap<Url, Vec<lsp_types::Diagnostic>> = HashMap::new();
+    for path in check_result.file_paths.values() {
+        if let Ok(url) = Url::from_file_path(path) {
+            result.entry(url).or_default();
+        }
+    }
+
+    // Convert and add diagnostics
+    for diag in &check_result.diagnostics {
+        if let Some((url, lsp_diag)) = to_lsp_diagnostic(diag, &config) {
+            result.entry(url).or_default().push(lsp_diag);
+        }
+    }
+
+    result
 }
 
 /// Returns diagnostics only for the specified file URL.

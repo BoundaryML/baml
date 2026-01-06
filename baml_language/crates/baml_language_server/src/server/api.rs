@@ -18,6 +18,7 @@ use url::Url;
 use crate::{server::schedule::Task, session::Session};
 
 mod diagnostics;
+pub(crate) mod lsp_diagnostic;
 pub(crate) mod notifications;
 mod requests;
 mod traits;

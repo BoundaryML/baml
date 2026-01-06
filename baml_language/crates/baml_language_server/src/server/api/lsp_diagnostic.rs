@@ -1,14 +1,16 @@
 //! LSP conversion for BAML diagnostics.
 //!
 //! This module provides conversion from the unified `Diagnostic` type
-//! to `lsp_types::Diagnostic` for editor integration.
+//! (from `baml_diagnostics`) to `lsp_types::Diagnostic` for editor integration.
+//!
+//! Following ty's architecture, this conversion logic lives in the LSP server crate,
+//! keeping the diagnostics crate free of LSP dependencies.
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_base::FileId;
+use baml_db::FileId;
+use baml_diagnostics::{Diagnostic, Severity};
 use lsp_types::{DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Url};
-
-use crate::diagnostic::{Diagnostic, Severity};
 
 /// Configuration for LSP diagnostic conversion.
 pub struct LspConversionConfig<'a> {
@@ -18,99 +20,97 @@ pub struct LspConversionConfig<'a> {
     pub file_sources: &'a HashMap<FileId, (String, Vec<u32>)>,
 }
 
-impl Diagnostic {
-    /// Convert to an LSP diagnostic.
-    ///
-    /// Returns `None` if the primary span's file is not in the provided file maps.
-    pub fn to_lsp(&self, config: &LspConversionConfig) -> Option<(Url, lsp_types::Diagnostic)> {
-        let primary_span = self.primary_span()?;
-        let path = config.file_paths.get(&primary_span.file_id)?;
-        let url = Url::from_file_path(path).ok()?;
+/// Convert a diagnostic to an LSP diagnostic.
+///
+/// Returns `None` if the primary span's file is not in the provided file maps.
+pub fn to_lsp_diagnostic(
+    diagnostic: &Diagnostic,
+    config: &LspConversionConfig,
+) -> Option<(Url, lsp_types::Diagnostic)> {
+    let primary_span = diagnostic.primary_span()?;
+    let path = config.file_paths.get(&primary_span.file_id)?;
+    let url = Url::from_file_path(path).ok()?;
 
-        let (source_text, line_starts) = config.file_sources.get(&primary_span.file_id)?;
+    let (source_text, line_starts) = config.file_sources.get(&primary_span.file_id)?;
 
-        let range = span_to_lsp_range(primary_span.range, source_text, line_starts);
+    let range = span_to_lsp_range(primary_span.range, source_text, line_starts);
 
-        let severity = match self.severity {
-            Severity::Error => Some(DiagnosticSeverity::ERROR),
-            Severity::Warning => Some(DiagnosticSeverity::WARNING),
-            Severity::Info => Some(DiagnosticSeverity::INFORMATION),
-        };
+    let severity = match diagnostic.severity {
+        Severity::Error => Some(DiagnosticSeverity::ERROR),
+        Severity::Warning => Some(DiagnosticSeverity::WARNING),
+        Severity::Info => Some(DiagnosticSeverity::INFORMATION),
+    };
 
-        // Build related information from secondary annotations and related_info
-        let mut related_information: Vec<DiagnosticRelatedInformation> = Vec::new();
+    // Build related information from secondary annotations and related_info
+    let mut related_information: Vec<DiagnosticRelatedInformation> = Vec::new();
 
-        // Add secondary annotations as related info
-        for annotation in &self.annotations {
-            if !annotation.is_primary {
-                if let Some(path) = config.file_paths.get(&annotation.span.file_id) {
-                    if let Ok(ann_url) = Url::from_file_path(path) {
-                        if let Some((ann_source, ann_line_starts)) =
-                            config.file_sources.get(&annotation.span.file_id)
-                        {
-                            let ann_range = span_to_lsp_range(
-                                annotation.span.range,
-                                ann_source,
-                                ann_line_starts,
-                            );
-                            related_information.push(DiagnosticRelatedInformation {
-                                location: Location {
-                                    uri: ann_url,
-                                    range: ann_range,
-                                },
-                                message: annotation
-                                    .message
-                                    .clone()
-                                    .unwrap_or_else(|| "related".to_string()),
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        // Add explicit related_info
-        for info in &self.related_info {
-            if let Some(path) = config.file_paths.get(&info.span.file_id) {
-                if let Ok(info_url) = Url::from_file_path(path) {
-                    if let Some((info_source, info_line_starts)) =
-                        config.file_sources.get(&info.span.file_id)
+    // Add secondary annotations as related info
+    for annotation in &diagnostic.annotations {
+        if !annotation.is_primary {
+            if let Some(path) = config.file_paths.get(&annotation.span.file_id) {
+                if let Ok(ann_url) = Url::from_file_path(path) {
+                    if let Some((ann_source, ann_line_starts)) =
+                        config.file_sources.get(&annotation.span.file_id)
                     {
-                        let info_range =
-                            span_to_lsp_range(info.span.range, info_source, info_line_starts);
+                        let ann_range =
+                            span_to_lsp_range(annotation.span.range, ann_source, ann_line_starts);
                         related_information.push(DiagnosticRelatedInformation {
                             location: Location {
-                                uri: info_url,
-                                range: info_range,
+                                uri: ann_url,
+                                range: ann_range,
                             },
-                            message: info.message.clone(),
+                            message: annotation
+                                .message
+                                .clone()
+                                .unwrap_or_else(|| "related".to_string()),
                         });
                     }
                 }
             }
         }
-
-        let related_information = if related_information.is_empty() {
-            None
-        } else {
-            Some(related_information)
-        };
-
-        Some((
-            url,
-            lsp_types::Diagnostic {
-                range,
-                severity,
-                code: Some(NumberOrString::String(self.code().to_string())),
-                code_description: None,
-                source: Some("baml".to_string()),
-                message: self.message.clone(),
-                related_information,
-                tags: None,
-                data: None,
-            },
-        ))
     }
+
+    // Add explicit related_info
+    for info in &diagnostic.related_info {
+        if let Some(path) = config.file_paths.get(&info.span.file_id) {
+            if let Ok(info_url) = Url::from_file_path(path) {
+                if let Some((info_source, info_line_starts)) =
+                    config.file_sources.get(&info.span.file_id)
+                {
+                    let info_range =
+                        span_to_lsp_range(info.span.range, info_source, info_line_starts);
+                    related_information.push(DiagnosticRelatedInformation {
+                        location: Location {
+                            uri: info_url,
+                            range: info_range,
+                        },
+                        message: info.message.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    let related_information = if related_information.is_empty() {
+        None
+    } else {
+        Some(related_information)
+    };
+
+    Some((
+        url,
+        lsp_types::Diagnostic {
+            range,
+            severity,
+            code: Some(NumberOrString::String(diagnostic.code().to_string())),
+            code_description: None,
+            source: Some("baml".to_string()),
+            message: diagnostic.message.clone(),
+            related_information,
+            tags: None,
+            data: None,
+        },
+    ))
 }
 
 /// Convert a TextRange to an LSP Range.
@@ -158,11 +158,11 @@ pub fn compute_line_starts(source: &str) -> Vec<u32> {
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Span;
+    use baml_db::Span;
+    use baml_diagnostics::DiagnosticId;
     use text_size::TextRange;
 
     use super::*;
-    use crate::diagnostic::DiagnosticId;
 
     #[test]
     fn test_compute_line_starts() {
@@ -220,7 +220,7 @@ mod tests {
             file_sources: &file_sources,
         };
 
-        let result = diag.to_lsp(&config);
+        let result = to_lsp_diagnostic(&diag, &config);
         assert!(result.is_some());
 
         let (url, lsp_diag) = result.unwrap();

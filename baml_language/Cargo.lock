@@ -356,7 +356,6 @@ dependencies = [
  "ariadne",
  "baml_base",
  "baml_workspace",
- "lsp-types",
  "salsa",
  "text-size",
 ]
