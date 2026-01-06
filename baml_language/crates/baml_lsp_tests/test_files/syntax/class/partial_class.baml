@@ -13,7 +13,7 @@ class TestClassAlias {
 //----
 //- diagnostics
 // Error: field 'we' is missing a type annotation
-//    ╭─[ 0:2:3 ]
+//    ╭─[ class_partial_class.baml:2:3 ]
 //    │
 //  2 │   we
 //    │   ─┬  
@@ -22,7 +22,7 @@ class TestClassAlias {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Attribute '@alias' can only be defined once on field 'key2' in class 'TestClassAlias'
-//    ╭─[ 0:8:32 ]
+//    ╭─[ class_partial_class.baml:8:32 ]
 //    │
 //  8 │   key2 string @alias("key21") @alias("key22")
 //    │                ──┬──           ──┬──  

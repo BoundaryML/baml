@@ -63,7 +63,7 @@ function Bar(a: string, b: int | bool) -> int {
 //----
 //- diagnostics
 // Error: Expected '(', found '{'
-//    ╭─[ 0:1:14 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
@@ -72,7 +72,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '{'
-//    ╭─[ 0:1:14 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
@@ -81,7 +81,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '{'
-//    ╭─[ 0:1:14 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
@@ -90,7 +90,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '{'
-//    ╭─[ 0:1:14 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
@@ -99,7 +99,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected return type (->), found '{'
-//    ╭─[ 0:1:14 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
@@ -108,7 +108,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Duplicate function 'Bar'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:1 ]
 //    │
 //  1 │ function Bar {
 //    │ │ 
@@ -119,7 +119,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Unknown variable input
-//    ╭─[ 0:2:3 ]
+//    ╭─[ functions_v2_duplicate_names.baml:2:3 ]
 //    │
 //  2 │   input string
 //    │   ──┬──  
@@ -128,7 +128,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable string
-//    ╭─[ 0:2:9 ]
+//    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
 //    │
 //  2 │   input string
 //    │         ───┬──  
@@ -137,7 +137,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable output
-//    ╭─[ 0:3:3 ]
+//    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
 //    │
 //  3 │   output string
 //    │   ───┬──  
@@ -146,7 +146,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable string
-//    ╭─[ 0:3:10 ]
+//    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
 //    │
 //  3 │   output string
 //    │          ───┬──  
@@ -155,7 +155,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable input
-//    ╭─[ 0:2:3 ]
+//    ╭─[ functions_v2_duplicate_names.baml:2:3 ]
 //    │
 //  2 │   input string
 //    │   ──┬──  
@@ -164,7 +164,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable string
-//    ╭─[ 0:2:9 ]
+//    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
 //    │
 //  2 │   input string
 //    │         ───┬──  
@@ -173,7 +173,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable output
-//    ╭─[ 0:3:3 ]
+//    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
 //    │
 //  3 │   output string
 //    │   ───┬──  
@@ -182,7 +182,7 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable string
-//    ╭─[ 0:3:10 ]
+//    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
 //    │
 //  3 │   output string
 //    │          ───┬──  

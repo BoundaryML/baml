@@ -82,7 +82,7 @@ template_string BadCall4 #"
 //----
 //- diagnostics
 // Error: Expected '(', found '#'
-//    ╭─[ 0:5:26 ]
+//    ╭─[ template_string_bad_calls.baml:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
@@ -91,7 +91,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '#'
-//    ╭─[ 0:5:26 ]
+//    ╭─[ template_string_bad_calls.baml:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
@@ -100,7 +100,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '#'
-//    ╭─[ 0:5:26 ]
+//    ╭─[ template_string_bad_calls.baml:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
@@ -109,7 +109,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '#'
-//    ╭─[ 0:5:26 ]
+//    ╭─[ template_string_bad_calls.baml:5:26 ]
 //    │
 //  5 │ template_string BadCall1 #"
 //    │                          ┬  
@@ -118,7 +118,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected '(', found '#'
-//    ╭─[ 0:9:26 ]
+//    ╭─[ template_string_bad_calls.baml:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
@@ -127,7 +127,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '#'
-//    ╭─[ 0:9:26 ]
+//    ╭─[ template_string_bad_calls.baml:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
@@ -136,7 +136,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '#'
-//    ╭─[ 0:9:26 ]
+//    ╭─[ template_string_bad_calls.baml:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
@@ -145,7 +145,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '#'
-//    ╭─[ 0:9:26 ]
+//    ╭─[ template_string_bad_calls.baml:9:26 ]
 //    │
 //  9 │ template_string BadCall2 #"
 //    │                          ┬  
@@ -154,7 +154,7 @@ template_string BadCall4 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected '(', found '#'
-//     ╭─[ 0:13:26 ]
+//     ╭─[ template_string_bad_calls.baml:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
@@ -163,7 +163,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected parameter name, found '#'
-//     ╭─[ 0:13:26 ]
+//     ╭─[ template_string_bad_calls.baml:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
@@ -172,7 +172,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type annotation, found '#'
-//     ╭─[ 0:13:26 ]
+//     ╭─[ template_string_bad_calls.baml:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
@@ -181,7 +181,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected ')', found '#'
-//     ╭─[ 0:13:26 ]
+//     ╭─[ template_string_bad_calls.baml:13:26 ]
 //     │
 //  13 │ template_string BadCall3 #"
 //     │                          ┬  
@@ -190,7 +190,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '(', found '#'
-//     ╭─[ 0:17:26 ]
+//     ╭─[ template_string_bad_calls.baml:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
@@ -199,7 +199,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected parameter name, found '#'
-//     ╭─[ 0:17:26 ]
+//     ╭─[ template_string_bad_calls.baml:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
@@ -208,7 +208,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type annotation, found '#'
-//     ╭─[ 0:17:26 ]
+//     ╭─[ template_string_bad_calls.baml:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  
@@ -217,7 +217,7 @@ template_string BadCall4 #"
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected ')', found '#'
-//     ╭─[ 0:17:26 ]
+//     ╭─[ template_string_bad_calls.baml:17:26 ]
 //     │
 //  17 │ template_string BadCall4 #"
 //     │                          ┬  

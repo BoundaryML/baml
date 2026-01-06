@@ -13,7 +13,7 @@ enum Test {
 //----
 //- diagnostics
 // Error: Expected Unexpected token in enum body, found '|'
-//    ╭─[ 0:2:11 ]
+//    ╭─[ enum_invalid_value_expr.baml:2:11 ]
 //    │
 //  2 │     A int | string
 //    │           ┬  

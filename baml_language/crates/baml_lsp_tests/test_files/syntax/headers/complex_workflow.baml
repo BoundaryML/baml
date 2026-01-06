@@ -69,7 +69,7 @@ client<llm> GPT4 {
 //----
 //- diagnostics
 // Error: Cannot apply operator '!' to type string?
-//    ╭─[ 0:6:30 ]
+//    ╭─[ headers_complex_workflow.baml:6:30 ]
 //    │
 //  6 │     let computed_title = if (!title) {
 //    │                              ───┬──  
@@ -78,7 +78,7 @@ client<llm> GPT4 {
 //    │ Note: Error code: E0004
 // ───╯
 // Error: Cannot apply operator 'Add' to types string | string? and string
-//     ╭─[ 0:17:5 ]
+//     ╭─[ headers_complex_workflow.baml:17:5 ]
 //     │
 //  17 │     computed_title + ": " + summary
 //     │     ──────────┬──────────  
@@ -87,7 +87,7 @@ client<llm> GPT4 {
 //     │ Note: Error code: E0004
 // ────╯
 // Error: Cannot apply operator 'Add' to types error and string
-//     ╭─[ 0:17:1 ]
+//     ╭─[ headers_complex_workflow.baml:17:1 ]
 //     │
 //  17 │     computed_title + ": " + summary
 //     │ ─────────────────┬─────────────────  

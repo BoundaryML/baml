@@ -103,7 +103,7 @@ test IncompleteSyntax {
 //----
 //- diagnostics
 // Error: Expected '}', found type_builder
-//    ╭─[ 0:4:3 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:4:3 ]
 //    │
 //  4 │   type_builder {
 //    │   ──────┬─────  
@@ -112,7 +112,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found type_builder
-//    ╭─[ 0:4:3 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:4:3 ]
 //    │
 //  4 │   type_builder {
 //    │   ──────┬─────  
@@ -121,7 +121,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:4:16 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:4:16 ]
 //    │
 //  4 │   type_builder {
 //    │                ┬  
@@ -130,7 +130,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found dynamic
-//    ╭─[ 0:8:5 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:8:5 ]
 //    │
 //  8 │     dynamic class Bar {
 //    │     ───┬───  
@@ -139,7 +139,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:11:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:11:3 ]
 //     │
 //  11 │   }
 //     │   ┬  
@@ -148,7 +148,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:12:1 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:12:1 ]
 //     │
 //  12 │ }
 //     │ ┬  
@@ -157,7 +157,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:16:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:16:3 ]
 //     │
 //  16 │   type_builder {
 //     │   ──────┬─────  
@@ -166,7 +166,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:16:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:16:3 ]
 //     │
 //  16 │   type_builder {
 //     │   ──────┬─────  
@@ -175,7 +175,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:16:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:16:16 ]
 //     │
 //  16 │   type_builder {
 //     │                ┬  
@@ -184,7 +184,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:20:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:20:5 ]
 //     │
 //  20 │     dynamic class Bar {
 //     │     ───┬───  
@@ -193,7 +193,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:23:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:23:3 ]
 //     │
 //  23 │   }
 //     │   ┬  
@@ -202,7 +202,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:24:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:24:3 ]
 //     │
 //  24 │   type_builder {
 //     │   ──────┬─────  
@@ -211,7 +211,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:24:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:24:16 ]
 //     │
 //  24 │   type_builder {
 //     │                ┬  
@@ -220,7 +220,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:28:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:28:5 ]
 //     │
 //  28 │     dynamic class B {
 //     │     ───┬───  
@@ -229,7 +229,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:31:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:31:3 ]
 //     │
 //  31 │   }
 //     │   ┬  
@@ -238,7 +238,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:32:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:32:3 ]
 //     │
 //  32 │   args {
 //     │   ──┬─  
@@ -247,7 +247,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:32:8 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:32:8 ]
 //     │
 //  32 │   args {
 //     │        ┬  
@@ -256,7 +256,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:33:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:33:5 ]
 //     │
 //  33 │     from_text "Test"
 //     │     ────┬────  
@@ -265,7 +265,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:33:15 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:33:15 ]
 //     │
 //  33 │     from_text "Test"
 //     │               ┬  
@@ -274,7 +274,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:33:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:33:16 ]
 //     │
 //  33 │     from_text "Test"
 //     │                ──┬─  
@@ -283,7 +283,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:33:20 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:33:20 ]
 //     │
 //  33 │     from_text "Test"
 //     │                    ┬  
@@ -292,7 +292,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:34:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:34:3 ]
 //     │
 //  34 │   }
 //     │   ┬  
@@ -301,7 +301,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:35:1 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:35:1 ]
 //     │
 //  35 │ }
 //     │ ┬  
@@ -310,7 +310,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:39:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:39:3 ]
 //     │
 //  39 │   type_builder {
 //     │   ──────┬─────  
@@ -319,7 +319,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:39:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:39:3 ]
 //     │
 //  39 │   type_builder {
 //     │   ──────┬─────  
@@ -328,7 +328,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:39:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:39:16 ]
 //     │
 //  39 │   type_builder {
 //     │                ┬  
@@ -337,7 +337,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:40:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:40:5 ]
 //     │
 //  40 │     dynamic Bar {
 //     │     ───┬───  
@@ -346,7 +346,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:40:13 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
 //  40 │     dynamic Bar {
 //     │             ─┬─  
@@ -355,7 +355,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:40:17 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:40:17 ]
 //     │
 //  40 │     dynamic Bar {
 //     │                 ┬  
@@ -364,7 +364,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:41:7 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:41:7 ]
 //     │
 //  41 │       bar int
 //     │       ─┬─  
@@ -373,7 +373,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:41:11 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:41:11 ]
 //     │
 //  41 │       bar int
 //     │           ─┬─  
@@ -382,7 +382,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:42:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:42:5 ]
 //     │
 //  42 │     }
 //     │     ┬  
@@ -391,7 +391,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:43:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:43:3 ]
 //     │
 //  43 │   }
 //     │   ┬  
@@ -400,7 +400,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:44:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:44:3 ]
 //     │
 //  44 │   args {
 //     │   ──┬─  
@@ -409,7 +409,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:44:8 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:44:8 ]
 //     │
 //  44 │   args {
 //     │        ┬  
@@ -418,7 +418,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:45:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:45:5 ]
 //     │
 //  45 │     from_text "Test"
 //     │     ────┬────  
@@ -427,7 +427,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:45:15 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:45:15 ]
 //     │
 //  45 │     from_text "Test"
 //     │               ┬  
@@ -436,7 +436,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:45:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:45:16 ]
 //     │
 //  45 │     from_text "Test"
 //     │                ──┬─  
@@ -445,7 +445,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:45:20 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:45:20 ]
 //     │
 //  45 │     from_text "Test"
 //     │                    ┬  
@@ -454,7 +454,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:46:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:46:3 ]
 //     │
 //  46 │   }
 //     │   ┬  
@@ -463,7 +463,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:47:1 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:47:1 ]
 //     │
 //  47 │ }
 //     │ ┬  
@@ -472,7 +472,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:51:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:51:3 ]
 //     │
 //  51 │   type_builder {
 //     │   ──────┬─────  
@@ -481,7 +481,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:51:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:51:3 ]
 //     │
 //  51 │   type_builder {
 //     │   ──────┬─────  
@@ -490,7 +490,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:51:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:51:16 ]
 //     │
 //  51 │   type_builder {
 //     │                ┬  
@@ -499,7 +499,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type alias name, found dynamic
-//     ╭─[ 0:54:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
@@ -508,7 +508,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '=', found dynamic
-//     ╭─[ 0:54:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
@@ -517,7 +517,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type, found dynamic
-//     ╭─[ 0:54:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
@@ -526,7 +526,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:54:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
@@ -535,7 +535,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:57:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:57:3 ]
 //     │
 //  57 │   }
 //     │   ┬  
@@ -544,7 +544,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:58:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:58:3 ]
 //     │
 //  58 │   args {
 //     │   ──┬─  
@@ -553,7 +553,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:58:8 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:58:8 ]
 //     │
 //  58 │   args {
 //     │        ┬  
@@ -562,7 +562,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:59:5 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:59:5 ]
 //     │
 //  59 │     from_text "Test"
 //     │     ────┬────  
@@ -571,7 +571,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:59:15 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:59:15 ]
 //     │
 //  59 │     from_text "Test"
 //     │               ┬  
@@ -580,7 +580,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:59:16 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:59:16 ]
 //     │
 //  59 │     from_text "Test"
 //     │                ──┬─  
@@ -589,7 +589,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:59:20 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:59:20 ]
 //     │
 //  59 │     from_text "Test"
 //     │                    ┬  
@@ -598,7 +598,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:60:3 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:60:3 ]
 //     │
 //  60 │   }
 //     │   ┬  
@@ -607,7 +607,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:61:1 ]
+//     ╭─[ misc_dynamic_types_parser_errors.baml:61:1 ]
 //     │
 //  61 │ }
 //     │ ┬  
@@ -616,7 +616,7 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Duplicate class 'Bar'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
@@ -627,7 +627,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'Bar'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
@@ -638,7 +638,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'Foo'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 
@@ -649,7 +649,7 @@ test IncompleteSyntax {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Unknown type Resume
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {
 //    │ │ 

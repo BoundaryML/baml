@@ -43,7 +43,7 @@ function ArrayAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected int[], found string[]
-//     ╭─[ 0:18:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:18:5 ]
 //     │
 //  18 │     d = ["a", "b"];
 //     │        ─────┬─────  
@@ -52,7 +52,7 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string[], found int[]
-//     ╭─[ 0:22:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:22:5 ]
 //     │
 //  22 │     e = [1, 2];
 //     │        ───┬───  
@@ -61,7 +61,7 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int, found int[]
-//     ╭─[ 0:26:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:26:5 ]
 //     │
 //  26 │     f = [1, 2, 3];
 //     │        ─────┬────  
@@ -70,7 +70,7 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int[], found int
-//     ╭─[ 0:30:6 ]
+//     ╭─[ invalid_assignment_arrays.baml:30:6 ]
 //     │
 //  30 │     g = 42;
 //     │         ─┬  
@@ -79,7 +79,7 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int[], found string
-//     ╭─[ 0:34:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:34:5 ]
 //     │
 //  34 │     h = "array";
 //     │        ────┬───  
@@ -88,7 +88,7 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string, found int[]
-//     ╭─[ 0:38:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:38:5 ]
 //     │
 //  38 │     i = [4, 5, 6];
 //     │        ─────┬────  

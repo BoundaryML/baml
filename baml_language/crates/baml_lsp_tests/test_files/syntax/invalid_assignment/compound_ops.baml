@@ -36,7 +36,7 @@ function CompoundAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected int, found string
-//     ╭─[ 0:15:6 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:15:6 ]
 //     │
 //  15 │     c += "five";
 //     │         ───┬───  
@@ -45,7 +45,7 @@ function CompoundAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string, found int
-//     ╭─[ 0:19:7 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:19:7 ]
 //     │
 //  19 │     d += 100;
 //     │          ─┬─  
@@ -54,7 +54,7 @@ function CompoundAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int, found bool
-//     ╭─[ 0:23:7 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:23:7 ]
 //     │
 //  23 │     e += true;
 //     │          ──┬─  
@@ -63,7 +63,7 @@ function CompoundAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected bool, found int
-//     ╭─[ 0:27:7 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:27:7 ]
 //     │
 //  27 │     f += 1;
 //     │          ┬  
@@ -72,7 +72,7 @@ function CompoundAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected float, found string
-//     ╭─[ 0:31:6 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:31:6 ]
 //     │
 //  31 │     g += "add";
 //     │         ───┬──  

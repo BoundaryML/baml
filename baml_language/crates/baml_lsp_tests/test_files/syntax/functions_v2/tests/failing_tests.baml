@@ -128,7 +128,7 @@ test Bar {
 //----
 //- diagnostics
 // Error: Duplicate test 'Bar' for function 'InputEnum'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ functions_v2_tests_failing_tests.baml:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
@@ -139,7 +139,7 @@ test Bar {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate test 'Foo' for function 'InputImage'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ functions_v2_tests_failing_tests.baml:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 

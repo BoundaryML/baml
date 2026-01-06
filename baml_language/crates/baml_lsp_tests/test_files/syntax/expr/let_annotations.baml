@@ -25,7 +25,7 @@ function Ok() -> int {
 //----
 //- diagnostics
 // Error: Expected int, found float
-//    ╭─[ 0:5:10 ]
+//    ╭─[ expr_let_annotations.baml:5:10 ]
 //    │
 //  5 │   let y : int = 10.0;
 //    │          ──┬─  
@@ -34,7 +34,7 @@ function Ok() -> int {
 //    │ Note: Error code: E0001
 // ───╯
 // Error: Expected int, found string
-//    ╭─[ 0:6:9 ]
+//    ╭─[ expr_let_annotations.baml:6:9 ]
 //    │
 //  6 │   let c: int = "hello";
 //    │         ──┬─  

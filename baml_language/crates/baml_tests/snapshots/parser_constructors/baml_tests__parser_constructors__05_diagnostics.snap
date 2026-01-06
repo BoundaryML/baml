@@ -1,16 +1,16 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [name] Error: Duplicate class 'Point'
-   ╭─[ 1:1:1 ]
+   ╭─[ class_constructor.baml:1:1 ]
    │
  1 │ class Point {
    │ │ 
    │ ╰─ class 'Point' defined in class_constructor.baml
    │
-   ├─[ 0:1:1 ]
+   ├─[ array_constructor.baml:1:1 ]
    │
  1 │ class Point {
    │ │ 

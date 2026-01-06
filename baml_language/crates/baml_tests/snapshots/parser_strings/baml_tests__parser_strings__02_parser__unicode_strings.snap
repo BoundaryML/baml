@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -279,7 +279,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected function name, found error
-    ╭─[ 0:29:1 ]
+    ╭─[ unicode_strings.baml:29:1 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │ ─┬─  
@@ -289,7 +289,7 @@ Error: Expected function name, found error
 ────╯
 
 Error: Expected parameter name, found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -299,7 +299,7 @@ Error: Expected parameter name, found error
 ────╯
 
 Error: Expected type annotation, found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -309,7 +309,7 @@ Error: Expected type annotation, found error
 ────╯
 
 Error: Expected ')', found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -319,7 +319,7 @@ Error: Expected ')', found error
 ────╯
 
 Error: Expected return type (->), found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -329,7 +329,7 @@ Error: Expected return type (->), found error
 ────╯
 
 Error: Expected function body, found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -339,7 +339,7 @@ Error: Expected function body, found error
 ────╯
 
 Error: Expected top-level declaration, found error
-    ╭─[ 0:29:14 ]
+    ╭─[ unicode_strings.baml:29:14 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │              ─┬─  
@@ -349,7 +349,7 @@ Error: Expected top-level declaration, found error
 ────╯
 
 Error: Expected top-level declaration, found error
-    ╭─[ 0:29:17 ]
+    ╭─[ unicode_strings.baml:29:17 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                 ─┬─  
@@ -359,7 +359,7 @@ Error: Expected top-level declaration, found error
 ────╯
 
 Error: Expected top-level declaration, found identifier
-    ╭─[ 0:29:21 ]
+    ╭─[ unicode_strings.baml:29:21 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                     ───┬──  
@@ -369,7 +369,7 @@ Error: Expected top-level declaration, found identifier
 ────╯
 
 Error: Expected top-level declaration, found ')'
-    ╭─[ 0:29:27 ]
+    ╭─[ unicode_strings.baml:29:27 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                           ┬  
@@ -379,7 +379,7 @@ Error: Expected top-level declaration, found ')'
 ────╯
 
 Error: Expected top-level declaration, found '->'
-    ╭─[ 0:29:29 ]
+    ╭─[ unicode_strings.baml:29:29 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                             ─┬   
@@ -389,7 +389,7 @@ Error: Expected top-level declaration, found '->'
 ────╯
 
 Error: Expected top-level declaration, found identifier
-    ╭─[ 0:29:32 ]
+    ╭─[ unicode_strings.baml:29:32 ]
     │
  29 │     Return result with emojis: ✅ or ❌
     │                                ────┬───  
@@ -399,7 +399,7 @@ Error: Expected top-level declaration, found identifier
 ────╯
 
 Error: Expected top-level declaration, found '{'
-    ╭─[ 0:30:1 ]
+    ╭─[ unicode_strings.baml:30:1 ]
     │
  30 │   "#
     │ ┬  

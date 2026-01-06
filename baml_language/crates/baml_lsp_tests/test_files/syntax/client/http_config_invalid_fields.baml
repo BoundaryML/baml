@@ -20,7 +20,7 @@ client<llm> InvalidFieldName {
 //----
 //- diagnostics
 // Error: Unrecognized field 'conect_timeout_ms' in http configuration block. Did you mean 'connect_timeout_ms'?
-//    ╭─[ 0:6:7 ]
+//    ╭─[ client_http_config_invalid_fields.baml:6:7 ]
 //    │
 //  6 │       conect_timeout_ms 5000  // Typo in field name
 //    │       ────────┬────────  

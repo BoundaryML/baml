@@ -15,13 +15,13 @@ enum Test {
 //----
 //- diagnostics
 // Error: Duplicate variant 'ONE' in enum 'Test'
-//    ╭─[ 0:4:5 ]
+//    ╭─[ enum_duplicate_value.baml:4:5 ]
 //    │
 //  4 │     ONE
 //    │     ─┬─  
 //    │      ╰─── duplicate definition
 //    │
-//    ├─[ 0:4:5 ]
+//    ├─[ enum_duplicate_value.baml:4:5 ]
 //    │
 //  2 │     ONE
 //    │     ─┬─  

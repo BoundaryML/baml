@@ -72,7 +72,7 @@ test TestMakePoem() {
 //----
 //- diagnostics
 // Error: remove parentheses from test name: `test TestPipeline`
-//     ╭─[ 0:44:18 ]
+//     ╭─[ expr_expr_full.baml:44:18 ]
 //     │
 //  44 │ test TestPipeline() {
 //     │                  ─┬  
@@ -81,7 +81,7 @@ test TestMakePoem() {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test TestPyramid`
-//     ╭─[ 0:49:17 ]
+//     ╭─[ expr_expr_full.baml:49:17 ]
 //     │
 //  49 │ test TestPyramid() {
 //     │                 ─┬  
@@ -90,7 +90,7 @@ test TestMakePoem() {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test OuterPyramid`
-//     ╭─[ 0:54:18 ]
+//     ╭─[ expr_expr_full.baml:54:18 ]
 //     │
 //  54 │ test OuterPyramid() {
 //     │                  ─┬  
@@ -99,7 +99,7 @@ test TestMakePoem() {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test TestMakePoem`
-//     ╭─[ 0:67:18 ]
+//     ╭─[ expr_expr_full.baml:67:18 ]
 //     │
 //  67 │ test TestMakePoem() {
 //     │                  ─┬  
@@ -108,7 +108,7 @@ test TestMakePoem() {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Unknown variable poem
-//     ╭─[ 0:41:16 ]
+//     ╭─[ expr_expr_full.baml:41:16 ]
 //     │
 //  41 │   CombinePoems(poem, another)
 //     │                ──┬─  
@@ -117,7 +117,7 @@ test TestMakePoem() {
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable another
-//     ╭─[ 0:41:22 ]
+//     ╭─[ expr_expr_full.baml:41:22 ]
 //     │
 //  41 │   CombinePoems(poem, another)
 //     │                      ───┬───  

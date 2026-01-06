@@ -45,7 +45,7 @@ function ContinueNested() -> int {
 //----
 //- diagnostics
 // Error: Expected int, found void
-//    ╭─[ 0:1:1 ]
+//    ╭─[ loops_continue.baml:1:1 ]
 //    │
 //  1 │ function Factorial(limit: int) -> int {
 //    │ │ 

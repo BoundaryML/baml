@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [type] Error: Cannot apply operator 'Add' to types int and string
-   ╭─[ 0:2:3 ]
+   ╭─[ simple_type_error.baml:2:3 ]
    │
  2 │   1 + "foo"
    │   ────┬────  

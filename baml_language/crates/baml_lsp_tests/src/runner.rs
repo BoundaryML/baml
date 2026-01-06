@@ -1,7 +1,5 @@
 //! Test runner for inline assertion tests.
 
-use std::collections::HashMap;
-
 use baml_db::{
     RootDatabase,
     baml_hir::{self, file_items, function_body, function_signature},
@@ -9,7 +7,7 @@ use baml_db::{
     baml_tir::{self, class_field_types, type_aliases, typing_context},
 };
 use baml_diagnostics::{
-    render_hir_diagnostic, render_name_error, render_parse_error, render_type_error,
+    DbSourceCache, render_hir_diagnostic, render_name_error, render_parse_error, render_type_error,
 };
 use salsa::Setter;
 
@@ -41,12 +39,10 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let mut db = RootDatabase::new();
     let root = db.set_project_root(std::path::PathBuf::from("."));
 
-    let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
     let mut source_files = Vec::new();
 
     for (filename, vfile) in &parsed.files {
         let source_file = db.add_file(filename, &vfile.content);
-        sources.insert(source_file.file_id(&db), vfile.content.clone());
         source_files.push(source_file);
     }
 
@@ -55,12 +51,13 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
 
     // 2. Collect all diagnostics
     let mut all_errors: Vec<String> = Vec::new();
+    let mut cache = DbSourceCache::new(&db, root);
 
     // Collect parse errors
     for source_file in &source_files {
         let errors = baml_parser::parse_errors(&db, *source_file);
         for error in errors.iter() {
-            all_errors.push(render_parse_error(error, &sources, false));
+            all_errors.push(render_parse_error(error, &mut cache, false));
         }
     }
 
@@ -68,17 +65,17 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     for source_file in &source_files {
         let lowering_result = baml_hir::file_lowering(&db, *source_file);
         for diag in lowering_result.diagnostics(&db) {
-            all_errors.push(render_hir_diagnostic(diag, &sources, false));
+            all_errors.push(render_hir_diagnostic(diag, &mut cache, false));
         }
     }
 
     // Collect validation errors (duplicates across files, reserved names)
     let validation_result = baml_hir::validate_hir(&db, root);
     for diag in validation_result.hir_diagnostics {
-        all_errors.push(render_hir_diagnostic(&diag, &sources, false));
+        all_errors.push(render_hir_diagnostic(&diag, &mut cache, false));
     }
     for error in validation_result.name_errors {
-        all_errors.push(render_name_error(&error, &sources, false));
+        all_errors.push(render_name_error(&error, &mut cache, false));
     }
 
     // Collect type errors
@@ -106,7 +103,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
                     *func_id,
                 );
                 for error in &result.errors {
-                    all_errors.push(render_type_error(error, &sources, false));
+                    all_errors.push(render_type_error(error, &mut cache, false));
                 }
             }
         }

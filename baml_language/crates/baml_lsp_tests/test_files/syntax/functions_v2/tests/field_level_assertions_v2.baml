@@ -22,7 +22,7 @@ test MyTest {
 //----
 //- diagnostics
 // Error: Expected config key, found '@'
-//    ╭─[ 0:9:28 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:28 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                            ┬  
@@ -31,7 +31,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected config key, found assert
-//    ╭─[ 0:9:29 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:29 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                             ───┬──  
@@ -40,7 +40,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected config key, found '('
-//    ╭─[ 0:9:35 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:35 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                   ┬  
@@ -49,7 +49,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected config key, found '{'
-//    ╭─[ 0:9:36 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:36 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                    ┬  
@@ -58,7 +58,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected config key, found '{'
-//    ╭─[ 0:9:37 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:37 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                     ┬  
@@ -67,7 +67,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:45 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:45 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                             ┬  
@@ -76,7 +76,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ')'
-//    ╭─[ 0:9:46 ]
+//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:46 ]
 //    │
 //  9 │   functions [TestFunction] @assert({{ true }})
 //    │                                              ┬  
@@ -85,7 +85,7 @@ test MyTest {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:10:3 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:10:3 ]
 //     │
 //  10 │   args {
 //     │   ──┬─  
@@ -94,7 +94,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:10:8 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:10:8 ]
 //     │
 //  10 │   args {
 //     │        ┬  
@@ -103,7 +103,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:5 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:11:5 ]
 //     │
 //  11 │     input "hello"
 //     │     ──┬──  
@@ -112,7 +112,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:11:11 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:11:11 ]
 //     │
 //  11 │     input "hello"
 //     │           ┬  
@@ -121,7 +121,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:12 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:11:12 ]
 //     │
 //  11 │     input "hello"
 //     │            ──┬──  
@@ -130,7 +130,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:11:17 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:11:17 ]
 //     │
 //  11 │     input "hello"
 //     │                 ┬  
@@ -139,7 +139,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:12:3 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:12:3 ]
 //     │
 //  12 │   }
 //     │   ┬  
@@ -148,7 +148,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:13:1 ]
+//     ╭─[ functions_v2_tests_field_level_assertions_v2.baml:13:1 ]
 //     │
 //  13 │ }
 //     │ ┬  

@@ -14,7 +14,7 @@ function FooBar(arg: int) {
 //----
 //- diagnostics
 // Error: Expected return type (->), found '{'
-//    ╭─[ 0:1:27 ]
+//    ╭─[ functions_v2_invalid_no_return.baml:1:27 ]
 //    │
 //  1 │ function FooBar(arg: int) {
 //    │                           ┬  

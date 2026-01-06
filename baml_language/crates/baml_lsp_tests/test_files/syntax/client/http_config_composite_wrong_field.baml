@@ -38,7 +38,7 @@ client<llm> InvalidCompositeFields {
 //----
 //- diagnostics
 // Error: Unrecognized field 'request_timeout_ms' in http configuration block. Did you mean 'total_timeout_ms'? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     ╭─[ 0:13:7 ]
+//     ╭─[ client_http_config_composite_wrong_field.baml:13:7 ]
 //     │
 //  13 │       request_timeout_ms 5000  // Not allowed for composite
 //     │       ─────────┬────────  
@@ -47,7 +47,7 @@ client<llm> InvalidCompositeFields {
 //     │ Note: Error code: E0024
 // ────╯
 // Error: Unrecognized field 'connect_timeout_ms' in http configuration block. Did you mean 'total_timeout_ms'? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     ╭─[ 0:14:7 ]
+//     ╭─[ client_http_config_composite_wrong_field.baml:14:7 ]
 //     │
 //  14 │       connect_timeout_ms 3000  // Not allowed for composite
 //     │       ─────────┬────────  

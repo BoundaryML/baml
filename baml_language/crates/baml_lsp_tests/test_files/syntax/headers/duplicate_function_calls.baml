@@ -15,7 +15,7 @@ function CallsDedup() -> string {
 //----
 //- diagnostics
 // Error: Unknown variable Foo
-//    ╭─[ 0:4:13 ]
+//    ╭─[ headers_duplicate_function_calls.baml:4:13 ]
 //    │
 //  4 │     let a = Foo();
 //    │             ─┬─  
@@ -24,7 +24,7 @@ function CallsDedup() -> string {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable Foo
-//    ╭─[ 0:7:13 ]
+//    ╭─[ headers_duplicate_function_calls.baml:7:13 ]
 //    │
 //  7 │     let b = Foo();
 //    │             ─┬─  
@@ -33,7 +33,7 @@ function CallsDedup() -> string {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable Foo
-//     ╭─[ 0:10:13 ]
+//     ╭─[ headers_duplicate_function_calls.baml:10:13 ]
 //     │
 //  10 │     let c = Foo();
 //     │             ─┬─  
@@ -42,7 +42,7 @@ function CallsDedup() -> string {
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Cannot apply operator 'Add' to types unknown and unknown
-//     ╭─[ 0:12:5 ]
+//     ╭─[ headers_duplicate_function_calls.baml:12:5 ]
 //     │
 //  12 │     a + b
 //     │     ──┬──  

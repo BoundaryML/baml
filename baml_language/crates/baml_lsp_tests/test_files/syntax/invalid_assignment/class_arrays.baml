@@ -46,7 +46,7 @@ function ClassArrayAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected Person[], found Animal[]
-//     ╭─[ 0:25:6 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
 //     │
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
 //     │         ───────────────────┬──────────────────  
@@ -55,7 +55,7 @@ function ClassArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Animal[], found Person[]
-//     ╭─[ 0:29:6 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
 //     │
 //  29 │     a1 = [Person { name: "D", age: 4 }];
 //     │         ───────────────┬───────────────  
@@ -64,7 +64,7 @@ function ClassArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person[], found Person
-//     ╭─[ 0:33:7 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:33:7 ]
 //     │
 //  33 │     p2 = Person { name: "F", age: 6 };
 //     │          ──────────────┬─────────────  
@@ -73,7 +73,7 @@ function ClassArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person, found Person[]
-//     ╭─[ 0:37:6 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:37:6 ]
 //     │
 //  37 │     p3 = [Person { name: "H", age: 8 }];
 //     │         ───────────────┬───────────────  
@@ -82,7 +82,7 @@ function ClassArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int[], found Person[]
-//     ╭─[ 0:41:8 ]
+//     ╭─[ invalid_assignment_class_arrays.baml:41:8 ]
 //     │
 //  41 │     nums = [Person { name: "I", age: 9 }];
 //     │           ───────────────┬───────────────  

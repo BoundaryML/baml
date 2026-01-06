@@ -65,7 +65,7 @@ function Go3(x:int) -> int {
 //----
 //- diagnostics
 // Error: Unknown variable a
-//    ╭─[ 0:2:13 ]
+//    ╭─[ expr_unknown_name.baml:2:13 ]
 //    │
 //  2 │     let y = a;
 //    │             ┬  
@@ -74,7 +74,7 @@ function Go3(x:int) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Unknown variable Unknown
-//     ╭─[ 0:13:5 ]
+//     ╭─[ expr_unknown_name.baml:13:5 ]
 //     │
 //  13 │     Unknown(x)
 //     │     ───┬───  
@@ -83,7 +83,7 @@ function Go3(x:int) -> int {
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable b
-//    ╭─[ 0:9:12 ]
+//    ╭─[ expr_unknown_name.baml:9:12 ]
 //    │
 //  9 │     Go(z,a,b)
 //    │            ┬  
@@ -92,7 +92,7 @@ function Go3(x:int) -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Expected 1 arguments, found 3
-//    ╭─[ 0:9:5 ]
+//    ╭─[ expr_unknown_name.baml:9:5 ]
 //    │
 //  9 │     Go(z,a,b)
 //    │     ────┬────  

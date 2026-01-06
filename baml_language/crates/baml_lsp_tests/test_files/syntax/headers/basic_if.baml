@@ -18,7 +18,7 @@ function BasicIf() -> string {
 //----
 //- diagnostics
 // Error: Expected string, found int
-//    ╭─[ 0:1:1 ]
+//    ╭─[ headers_basic_if.baml:1:1 ]
 //    │
 //  1 │ //# Basic test
 //    │ │ 

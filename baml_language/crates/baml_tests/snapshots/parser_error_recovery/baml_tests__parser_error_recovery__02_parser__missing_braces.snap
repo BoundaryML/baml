@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -24,7 +24,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected '}', found class
-   ╭─[ 0:5:1 ]
+   ╭─[ missing_braces.baml:5:1 ]
    │
  5 │ class Another {  // Should still parse this class
    │ ──┬──  

@@ -14,7 +14,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //----
 //- diagnostics
 // Error: Expected ')', found '@'
-//    ╭─[ 0:9:36 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
@@ -23,7 +23,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected return type (->), found '@'
-//    ╭─[ 0:9:36 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
@@ -32,7 +32,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected function body, found '@'
-//    ╭─[ 0:9:36 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
@@ -41,7 +41,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '@'
-//    ╭─[ 0:9:36 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:36 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                    ┬  
@@ -50,7 +50,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found assert
-//    ╭─[ 0:9:37 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:37 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                     ───┬──  
@@ -59,7 +59,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '('
-//    ╭─[ 0:9:43 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:43 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                           ┬  
@@ -68,7 +68,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:44 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:44 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                            ─────┬────  
@@ -77,7 +77,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ','
-//    ╭─[ 0:9:54 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:54 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                      ┬  
@@ -86,7 +86,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:9:56 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:56 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                        ┬  
@@ -95,7 +95,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:9:57 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:57 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                         ┬  
@@ -104,7 +104,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:58 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:58 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                          ──┬─  
@@ -113,7 +113,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '.'
-//    ╭─[ 0:9:62 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:62 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                              ┬  
@@ -122,7 +122,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:63 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:63 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                               ─┬─  
@@ -131,7 +131,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '>'
-//    ╭─[ 0:9:67 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:67 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                   ┬  
@@ -140,7 +140,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found integer
-//    ╭─[ 0:9:69 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:69 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                     ─┬  
@@ -149,7 +149,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:71 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:71 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                       ┬  
@@ -158,7 +158,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:72 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:72 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                        ┬  
@@ -167,7 +167,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ')'
-//    ╭─[ 0:9:73 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:73 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                         ┬  
@@ -176,7 +176,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ')'
-//    ╭─[ 0:9:74 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:74 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                          ┬  
@@ -185,7 +185,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '->'
-//    ╭─[ 0:9:76 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:76 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                            ─┬  
@@ -194,7 +194,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:79 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:79 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                               ─┬─  
@@ -203,7 +203,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '@'
-//    ╭─[ 0:9:83 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:83 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                   ┬  
@@ -212,7 +212,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:84 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:84 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                    ──┬──  
@@ -221,7 +221,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '('
-//    ╭─[ 0:9:89 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:89 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                         ┬  
@@ -230,7 +230,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:90 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:90 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                          ────┬────  
@@ -239,7 +239,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ','
-//    ╭─[ 0:9:99 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:99 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                   ┬  
@@ -248,7 +248,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:9:101 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:101 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                     ┬  
@@ -257,7 +257,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:9:102 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:102 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                      ┬  
@@ -266,7 +266,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:104 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:104 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                        ──┬─  
@@ -275,7 +275,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '<'
-//    ╭─[ 0:9:109 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:109 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                             ┬  
@@ -284,7 +284,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found integer
-//    ╭─[ 0:9:111 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:111 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                               ─┬  
@@ -293,7 +293,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:114 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:114 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                  ┬  
@@ -302,7 +302,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '}'
-//    ╭─[ 0:9:115 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:115 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                   ┬  
@@ -311,7 +311,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found ')'
-//    ╭─[ 0:9:116 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:116 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                    ┬  
@@ -320,7 +320,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '{'
-//    ╭─[ 0:9:118 ]
+//    ╭─[ constraints_constraints_everywhere.baml:9:118 ]
 //    │
 //  9 │ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //    │                                                                                                                      ┬  
@@ -329,7 +329,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected config block, found identifier
-//     ╭─[ 0:11:4 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:4 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │    ───┬──  
@@ -338,7 +338,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:4 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:4 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │    ───┬──  
@@ -347,7 +347,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '#'
-//     ╭─[ 0:11:11 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:11 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │           ┬  
@@ -356,7 +356,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:11:12 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:12 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │            ┬  
@@ -365,7 +365,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:13 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:13 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │             ─┬  
@@ -374,7 +374,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:11:15 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:15 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │               ┬  
@@ -383,7 +383,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '#'
-//     ╭─[ 0:11:16 ]
+//     ╭─[ constraints_constraints_everywhere.baml:11:16 ]
 //     │
 //  11 │    prompt #"fa"#
 //     │                ┬  
@@ -392,7 +392,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:12:1 ]
+//     ╭─[ constraints_constraints_everywhere.baml:12:1 ]
 //     │
 //  12 │ }
 //     │ ┬  
@@ -401,7 +401,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Missing `provider` field in client. e.g. `provider openai`
-//     ╭─[ 0:9:119 ]
+//     ╭─[ constraints_constraints_everywhere.baml:9:119 ]
 //     │
 //   9 │ ╭─▶ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> int @check(small_int, {{ this < 10 }}) {
 //  10 │ ├─▶    client Bar
@@ -411,7 +411,7 @@ function FooToInt(foo: Foo, a: Foo @assert(really_old, {{this.age > 20}})) -> in
 //     │     Note: Error code: E0026
 // ────╯
 // Error: Duplicate client 'Bar'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ constraints_constraints_everywhere.baml:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 

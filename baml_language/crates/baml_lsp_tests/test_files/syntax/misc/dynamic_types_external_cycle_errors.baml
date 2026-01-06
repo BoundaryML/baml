@@ -55,7 +55,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //----
 //- diagnostics
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:14:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:14:3 ]
 //     │
 //  14 │   type_builder {
 //     │   ──────┬─────  
@@ -64,7 +64,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:14:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:14:3 ]
 //     │
 //  14 │   type_builder {
 //     │   ──────┬─────  
@@ -73,7 +73,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:14:16 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:14:16 ]
 //     │
 //  14 │   type_builder {
 //     │                ┬  
@@ -82,7 +82,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:25:5 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:25:5 ]
 //     │
 //  25 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -91,7 +91,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:28:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:28:3 ]
 //     │
 //  28 │   }
 //     │   ┬  
@@ -100,7 +100,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:29:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:29:3 ]
 //     │
 //  29 │   args {
 //     │   ──┬─  
@@ -109,7 +109,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:29:8 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:29:8 ]
 //     │
 //  29 │   args {
 //     │        ┬  
@@ -118,7 +118,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:30:5 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:30:5 ]
 //     │
 //  30 │     from_text "Test"
 //     │     ────┬────  
@@ -127,7 +127,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:30:15 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:30:15 ]
 //     │
 //  30 │     from_text "Test"
 //     │               ┬  
@@ -136,7 +136,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:30:16 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:30:16 ]
 //     │
 //  30 │     from_text "Test"
 //     │                ──┬─  
@@ -145,7 +145,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:30:20 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:30:20 ]
 //     │
 //  30 │     from_text "Test"
 //     │                    ┬  
@@ -154,7 +154,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:31:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:31:3 ]
 //     │
 //  31 │   }
 //     │   ┬  
@@ -163,7 +163,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:32:1 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:32:1 ]
 //     │
 //  32 │ }
 //     │ ┬  
@@ -172,7 +172,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:36:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:36:3 ]
 //     │
 //  36 │   type_builder {
 //     │   ──────┬─────  
@@ -181,7 +181,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:36:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:36:3 ]
 //     │
 //  36 │   type_builder {
 //     │   ──────┬─────  
@@ -190,7 +190,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:36:16 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:36:16 ]
 //     │
 //  36 │   type_builder {
 //     │                ┬  
@@ -199,7 +199,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:37:5 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:37:5 ]
 //     │
 //  37 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -208,7 +208,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:40:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:40:3 ]
 //     │
 //  40 │   }
 //     │   ┬  
@@ -217,7 +217,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:41:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:41:3 ]
 //     │
 //  41 │   args {
 //     │   ──┬─  
@@ -226,7 +226,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:41:8 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:41:8 ]
 //     │
 //  41 │   args {
 //     │        ┬  
@@ -235,7 +235,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:42:5 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:42:5 ]
 //     │
 //  42 │     from_text "Test"
 //     │     ────┬────  
@@ -244,7 +244,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:42:15 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:42:15 ]
 //     │
 //  42 │     from_text "Test"
 //     │               ┬  
@@ -253,7 +253,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:42:16 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:42:16 ]
 //     │
 //  42 │     from_text "Test"
 //     │                ──┬─  
@@ -262,7 +262,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:42:20 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:42:20 ]
 //     │
 //  42 │     from_text "Test"
 //     │                    ┬  
@@ -271,7 +271,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:43:3 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:43:3 ]
 //     │
 //  43 │   }
 //     │   ┬  
@@ -280,7 +280,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:44:1 ]
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:44:1 ]
 //     │
 //  44 │ }
 //     │ ┬  
@@ -289,7 +289,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_external_cycle_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -300,7 +300,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_external_cycle_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 

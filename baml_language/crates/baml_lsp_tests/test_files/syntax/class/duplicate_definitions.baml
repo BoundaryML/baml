@@ -60,7 +60,7 @@ type A = int
 //----
 //- diagnostics
 // Error: Duplicate class 'A'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ class_duplicate_definitions.baml:1:1 ]
 //    │
 //  1 │ class A {
 //    │ │ 
@@ -71,7 +71,7 @@ type A = int
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate type alias 'A'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ class_duplicate_definitions.baml:1:1 ]
 //    │
 //  1 │ class A {
 //    │ │ 

@@ -16,7 +16,7 @@ client<llm> HttpNotMap {
 //----
 //- diagnostics
 // Error: http must be a configuration block with timeout settings
-//    ╭─[ 0:5:5 ]
+//    ╭─[ client_http_config_not_map.baml:5:5 ]
 //    │
 //  5 │     http "invalid"  // Should be a map
 //    │     ──┬─  

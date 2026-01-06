@@ -14,7 +14,7 @@ class InterfaceThree {
 //----
 //- diagnostics
 // Error: field 'foo' is missing a type annotation
-//    ╭─[ 0:3:3 ]
+//    ╭─[ class_incomplete_class.baml:3:3 ]
 //    │
 //  3 │   foo
 //    │   ─┬─  

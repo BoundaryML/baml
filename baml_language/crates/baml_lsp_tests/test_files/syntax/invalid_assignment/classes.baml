@@ -46,7 +46,7 @@ function ClassAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected Person, found Animal
-//     ╭─[ 0:25:7 ]
+//     ╭─[ invalid_assignment_classes.baml:25:7 ]
 //     │
 //  25 │     p2 = Animal { species: "Bird", legs: 2 };
 //     │          ─────────────────┬─────────────────  
@@ -55,7 +55,7 @@ function ClassAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Animal, found Person
-//     ╭─[ 0:29:7 ]
+//     ╭─[ invalid_assignment_classes.baml:29:7 ]
 //     │
 //  29 │     a2 = Person { name: "Dave", age: 40 };
 //     │          ────────────────┬───────────────  
@@ -64,7 +64,7 @@ function ClassAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person, found string
-//     ╭─[ 0:33:6 ]
+//     ╭─[ invalid_assignment_classes.baml:33:6 ]
 //     │
 //  33 │     p3 = "not a person";
 //     │         ───────┬───────  
@@ -73,7 +73,7 @@ function ClassAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person, found int
-//     ╭─[ 0:37:7 ]
+//     ╭─[ invalid_assignment_classes.baml:37:7 ]
 //     │
 //  37 │     p4 = 42;
 //     │          ─┬  
@@ -82,7 +82,7 @@ function ClassAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int, found Person
-//     ╭─[ 0:41:6 ]
+//     ╭─[ invalid_assignment_classes.baml:41:6 ]
 //     │
 //  41 │     n = Person { name: "Grace", age: 32 };
 //     │         ────────────────┬────────────────  

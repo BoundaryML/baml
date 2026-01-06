@@ -72,7 +72,7 @@ test ReturnDynamicClassTest {
 //----
 //- diagnostics
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:29:3 ]
+//     ╭─[ misc_dynamic_types.baml:29:3 ]
 //     │
 //  29 │   type_builder {
 //     │   ──────┬─────  
@@ -81,7 +81,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:29:3 ]
+//     ╭─[ misc_dynamic_types.baml:29:3 ]
 //     │
 //  29 │   type_builder {
 //     │   ──────┬─────  
@@ -90,7 +90,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:29:16 ]
+//     ╭─[ misc_dynamic_types.baml:29:16 ]
 //     │
 //  29 │   type_builder {
 //     │                ┬  
@@ -99,7 +99,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:46:5 ]
+//     ╭─[ misc_dynamic_types.baml:46:5 ]
 //     │
 //  46 │     dynamic class Resume {
 //     │     ───┬───  
@@ -108,7 +108,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:51:5 ]
+//     ╭─[ misc_dynamic_types.baml:51:5 ]
 //     │
 //  51 │     dynamic enum Job {
 //     │     ───┬───  
@@ -117,7 +117,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:54:3 ]
+//     ╭─[ misc_dynamic_types.baml:54:3 ]
 //     │
 //  54 │   }
 //     │   ┬  
@@ -126,7 +126,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:55:3 ]
+//     ╭─[ misc_dynamic_types.baml:55:3 ]
 //     │
 //  55 │   args {
 //     │   ──┬─  
@@ -135,7 +135,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:55:8 ]
+//     ╭─[ misc_dynamic_types.baml:55:8 ]
 //     │
 //  55 │   args {
 //     │        ┬  
@@ -144,7 +144,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:56:5 ]
+//     ╭─[ misc_dynamic_types.baml:56:5 ]
 //     │
 //  56 │     from_text #"
 //     │     ────┬────  
@@ -153,7 +153,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '#'
-//     ╭─[ 0:56:15 ]
+//     ╭─[ misc_dynamic_types.baml:56:15 ]
 //     │
 //  56 │     from_text #"
 //     │               ┬  
@@ -162,7 +162,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:56:16 ]
+//     ╭─[ misc_dynamic_types.baml:56:16 ]
 //     │
 //  56 │     from_text #"
 //     │                ┬  
@@ -171,7 +171,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:57:7 ]
+//     ╭─[ misc_dynamic_types.baml:57:7 ]
 //     │
 //  57 │       John Doe
 //     │       ──┬─  
@@ -180,7 +180,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:57:12 ]
+//     ╭─[ misc_dynamic_types.baml:57:12 ]
 //     │
 //  57 │       John Doe
 //     │            ─┬─  
@@ -189,7 +189,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:59:7 ]
+//     ╭─[ misc_dynamic_types.baml:59:7 ]
 //     │
 //  59 │       Education
 //     │       ────┬────  
@@ -198,7 +198,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '-'
-//     ╭─[ 0:60:7 ]
+//     ╭─[ misc_dynamic_types.baml:60:7 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │       ┬  
@@ -207,7 +207,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:9 ]
+//     ╭─[ misc_dynamic_types.baml:60:9 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │         ─────┬────  
@@ -216,7 +216,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:20 ]
+//     ╭─[ misc_dynamic_types.baml:60:20 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                    ─┬  
@@ -225,7 +225,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:23 ]
+//     ╭─[ misc_dynamic_types.baml:60:23 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                       ─────┬────  
@@ -234,7 +234,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:60:33 ]
+//     ╭─[ misc_dynamic_types.baml:60:33 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                 ┬  
@@ -243,7 +243,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:35 ]
+//     ╭─[ misc_dynamic_types.baml:60:35 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                   ────┬───  
@@ -252,7 +252,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:60:43 ]
+//     ╭─[ misc_dynamic_types.baml:60:43 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                           ┬  
@@ -261,7 +261,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:45 ]
+//     ╭─[ misc_dynamic_types.baml:60:45 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                             ┬  
@@ -270,7 +270,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '.'
-//     ╭─[ 0:60:46 ]
+//     ╭─[ misc_dynamic_types.baml:60:46 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                              ┬  
@@ -279,7 +279,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:47 ]
+//     ╭─[ misc_dynamic_types.baml:60:47 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                               ┬  
@@ -288,7 +288,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '.'
-//     ╭─[ 0:60:48 ]
+//     ╭─[ misc_dynamic_types.baml:60:48 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                ┬  
@@ -297,7 +297,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found in
-//     ╭─[ 0:60:50 ]
+//     ╭─[ misc_dynamic_types.baml:60:50 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                  ─┬  
@@ -306,7 +306,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:53 ]
+//     ╭─[ misc_dynamic_types.baml:60:53 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                     ────┬───  
@@ -315,7 +315,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:62 ]
+//     ╭─[ misc_dynamic_types.baml:60:62 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                              ───┬───  
@@ -324,7 +324,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:60:69 ]
+//     ╭─[ misc_dynamic_types.baml:60:69 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                                     ┬  
@@ -333,7 +333,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found integer
-//     ╭─[ 0:60:71 ]
+//     ╭─[ misc_dynamic_types.baml:60:71 ]
 //     │
 //  60 │       - University of California, Berkeley, B.S. in Computer Science, 2020
 //     │                                                                       ──┬─  
@@ -342,7 +342,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:62:7 ]
+//     ╭─[ misc_dynamic_types.baml:62:7 ]
 //     │
 //  62 │       Experience
 //     │       ─────┬────  
@@ -351,7 +351,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '-'
-//     ╭─[ 0:63:7 ]
+//     ╭─[ misc_dynamic_types.baml:63:7 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │       ┬  
@@ -360,7 +360,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:63:9 ]
+//     ╭─[ misc_dynamic_types.baml:63:9 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │         ────┬───  
@@ -369,7 +369,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:63:18 ]
+//     ╭─[ misc_dynamic_types.baml:63:18 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                  ────┬───  
@@ -378,7 +378,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:63:26 ]
+//     ╭─[ misc_dynamic_types.baml:63:26 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                          ┬  
@@ -387,7 +387,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:63:28 ]
+//     ╭─[ misc_dynamic_types.baml:63:28 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                            ────┬───  
@@ -396,7 +396,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:63:36 ]
+//     ╭─[ misc_dynamic_types.baml:63:36 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                    ┬  
@@ -405,7 +405,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:63:38 ]
+//     ╭─[ misc_dynamic_types.baml:63:38 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                      ─┬─  
@@ -414,7 +414,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found integer
-//     ╭─[ 0:63:42 ]
+//     ╭─[ misc_dynamic_types.baml:63:42 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                          ──┬─  
@@ -423,7 +423,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '-'
-//     ╭─[ 0:63:47 ]
+//     ╭─[ misc_dynamic_types.baml:63:47 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                               ┬  
@@ -432,7 +432,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:63:49 ]
+//     ╭─[ misc_dynamic_types.baml:63:49 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                                 ─┬─  
@@ -441,7 +441,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found integer
-//     ╭─[ 0:63:53 ]
+//     ╭─[ misc_dynamic_types.baml:63:53 ]
 //     │
 //  63 │       - Software Engineer, Boundary, Sep 2022 - Sep 2023
 //     │                                                     ──┬─  
@@ -450,7 +450,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:65:7 ]
+//     ╭─[ misc_dynamic_types.baml:65:7 ]
 //     │
 //  65 │       Skills
 //     │       ───┬──  
@@ -459,7 +459,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '-'
-//     ╭─[ 0:66:7 ]
+//     ╭─[ misc_dynamic_types.baml:66:7 ]
 //     │
 //  66 │       - Python
 //     │       ┬  
@@ -468,7 +468,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:66:9 ]
+//     ╭─[ misc_dynamic_types.baml:66:9 ]
 //     │
 //  66 │       - Python
 //     │         ───┬──  
@@ -477,7 +477,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '-'
-//     ╭─[ 0:67:7 ]
+//     ╭─[ misc_dynamic_types.baml:67:7 ]
 //     │
 //  67 │       - Java
 //     │       ┬  
@@ -486,7 +486,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:67:9 ]
+//     ╭─[ misc_dynamic_types.baml:67:9 ]
 //     │
 //  67 │       - Java
 //     │         ──┬─  
@@ -495,7 +495,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:68:5 ]
+//     ╭─[ misc_dynamic_types.baml:68:5 ]
 //     │
 //  68 │     "#
 //     │     ┬  
@@ -504,7 +504,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '#'
-//     ╭─[ 0:68:6 ]
+//     ╭─[ misc_dynamic_types.baml:68:6 ]
 //     │
 //  68 │     "#
 //     │      ┬  
@@ -513,7 +513,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:69:3 ]
+//     ╭─[ misc_dynamic_types.baml:69:3 ]
 //     │
 //  69 │   }
 //     │   ┬  
@@ -522,7 +522,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:70:1 ]
+//     ╭─[ misc_dynamic_types.baml:70:1 ]
 //     │
 //  70 │ }
 //     │ ┬  
@@ -531,7 +531,7 @@ test ReturnDynamicClassTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Duplicate class 'Resume'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types.baml:1:1 ]
 //    │
 //  1 │ class Resume {
 //    │ │ 
@@ -542,7 +542,7 @@ test ReturnDynamicClassTest {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate enum 'Job'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types.baml:1:1 ]
 //    │
 //  1 │ class Resume {
 //    │ │ 

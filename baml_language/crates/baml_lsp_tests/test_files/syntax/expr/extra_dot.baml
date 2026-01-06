@@ -59,7 +59,7 @@ function ModernFunction(x: int) -> int {
 //----
 //- diagnostics
 // Error: Expected expression, found '.'
-//     ╭─[ 0:21:3 ]
+//     ╭─[ expr_extra_dot.baml:21:3 ]
 //     │
 //  21 │   .let result = receipt.calculate();
 //     │   ┬  
@@ -68,7 +68,7 @@ function ModernFunction(x: int) -> int {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected expression, found '^'
-//     ╭─[ 0:23:3 ]
+//     ╭─[ expr_extra_dot.baml:23:3 ]
 //     │
 //  23 │   ^if (true) {
 //     │   ┬  

@@ -28,7 +28,7 @@ enum TestEnum {
 //----
 //- diagnostics
 // Error: Expected ')', found identifier
-//     ╭─[ 0:13:10 ]
+//     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
 //     │
 //  13 │     User is confused
 //     │          ─┬  
@@ -37,7 +37,7 @@ enum TestEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ 0:14:3 ]
+//     ╭─[ enum_enum_unquoted_description.baml:14:3 ]
 //     │
 //  14 │   )
 //     │   ┬  
@@ -46,7 +46,7 @@ enum TestEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected ')', found identifier
-//     ╭─[ 0:16:10 ]
+//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  16 │     User is excited
 //     │          ─┬  
@@ -55,7 +55,7 @@ enum TestEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Unexpected token in enum body, found ')'
-//     ╭─[ 0:17:3 ]
+//     ╭─[ enum_enum_unquoted_description.baml:17:3 ]
 //     │
 //  17 │   )
 //     │   ┬  
@@ -64,13 +64,13 @@ enum TestEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Duplicate variant 'is' in enum 'TestEnum'
-//     ╭─[ 0:16:10 ]
+//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  16 │     User is excited
 //     │          ─┬  
 //     │           ╰── duplicate definition
 //     │
-//     ├─[ 0:16:10 ]
+//     ├─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
 //  13 │     User is confused
 //     │          ─┬  

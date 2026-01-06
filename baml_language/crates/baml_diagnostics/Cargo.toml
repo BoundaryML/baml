@@ -18,6 +18,8 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_workspace = { workspace = true }
 
 ariadne = { workspace = true }
+salsa = { workspace = true }
 text-size = { workspace = true }

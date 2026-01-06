@@ -1,16 +1,16 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [hir] Error: Attribute '@@description' can only be defined once on class 'HasDuplicateDescription'
-   ╭─[ 0:7:5 ]
+   ╭─[ test.baml:7:5 ]
    │
  7 │   @@description("Second description")
    │     ─────┬─────  
    │          ╰─────── duplicate attribute
    │
-   ├─[ 0:7:5 ]
+   ├─[ test.baml:7:5 ]
    │
  5 │   @@description("First description")
    │     ─────┬─────  
@@ -20,13 +20,13 @@ expression: output
 ───╯
 
   [hir] Error: Duplicate field 'name' in class 'HasDuplicateField'
-    ╭─[ 0:13:3 ]
+    ╭─[ test.baml:13:3 ]
     │
  13 │   name int
     │   ──┬─  
     │     ╰─── duplicate definition
     │
-    ├─[ 0:13:3 ]
+    ├─[ test.baml:13:3 ]
     │
  11 │   name string
     │   ──┬─  
@@ -36,7 +36,7 @@ expression: output
 ────╯
 
   [hir] Error: Attribute '@alias' can only be defined once on field 'name' in class 'HasDuplicateFieldAttr'
-    ╭─[ 0:17:49 ]
+    ╭─[ test.baml:17:49 ]
     │
  17 │   name string @alias("n") @description("Name") @alias("nm")
     │                ──┬──                            ──┬──  
@@ -48,13 +48,13 @@ expression: output
 ────╯
 
   [hir] Error: Duplicate variant 'RED' in enum 'HasDuplicateVariant'
-    ╭─[ 0:23:3 ]
+    ╭─[ test.baml:23:3 ]
     │
  23 │   RED
     │   ─┬─  
     │    ╰─── duplicate definition
     │
-    ├─[ 0:23:3 ]
+    ├─[ test.baml:23:3 ]
     │
  21 │   RED
     │   ─┬─  
@@ -64,13 +64,13 @@ expression: output
 ────╯
 
   [hir] Error: Attribute '@@description' can only be defined once on enum 'HasDuplicateEnumAttr'
-    ╭─[ 0:30:5 ]
+    ╭─[ test.baml:30:5 ]
     │
  30 │   @@description("Second")
     │     ─────┬─────  
     │          ╰─────── duplicate attribute
     │
-    ├─[ 0:30:5 ]
+    ├─[ test.baml:30:5 ]
     │
  29 │   @@description("First")
     │     ─────┬─────  
@@ -80,7 +80,7 @@ expression: output
 ────╯
 
   [hir] Error: Attribute '@alias' can only be defined once on field 'ACTIVE' in enum 'HasDuplicateVariantAttr'
-    ╭─[ 0:34:23 ]
+    ╭─[ test.baml:34:23 ]
     │
  34 │   ACTIVE @alias("a") @alias("active")
     │           ──┬──       ──┬──  

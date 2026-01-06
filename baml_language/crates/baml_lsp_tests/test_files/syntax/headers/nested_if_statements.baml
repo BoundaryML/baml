@@ -61,7 +61,7 @@ function NestedIfStatements() -> string {
 //----
 //- diagnostics
 // Error: Expected string, found int
-//    ╭─[ 0:1:1 ]
+//    ╭─[ headers_nested_if_statements.baml:1:1 ]
 //    │
 //  1 │ //# Main Function
 //    │ │ 

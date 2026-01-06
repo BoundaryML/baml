@@ -45,7 +45,7 @@ function NestedArrayAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected int[][], found int[]
-//     ╭─[ 0:28:5 ]
+//     ╭─[ invalid_assignment_nested_arrays.baml:28:5 ]
 //     │
 //  28 │     d = [3, 4, 5];
 //     │        ─────┬────  
@@ -54,7 +54,7 @@ function NestedArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int[], found int[][]
-//     ╭─[ 0:32:5 ]
+//     ╭─[ invalid_assignment_nested_arrays.baml:32:5 ]
 //     │
 //  32 │     e = [[4, 5], [6, 7]];
 //     │        ────────┬────────  
@@ -63,7 +63,7 @@ function NestedArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string[][], found int[][]
-//     ╭─[ 0:36:5 ]
+//     ╭─[ invalid_assignment_nested_arrays.baml:36:5 ]
 //     │
 //  36 │     f = [[1, 2]];
 //     │        ────┬────  
@@ -72,7 +72,7 @@ function NestedArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person[][], found Animal[][]
-//     ╭─[ 0:40:5 ]
+//     ╭─[ invalid_assignment_nested_arrays.baml:40:5 ]
 //     │
 //  40 │     g = [[Animal { species: "Cat", legs: 4 }]];
 //     │        ───────────────────┬───────────────────  

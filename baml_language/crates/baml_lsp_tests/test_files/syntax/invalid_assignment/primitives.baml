@@ -50,7 +50,7 @@ function PrimitiveAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected int, found string
-//     ╭─[ 0:21:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:21:5 ]
 //     │
 //  21 │     e = "oops";
 //     │        ───┬───  
@@ -59,7 +59,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string, found int
-//     ╭─[ 0:25:6 ]
+//     ╭─[ invalid_assignment_primitives.baml:25:6 ]
 //     │
 //  25 │     f = 42;
 //     │         ─┬  
@@ -68,7 +68,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected bool, found int
-//     ╭─[ 0:29:6 ]
+//     ╭─[ invalid_assignment_primitives.baml:29:6 ]
 //     │
 //  29 │     g = 123;
 //     │         ─┬─  
@@ -77,7 +77,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected int, found bool
-//     ╭─[ 0:33:6 ]
+//     ╭─[ invalid_assignment_primitives.baml:33:6 ]
 //     │
 //  33 │     h = false;
 //     │         ──┬──  
@@ -86,7 +86,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected float, found string
-//     ╭─[ 0:37:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:37:5 ]
 //     │
 //  37 │     i = "pi";
 //     │        ──┬──  
@@ -95,7 +95,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected bool, found string
-//     ╭─[ 0:41:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:41:5 ]
 //     │
 //  41 │     j = "true";
 //     │        ───┬───  
@@ -104,7 +104,7 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string, found bool
-//     ╭─[ 0:45:6 ]
+//     ╭─[ invalid_assignment_primitives.baml:45:6 ]
 //     │
 //  45 │     k = true;
 //     │         ──┬─  

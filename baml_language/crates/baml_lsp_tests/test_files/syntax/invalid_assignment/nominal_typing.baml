@@ -68,7 +68,7 @@ function NominalTypingAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected Person, found Human
-//     ╭─[ 0:43:7 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:43:7 ]
 //     │
 //  43 │     p2 = Human { name: "F", age: 6 };
 //     │          ─────────────┬─────────────  
@@ -77,7 +77,7 @@ function NominalTypingAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Human, found Person
-//     ╭─[ 0:47:7 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:47:7 ]
 //     │
 //  47 │     h2 = Person { name: "H", age: 8 };
 //     │          ──────────────┬─────────────  
@@ -86,7 +86,7 @@ function NominalTypingAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Animal, found Creature
-//     ╭─[ 0:51:7 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:51:7 ]
 //     │
 //  51 │     a2 = Creature { species: "Lizard", legs: 4 };
 //     │          ───────────────────┬───────────────────  
@@ -95,7 +95,7 @@ function NominalTypingAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Creature, found Animal
-//     ╭─[ 0:55:7 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:55:7 ]
 //     │
 //  55 │     c2 = Animal { species: "Spider", legs: 8 };
 //     │          ──────────────────┬──────────────────  
@@ -104,7 +104,7 @@ function NominalTypingAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Person[], found Human[]
-//     ╭─[ 0:59:10 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
 //     │
 //  59 │     people = [Human { name: "J", age: 10 }];
 //     │             ───────────────┬───────────────  
@@ -113,7 +113,7 @@ function NominalTypingAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected Human[], found Person[]
-//     ╭─[ 0:63:10 ]
+//     ╭─[ invalid_assignment_nominal_typing.baml:63:10 ]
 //     │
 //  63 │     humans = [Person { name: "L", age: 12 }];
 //     │             ────────────────┬───────────────  

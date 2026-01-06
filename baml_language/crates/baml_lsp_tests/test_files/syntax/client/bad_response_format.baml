@@ -32,7 +32,7 @@ client<llm> MyClient3 {
 //----
 //- diagnostics
 // Error: client_response_type must be one of openai, openai-responses, anthropic, google, vertex, openrouter. Got: invalid
-//    ╭─[ 0:5:25 ]
+//    ╭─[ client_bad_response_format.baml:5:25 ]
 //    │
 //  5 │     client_response_type "invalid"
 //    │                         ─────┬────  

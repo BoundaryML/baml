@@ -228,7 +228,7 @@ args {
 //----
 //- diagnostics
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:13:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:13:3 ]
 //     │
 //  13 │   type_builder {
 //     │   ──────┬─────  
@@ -237,7 +237,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:13:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:13:3 ]
 //     │
 //  13 │   type_builder {
 //     │   ──────┬─────  
@@ -246,7 +246,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:13:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:13:16 ]
 //     │
 //  13 │   type_builder {
 //     │                ┬  
@@ -255,7 +255,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:14:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:14:5 ]
 //     │
 //  14 │     dynamic class NonDynamic {
 //     │     ───┬───  
@@ -264,7 +264,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:17:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:17:3 ]
 //     │
 //  17 │   }
 //     │   ┬  
@@ -273,7 +273,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:18:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:18:1 ]
 //     │
 //  18 │ args {
 //     │ ──┬─  
@@ -282,7 +282,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:18:6 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:18:6 ]
 //     │
 //  18 │ args {
 //     │      ┬  
@@ -291,7 +291,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:19:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:19:5 ]
 //     │
 //  19 │     from_text "Test"
 //     │     ────┬────  
@@ -300,7 +300,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:19:15 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:19:15 ]
 //     │
 //  19 │     from_text "Test"
 //     │               ┬  
@@ -309,7 +309,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:19:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:19:16 ]
 //     │
 //  19 │     from_text "Test"
 //     │                ──┬─  
@@ -318,7 +318,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:19:20 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:19:20 ]
 //     │
 //  19 │     from_text "Test"
 //     │                    ┬  
@@ -327,7 +327,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:20:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:20:3 ]
 //     │
 //  20 │   }
 //     │   ┬  
@@ -336,7 +336,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:21:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:21:1 ]
 //     │
 //  21 │ }
 //     │ ┬  
@@ -345,7 +345,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:27:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:27:3 ]
 //     │
 //  27 │   type_builder {
 //     │   ──────┬─────  
@@ -354,7 +354,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:27:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:27:3 ]
 //     │
 //  27 │   type_builder {
 //     │   ──────┬─────  
@@ -363,7 +363,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:27:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:27:16 ]
 //     │
 //  27 │   type_builder {
 //     │                ┬  
@@ -372,7 +372,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:28:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:28:5 ]
 //     │
 //  28 │     dynamic class SomeAlias {
 //     │     ───┬───  
@@ -381,7 +381,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:31:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:31:3 ]
 //     │
 //  31 │   }
 //     │   ┬  
@@ -390,7 +390,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:32:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:32:1 ]
 //     │
 //  32 │ args {
 //     │ ──┬─  
@@ -399,7 +399,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:32:6 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:32:6 ]
 //     │
 //  32 │ args {
 //     │      ┬  
@@ -408,7 +408,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:33:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:33:5 ]
 //     │
 //  33 │     from_text "Test"
 //     │     ────┬────  
@@ -417,7 +417,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:33:15 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:33:15 ]
 //     │
 //  33 │     from_text "Test"
 //     │               ┬  
@@ -426,7 +426,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:33:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:33:16 ]
 //     │
 //  33 │     from_text "Test"
 //     │                ──┬─  
@@ -435,7 +435,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:33:20 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:33:20 ]
 //     │
 //  33 │     from_text "Test"
 //     │                    ┬  
@@ -444,7 +444,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:34:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:34:3 ]
 //     │
 //  34 │   }
 //     │   ┬  
@@ -453,7 +453,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:35:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:35:1 ]
 //     │
 //  35 │ }
 //     │ ┬  
@@ -462,7 +462,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:45:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:45:3 ]
 //     │
 //  45 │   type_builder {
 //     │   ──────┬─────  
@@ -471,7 +471,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:45:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:45:3 ]
 //     │
 //  45 │   type_builder {
 //     │   ──────┬─────  
@@ -480,7 +480,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:45:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:45:16 ]
 //     │
 //  45 │   type_builder {
 //     │                ┬  
@@ -489,7 +489,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:54:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -498,7 +498,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:58:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:58:3 ]
 //     │
 //  58 │   }
 //     │   ┬  
@@ -507,7 +507,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:59:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:59:1 ]
 //     │
 //  59 │ args {
 //     │ ──┬─  
@@ -516,7 +516,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:59:6 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:59:6 ]
 //     │
 //  59 │ args {
 //     │      ┬  
@@ -525,7 +525,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:60:5 ]
 //     │
 //  60 │     from_text "Test"
 //     │     ────┬────  
@@ -534,7 +534,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:60:15 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:60:15 ]
 //     │
 //  60 │     from_text "Test"
 //     │               ┬  
@@ -543,7 +543,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:60:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:60:16 ]
 //     │
 //  60 │     from_text "Test"
 //     │                ──┬─  
@@ -552,7 +552,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:60:20 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:60:20 ]
 //     │
 //  60 │     from_text "Test"
 //     │                    ┬  
@@ -561,7 +561,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:61:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:61:3 ]
 //     │
 //  61 │   }
 //     │   ┬  
@@ -570,7 +570,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:62:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:62:1 ]
 //     │
 //  62 │ }
 //     │ ┬  
@@ -579,7 +579,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:66:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:66:3 ]
 //     │
 //  66 │   type_builder {
 //     │   ──────┬─────  
@@ -588,7 +588,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:66:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:66:3 ]
 //     │
 //  66 │   type_builder {
 //     │   ──────┬─────  
@@ -597,7 +597,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:66:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:66:16 ]
 //     │
 //  66 │   type_builder {
 //     │                ┬  
@@ -606,7 +606,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:67:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:67:5 ]
 //     │
 //  67 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -615,7 +615,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:70:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:70:5 ]
 //     │
 //  70 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -624,7 +624,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:73:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:73:1 ]
 //     │
 //  73 │ }
 //     │ ┬  
@@ -633,7 +633,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:74:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:74:1 ]
 //     │
 //  74 │ args {
 //     │ ──┬─  
@@ -642,7 +642,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:74:6 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:74:6 ]
 //     │
 //  74 │ args {
 //     │      ┬  
@@ -651,7 +651,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:75:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:75:5 ]
 //     │
 //  75 │     from_text "Test"
 //     │     ────┬────  
@@ -660,7 +660,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:75:15 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:75:15 ]
 //     │
 //  75 │     from_text "Test"
 //     │               ┬  
@@ -669,7 +669,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:75:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:75:16 ]
 //     │
 //  75 │     from_text "Test"
 //     │                ──┬─  
@@ -678,7 +678,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:75:20 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:75:20 ]
 //     │
 //  75 │     from_text "Test"
 //     │                    ┬  
@@ -687,7 +687,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:76:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:76:3 ]
 //     │
 //  76 │   }
 //     │   ┬  
@@ -696,7 +696,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:77:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:77:1 ]
 //     │
 //  77 │ }
 //     │ ┬  
@@ -705,7 +705,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//     ╭─[ 0:81:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:81:3 ]
 //     │
 //  81 │   type_builder {
 //     │   ──────┬─────  
@@ -714,7 +714,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found type_builder
-//     ╭─[ 0:81:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:81:3 ]
 //     │
 //  81 │   type_builder {
 //     │   ──────┬─────  
@@ -723,7 +723,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:81:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:81:16 ]
 //     │
 //  81 │   type_builder {
 //     │                ┬  
@@ -732,7 +732,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found dynamic
-//     ╭─[ 0:86:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:86:5 ]
 //     │
 //  86 │     dynamic class DynamicClass {
 //     │     ───┬───  
@@ -741,7 +741,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:89:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:89:3 ]
 //     │
 //  89 │   }
 //     │   ┬  
@@ -750,7 +750,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:90:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:90:1 ]
 //     │
 //  90 │ args {
 //     │ ──┬─  
@@ -759,7 +759,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:90:6 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:90:6 ]
 //     │
 //  90 │ args {
 //     │      ┬  
@@ -768,7 +768,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:91:5 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:91:5 ]
 //     │
 //  91 │     from_text "Test"
 //     │     ────┬────  
@@ -777,7 +777,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:91:15 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:91:15 ]
 //     │
 //  91 │     from_text "Test"
 //     │               ┬  
@@ -786,7 +786,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:91:16 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:91:16 ]
 //     │
 //  91 │     from_text "Test"
 //     │                ──┬─  
@@ -795,7 +795,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
-//     ╭─[ 0:91:20 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:91:20 ]
 //     │
 //  91 │     from_text "Test"
 //     │                    ┬  
@@ -804,7 +804,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:92:3 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:92:3 ]
 //     │
 //  92 │   }
 //     │   ┬  
@@ -813,7 +813,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:93:1 ]
+//     ╭─[ misc_dynamic_types_validation_errors.baml:93:1 ]
 //     │
 //  93 │ }
 //     │ ┬  
@@ -822,7 +822,7 @@ args {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '}', found type_builder
-//      ╭─[ 0:103:3 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:103:3 ]
 //      │
 //  103 │   type_builder {
 //      │   ──────┬─────  
@@ -831,7 +831,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found type_builder
-//      ╭─[ 0:103:3 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:103:3 ]
 //      │
 //  103 │   type_builder {
 //      │   ──────┬─────  
@@ -840,7 +840,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '{'
-//      ╭─[ 0:103:16 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:103:16 ]
 //      │
 //  103 │   type_builder {
 //      │                ┬  
@@ -849,7 +849,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found dynamic
-//      ╭─[ 0:104:5 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:104:5 ]
 //      │
 //  104 │     dynamic class DynamicEnum {
 //      │     ───┬───  
@@ -858,7 +858,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: field 'C' is missing a type annotation
-//      ╭─[ 0:105:7 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:105:7 ]
 //      │
 //  105 │       C
 //      │       ┬  
@@ -867,7 +867,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found dynamic
-//      ╭─[ 0:107:5 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:107:5 ]
 //      │
 //  107 │     dynamic enum DynamicClass {
 //      │     ───┬───  
@@ -876,7 +876,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '}'
-//      ╭─[ 0:110:1 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:110:1 ]
 //      │
 //  110 │ }
 //      │ ┬  
@@ -885,7 +885,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found identifier
-//      ╭─[ 0:111:1 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:111:1 ]
 //      │
 //  111 │ args {
 //      │ ──┬─  
@@ -894,7 +894,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '{'
-//      ╭─[ 0:111:6 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:111:6 ]
 //      │
 //  111 │ args {
 //      │      ┬  
@@ -903,7 +903,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found identifier
-//      ╭─[ 0:112:5 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:112:5 ]
 //      │
 //  112 │     from_text "Test"
 //      │     ────┬────  
@@ -912,7 +912,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '"'
-//      ╭─[ 0:112:15 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:112:15 ]
 //      │
 //  112 │     from_text "Test"
 //      │               ┬  
@@ -921,7 +921,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found identifier
-//      ╭─[ 0:112:16 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:112:16 ]
 //      │
 //  112 │     from_text "Test"
 //      │                ──┬─  
@@ -930,7 +930,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '"'
-//      ╭─[ 0:112:20 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:112:20 ]
 //      │
 //  112 │     from_text "Test"
 //      │                    ┬  
@@ -939,7 +939,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '}'
-//      ╭─[ 0:113:3 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:113:3 ]
 //      │
 //  113 │   }
 //      │   ┬  
@@ -948,7 +948,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Expected top-level declaration, found '}'
-//      ╭─[ 0:114:1 ]
+//      ╭─[ misc_dynamic_types_validation_errors.baml:114:1 ]
 //      │
 //  114 │ }
 //      │ ┬  
@@ -957,7 +957,7 @@ args {
 //      │ Note: Error code: E0010
 // ─────╯
 // Error: Duplicate class 'NonDynamic'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -968,7 +968,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'NonDynamic'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -979,7 +979,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -990,7 +990,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -1001,7 +1001,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -1012,7 +1012,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate class 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -1023,7 +1023,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate enum 'DynamicEnum'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -1034,7 +1034,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate enum 'DynamicClass'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 
@@ -1045,7 +1045,7 @@ args {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Duplicate type alias 'SomeAlias'
-//    ╭─[ 0:1:1 ]
+//    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn() -> string {
 //    │ │ 

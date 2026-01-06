@@ -49,7 +49,7 @@ function MapAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected map<string, int>, found map<string, string>
-//     ╭─[ 0:28:5 ]
+//     ╭─[ invalid_assignment_maps.baml:28:5 ]
 //     │
 //  28 │     d = {"y": "wrong"};
 //     │        ───────┬───────  
@@ -58,7 +58,7 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected map<string, Person>, found map<string, Animal>
-//     ╭─[ 0:32:5 ]
+//     ╭─[ invalid_assignment_maps.baml:32:5 ]
 //     │
 //  32 │     e = {"a": Animal { species: "Cat", legs: 4 }};
 //     │        ─────────────────────┬────────────────────  
@@ -67,7 +67,7 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected map<string, int>, found string
-//     ╭─[ 0:36:5 ]
+//     ╭─[ invalid_assignment_maps.baml:36:5 ]
 //     │
 //  36 │     f = "not a map";
 //     │        ──────┬─────  
@@ -76,7 +76,7 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected map<string, int>, found int
-//     ╭─[ 0:40:6 ]
+//     ╭─[ invalid_assignment_maps.baml:40:6 ]
 //     │
 //  40 │     g = 123;
 //     │         ─┬─  
@@ -85,7 +85,7 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected string, found map<string, int>
-//     ╭─[ 0:44:5 ]
+//     ╭─[ invalid_assignment_maps.baml:44:5 ]
 //     │
 //  44 │     h = {"k": 7};
 //     │        ────┬────  

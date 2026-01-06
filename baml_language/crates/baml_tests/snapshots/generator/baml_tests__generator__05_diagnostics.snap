@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected client name, found '<'
-    ╭─[ 0:21:11 ]
+    ╭─[ valid_generator.baml:21:11 ]
     │
  21 │     client<llm> MyClient
     │           ┬  
@@ -14,7 +14,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
-    ╭─[ 0:21:11 ]
+    ╭─[ valid_generator.baml:21:11 ]
     │
  21 │     client<llm> MyClient
     │           ┬  
@@ -24,7 +24,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'llm', found identifier
-    ╭─[ 0:21:12 ]
+    ╭─[ valid_generator.baml:21:12 ]
     │
  21 │     client<llm> MyClient
     │            ─┬─  
@@ -34,7 +34,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '>', found '>'
-    ╭─[ 0:21:15 ]
+    ╭─[ valid_generator.baml:21:15 ]
     │
  21 │     client<llm> MyClient
     │               ┬  
@@ -44,7 +44,7 @@ expression: output
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'MyClient', found identifier
-    ╭─[ 0:21:17 ]
+    ╭─[ valid_generator.baml:21:17 ]
     │
  21 │     client<llm> MyClient
     │                 ────┬───  

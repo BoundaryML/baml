@@ -5,7 +5,7 @@ function UseUnknown() -> int {
 //----
 //- diagnostics
 // Error: Unknown variable unknown_var
-//    ╭─[ 0:2:3 ]
+//    ╭─[ unknown_variable.baml:2:3 ]
 //    │
 //  2 │   unknown_var + 1
 //    │   ─────┬─────  
@@ -14,7 +14,7 @@ function UseUnknown() -> int {
 //    │ Note: Error code: E0003
 // ───╯
 // Error: Cannot apply operator 'Add' to types unknown and int
-//    ╭─[ 0:2:3 ]
+//    ╭─[ unknown_variable.baml:2:3 ]
 //    │
 //  2 │   unknown_var + 1
 //    │   ───────┬───────  

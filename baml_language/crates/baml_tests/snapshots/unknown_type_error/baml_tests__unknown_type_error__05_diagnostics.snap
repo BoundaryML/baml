@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [type] Error: Unknown type unknown_param_type
-   ╭─[ 0:1:1 ]
+   ╭─[ unknown_type_error.baml:1:1 ]
    │
  1 │ // Test case: unknown type in return position should report error
    │ │ 
@@ -14,7 +14,7 @@ expression: output
 ───╯
 
   [type] Error: Unknown type blah
-   ╭─[ 0:1:1 ]
+   ╭─[ unknown_type_error.baml:1:1 ]
    │
  1 │ // Test case: unknown type in return position should report error
    │ │ 
@@ -24,7 +24,7 @@ expression: output
 ───╯
 
   [type] Error: Unknown type unknown_optional
-   ╭─[ 0:1:1 ]
+   ╭─[ unknown_type_error.baml:1:1 ]
    │
  1 │ // Test case: unknown type in return position should report error
    │ │ 

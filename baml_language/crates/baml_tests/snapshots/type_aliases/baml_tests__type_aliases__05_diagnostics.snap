@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [type] Error: Expected foo, found bool
-   ╭─[ 0:1:1 ]
+   ╭─[ type_aliases.baml:1:1 ]
    │
  1 │ type foo = bar
    │ │ 
@@ -14,7 +14,7 @@ expression: output
 ───╯
 
   [type] Error: Expected JSON, found NotJSON
-   ╭─[ 0:1:1 ]
+   ╭─[ type_aliases.baml:1:1 ]
    │
  1 │ type foo = bar
    │ │ 

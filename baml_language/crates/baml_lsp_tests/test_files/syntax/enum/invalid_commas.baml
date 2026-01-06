@@ -29,7 +29,7 @@ enum Test {
 //----
 //- diagnostics
 // Error: Expected Unexpected token in enum body, found ','
-//    ╭─[ 0:2:6 ]
+//    ╭─[ enum_invalid_commas.baml:2:6 ]
 //    │
 //  2 │     A,
 //    │      ┬  
@@ -38,7 +38,7 @@ enum Test {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in enum body, found ','
-//    ╭─[ 0:3:6 ]
+//    ╭─[ enum_invalid_commas.baml:3:6 ]
 //    │
 //  3 │     B,
 //    │      ┬  
@@ -47,7 +47,7 @@ enum Test {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in enum body, found ','
-//    ╭─[ 0:4:6 ]
+//    ╭─[ enum_invalid_commas.baml:4:6 ]
 //    │
 //  4 │     C,
 //    │      ┬  

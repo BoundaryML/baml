@@ -67,7 +67,7 @@ function ForLoopWithHeaders() -> int {
 //----
 //- diagnostics
 // Error: Expected string, found int
-//    ╭─[ 0:1:1 ]
+//    ╭─[ headers_complex_headers_test.baml:1:1 ]
 //    │
 //  1 │ //# Main Function
 //    │ │ 

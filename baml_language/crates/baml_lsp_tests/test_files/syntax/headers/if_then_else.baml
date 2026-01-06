@@ -50,7 +50,7 @@ function ComplexHeaderTest(x: int) -> int {
 //----
 //- diagnostics
 // Error: Unknown variable y
-//     ╭─[ 0:17:5 ]
+//     ╭─[ headers_if_then_else.baml:17:5 ]
 //     │
 //  17 │     y
 //     │     ┬  

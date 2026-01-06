@@ -41,7 +41,7 @@ test TestFoo {
 //----
 //- diagnostics
 // Error: Expected config key, found '@@'
-//     ╭─[ 0:37:3 ]
+//     ╭─[ constraints_block_level.baml:37:3 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │   ─┬  
@@ -50,7 +50,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected config key, found '{'
-//     ╭─[ 0:37:24 ]
+//     ╭─[ constraints_block_level.baml:37:24 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                        ┬  
@@ -59,7 +59,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected config key, found '{'
-//     ╭─[ 0:37:25 ]
+//     ╭─[ constraints_block_level.baml:37:25 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                         ┬  
@@ -68,7 +68,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:37:33 ]
+//     ╭─[ constraints_block_level.baml:37:33 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                                 ┬  
@@ -77,7 +77,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ')'
-//     ╭─[ 0:37:34 ]
+//     ╭─[ constraints_block_level.baml:37:34 ]
 //     │
 //  37 │   @@check(foo_check_1, {{ this }})
 //     │                                  ┬  
@@ -86,7 +86,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '@@'
-//     ╭─[ 0:38:3 ]
+//     ╭─[ constraints_block_level.baml:38:3 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │   ─┬  
@@ -95,7 +95,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:38:5 ]
+//     ╭─[ constraints_block_level.baml:38:5 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │     ──┬──  
@@ -104,7 +104,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '('
-//     ╭─[ 0:38:10 ]
+//     ╭─[ constraints_block_level.baml:38:10 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │          ┬  
@@ -113,7 +113,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:38:11 ]
+//     ╭─[ constraints_block_level.baml:38:11 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │           ─────┬─────  
@@ -122,7 +122,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ','
-//     ╭─[ 0:38:22 ]
+//     ╭─[ constraints_block_level.baml:38:22 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                      ┬  
@@ -131,7 +131,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:38:24 ]
+//     ╭─[ constraints_block_level.baml:38:24 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                        ┬  
@@ -140,7 +140,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:38:25 ]
+//     ╭─[ constraints_block_level.baml:38:25 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                         ┬  
@@ -149,7 +149,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:38:27 ]
+//     ╭─[ constraints_block_level.baml:38:27 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                           ──┬─  
@@ -158,7 +158,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:38:32 ]
+//     ╭─[ constraints_block_level.baml:38:32 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                ┬  
@@ -167,7 +167,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:38:33 ]
+//     ╭─[ constraints_block_level.baml:38:33 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                 ┬  
@@ -176,7 +176,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ')'
-//     ╭─[ 0:38:34 ]
+//     ╭─[ constraints_block_level.baml:38:34 ]
 //     │
 //  38 │   @@check(foo_check_2, {{ this }})
 //     │                                  ┬  
@@ -185,7 +185,7 @@ test TestFoo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:39:1 ]
+//     ╭─[ constraints_block_level.baml:39:1 ]
 //     │
 //  39 │ }
 //     │ ┬  

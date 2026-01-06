@@ -13,8 +13,8 @@ use baml_db::{
     baml_tir, baml_workspace,
 };
 use baml_diagnostics::compiler_error::{
-    CompilerError, HirDiagnostic, ParseError, TypeError, render_hir_diagnostic, render_parse_error,
-    render_type_error,
+    CompilerError, DbSourceCache, HirDiagnostic, ParseError, TypeError, render_hir_diagnostic,
+    render_parse_error, render_type_error,
 };
 use baml_hir::{ItemId, file_lowering, function_body, function_signature};
 use baml_syntax::{
@@ -1114,13 +1114,8 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Build a source map for error rendering (FileId -> source text)
-        let mut sources: HashMap<FileId, String> = HashMap::new();
-        for source_file in self.source_files.values() {
-            let file_id = source_file.file_id(&self.db);
-            let text = source_file.text(&self.db).clone();
-            sources.insert(file_id, text);
-        }
+        // Create a cache for rendering diagnostics (reused across all errors)
+        let mut cache = DbSourceCache::new(&self.db, self.project_root);
 
         // Group errors by file_id and error type (parse vs type vs hir)
         let mut parse_errors_by_file: HashMap<FileId, Vec<&ParseError>> = HashMap::new();
@@ -1172,7 +1167,7 @@ impl CompilerRunner {
 
                 for error in errors {
                     total_parse_errors += 1;
-                    let rendered = render_parse_error(error, &sources, false);
+                    let rendered = render_parse_error(error, &mut cache, false);
                     for line in rendered.lines() {
                         writeln!(output, "{}", line).ok();
                         output_annotated.push((
@@ -1209,7 +1204,7 @@ impl CompilerRunner {
 
                 for error in errors {
                     total_hir_errors += 1;
-                    let rendered = render_hir_diagnostic(error, &sources, false);
+                    let rendered = render_hir_diagnostic(error, &mut cache, false);
                     for line in rendered.lines() {
                         writeln!(output, "{}", line).ok();
                         output_annotated.push((
@@ -1246,7 +1241,7 @@ impl CompilerRunner {
 
                 for error in errors {
                     total_type_errors += 1;
-                    let rendered = render_type_error(error, &sources, false);
+                    let rendered = render_type_error(error, &mut cache, false);
                     for line in rendered.lines() {
                         writeln!(output, "{}", line).ok();
                         output_annotated.push((
