@@ -33,30 +33,12 @@ function Ok() -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Expected `int`, found `10.0`
-//    ╭─[ expr_let_annotations.baml:5:10 ]
-//    │
-//  5 │   let y : int = 10.0;
-//    │          ──┬─  
-//    │            ╰─── Expected `int`, found `10.0`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Expected `int`, found `string`
 //    ╭─[ expr_let_annotations.baml:6:15 ]
 //    │
 //  6 │   let c: int = "hello";
 //    │               ────┬───  
 //    │                   ╰───── Expected `int`, found `string`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected `int`, found `"hello"`
-//    ╭─[ expr_let_annotations.baml:6:9 ]
-//    │
-//  6 │   let c: int = "hello";
-//    │         ──┬─  
-//    │           ╰─── Expected `int`, found `"hello"`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

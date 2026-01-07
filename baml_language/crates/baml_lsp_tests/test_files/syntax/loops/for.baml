@@ -60,42 +60,15 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: Expected `0`, found `1`
-//    ╭─[ loops_for.baml:1:1 ]
-//    │
-//  1 │ function Sum(xs: int[]) -> int {
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected `0`, found `string`
+// Error: Expected `int`, found `string`
 //     ╭─[ loops_for.baml:16:12 ]
 //     │
 //  16 │        result = x;
 //     │                 ┬  
-//     │                 ╰── Expected `0`, found `string`
+//     │                 ╰── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `0`, found `1`
-//    ╭─[ loops_for.baml:1:1 ]
-//    │
-//  1 │ function Sum(xs: int[]) -> int {
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected `0`, found `int`
-//    ╭─[ loops_for.baml:5:13 ]
-//    │
-//  5 │        result += x;
-//    │                  ┬  
-//    │                  ╰── Expected `0`, found `int`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Type `int` has no field `length`
 //    ╭─[ loops_for.baml:1:1 ]
 //    │
@@ -122,13 +95,4 @@ function SumUnknownType(xs: int, b: string) -> int {
 //    │ ╰─ Type `int` is not indexable
 //    │ 
 //    │ Note: Error code: E0008
-// ───╯
-// Error: Expected `0`, found `1`
-//    ╭─[ loops_for.baml:1:1 ]
-//    │
-//  1 │ function Sum(xs: int[]) -> int {
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
 // ───╯

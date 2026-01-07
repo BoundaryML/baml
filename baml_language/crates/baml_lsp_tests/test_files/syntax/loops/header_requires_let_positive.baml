@@ -46,21 +46,3 @@ function InitWithLet() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected `100`, found `1`
-//    ╭─[ loops_header_requires_let_positive.baml:4:26 ]
-//    │
-//  4 │     for (i = 0; i < 3; i += 1) {
-//    │                             ┬  
-//    │                             ╰── Expected `100`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: Expected `0`, found `1`
-//     ╭─[ loops_header_requires_let_positive.baml:13:30 ]
-//     │
-//  13 │     for (let j = 0; j < 3; j += 1) {
-//     │                                 ┬  
-//     │                                 ╰── Expected `0`, found `1`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯

@@ -11,12 +11,4 @@ function MixedChildrenNotFlattened() -> string {
 
 //----
 //- diagnostics
-// Error: Expected `0`, found `1`
-//    ╭─[ headers_mixed_children_not_flattened.baml:1:1 ]
-//    │
-//  1 │ //# Parent
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

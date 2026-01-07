@@ -8,14 +8,13 @@ expression: output
   Function VeryLongHeaderTitle:
     Return: Literal(String("long headers"))
   Function HeadersAroundExpressions:
-    Return: Literal(Int(5))
+    Return: Int
     Errors:
-      - Expected 0. Found 1
       - Expected string. Found int
   Function HeadersInComplexNesting:
     Return: String
   Function HeadersAndComments:
-    Return: Literal(String("test"))
+    Return: String
   Function ConsecutiveHeaders:
     Return: Literal(String("multiple consecutive headers"))
   Function UnicodeHeaders:
@@ -25,4 +24,4 @@ expression: output
   Function HeadersWithSpecialChars:
     Return: Literal(String("special chars"))
   Function HeadersWithWhitespace:
-    Return: Literal(String("whitespace test"))
+    Return: String

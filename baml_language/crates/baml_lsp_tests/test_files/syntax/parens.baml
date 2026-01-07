@@ -821,15 +821,6 @@ function foo() -> int {
 //    │ 
 //    │ Note: Error code: E0008
 // ───╯
-// Error: Expected `0`, found `1`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Unknown variable `a`
 //     ╭─[ parens.baml:59:12 ]
 //     │
@@ -865,15 +856,6 @@ function foo() -> int {
 //    │ ╰─ Cannot apply operator 'Lt' to types `int` and `unknown`
 //    │ 
 //    │ Note: Error code: E0004
-// ───╯
-// Error: Expected `0`, found `1`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
 // ───╯
 // Error: Expected `int`, found `void`
 //    ╭─[ parens.baml:1:1 ]

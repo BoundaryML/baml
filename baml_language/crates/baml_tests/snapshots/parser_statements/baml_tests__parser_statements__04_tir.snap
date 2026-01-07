@@ -5,35 +5,20 @@ expression: output
 === TYPE INFERENCE ===
   Function mul_assign:
     Return: Int
-    Errors:
-      - Expected 3. Found 4
   Function assign_in_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found 1
   Function multi_assign:
     Return: Int
-    Errors:
-      - Expected 1. Found 10
-      - Expected 2. Found 20
   Function sub_assign:
     Return: Int
-    Errors:
-      - Expected 10. Found 3
   Function add_assign:
     Return: Int
-    Errors:
-      - Expected 10. Found 5
   Function simple_assign:
     Return: Int
-    Errors:
-      - Expected 1. Found 5
   Function block_with_tail:
     Return: Int
   Function break_in_for:
     Return: Int
-    Errors:
-      - Expected 0. Found int
   Function simple_continue:
     Return: Int
   Function continue_with_locals:
@@ -44,35 +29,19 @@ expression: output
     Return: Int
   Function continue_in_for:
     Return: Int
-    Errors:
-      - Expected 0. Found int
-      - Expected 0. Found int
   Function break_with_locals:
     Return: Int
   Function c_style_for_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found 1
   Function iterator_style_for_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found 1
-      - Expected 0. Found int
   Function nested_for_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found 1
-      - Expected 0. Found 1
-      - Expected 0. Found int
   Function ConditionalLogic:
     Return: String
   Function let_statements:
     Return: Int
   Function simple_while_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found int
   Function nested_while_loop:
     Return: Int
-    Errors:
-      - Expected 0. Found int

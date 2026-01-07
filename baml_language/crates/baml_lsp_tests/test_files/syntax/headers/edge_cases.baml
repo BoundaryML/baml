@@ -214,15 +214,6 @@ function HeaderOnlyFunction() -> string {
 
 //----
 //- diagnostics
-// Error: Expected `0`, found `1`
-//    ╭─[ headers_edge_cases.baml:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Expected `string`, found `int`
 //      ╭─[ headers_edge_cases.baml:135:15 ]
 //      │

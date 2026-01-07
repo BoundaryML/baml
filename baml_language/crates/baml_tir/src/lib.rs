@@ -1213,18 +1213,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
                             // Use the argument's span if available, otherwise fall back to call span
                             let error_span = arg_span.unwrap_or(span);
-                            // Generalize literal types for clearer error messages when expected is base type
-                            let found_for_error = if matches!(
-                                param_ty,
-                                Ty::Int | Ty::Float | Ty::String | Ty::Bool
-                            ) {
-                                generalize(arg_ty)
-                            } else {
-                                arg_ty.clone()
-                            };
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
-                                found: found_for_error,
+                                found: generalize_for_error(param_ty, arg_ty),
                                 span: error_span,
                                 info_span: None,
                             });
@@ -1613,18 +1604,9 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     for &elem in elements {
                         let elem_ty = check_expr(ctx, elem, body, expected_elem);
                         if !ctx.is_subtype_of(&elem_ty, expected_elem) {
-                            // Generalize literal types for clearer error messages when expected is base type
-                            let found_for_error = if matches!(
-                                **expected_elem,
-                                Ty::Int | Ty::Float | Ty::String | Ty::Bool
-                            ) {
-                                generalize(&elem_ty)
-                            } else {
-                                elem_ty
-                            };
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_elem).clone(),
-                                found: found_for_error,
+                                found: generalize_for_error(expected_elem, &elem_ty),
                                 span,
                                 info_span: None,
                             });
@@ -1636,16 +1618,9 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 // Fall back to synthesis
                 let ty = infer_expr(ctx, expr_id, body);
                 if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() {
-                    // Generalize literal types for clearer error messages when expected is base type
-                    let found_for_error =
-                        if matches!(expected, Ty::Int | Ty::Float | Ty::String | Ty::Bool) {
-                            generalize(&ty)
-                        } else {
-                            ty.clone()
-                        };
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
-                        found: found_for_error,
+                        found: generalize_for_error(expected, &ty),
                         span,
                         info_span: None,
                     });
@@ -1705,16 +1680,9 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 // Fall back to synthesis
                 let ty = infer_expr(ctx, expr_id, body);
                 if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() {
-                    // Generalize literal types for clearer error messages when expected is base type
-                    let found_for_error =
-                        if matches!(expected, Ty::Int | Ty::Float | Ty::String | Ty::Bool) {
-                            generalize(&ty)
-                        } else {
-                            ty.clone()
-                        };
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
-                        found: found_for_error,
+                        found: generalize_for_error(expected, &ty),
                         span,
                         info_span: None,
                     });
@@ -1727,17 +1695,12 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
         _ => {
             let ty = infer_expr(ctx, expr_id, body);
             if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() && !ty.is_unknown() {
-                // If expected is a base type, generalize the found type for clearer error messages
-                // e.g., "Expected bool, found int" instead of "Expected bool, found 42"
-                let found_for_error =
-                    if matches!(expected, Ty::Int | Ty::Float | Ty::String | Ty::Bool) {
-                        generalize(&ty)
-                    } else {
-                        ty.clone()
-                    };
+                // Generalize found type for clearer error messages
+                // e.g., "Expected int[], found int" instead of "Expected int[], found 42"
+                // But preserve literals when expected is also a literal (e.g., "Expected 4, found 3")
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: expected.clone(),
-                    found: found_for_error,
+                    found: generalize_for_error(expected, &ty),
                     span,
                     info_span: None,
                 });
@@ -1907,6 +1870,20 @@ fn generalize(ty: &Ty) -> Ty {
         Ty::Literal(LiteralValue::String(_)) => Ty::String,
         Ty::Literal(LiteralValue::Bool(_)) => Ty::Bool,
         other => other.clone(),
+    }
+}
+
+/// Generalize the found type for error messages, but preserve literals when expected is also a literal.
+///
+/// When expected is a literal type (like `4`), we want to show "Expected `4`, found `3`"
+/// rather than "Expected `4`, found `int`". But when expected is a base type like `int[]`,
+/// we want to show "Expected `int[]`, found `int`" rather than "Expected `int[]`, found `42`".
+fn generalize_for_error(expected: &Ty, found: &Ty) -> Ty {
+    if matches!(expected, Ty::Literal(_)) {
+        // Keep literal types when expected is also a literal
+        found.clone()
+    } else {
+        generalize(found)
     }
 }
 
@@ -2281,18 +2258,14 @@ fn check_stmt_with_return(
                     let span = ctx.build_span_default(type_span);
                     let annot_ty = ctx.lower_type_resolved(annot, span);
                     // Use check_expr when we have an expected type
-                    let init_ty = check_expr(ctx, *init, body, &annot_ty);
-                    if !ctx.is_subtype_of(&init_ty, &annot_ty) {
-                        ctx.push_error(TypeError::TypeMismatch {
-                            expected: annot_ty.clone(),
-                            found: init_ty,
-                            span,
-                            info_span: None,
-                        });
-                    }
+                    // check_expr already reports any type mismatch errors
+                    check_expr(ctx, *init, body, &annot_ty);
                     annot_ty
                 } else {
-                    infer_expr(ctx, *init, body)
+                    // No type annotation - infer and generalize for mutable variables
+                    // This ensures `let x = 5` gives `x : int`, not `x : 5`
+                    let inferred = infer_expr(ctx, *init, body);
+                    generalize(&inferred)
                 }
             } else if let Some(annot) = type_annotation {
                 ctx.lower_type_resolved(annot, Span::default())
@@ -2374,8 +2347,8 @@ fn check_stmt_with_return(
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
                 let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: target_ty,
-                    found: value_ty,
+                    expected: target_ty.clone(),
+                    found: generalize_for_error(&target_ty, &value_ty),
                     span,
                     info_span: None,
                 });
@@ -2394,8 +2367,8 @@ fn check_stmt_with_return(
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
                 let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: target_ty,
-                    found: value_ty,
+                    expected: target_ty.clone(),
+                    found: generalize_for_error(&target_ty, &value_ty),
                     span,
                     info_span: None,
                 });

@@ -20,12 +20,4 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `0`, found `1`
-//    ╭─[ headers_for_loop_mermaid.baml:1:1 ]
-//    │
-//  1 │ //# Loop Processing
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

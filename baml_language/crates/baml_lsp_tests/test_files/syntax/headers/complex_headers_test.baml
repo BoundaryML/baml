@@ -66,15 +66,6 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `0`, found `1`
-//    ╭─[ headers_complex_headers_test.baml:1:1 ]
-//    │
-//  1 │ //# Main Function
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: Expected `string`, found `int`
 //     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │
@@ -84,12 +75,3 @@ function ForLoopWithHeaders() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `0`, found `1`
-//    ╭─[ headers_complex_headers_test.baml:1:1 ]
-//    │
-//  1 │ //# Main Function
-//    │ │ 
-//    │ ╰─ Expected `0`, found `1`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
