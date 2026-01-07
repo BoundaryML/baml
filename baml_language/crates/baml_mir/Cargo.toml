@@ -13,6 +13,7 @@ baml_tir = { workspace = true }
 baml_vir = { workspace = true }
 baml_workspace = { workspace = true }
 la-arena = { workspace = true }
+log = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
