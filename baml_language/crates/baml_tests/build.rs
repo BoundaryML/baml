@@ -570,7 +570,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_05_diagnostics() {
-            use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
+            use baml_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
             use baml_project::collect_diagnostics;
             use std::path::PathBuf;
 
@@ -592,7 +592,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             for source_file in &source_files {
                 let file_id = source_file.file_id(&db);
                 sources.insert(file_id, source_file.text(&db).to_string());
-                file_paths.insert(file_id, source_file.path(&db).into());
+                file_paths.insert(file_id, source_file.path(&db));
             }
 
             let config = RenderConfig::test();
