@@ -109,10 +109,5 @@ runs:
       shell: bash
 
     # only on debian-based runners
-    - name: Install protoc
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        apt-get update
-        apt-get install -y protobuf-compiler
-      shell: bash
-      
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
