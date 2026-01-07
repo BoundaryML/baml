@@ -3,8 +3,8 @@
 mod common;
 
 use baml::{
-    __internal::{host_map_entry, host_value},
     BamlClass, BamlDecode, BamlEncode, BamlEnum,
+    __internal::{host_map_entry, host_value},
 };
 
 // =============================================================================

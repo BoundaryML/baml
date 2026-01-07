@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     ffi::c_int,
-    sync::{Mutex, OnceLock, mpsc},
+    sync::{mpsc, Mutex, OnceLock},
 };
 
 use crate::{error::BamlError, ffi::bindings};

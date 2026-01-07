@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, ffi::c_void};
 
-use super::{RawObject, RawObjectTrait, llm_call::LLMCallKind};
+use super::{llm_call::LLMCallKind, RawObject, RawObjectTrait};
 use crate::{
     baml_unreachable,
     codec::BamlDecode,

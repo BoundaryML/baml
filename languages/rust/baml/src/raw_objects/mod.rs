@@ -73,15 +73,15 @@ pub use type_builder::{
 use crate::{
     baml_unreachable,
     codec::{
-        BamlDecode,
         traits::{DecodeHandle, IntoKwargs},
+        BamlDecode,
     },
     error::BamlError,
     ffi,
     proto::baml_cffi_v1::{
+        baml_object_handle, invocation_response, invocation_response_success,
         BamlObjectConstructorInvocation, BamlObjectHandle, BamlObjectMethodInvocation,
         BamlObjectType, BamlPointerType, CffiValueHolder, HostMapEntry, InvocationResponse,
-        baml_object_handle, invocation_response, invocation_response_success,
     },
 };
 

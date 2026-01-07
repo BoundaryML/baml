@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     codec::{BamlDecode, BamlEncode},
     error::BamlError,
-    proto::baml_cffi_v1::{CffiStreamState, CffiValueHolder, HostValue, cffi_value_holder},
+    proto::baml_cffi_v1::{cffi_value_holder, CffiStreamState, CffiValueHolder, HostValue},
 };
 
 /// Result of a @check constraint

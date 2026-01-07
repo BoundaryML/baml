@@ -3,7 +3,7 @@
 
 use std::env;
 
-use baml_sys::{BamlSysError, ENV_LIBRARY_PATH, ensure_library, version};
+use baml_sys::{ensure_library, version, BamlSysError, ENV_LIBRARY_PATH};
 
 /// Test that version returns a non-empty string when library is available.
 /// This test is skipped if the library is not present.

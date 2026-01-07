@@ -4,8 +4,8 @@
 mod common;
 
 use baml::{
-    __internal::{CffiStreamState, host_value},
     BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState,
+    __internal::{host_value, CffiStreamState},
 };
 use common::{
     make_bool_holder, make_checked_holder, make_float_holder, make_int_holder, make_list_holder,

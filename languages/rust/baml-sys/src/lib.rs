@@ -55,10 +55,10 @@ use std::ffi::CStr;
 pub use error::{BamlSysError, Result};
 use libc::{c_char, c_int, c_void, size_t};
 pub use loader::{
-    ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH, VERSION, ensure_library,
-    set_library_path,
+    ensure_library, set_library_path, ENV_CACHE_DIR, ENV_DISABLE_DOWNLOAD, ENV_LIBRARY_PATH,
+    VERSION,
 };
-pub use symbols::{Buffer, CallbackFn, OnTickCallbackFn, Symbols, get_symbols};
+pub use symbols::{get_symbols, Buffer, CallbackFn, OnTickCallbackFn, Symbols};
 
 // ============================================================================
 // Safe wrapper functions

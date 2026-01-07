@@ -2,10 +2,10 @@
 #![allow(dead_code)]
 
 use baml::__internal::{
-    CffiCheckValue, CffiFieldTypeLiteral, CffiLiteralBool, CffiLiteralInt, CffiLiteralString,
-    CffiMapEntry, CffiStreamState, CffiTypeName, CffiValueChecked, CffiValueClass, CffiValueEnum,
-    CffiValueHolder, CffiValueList, CffiValueMap, CffiValueStreamingState, CffiValueUnionVariant,
-    cffi_value_holder,
+    cffi_value_holder, CffiCheckValue, CffiFieldTypeLiteral, CffiLiteralBool, CffiLiteralInt,
+    CffiLiteralString, CffiMapEntry, CffiStreamState, CffiTypeName, CffiValueChecked,
+    CffiValueClass, CffiValueEnum, CffiValueHolder, CffiValueList, CffiValueMap,
+    CffiValueStreamingState, CffiValueUnionVariant,
 };
 
 /// Create a `CffiValueHolder` containing a string value.

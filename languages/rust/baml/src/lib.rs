@@ -28,6 +28,7 @@ mod codec;
 mod error;
 mod ffi;
 mod known_types;
+pub mod platform;
 mod raw_objects;
 mod runtime;
 mod stream;
@@ -51,9 +52,9 @@ pub use async_stream::AsyncStreamingCall;
 pub use baml_macros::{BamlDecode, BamlEncode};
 pub use client_registry::ClientRegistry;
 pub use codec::{
-    BamlClass, BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey, BamlValue, DynamicClass,
-    DynamicEnum, DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes, decode_enum,
-    decode_field, encode_class, encode_class_dynamic, encode_enum,
+    decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum, BamlClass,
+    BamlDecode, BamlEncode, BamlEnum, BamlSerializeMapKey, BamlValue, DynamicClass, DynamicEnum,
+    DynamicUnion, FromBamlValue, FromBamlValueRef, KnownTypes,
 };
 pub use error::BamlError;
 pub use raw_objects::{

@@ -6,8 +6,8 @@ mod common;
 use std::collections::HashMap;
 
 use baml::{
-    __internal::CffiStreamState, BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum,
-    DynamicUnion, KnownTypes, StreamingState,
+    BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum, DynamicUnion, KnownTypes,
+    StreamingState, __internal::CffiStreamState,
 };
 use common::{
     make_bool_holder, make_checked_holder, make_class_holder, make_enum_holder, make_float_holder,

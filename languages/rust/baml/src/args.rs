@@ -5,7 +5,7 @@ use crate::{
     codec::BamlEncode,
     error::BamlError,
     proto::baml_cffi_v1::{
-        BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry, host_map_entry,
+        host_map_entry, BamlObjectHandle, HostEnvVar, HostFunctionArguments, HostMapEntry,
     },
     raw_objects::{Collector, RawObjectTrait, TypeBuilder},
 };
@@ -28,8 +28,8 @@ use crate::{
 pub(crate) mod cancellation {
     use std::{
         sync::{
-            Arc, Condvar, Mutex,
             atomic::{AtomicBool, Ordering},
+            Arc, Condvar, Mutex,
         },
         time::Duration,
     };
@@ -381,8 +381,8 @@ pub(crate) mod cancellation {
         /// Get a token to pass to user code.
         ///
         /// Tokens are cheap to clone and can be passed to multiple tasks.
-        /// Note: tokens from `CancellationSource` don't have their own timeout -
-        /// the source manages timeout via `start()`.
+        /// Note: tokens from `CancellationSource` don't have their own timeout
+        /// - the source manages timeout via `start()`.
         pub(crate) fn token(&self) -> CancellationToken {
             CancellationToken {
                 state: self.state.clone(),
@@ -641,7 +641,8 @@ mod tests {
         assert!(encoded.is_ok());
         // Empty args should still encode to something (empty protobuf message)
         let bytes = encoded.unwrap();
-        assert!(bytes.is_empty() || !bytes.is_empty()); // Just check it doesn't panic
+        assert!(bytes.is_empty() || !bytes.is_empty()); // Just check it doesn't
+                                                        // panic
     }
 
     #[test]

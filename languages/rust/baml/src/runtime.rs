@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString, c_void},
+    ffi::{c_void, CStr, CString},
 };
 
 use prost::Message;

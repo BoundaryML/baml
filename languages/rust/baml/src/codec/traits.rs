@@ -3,7 +3,7 @@
 use crate::{
     error::BamlError,
     proto::baml_cffi_v1::{
-        CffiValueClass, CffiValueHolder, HostMapEntry, HostValue, host_map_entry,
+        host_map_entry, CffiValueClass, CffiValueHolder, HostMapEntry, HostValue,
     },
 };
 
@@ -91,12 +91,12 @@ impl<V1: BamlEncode, V2: BamlEncode> IntoKwargs for ((&str, V1), (&str, V2)) {
     fn into_kwargs(self) -> Vec<HostMapEntry> {
         vec![
             HostMapEntry {
-                key: Some(host_map_entry::Key::StringKey(self.0.0.to_string())),
-                value: Some(self.0.1.baml_encode()),
+                key: Some(host_map_entry::Key::StringKey(self.0 .0.to_string())),
+                value: Some(self.0 .1.baml_encode()),
             },
             HostMapEntry {
-                key: Some(host_map_entry::Key::StringKey(self.1.0.to_string())),
-                value: Some(self.1.1.baml_encode()),
+                key: Some(host_map_entry::Key::StringKey(self.1 .0.to_string())),
+                value: Some(self.1 .1.baml_encode()),
             },
         ]
     }

@@ -93,8 +93,8 @@ impl<T: KnownTypes, S: KnownTypes> BamlValue<T, S> {
 
 use super::traits::{BamlDecode, BamlEncode};
 use crate::proto::baml_cffi_v1::{
-    HostClassValue, HostEnumValue, HostListValue, HostMapEntry, HostMapValue, HostValue,
-    host_map_entry, host_value,
+    host_map_entry, host_value, HostClassValue, HostEnumValue, HostListValue, HostMapEntry,
+    HostMapValue, HostValue,
 };
 
 impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
@@ -185,7 +185,7 @@ impl<T: KnownTypes, S: KnownTypes> BamlEncode for BamlValue<T, S> {
 
 use crate::{
     proto::baml_cffi_v1::{
-        CffiStreamState, CffiValueHolder, cffi_field_type_literal, cffi_value_holder,
+        cffi_field_type_literal, cffi_value_holder, CffiStreamState, CffiValueHolder,
     },
     types::{Check, CheckStatus, StreamingState},
 };

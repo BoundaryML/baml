@@ -4,7 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Result};
 
-use crate::shared::{ContainerAttrs, FieldAttrs, VariantAttrs, baml_crate_path};
+use crate::shared::{baml_crate_path, ContainerAttrs, FieldAttrs, VariantAttrs};
 
 pub(crate) fn derive_encode(input: &DeriveInput) -> Result<TokenStream> {
     let container_attrs = ContainerAttrs::from_attrs(&input.attrs)?;
