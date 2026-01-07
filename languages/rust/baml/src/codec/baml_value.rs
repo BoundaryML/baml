@@ -283,7 +283,7 @@ impl<T: KnownTypes, S: KnownTypes> BamlDecode for BamlValue<T, S> {
                                 name: c.name.clone(),
                                 expression: c.expression.clone(),
                                 status: match c.status.as_str() {
-                                    "passed" | "PASSED" => CheckStatus::Passed,
+                                    "passed" | "PASSED" => CheckStatus::Succeeded,
                                     _ => CheckStatus::Failed,
                                 },
                             },

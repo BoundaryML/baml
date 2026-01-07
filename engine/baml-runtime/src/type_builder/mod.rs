@@ -400,26 +400,14 @@ impl fmt::Display for TypeBuilder {
 
         if !type_aliases.is_empty() {
             write!(f, "\n  type_aliases: ")?;
-
-            match self.type_aliases.lock() {
-                Ok(type_aliases) => {
-                    let keys: Vec<_> = type_aliases.keys().collect();
-                    writeln!(f, "{keys:?}")?
-                }
-                Err(_) => writeln!(f, "Cannot acquire lock,")?,
-            }
+            let keys: Vec<_> = type_aliases.keys().collect();
+            writeln!(f, "{keys:?}")?
         }
 
         if !recursive_type_aliases.is_empty() {
             write!(f, "\n  recursive_type_aliases: ")?;
-
-            match self.recursive_type_aliases.lock() {
-                Ok(recursive_type_aliases) => {
-                    let keys: Vec<_> = recursive_type_aliases.iter().map(|v| v.keys()).collect();
-                    writeln!(f, "{keys:?}")?
-                }
-                Err(_) => writeln!(f, "Cannot acquire lock,")?,
-            }
+            let keys: Vec<_> = recursive_type_aliases.iter().map(|v| v.keys()).collect();
+            writeln!(f, "{keys:?}")?
         }
 
         if !enums.is_empty() {

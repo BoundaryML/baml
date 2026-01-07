@@ -35,7 +35,7 @@ pub struct Check {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
-    Passed,
+    Succeeded,
     Failed,
 }
 
@@ -53,19 +53,25 @@ impl<T: BamlDecode> BamlDecode for Checked<T> {
                     .checks
                     .iter()
                     .map(|c| {
-                        (
+                        Ok((
                             c.name.clone(),
                             Check {
                                 name: c.name.clone(),
                                 expression: c.expression.clone(),
                                 status: match c.status.as_str() {
-                                    "passed" | "PASSED" => CheckStatus::Passed,
-                                    _ => CheckStatus::Failed,
+                                    "succeeded" => CheckStatus::Succeeded,
+                                    "failed" => CheckStatus::Failed,
+                                    _ => {
+                                        return Err(BamlError::internal(format!(
+                                            "invalid check status: {}",
+                                            c.status
+                                        )));
+                                    }
                                 },
                             },
-                        )
+                        ))
                     })
-                    .collect();
+                    .collect::<Result<HashMap<String, Check>, BamlError>>()?;
 
                 Ok(Checked { value, checks })
             }
@@ -90,7 +96,7 @@ impl<T> Checked<T> {
     pub fn all_passed(&self) -> bool {
         self.checks
             .values()
-            .all(|c| c.status == CheckStatus::Passed)
+            .all(|c| c.status == CheckStatus::Succeeded)
     }
 
     /// Returns true if any check failed

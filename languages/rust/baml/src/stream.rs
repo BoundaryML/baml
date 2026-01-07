@@ -3,9 +3,8 @@ use std::sync::mpsc;
 use prost::Message;
 
 use crate::{
-    args::cancellation::OnCancelGuard,
-    codec::BamlDecode, error::BamlError, ffi::callbacks::CallbackResult,
-    proto::baml_cffi_v1::CffiValueHolder,
+    args::cancellation::OnCancelGuard, codec::BamlDecode, error::BamlError,
+    ffi::callbacks::CallbackResult, proto::baml_cffi_v1::CffiValueHolder,
 };
 
 /// Event from a streaming function call
@@ -40,6 +39,7 @@ pub struct StreamingCall<TStream, TFinal: Clone> {
 enum Internal<TPartial, TFinal> {
     Partial(TPartial),
     Final(TFinal),
+    Error(BamlError),
 }
 
 impl<TPartial, TFinal: Clone> StreamingCall<TPartial, TFinal>
@@ -62,30 +62,32 @@ where
         }
     }
 
-    fn recv_internal(&mut self) -> Result<Internal<TPartial, TFinal>, BamlError> {
+    fn recv_internal(&mut self) -> Option<Result<Internal<TPartial, TFinal>, BamlError>> {
         if matches!(self.state, StreamState::Finished) {
-            return Err(BamlError::internal("stream already finished"));
+            return None;
         }
 
         match self.receiver.recv() {
-            Ok(CallbackResult::Partial(bytes)) => decode_partial(&bytes).map(Internal::Partial),
+            Ok(CallbackResult::Partial(bytes)) => {
+                Some(decode_partial(&bytes).map(|p| Internal::Partial(p)))
+            }
 
             Ok(CallbackResult::Final(bytes)) => {
                 self.state = StreamState::Finished;
                 let decoded = decode_final(&bytes);
                 self.final_value = Some(decoded.clone());
-                decoded.map(Internal::Final)
+                Some(decoded.map(|v| Internal::Final(v)))
             }
 
             Ok(CallbackResult::Error(e)) => {
                 self.state = StreamState::Finished;
                 self.final_value = Some(Err(e.clone()));
-                Err(e)
+                Some(Ok(Internal::Error(e)))
             }
 
             Err(_) => {
                 self.state = StreamState::Finished;
-                Err(BamlError::internal("callback channel closed"))
+                Some(Err(BamlError::internal("callback channel closed")))
             }
         }
     }
@@ -94,7 +96,6 @@ where
         <&mut Self as IntoIterator>::into_iter(self)
     }
 }
-
 
 fn decode_partial<T: BamlDecode>(data: &[u8]) -> Result<T, BamlError> {
     let holder = CffiValueHolder::decode(data)
@@ -121,9 +122,11 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.call.recv_internal() {
-            Ok(Internal::Partial(p)) => Some(Ok(p)),
-            Ok(Internal::Final(_)) => None,
-            Err(e) => Some(Err(e)),
+            Some(Ok(Internal::Partial(p))) => Some(Ok(p)),
+            Some(Ok(Internal::Error(e))) => Some(Err(e)),
+            Some(Err(e)) => Some(Err(e)),
+            Some(Ok(Internal::Final(_))) => None,
+            None => None,
         }
     }
 }
@@ -154,9 +157,11 @@ where
 
         loop {
             match self.recv_internal() {
-                Ok(Internal::Partial(_)) => continue,
-                Ok(Internal::Final(v)) => return Ok(v),
-                Err(e) => return Err(e),
+                Some(Ok(Internal::Partial(_))) => continue,
+                Some(Ok(Internal::Final(v))) => return Ok(v),
+                Some(Ok(Internal::Error(e))) => return Err(e),
+                Some(Err(e)) => return Err(e),
+                None => return Err(BamlError::internal("callback channel closed")),
             }
         }
     }
@@ -191,9 +196,11 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.call.recv_internal() {
-            Ok(Internal::Partial(p)) => Some(Ok(p)),
-            Ok(Internal::Final(_)) => None,
-            Err(e) => Some(Err(e)),
+            Some(Ok(Internal::Partial(p))) => Some(Ok(p)),
+            Some(Ok(Internal::Final(_))) => None,
+            Some(Ok(Internal::Error(e))) => Some(Err(e)),
+            Some(Err(e)) => Some(Err(e)),
+            None => None,
         }
     }
 }

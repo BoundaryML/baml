@@ -120,7 +120,8 @@ impl BamlRuntime {
         });
 
         // Wait for result
-        match receiver.recv() {
+        let result = receiver.recv();
+        match result {
             Ok(callbacks::CallbackResult::Final(data)) => {
                 let holder = CffiValueHolder::decode(&data[..])
                     .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
@@ -330,7 +331,7 @@ impl BamlRuntime {
         // Build args using FunctionArgs with parse-specific fields
         let args = FunctionArgs::new().arg("text", llm_response);
         let args = if stream {
-            args.arg("stream", "true")
+            args.arg("stream", true)
         } else {
             args
         };
@@ -363,19 +364,33 @@ impl BamlRuntime {
                 let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
                 cstr.to_string_lossy().into_owned()
             };
-            return Err(BamlError::internal(error_msg));
+            return Err(BamlError::internal(format!(
+                "function parse error: {error_msg}"
+            )));
         }
 
         // Wait for result
         match receiver.recv() {
             Ok(callbacks::CallbackResult::Final(data)) => {
-                let holder = CffiValueHolder::decode(&data[..])
-                    .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
-                T::baml_decode(&holder)
+                if stream {
+                    Err(BamlError::internal("unexpected final result in parse call"))
+                } else {
+                    let holder = CffiValueHolder::decode(&data[..])
+                        .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                    T::baml_decode(&holder)
+                }
             }
-            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
-                "unexpected partial result in parse call",
-            )),
+            Ok(callbacks::CallbackResult::Partial(data)) => {
+                if stream {
+                    let holder = CffiValueHolder::decode(&data[..])
+                        .map_err(|e| BamlError::internal(format!("decode error: {e}")))?;
+                    T::baml_decode(&holder)
+                } else {
+                    Err(BamlError::internal(
+                        "unexpected partial result in parse call",
+                    ))
+                }
+            }
             Ok(callbacks::CallbackResult::Error(e)) => Err(e),
             Err(_) => Err(BamlError::internal("callback channel closed")),
         }

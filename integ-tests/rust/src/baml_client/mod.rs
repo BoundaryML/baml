@@ -52,3 +52,8 @@ pub use runtime::new_collector;
 
 // Re-export client registry for runtime client configuration
 pub use baml::ClientRegistry;
+
+
+pub fn init() {
+    let _ = get_runtime();
+}

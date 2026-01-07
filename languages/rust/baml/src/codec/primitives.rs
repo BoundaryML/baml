@@ -294,7 +294,7 @@ impl BamlDecode for JsonValue {
                                 name: c.name.clone(),
                                 expression: c.expression.clone(),
                                 status: match c.status.as_str() {
-                                    "passed" | "PASSED" => crate::CheckStatus::Passed,
+                                    "passed" | "PASSED" => crate::CheckStatus::Succeeded,
                                     _ => crate::CheckStatus::Failed,
                                 },
                             },

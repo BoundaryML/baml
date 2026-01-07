@@ -10,12 +10,13 @@ use crate::{
     raw_objects::{Collector, RawObjectTrait, TypeBuilder},
 };
 
-
 /// Cancellation system using channels for efficient sync/async support.
 ///
 /// Design:
-/// - `CancellationToken`: Read-only handle for checking/waiting on cancellation (user-facing)
-/// - `CancellationSource`: Internal handle for triggering cancellation with callbacks (runtime-only)
+/// - `CancellationToken`: Read-only handle for checking/waiting on cancellation
+///   (user-facing)
+/// - `CancellationSource`: Internal handle for triggering cancellation with
+///   callbacks (runtime-only)
 /// - `CancellationGuard`: Active cancellation context with callback support
 ///
 /// Uses:
@@ -25,9 +26,13 @@ use crate::{
 /// - Oneshot channel for callback notification
 #[allow(dead_code)] // Internal types will be used when runtime is updated
 pub(crate) mod cancellation {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::time::Duration;
+    use std::{
+        sync::{
+            Arc, Condvar, Mutex,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
 
     /// Shared state between token and source
     struct SharedState {
@@ -69,7 +74,8 @@ pub(crate) mod cancellation {
             self.cancelled.load(Ordering::Acquire)
         }
 
-        /// Trigger cancellation, returns true if this was the first cancellation
+        /// Trigger cancellation, returns true if this was the first
+        /// cancellation
         fn cancel(&self) -> bool {
             // swap returns the previous value; if it was false, we're the first to cancel
             if !self.cancelled.swap(true, Ordering::AcqRel) {
@@ -92,7 +98,7 @@ pub(crate) mod cancellation {
             // Wait while NOT cancelled, then drop the guard
             drop(
                 self.condvar
-                    .wait_while(guard, |_| !self.is_cancelled())
+                    .wait_while(guard, |()| !self.is_cancelled())
                     .unwrap(),
             );
         }
@@ -106,7 +112,7 @@ pub(crate) mod cancellation {
             let guard = self.mutex.lock().unwrap();
             let (guard, result) = self
                 .condvar
-                .wait_timeout_while(guard, timeout, |_| !self.is_cancelled())
+                .wait_timeout_while(guard, timeout, |()| !self.is_cancelled())
                 .unwrap();
             drop(guard);
             // If we didn't time out, we were cancelled
@@ -150,7 +156,7 @@ pub(crate) mod cancellation {
     #[derive(Debug, Clone)]
     pub struct CancellationToken {
         state: Arc<SharedState>,
-        /// Timeout duration - only starts when runtime calls on_cancel()
+        /// Timeout duration - only starts when runtime calls `on_cancel()`
         timeout: Option<Duration>,
     }
 
@@ -165,10 +171,10 @@ pub(crate) mod cancellation {
 
         /// Create a new cancellation token with automatic timeout.
         ///
-        /// **Important:** The timeout does NOT start immediately. It only starts
-        /// when the token is passed to a runtime function (call_function, etc.).
-        /// This allows you to create the token ahead of time without the clock
-        /// ticking.
+        /// **Important:** The timeout does NOT start immediately. It only
+        /// starts when the token is passed to a runtime function
+        /// (`call_function`, etc.). This allows you to create the token
+        /// ahead of time without the clock ticking.
         pub fn new_with_timeout(timeout: Duration) -> Self {
             Self {
                 state: Arc::new(SharedState::new()),
@@ -220,17 +226,19 @@ pub(crate) mod cancellation {
         /// Register a callback to run when cancellation occurs.
         ///
         /// The callback runs on a dedicated thread and is invoked exactly once
-        /// when the token is cancelled. If already cancelled, callback runs immediately.
+        /// when the token is cancelled. If already cancelled, callback runs
+        /// immediately.
         ///
-        /// **Important:** If this token was created with `new_with_timeout()`, the
-        /// timeout countdown starts NOW (when this method is called), not when the
-        /// token was created.
+        /// **Important:** If this token was created with `new_with_timeout()`,
+        /// the timeout countdown starts NOW (when this method is
+        /// called), not when the token was created.
         ///
-        /// Returns a guard that, when dropped, signals the watcher thread to stop
-        /// (if cancellation hasn't occurred yet).
+        /// Returns a guard that, when dropped, signals the watcher thread to
+        /// stop (if cancellation hasn't occurred yet).
         ///
         /// # Internal Use
-        /// This is primarily for runtime integration - to hook FFI cleanup on cancellation.
+        /// This is primarily for runtime integration - to hook FFI cleanup on
+        /// cancellation.
         pub(crate) fn on_cancel<F>(&self, callback: F) -> OnCancelGuard
         where
             F: FnOnce() + Send + 'static,
@@ -315,7 +323,8 @@ pub(crate) mod cancellation {
             }
             // Don't join threads - let them exit naturally
             // This avoids blocking on drop
-            // Note: timeout thread will continue running but cancel() is idempotent
+            // Note: timeout thread will continue running but cancel() is
+            // idempotent
         }
     }
 
@@ -360,8 +369,8 @@ pub(crate) mod cancellation {
 
         /// Create a new cancellation source with automatic timeout.
         ///
-        /// The cancellation will automatically trigger after the timeout expires
-        /// once `start()` is called.
+        /// The cancellation will automatically trigger after the timeout
+        /// expires once `start()` is called.
         pub(crate) fn with_timeout(timeout: Duration) -> Self {
             Self {
                 state: Arc::new(SharedState::new()),
@@ -372,8 +381,8 @@ pub(crate) mod cancellation {
         /// Get a token to pass to user code.
         ///
         /// Tokens are cheap to clone and can be passed to multiple tasks.
-        /// Note: tokens from CancellationSource don't have their own timeout -
-        /// the source manages timeout via start().
+        /// Note: tokens from `CancellationSource` don't have their own timeout -
+        /// the source manages timeout via `start()`.
         pub(crate) fn token(&self) -> CancellationToken {
             CancellationToken {
                 state: self.state.clone(),
@@ -470,8 +479,8 @@ pub(crate) mod cancellation {
 
     /// Guard representing an active cancellation context with callback support.
     ///
-    /// Created by `CancellationSource::start()`. Use this to trigger cancellation
-    /// and the registered callback will be invoked.
+    /// Created by `CancellationSource::start()`. Use this to trigger
+    /// cancellation and the registered callback will be invoked.
     pub(crate) struct CancellationGuard {
         state: Arc<SharedState>,
         cancel_tx: std::sync::mpsc::Sender<()>,
@@ -509,13 +518,12 @@ pub(crate) mod cancellation {
 
 // Re-export CancellationToken for public API
 pub use cancellation::CancellationToken;
-
 // Re-export internal types for crate-level access (when runtime integration is added)
 #[allow(unused_imports)]
 pub(crate) use cancellation::{CancellationGuard, CancellationSource};
 
 /// Arguments for a BAML function call
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FunctionArgs {
     kwargs: Vec<HostMapEntry>,
     env_overrides: Vec<HostEnvVar>,
@@ -531,7 +539,11 @@ impl FunctionArgs {
         Self::default()
     }
 
-    pub fn with_cancellation_token(mut self, cancellation_token: Option<CancellationToken>) -> Self {
+    #[must_use]
+    pub fn with_cancellation_token(
+        mut self,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Self {
         self.cancellation_token = cancellation_token;
         self
     }

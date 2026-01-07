@@ -482,8 +482,14 @@ mod decode_wrappers {
         if let BamlValue::Checked(checked) = result {
             assert!(matches!(*checked.value, BamlValue::String(s) if s == "valid"));
             assert_eq!(checked.checks.len(), 2);
-            assert_eq!(checked.checks["length_check"].status, CheckStatus::Passed);
-            assert_eq!(checked.checks["format_check"].status, CheckStatus::Passed);
+            assert_eq!(
+                checked.checks["length_check"].status,
+                CheckStatus::Succeeded
+            );
+            assert_eq!(
+                checked.checks["format_check"].status,
+                CheckStatus::Succeeded
+            );
         } else {
             panic!("expected Checked");
         }
@@ -503,7 +509,7 @@ mod decode_wrappers {
         if let BamlValue::Checked(checked) = result {
             assert!(matches!(*checked.value, BamlValue::Int(5)));
             assert_eq!(checked.checks["min_check"].status, CheckStatus::Failed);
-            assert_eq!(checked.checks["type_check"].status, CheckStatus::Passed);
+            assert_eq!(checked.checks["type_check"].status, CheckStatus::Succeeded);
         } else {
             panic!("expected Checked");
         }
@@ -734,7 +740,7 @@ mod decode_wrappers {
         let result: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         if let BamlValue::Checked(checked) = result {
             assert!(matches!(*checked.value, BamlValue::Null));
-            assert_eq!(checked.checks["is_null"].status, CheckStatus::Passed);
+            assert_eq!(checked.checks["is_null"].status, CheckStatus::Succeeded);
         } else {
             panic!("expected Checked");
         }

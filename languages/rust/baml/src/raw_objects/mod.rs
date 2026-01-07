@@ -244,7 +244,6 @@ impl RawObject {
         kwargs: K,
     ) -> Result<T, BamlError> {
         let response = self.call_method_raw_internal(method_name, kwargs.into_kwargs())?;
-
         match response.response {
             Some(invocation_response::Response::Success(success)) => {
                 match success.result {

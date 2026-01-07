@@ -7,10 +7,9 @@ description.workspace = true
 license-file.workspace = true
 
 [lib]
-# cdylib - Dynamic library for runtime linking (used by Go, Python, etc.)
-# staticlib - Static library for compile-time linking (used by Rust FFI crates)
+# cdylib - Dynamic library for runtime linking (used by Go, Rust, etc.)
 # See https://doc.rust-lang.org/reference/linkage.html
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.2"

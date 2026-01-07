@@ -736,7 +736,7 @@ mod function_calls {
         if checked.value > 0 && checked.value < 150 {
             assert_eq!(
                 check.status,
-                CheckStatus::Passed,
+                CheckStatus::Succeeded,
                 "Check should pass for reasonable age"
             );
             assert!(checked.all_passed());
@@ -804,7 +804,7 @@ mod function_calls {
                 if age > 0 && age < 150 {
                     assert_eq!(
                         check.status,
-                        CheckStatus::Passed,
+                        CheckStatus::Succeeded,
                         "Check should pass for reasonable age"
                     );
                 }
@@ -813,7 +813,7 @@ mod function_calls {
                 println!("Got null (no age)");
                 assert_eq!(
                     check.status,
-                    CheckStatus::Passed,
+                    CheckStatus::Succeeded,
                     "Check should pass for null"
                 );
             }
@@ -885,7 +885,7 @@ mod function_calls {
                 if checked.value > 0 && checked.value < 150 {
                     assert_eq!(
                         check.status,
-                        CheckStatus::Passed,
+                        CheckStatus::Succeeded,
                         "Check should pass for reasonable age"
                     );
                     assert!(checked.all_passed());

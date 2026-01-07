@@ -150,10 +150,9 @@ fn derive_enum_encode(
                 }
             });
             encode_as_map_key_arms.push(quote! {
-                Self::#variant_name => #baml_crate::__internal::host_map_entry::Key::EnumKey(#baml_crate::__internal::HostEnumValue {
-                    name: #baml_name.to_string(),
-                    value: #literal_string.to_string(),
-                })
+                Self::#variant_name => {
+                    #literal_string.to_string().baml_encode_map_key()
+                }
             });
             decode_as_map_key_arms.push(quote! {
                 k if k == #literal_string => Ok(Self::#variant_name)
@@ -166,7 +165,7 @@ fn derive_enum_encode(
                 }
             });
             encode_as_map_key_arms.push(quote! {
-                Self::#variant_name => #baml_crate::__internal::host_map_entry::Key::IntKey(#literal_int)
+                Self::#variant_name => #literal_int.baml_encode_map_key()
             });
             decode_as_map_key_arms.push(quote! {
                 k if k.parse::<i64>().and_then(|parsed| Ok(parsed == #literal_int)).is_ok() => Ok(Self::#variant_name)
@@ -179,7 +178,7 @@ fn derive_enum_encode(
                 }
             });
             encode_as_map_key_arms.push(quote! {
-                Self::#variant_name => #baml_crate::__internal::host_map_entry::Key::BoolKey(#literal_bool)
+                Self::#variant_name => #literal_bool.baml_encode_map_key()
             });
             decode_as_map_key_arms.push(quote! {
                 k if k.parse::<bool>().and_then(|parsed| Ok(parsed == #literal_bool)).is_ok() => Ok(Self::#variant_name)

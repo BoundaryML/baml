@@ -432,7 +432,9 @@ where
                             ))),
                         }
                     }
-                    _ => None,
+                    other => {
+                        None
+                    },
                 };
 
                 // parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
@@ -471,9 +473,8 @@ where
                     let event_result = match &response_value_without_flags {
                         Some(Ok(val)) => Some(Ok(val.clone())),
                         Some(Err(e)) => {
-                            // We can't clone the error, but we can create a FunctionResult
-                            // from the final_response which contains the error info
-                            None
+                            // print the type of the error
+                            Some(Err(anyhow::anyhow!(e.to_string())))
                         }
                         None => None,
                     };

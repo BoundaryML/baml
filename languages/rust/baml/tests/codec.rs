@@ -268,7 +268,7 @@ mod checked {
         let length_check = result.get_check("length_check").unwrap();
         assert_eq!(length_check.name, "length_check");
         assert_eq!(length_check.expression, "value.len() <= 10");
-        assert_eq!(length_check.status, CheckStatus::Passed);
+        assert_eq!(length_check.status, CheckStatus::Succeeded);
 
         let format_check = result.get_check("format_check").unwrap();
         assert_eq!(format_check.status, CheckStatus::Failed);

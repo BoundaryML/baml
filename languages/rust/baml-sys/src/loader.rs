@@ -107,6 +107,8 @@ fn find_or_download_library() -> Result<PathBuf> {
 
     // 2. Check environment variable
     if let Ok(env_path) = std::env::var(ENV_LIBRARY_PATH) {
+        // Env vars can be wrapped in quotes and spaces, so we need to unwrap them
+        let env_path = env_path.trim().trim_matches('"').trim();
         let path = PathBuf::from(&env_path);
         if path.exists() {
             return Ok(path);
