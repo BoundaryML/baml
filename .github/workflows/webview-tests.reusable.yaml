@@ -129,5 +129,6 @@ jobs:
       - name: "Run HMR tests"
         run: pnpm --filter app-vscode-webview test:hmr
         working-directory: typescript2
+        timeout-minutes: 0.5
         env:
           DEBUG_HMR: "1"

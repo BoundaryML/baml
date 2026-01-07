@@ -126,7 +126,7 @@ export async function startWasmWatcher(): Promise<ChildProcess> {
     ],
     {
       cwd: playgroundDir,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
     }
   )
