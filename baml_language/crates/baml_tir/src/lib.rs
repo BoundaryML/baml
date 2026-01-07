@@ -1336,9 +1336,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     value: Box::new(Ty::Unknown),
                 }
             } else {
-                // Infer key and value types from first entry
-                let key_ty = infer_expr(ctx, entries[0].0, body);
-                let value_ty = infer_expr(ctx, entries[0].1, body);
+                // Infer key and value types from first entry, but generalize literals to base types
+                // This ensures {"x": 1} is map<string, int> not map<"x", 1>
+                let first_key_ty = infer_expr(ctx, entries[0].0, body);
+                let first_value_ty = infer_expr(ctx, entries[0].1, body);
+                let key_ty = generalize(&first_key_ty);
+                let value_ty = generalize(&first_value_ty);
 
                 // Check all entries have compatible types
                 for &(key, value) in &entries[1..] {
@@ -1347,7 +1350,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if !ctx.is_subtype_of(&other_key_ty, &key_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: key_ty.clone(),
-                            found: other_key_ty,
+                            found: generalize_for_error(&key_ty, &other_key_ty),
                             span,
                             info_span: None,
                         });
@@ -1355,7 +1358,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if !ctx.is_subtype_of(&other_value_ty, &value_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: value_ty.clone(),
-                            found: other_value_ty,
+                            found: generalize_for_error(&value_ty, &other_value_ty),
                             span,
                             info_span: None,
                         });
@@ -1679,6 +1682,60 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     Ty::Named(name.clone())
                 } else {
                     Ty::Unknown
+                }
+            } else {
+                // Fall back to synthesis
+                let ty = infer_expr(ctx, expr_id, body);
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        found: generalize_for_error(expected, &ty),
+                        span,
+                        info_span: None,
+                    });
+                }
+                ty
+            }
+        }
+
+        Expr::Map { entries } => {
+            // If we expect a specific map type, use it to check entries
+            if let Ty::Map {
+                key: expected_key,
+                value: expected_value,
+            } = expected
+            {
+                if entries.is_empty() {
+                    Ty::Map {
+                        key: expected_key.clone(),
+                        value: expected_value.clone(),
+                    }
+                } else {
+                    // Check all entries against the expected key/value types
+                    for &(key_expr, value_expr) in entries {
+                        let key_ty = check_expr(ctx, key_expr, body, expected_key);
+                        if !ctx.is_subtype_of(&key_ty, expected_key) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: (**expected_key).clone(),
+                                found: generalize_for_error(expected_key, &key_ty),
+                                span,
+                                info_span: None,
+                            });
+                        }
+                        let value_ty = check_expr(ctx, value_expr, body, expected_value);
+                        if !ctx.is_subtype_of(&value_ty, expected_value) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: (**expected_value).clone(),
+                                found: generalize_for_error(expected_value, &value_ty),
+                                span,
+                                info_span: None,
+                            });
+                        }
+                    }
+                    expected.clone()
                 }
             } else {
                 // Fall back to synthesis
