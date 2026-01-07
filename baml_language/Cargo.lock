@@ -380,6 +380,7 @@ name = "baml_ide"
 version = "0.0.0"
 dependencies = [
  "baml_db",
+ "baml_project",
  "smol_str",
  "text-size",
 ]
@@ -543,7 +544,12 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_diagnostics",
+ "baml_hir",
+ "baml_mir",
+ "baml_tir",
+ "baml_workspace",
  "lsp-types",
+ "salsa",
  "text-size",
 ]
 

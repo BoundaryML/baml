@@ -6,26 +6,23 @@
 //! ## Example
 //!
 //! ```ignore
-//! let diagnostics = lsp_db.check();
-//! for diag in diagnostics {
-//!     println!("{}", diag.display_ariadne(&sources, false));
+//! let result = db.check();
+//! for diag in &result.diagnostics {
+//!     println!("{}", diag.message);
 //! }
 //! ```
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_db::{
-    FileId, RootDatabase, SourceFile,
-    baml_hir::{
-        self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
-    },
-    baml_parser,
-    baml_tir::{self, class_field_types, enum_variants, type_aliases, typing_context},
-    baml_workspace::Project,
-};
+use baml_db::{FileId, SourceFile, baml_parser};
 use baml_diagnostics::{Diagnostic, ToDiagnostic};
+use baml_hir::{
+    self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
+};
+use baml_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
+use baml_workspace::Project;
 
-use crate::LspDatabase;
+use crate::ProjectDatabase;
 
 /// Result of checking a project, containing diagnostics and metadata for rendering.
 #[derive(Debug)]
@@ -52,7 +49,7 @@ pub struct CheckResult {
 /// }
 /// ```
 pub fn collect_diagnostics(
-    db: &RootDatabase,
+    db: &ProjectDatabase,
     project: Project,
     source_files: &[SourceFile],
 ) -> Vec<Diagnostic> {
@@ -123,7 +120,7 @@ pub fn collect_diagnostics(
     diagnostics
 }
 
-impl LspDatabase {
+impl ProjectDatabase {
     /// Check the entire project and return all diagnostics.
     ///
     /// This is the centralized entry point for diagnostic collection, replacing
@@ -131,8 +128,7 @@ impl LspDatabase {
     ///
     /// Returns a `CheckResult` containing diagnostics and metadata for rendering.
     pub fn check(&self) -> CheckResult {
-        let db = self.db();
-        let Some(project) = self.project() else {
+        let Some(project) = self.get_project() else {
             return CheckResult {
                 diagnostics: Vec::new(),
                 sources: HashMap::new(),
@@ -146,16 +142,16 @@ impl LspDatabase {
 
         // Build all maps
         for source_file in &source_files {
-            let file_id = source_file.file_id(db);
-            let text = source_file.text(db).to_string();
-            let path = source_file.path(db);
+            let file_id = source_file.file_id(self);
+            let text = source_file.text(self).to_string();
+            let path = source_file.path(self);
 
             sources.insert(file_id, text);
             file_paths.insert(file_id, path);
         }
 
         // Use the shared collect_diagnostics function
-        let diagnostics = collect_diagnostics(db, project, &source_files);
+        let diagnostics = collect_diagnostics(self, project, &source_files);
 
         CheckResult {
             diagnostics,
@@ -175,13 +171,12 @@ impl LspDatabase {
     ///
     /// Note: This still requires the full project context for type checking.
     pub fn check_file(&self, file: SourceFile) -> Vec<Diagnostic> {
-        let db = self.db();
-        let Some(project) = self.project() else {
+        let Some(project) = self.get_project() else {
             return Vec::new();
         };
 
         let source_files = vec![file];
-        collect_diagnostics(db, project, &source_files)
+        collect_diagnostics(self, project, &source_files)
     }
 }
 
@@ -193,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_check_empty_project() {
-        let mut db = LspDatabase::new();
+        let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new("/tmp"));
 
         let result = db.check();
@@ -202,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_check_valid_file() {
-        let mut db = LspDatabase::new();
+        let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new("/tmp"));
         db.add_or_update_file(Path::new("/tmp/test.baml"), "class Foo {\n  name string\n}");
 
@@ -212,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_check_parse_error() {
-        let mut db = LspDatabase::new();
+        let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new("/tmp"));
         db.add_or_update_file(Path::new("/tmp/test.baml"), "class Foo {");
 

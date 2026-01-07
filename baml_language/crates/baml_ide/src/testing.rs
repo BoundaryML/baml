@@ -5,7 +5,8 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_db::{RootDatabase, Setter, SourceFile, baml_workspace::Project};
+use baml_db::{Setter, SourceFile, baml_workspace::Project};
+use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
 /// The cursor marker used in test sources.
@@ -15,7 +16,7 @@ pub const CURSOR_MARKER: &str = "<[CURSOR]";
 /// A test with cursor position information.
 pub struct CursorTest {
     /// The test database.
-    pub db: RootDatabase,
+    pub db: ProjectDatabase,
     /// The project.
     pub project: Project,
     /// Information about the cursor.
@@ -126,16 +127,16 @@ impl CursorTestBuilder {
         let (cursor_file_idx, _) = cursor_files[0];
 
         // Create database
-        let mut db = RootDatabase::default();
+        let mut db = ProjectDatabase::default();
 
         // Create project first
-        let project = db.set_project_root(PathBuf::from("/test"));
+        let project = db.set_project_root(&PathBuf::from("/test"));
 
         // Add files to database
         let mut file_map: HashMap<String, SourceFile> = HashMap::new();
         for source in &self.sources {
             let path = PathBuf::from("/test").join(&source.filename);
-            let file = db.add_file(path, source.content.clone());
+            let file = db.add_file(path, &source.content);
             file_map.insert(source.filename.clone(), file);
         }
 

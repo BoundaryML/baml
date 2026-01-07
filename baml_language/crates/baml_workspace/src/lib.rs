@@ -7,6 +7,20 @@
 //! - Project root tracking (`Project` Salsa input)
 //! - Source file utilities
 //! - The base `Db` trait for project context
+//!
+//! ## Architecture Note
+//!
+//! `Project` is defined here (rather than in `baml_project`) because:
+//! - Lower-level crates (`baml_hir`, `baml_tir`, `baml_mir`) need the `Project` type
+//!   in their query signatures (e.g., `validate_hir(db, project)`)
+//! - If `Project` were in `baml_project`, those crates would need to depend on
+//!   `baml_project`, creating a circular dependency
+//! - This follows the pattern: low-level types here, high-level operations in `baml_project`
+//!
+//! This is similar to how ty/ruff structures their codebase:
+//! - `ruff_db` provides low-level types and the base `Db` trait
+//! - `ty_project` provides high-level `ProjectDatabase` and operations
+//! - The `Program` singleton (compiler settings) lives in the semantic crate
 
 use std::path::PathBuf;
 

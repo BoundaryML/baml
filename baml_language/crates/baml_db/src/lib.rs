@@ -1,11 +1,13 @@
-//! Root database that assembles all compiler phases.
+//! Re-exports all compiler crate APIs for convenience.
 //!
-//! This crate purely combines all the compiler traits into a single database.
-
-use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
-};
+//! This crate provides a single import point for all BAML compiler functionality.
+//! For the main database type, use `baml_project::ProjectDatabase`.
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use baml_db::{FileId, SourceFile, baml_hir, baml_parser};
+//! ```
 
 // Re-export all public APIs
 pub use baml_base::*;
@@ -20,92 +22,3 @@ pub use baml_tir;
 pub use baml_vir;
 pub use baml_workspace;
 pub use salsa::Setter;
-use salsa::Storage;
-
-/// Type alias for Salsa event callbacks
-pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
-
-/// Root database combining all compiler phases.
-/// With Salsa 2022, we use the #[`salsa::db`] attribute
-#[salsa::db]
-#[derive(Clone)]
-pub struct RootDatabase {
-    storage: salsa::Storage<Self>,
-    next_file_id: std::sync::Arc<AtomicU32>,
-    /// The current project. Set via `set_project_root()` or directly.
-    pub project: Option<baml_workspace::Project>,
-}
-
-#[salsa::db]
-impl salsa::Database for RootDatabase {}
-
-#[salsa::db]
-impl baml_workspace::Db for RootDatabase {
-    fn project(&self) -> baml_workspace::Project {
-        self.project
-            .expect("project must be set before querying - call set_project_root first")
-    }
-}
-
-#[salsa::db]
-impl baml_hir::Db for RootDatabase {}
-
-#[salsa::db]
-impl baml_tir::Db for RootDatabase {}
-
-#[salsa::db]
-impl baml_mir::Db for RootDatabase {}
-
-impl RootDatabase {
-    /// Create a new empty database.
-    pub fn new() -> Self {
-        Self {
-            storage: Storage::default(),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-            project: None,
-        }
-    }
-
-    /// Create a new database with an event callback for tracking query execution.
-    ///
-    /// The callback will be invoked for various Salsa events, including:
-    /// - `WillExecute`: A query is about to be recomputed
-    /// - `DidValidateMemoizedValue`: A cached value was reused
-    ///
-    /// This is useful for tracking incremental compilation behavior.
-    pub fn new_with_event_callback(callback: EventCallback) -> Self {
-        Self {
-            storage: Storage::new(Some(callback)),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-            project: None,
-        }
-    }
-
-    /// Add a file to the database.
-    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
-        let file_id = FileId::new(
-            self.next_file_id
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-
-        // Create a new SourceFile input
-        SourceFile::new(self, text.into(), path.into(), file_id)
-    }
-
-    /// Create and set the project root.
-    ///
-    /// This must be called before any queries that require project context.
-    /// After creating the project root, use `add_file()` to add source files,
-    /// then update the project's file list with `project.set_files()`.
-    pub fn set_project_root(&mut self, path: impl Into<PathBuf>) -> baml_workspace::Project {
-        let project = baml_workspace::Project::new(self, path.into(), vec![]);
-        self.project = Some(project);
-        project
-    }
-}
-
-impl Default for RootDatabase {
-    fn default() -> Self {
-        Self::new()
-    }
-}

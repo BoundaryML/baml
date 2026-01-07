@@ -11,7 +11,7 @@ use super::IncrementalTestDb;
 
 /// Query all function bodies in a file.
 /// This is a helper to avoid manually extracting function IDs in tests.
-fn query_all_function_bodies(db: &baml_db::RootDatabase, file: SourceFile) {
+fn query_all_function_bodies(db: &baml_project::ProjectDatabase, file: SourceFile) {
     let items = baml_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_hir::ItemId::Function(func_id) = item {
@@ -21,7 +21,7 @@ fn query_all_function_bodies(db: &baml_db::RootDatabase, file: SourceFile) {
 }
 
 /// Query all function signatures in a file.
-fn query_all_function_signatures(db: &baml_db::RootDatabase, file: SourceFile) {
+fn query_all_function_signatures(db: &baml_project::ProjectDatabase, file: SourceFile) {
     let items = baml_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_hir::ItemId::Function(func_id) = item {

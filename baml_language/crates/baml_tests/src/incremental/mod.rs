@@ -7,15 +7,15 @@ mod scenarios;
 
 use std::sync::{Arc, Mutex};
 
-use baml_db::RootDatabase;
+use baml_project::ProjectDatabase;
 use salsa::{Database, Event, EventKind, Setter};
 
 /// Test database wrapper with Salsa event logging for incrementality verification.
 ///
-/// This wraps `RootDatabase` and captures all Salsa events, allowing tests to
+/// This wraps `ProjectDatabase` and captures all Salsa events, allowing tests to
 /// verify which queries were executed (cache misses) vs which were cached (hits).
 pub struct IncrementalTestDb {
-    db: RootDatabase,
+    db: ProjectDatabase,
     events: Arc<Mutex<Vec<Event>>>,
 }
 
@@ -23,7 +23,7 @@ impl IncrementalTestDb {
     /// Create a new test database with event logging enabled.
     pub fn new() -> Self {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let db = RootDatabase::new_with_event_callback({
+        let db = ProjectDatabase::new_with_event_callback({
             let events = events.clone();
             Box::new(move |event| {
                 events.lock().unwrap().push(event);
@@ -33,12 +33,12 @@ impl IncrementalTestDb {
     }
 
     /// Get mutable access to the database for modifying inputs.
-    pub fn db_mut(&mut self) -> &mut RootDatabase {
+    pub fn db_mut(&mut self) -> &mut ProjectDatabase {
         &mut self.db
     }
 
     /// Get immutable access to the database for queries.
-    pub fn db(&self) -> &RootDatabase {
+    pub fn db(&self) -> &ProjectDatabase {
         &self.db
     }
 
@@ -53,7 +53,7 @@ impl IncrementalTestDb {
     /// extracts all `WillExecute` events to get the list of query names.
     ///
     /// Returns: (closure_result, list_of_executed_query_names)
-    pub fn log_executed<R>(&self, f: impl FnOnce(&RootDatabase) -> R) -> (R, Vec<String>) {
+    pub fn log_executed<R>(&self, f: impl FnOnce(&ProjectDatabase) -> R) -> (R, Vec<String>) {
         self.clear_events();
         let result = f(&self.db);
         let executed = self.extract_executed_queries();
@@ -101,7 +101,7 @@ impl IncrementalTestDb {
     /// ```
     pub fn assert_executed<R>(
         &self,
-        f: impl FnOnce(&RootDatabase) -> R,
+        f: impl FnOnce(&ProjectDatabase) -> R,
         expected: &[(&str, usize)],
     ) -> R {
         let (result, executed) = self.log_executed(f);
@@ -128,7 +128,7 @@ impl IncrementalTestDb {
     /// This is a convenience method equivalent to `assert_executed` with count 0.
     pub fn assert_not_executed<R>(
         &self,
-        f: impl FnOnce(&RootDatabase) -> R,
+        f: impl FnOnce(&ProjectDatabase) -> R,
         query_names: &[&str],
     ) -> R {
         let expected: Vec<_> = query_names.iter().map(|&name| (name, 0)).collect();

@@ -9,12 +9,12 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_tir, baml_workspace,
+    FileId, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax, baml_tir,
+    baml_workspace,
 };
 use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
 use baml_hir::{ItemId, function_body, function_signature};
-use baml_project::collect_diagnostics;
+use baml_project::{ProjectDatabase, collect_diagnostics};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
@@ -104,7 +104,7 @@ impl CompilerPhase {
 }
 
 pub(crate) struct CompilerRunner {
-    db: RootDatabase,
+    db: ProjectDatabase,
     project_root: baml_workspace::Project,
     is_directory: bool,
     /// Source files currently in the database (path -> `SourceFile`)
@@ -222,20 +222,22 @@ impl CompilerRunner {
 
         // Create database with event callback
         let db =
-            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
-                EventKind::WillExecute { database_key } => {
-                    recomputed_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
+            ProjectDatabase::new_with_event_callback(Box::new(move |event: Event| {
+                match event.kind {
+                    EventKind::WillExecute { database_key } => {
+                        recomputed_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    EventKind::DidValidateMemoizedValue { database_key } => {
+                        cached_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    _ => {}
                 }
-                EventKind::DidValidateMemoizedValue { database_key } => {
-                    cached_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
-                }
-                _ => {}
             }));
 
         Self {
@@ -277,20 +279,22 @@ impl CompilerRunner {
         let cached_clone = self.cached_queries.clone();
 
         self.db =
-            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
-                EventKind::WillExecute { database_key } => {
-                    recomputed_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
+            ProjectDatabase::new_with_event_callback(Box::new(move |event: Event| {
+                match event.kind {
+                    EventKind::WillExecute { database_key } => {
+                        recomputed_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    EventKind::DidValidateMemoizedValue { database_key } => {
+                        cached_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    _ => {}
                 }
-                EventKind::DidValidateMemoizedValue { database_key } => {
-                    cached_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
-                }
-                _ => {}
             }));
 
         // Set project root

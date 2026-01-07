@@ -296,11 +296,7 @@ impl Session {
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
             let document_is_unsaved = any(self.baml_src_projects.lock().iter(), |(_, project)| {
-                project
-                    .lock()
-                    .baml_project
-                    .unsaved_files
-                    .contains_key(file_url)
+                project.lock().baml_project.has_unsaved_file(file_url)
             });
             if !document_is_unsaved {
                 self.open_text_document(file_url.clone(), text_document);
@@ -314,7 +310,7 @@ impl Session {
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
         for (_folder, project) in self.baml_src_projects.lock().iter_mut() {
-            project.lock().baml_project.unsaved_files.clear();
+            project.lock().baml_project.clear_unsaved_files();
         }
     }
 
@@ -358,8 +354,7 @@ impl Session {
             project
                 .lock()
                 .baml_project
-                .unsaved_files
-                .insert(document_key.clone(), text_document);
+                .insert_unsaved(document_key.clone(), text_document);
         }
         Ok(())
     }
@@ -398,12 +393,11 @@ impl Session {
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
-                if project.lock().baml_project.files.contains_key(doc_key) {
+                if project.lock().baml_project.has_file(doc_key) {
                     project
                         .lock()
                         .baml_project
-                        .unsaved_files
-                        .insert(doc_key.clone(), text_document);
+                        .insert_unsaved(doc_key.clone(), text_document);
                     let _elapsed = start_time.elapsed();
 
                     {

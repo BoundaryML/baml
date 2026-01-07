@@ -1,13 +1,13 @@
 //! Test runner for inline assertion tests.
 //!
-//! This module uses the centralized `LspDatabase::check()` method for diagnostic
+//! This module uses the centralized `ProjectDatabase::check()` method for diagnostic
 //! collection, eliminating code duplication with the LSP server.
 
 use std::path::Path;
 
 use baml_diagnostics::{RenderConfig, render_diagnostic};
 use baml_ide::{MarkupKind, hover::hover as lsp_ide_hover};
-use baml_project::LspDatabase;
+use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
 use super::parser::ParsedTestFile;
@@ -40,8 +40,8 @@ struct CursorHoverResult {
 
 /// Run an inline assertion test.
 pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
-    // 1. Create LspDatabase and add all virtual files
-    let mut lsp_db = LspDatabase::new();
+    // 1. Create ProjectDatabase and add all virtual files
+    let mut lsp_db = ProjectDatabase::new();
     lsp_db.set_project_root(Path::new("."));
 
     let mut file_map = std::collections::HashMap::new();

@@ -230,6 +230,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
             use baml_diagnostics::{DbSourceCache, render_parse_error};
+            use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -263,7 +264,7 @@ fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
             let content = #include_content;
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let tokens = baml_lexer::lex_file(&db, source_file);
 
@@ -298,8 +299,8 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             let content = #include_content;
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let source_file = db.add_file(#relative_path, &content);
             root.set_files(&mut db).to(vec![source_file]);
             let tree = baml_parser::syntax_tree(&db, source_file);
@@ -356,7 +357,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_03_hir() {
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let mut output = String::new();
             writeln!(output, "=== HIR ITEMS ===").unwrap();
 
@@ -399,8 +400,8 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_04_tir() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -473,8 +474,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_04_5_mir() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -573,8 +574,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             use baml_project::collect_diagnostics;
             use std::path::PathBuf;
 
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -646,8 +647,8 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_06_codegen() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -716,7 +717,7 @@ fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
             let content = content.replace("\r\n", "\n");
 
             // Test single character edits maintain correctness
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let original_tree = baml_parser::syntax_tree(&db, source_file);
 
@@ -745,7 +746,7 @@ fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
             let content = content.replace("\r\n", "\n");
 
             // Measure node reuse for single character edit
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let original_tree = baml_parser::syntax_tree(&db, source_file);
 
@@ -775,7 +776,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let mut db = RootDatabase::new();
+                    let mut db = ProjectDatabase::new();
                     let source_file = db.add_file(#relative_path, &content);
                     let tree = baml_parser::syntax_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
@@ -973,8 +974,8 @@ fn generate_incremental_benchmark(
             #after_includes
 
             bencher.bench_local(|| {
-                let mut db = RootDatabase::new();
-                let root = db.set_project_root(std::path::PathBuf::from("."));
+                let mut db = ProjectDatabase::new();
+                let root = db.set_project_root(std::path::Path::new("."));
 
                 // Initial compilation
                 #initial_loads
@@ -1001,8 +1002,8 @@ fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
             let content = content_raw.replace("\r\n", "\n");
 
             bencher.bench_local(|| {
-                let mut db = RootDatabase::new();
-                let root = db.set_project_root(std::path::PathBuf::from("."));
+                let mut db = ProjectDatabase::new();
+                let root = db.set_project_root(std::path::Path::new("."));
                 db.add_file(#file_name, &content);
                 let _ = black_box(baml_hir::project_items(&db, root));
             });
