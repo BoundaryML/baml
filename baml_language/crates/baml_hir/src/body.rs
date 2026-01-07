@@ -1157,8 +1157,20 @@ impl LoweringContext {
     }
 
     fn lower_if_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
+        use baml_syntax::SyntaxKind;
+
         // IF_EXPR structure: condition (EXPR), then_branch (BLOCK_EXPR), optional else_branch
         let children: Vec<_> = node.children().collect();
+
+        // Validate that condition is wrapped in parentheses
+        if let Some(cond) = children.first() {
+            if cond.kind() != SyntaxKind::PAREN_EXPR {
+                self.push_diagnostic(HirDiagnostic::MissingConditionParens {
+                    kind: "if",
+                    span: self.span_from_node(cond),
+                });
+            }
+        }
 
         let condition = children
             .first()
@@ -2453,12 +2465,27 @@ impl LoweringContext {
     }
 
     fn lower_while_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+        use baml_syntax::SyntaxKind;
+
         // Use the WhileStmt AST wrapper for cleaner access
         let while_stmt = baml_syntax::ast::WhileStmt::cast(node.clone());
 
-        let condition = while_stmt
+        // Get the raw condition node to check if it's wrapped in parentheses
+        let condition_node = while_stmt
             .as_ref()
-            .and_then(baml_syntax::WhileStmt::condition)
+            .and_then(baml_syntax::WhileStmt::condition);
+
+        // Validate that condition is wrapped in parentheses
+        if let Some(ref cond) = condition_node {
+            if cond.kind() != SyntaxKind::PAREN_EXPR {
+                self.push_diagnostic(HirDiagnostic::MissingConditionParens {
+                    kind: "while",
+                    span: self.span_from_node(cond),
+                });
+            }
+        }
+
+        let condition = condition_node
             .map(|n| self.lower_expr(&n))
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 

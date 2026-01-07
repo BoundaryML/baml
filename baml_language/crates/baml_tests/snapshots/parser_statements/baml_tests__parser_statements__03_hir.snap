@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -78,7 +78,7 @@ function continue_with_locals() -> int {
           if (true) {
               let y = 2;
               continue;
-          }
+          };
       }
       return 5;
 }
@@ -120,7 +120,7 @@ function break_with_locals() -> int {
           if (true) {
               let y = 2;
               break;
-          }
+          };
       }
       return 4;
 }

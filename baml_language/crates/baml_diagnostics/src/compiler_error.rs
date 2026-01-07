@@ -168,6 +168,10 @@ const MISSING_SEMICOLON: ErrorCode = ErrorCode(28);
 // Return expression errors
 const MISSING_RETURN_EXPRESSION: ErrorCode = ErrorCode(29);
 
+// Parentheses/delimiter diagnostics
+const MISSING_CONDITION_PARENS: ErrorCode = ErrorCode(30);
+const UNMATCHED_DELIMITER: ErrorCode = ErrorCode(31);
+
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);

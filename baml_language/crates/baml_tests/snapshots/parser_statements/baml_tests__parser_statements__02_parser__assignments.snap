@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -204,6 +204,7 @@ SOURCE_FILE
               INTEGER_LITERAL "1"
             SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return sum;"
           KW_RETURN "return"
           WORD "sum"

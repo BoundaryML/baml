@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -63,4 +63,34 @@ expression: output
     │                ╰────────────── Statement must end with a semicolon.
     │ 
     │ Note: Error code: E0028
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:20:6 ]
+    │
+ 20 │   if score > 0.8 {
+    │      ─────┬─────  
+    │           ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:22:13 ]
+    │
+ 22 │   } else if score > 0.5 {
+    │             ─────┬─────  
+    │                  ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:24:13 ]
+    │
+ 24 │   } else if score > 0.2 {
+    │             ─────┬─────  
+    │                  ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
 ────╯

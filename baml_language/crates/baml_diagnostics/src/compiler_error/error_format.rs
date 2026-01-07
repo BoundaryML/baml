@@ -5,13 +5,13 @@ use super::{
     ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_ATTRIBUTE, DUPLICATE_FIELD, DUPLICATE_NAME,
     DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HTTP_CONFIG_NOT_BLOCK,
     HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_CLIENT_RESPONSE_TYPE,
-    INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR, MISSING_GENERATOR_PROPERTY,
-    MISSING_PROVIDER, MISSING_RETURN_EXPRESSION, MISSING_SEMICOLON, NEGATIVE_TIMEOUT,
-    NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
-    RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF,
+    INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR, MISSING_CONDITION_PARENS,
+    MISSING_GENERATOR_PROPERTY, MISSING_PROVIDER, MISSING_RETURN_EXPRESSION, MISSING_SEMICOLON,
+    NEGATIVE_TIMEOUT, NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError,
+    ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF,
     UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY, UNKNOWN_ENUM_VARIANT,
     UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE, UNKNOWN_VARIABLE,
-    UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
+    UNMATCHED_DELIMITER, UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
 };
 
 /// The message format and id of each compiler error variant.
@@ -455,6 +455,21 @@ where
                 "Statement must end with a semicolon.".to_string(),
                 span,
                 MISSING_SEMICOLON,
+            ),
+            HirDiagnostic::MissingReturnExpression { span } => simple_error(
+                "Missing return expression. Function body must have a final expression or explicit return.".to_string(),
+                span,
+                MISSING_RETURN_EXPRESSION,
+            ),
+            HirDiagnostic::MissingConditionParens { kind, span } => simple_error(
+                format!("Condition in `{kind}` statement must be wrapped in parentheses."),
+                span,
+                MISSING_CONDITION_PARENS,
+            ),
+            HirDiagnostic::UnmatchedDelimiter { token, span } => simple_error(
+                format!("Unmatched `{token}`."),
+                span,
+                UNMATCHED_DELIMITER,
             ),
         },
     }

@@ -677,6 +677,24 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Condition in `if` statement must be wrapped in parentheses.
+//    ╭─[ parens.baml:7:7 ]
+//    │
+//  7 │    if true {}
+//    │       ───┬───  
+//    │          ╰───── Condition in `if` statement must be wrapped in parentheses.
+//    │ 
+//    │ Note: Error code: E0030
+// ───╯
+// Error: Condition in `while` statement must be wrapped in parentheses.
+//     ╭─[ parens.baml:15:10 ]
+//     │
+//  15 │    while true {}
+//     │          ───┬───  
+//     │             ╰───── Condition in `while` statement must be wrapped in parentheses.
+//     │ 
+//     │ Note: Error code: E0030
+// ────╯
 // Error: Statement must end with a semicolon.
 //     ╭─[ parens.baml:51:10 ]
 //     │

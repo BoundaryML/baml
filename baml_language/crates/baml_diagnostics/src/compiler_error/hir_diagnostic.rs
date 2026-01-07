@@ -148,4 +148,22 @@ pub enum HirDiagnostic {
     /// Statement missing required semicolon.
     /// In Rust-style blocks, all statements except the final expression need semicolons.
     MissingSemicolon { span: Span },
+
+    /// Missing return expression in function.
+    MissingReturnExpression { span: Span },
+
+    /// Missing parentheses around control flow condition.
+    /// Conditions in if/while/for require parentheses: `if (cond)`, `while (cond)`, `for (...)`.
+    MissingConditionParens {
+        /// The kind of control flow: "if", "while", or "for"
+        kind: &'static str,
+        span: Span,
+    },
+
+    /// Unmatched closing delimiter (e.g., `)` without `(`, `}` without `{`, `]` without `[`).
+    UnmatchedDelimiter {
+        /// The unmatched token: ")", "}", or "]"
+        token: &'static str,
+        span: Span,
+    },
 }

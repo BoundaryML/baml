@@ -479,6 +479,24 @@ impl ToDiagnostic for HirDiagnostic {
                 "Statement must end with a semicolon.",
             )
             .with_primary_span(*span),
+
+            HirDiagnostic::MissingReturnExpression { span } => Diagnostic::error(
+                DiagnosticId::MissingReturnExpression,
+                "Missing return expression. Function body must have a final expression or explicit return.",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::MissingConditionParens { kind, span } => Diagnostic::error(
+                DiagnosticId::MissingConditionParens,
+                format!("Condition in `{kind}` statement must be wrapped in parentheses."),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::UnmatchedDelimiter { token, span } => Diagnostic::error(
+                DiagnosticId::UnmatchedDelimiter,
+                format!("Unmatched `{token}`."),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

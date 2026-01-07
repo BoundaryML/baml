@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 Function "function"
@@ -35,6 +35,7 @@ PlusEquals "+="
 Word "i"
 Semicolon ";"
 RBrace "}"
+Semicolon ";"
 Return "return"
 Word "result"
 Semicolon ";"
@@ -70,6 +71,7 @@ PlusEquals "+="
 Word "i"
 Semicolon ";"
 RBrace "}"
+Semicolon ";"
 Return "return"
 Word "result"
 Semicolon ";"
@@ -121,7 +123,9 @@ Star "*"
 Word "j"
 Semicolon ";"
 RBrace "}"
+Semicolon ";"
 RBrace "}"
+Semicolon ";"
 Return "return"
 Word "result"
 Semicolon ";"

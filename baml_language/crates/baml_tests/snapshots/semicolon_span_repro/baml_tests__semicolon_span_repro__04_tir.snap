@@ -1,7 +1,0 @@
----
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
-expression: output
----
-=== TYPE INFERENCE ===
-  Function Foo:
-    Return: Int

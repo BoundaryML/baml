@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -28,6 +28,7 @@ SOURCE_FILE
               KW_BREAK "break"
               SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 42;"
           KW_RETURN "return"
           INTEGER_LITERAL "42"
@@ -57,6 +58,7 @@ SOURCE_FILE
               KW_CONTINUE "continue"
               SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 0;"
           KW_RETURN "return"
           INTEGER_LITERAL "0"
@@ -102,6 +104,7 @@ SOURCE_FILE
               KW_BREAK "break"
               SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 1;"
           KW_RETURN "return"
           INTEGER_LITERAL "1"
@@ -147,6 +150,7 @@ SOURCE_FILE
               KW_CONTINUE "continue"
               SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 2;"
           KW_RETURN "return"
           INTEGER_LITERAL "2"
@@ -237,7 +241,9 @@ SOURCE_FILE
                   KW_BREAK "break"
                   SEMICOLON ";"
                 R_BRACE "}"
+            SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 4;"
           KW_RETURN "return"
           INTEGER_LITERAL "4"
@@ -287,7 +293,9 @@ SOURCE_FILE
                   KW_CONTINUE "continue"
                   SEMICOLON ";"
                 R_BRACE "}"
+            SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return 5;"
           KW_RETURN "return"
           INTEGER_LITERAL "5"

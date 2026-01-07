@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -346,10 +346,11 @@ fn continue_with_locals() -> Int {
     let _2: Bool
     let _3: Void
     let _4: Int // x
-    let _5: Bool
-    let _6: Int // y
-    let _7: Void
+    let _5: Void
+    let _6: Bool
+    let _7: Int // y
     let _8: Void
+    let _9: Void
 
     bb0: {
         goto -> bb2;
@@ -366,8 +367,8 @@ fn continue_with_locals() -> Int {
 
     bb3: {
         _4 = const 1_i64;
-        _5 = const true;
-        branch copy _5 -> [bb5, bb6];
+        _6 = const true;
+        branch copy _6 -> [bb5, bb6];
     }
 
     bb4: {
@@ -377,16 +378,17 @@ fn continue_with_locals() -> Int {
     }
 
     bb5: {
-        _6 = const 2_i64;
+        _7 = const 2_i64;
         goto -> bb2;
     }
 
     bb6: {
-        _3 = const null;
+        _5 = const null;
         goto -> bb7;
     }
 
     bb7: {
+        _3 = const null;
         goto -> bb2;
     }
 
@@ -553,10 +555,11 @@ fn break_with_locals() -> Int {
     let _2: Bool
     let _3: Void
     let _4: Int // x
-    let _5: Bool
-    let _6: Int // y
-    let _7: Void
+    let _5: Void
+    let _6: Bool
+    let _7: Int // y
     let _8: Void
+    let _9: Void
 
     bb0: {
         goto -> bb2;
@@ -573,8 +576,8 @@ fn break_with_locals() -> Int {
 
     bb3: {
         _4 = const 1_i64;
-        _5 = const true;
-        branch copy _5 -> [bb5, bb6];
+        _6 = const true;
+        branch copy _6 -> [bb5, bb6];
     }
 
     bb4: {
@@ -584,16 +587,17 @@ fn break_with_locals() -> Int {
     }
 
     bb5: {
-        _6 = const 2_i64;
+        _7 = const 2_i64;
         goto -> bb4;
     }
 
     bb6: {
-        _3 = const null;
+        _5 = const null;
         goto -> bb7;
     }
 
     bb7: {
+        _3 = const null;
         goto -> bb2;
     }
 

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === MIR ===

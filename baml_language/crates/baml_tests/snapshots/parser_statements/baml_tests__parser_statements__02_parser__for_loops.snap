@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -49,6 +49,7 @@ SOURCE_FILE
               WORD "i"
             SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
@@ -96,6 +97,7 @@ SOURCE_FILE
               WORD "i"
             SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
@@ -164,7 +166,9 @@ SOURCE_FILE
                     WORD "j"
                 SEMICOLON ";"
                 R_BRACE "}"
+            SEMICOLON ";"
             R_BRACE "}"
+        SEMICOLON ";"
         RETURN_STMT "return result;"
           KW_RETURN "return"
           WORD "result"
