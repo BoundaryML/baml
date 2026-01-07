@@ -6,6 +6,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_base::{FileId, Span};
+use baml_diagnostics::HirDiagnostic;
 use baml_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
 use rowan::{TextRange, ast::AstNode};
@@ -34,6 +35,7 @@ pub fn strip_string_delimiters(text: &str) -> &str {
 
 /// The body of a function - determined by CST node type.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum FunctionBody {
     /// LLM function: has `LLM_FUNCTION_BODY` in CST
     Llm(LlmBody),
@@ -105,6 +107,12 @@ pub struct ExprBody {
     /// Spans for match arms: maps match expression ID to its arm spans.
     /// Each entry is (`arm_span`, `pattern_span`) for each arm in order.
     pub match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+
+    // ========================================================================
+    // Diagnostics
+    // ========================================================================
+    /// HIR diagnostics collected during lowering (e.g., missing semicolons).
+    pub diagnostics: Vec<HirDiagnostic>,
 }
 
 /// Span information for a single match arm.
@@ -554,6 +562,10 @@ struct LoweringContext {
     pattern_spans: HashMap<PatId, Span>,
     /// Span tracking for match arms (maps match expr ID to arm spans)
     match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+
+    // Diagnostics
+    /// HIR diagnostics collected during lowering.
+    diagnostics: Vec<HirDiagnostic>,
 }
 
 /// Helper enum for building pattern elements during lowering.
@@ -579,12 +591,36 @@ impl LoweringContext {
             stmt_spans: HashMap::new(),
             pattern_spans: HashMap::new(),
             match_arm_spans: HashMap::new(),
+            diagnostics: Vec::new(),
         }
+    }
+
+    /// Push a diagnostic to be reported.
+    fn push_diagnostic(&mut self, diagnostic: HirDiagnostic) {
+        self.diagnostics.push(diagnostic);
     }
 
     /// Create a span from a syntax node's text range.
     fn span_from_node(&self, node: &baml_syntax::SyntaxNode) -> Span {
         Span::new(self.file_id, node.text_range())
+    }
+
+    /// Create a span from a syntax node, but skip any leading trivia (whitespace, newlines, comments).
+    /// This is useful for error spans that should point to the actual code, not preceding whitespace.
+    fn span_from_node_skip_trivia(&self, node: &baml_syntax::SyntaxNode) -> Span {
+        // Find the first non-trivia token
+        let mut first_significant_start = node.text_range().start();
+        for element in node.descendants_with_tokens() {
+            if let Some(token) = element.as_token() {
+                if !token.kind().is_trivia() {
+                    first_significant_start = token.text_range().start();
+                    break;
+                }
+            }
+        }
+
+        let range = TextRange::new(first_significant_start, node.text_range().end());
+        Span::new(self.file_id, range)
     }
 
     /// Create a span from a text range.
@@ -620,6 +656,7 @@ impl LoweringContext {
             stmt_spans: self.stmt_spans,
             pattern_spans: self.pattern_spans,
             match_arm_spans: self.match_arm_spans,
+            diagnostics: self.diagnostics,
         }
     }
 
@@ -680,11 +717,37 @@ impl LoweringContext {
                         SyntaxKind::ASSERT_STMT => self.lower_assert_stmt(node),
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
+
+                    // Check for missing semicolon on statements that require them.
+                    // - let/watch_let/assert: always need semicolons
+                    // - while/for: need semicolons unless they're the tail expression
+                    // - break/continue/return: are type ! expressions, semicolons optional
+                    let always_needs_semicolon = matches!(
+                        node.kind(),
+                        SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET | SyntaxKind::ASSERT_STMT
+                    );
+                    let is_control_flow_stmt =
+                        matches!(node.kind(), SyntaxKind::WHILE_STMT | SyntaxKind::FOR_EXPR);
+                    let needs_semicolon =
+                        always_needs_semicolon || (is_control_flow_stmt && !is_last);
+
+                    if needs_semicolon && !element.has_trailing_semicolon() {
+                        self.push_diagnostic(HirDiagnostic::MissingSemicolon {
+                            span: self.span_from_node_skip_trivia(node),
+                        });
+                    }
+
                     stmts.push(stmt_id);
                 }
                 BlockElement::ExprNode(node) => {
                     // First, try to lower as an assignment statement
                     if let Some(stmt_id) = self.try_lower_assignment(node) {
+                        // Assignments always need semicolons
+                        if !element.has_trailing_semicolon() {
+                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
+                                span: self.span_from_node_skip_trivia(node),
+                            });
+                        }
                         stmts.push(stmt_id);
                         continue;
                     }
@@ -695,11 +758,17 @@ impl LoweringContext {
                     // Check if this expression is followed by a semicolon
                     let has_semicolon = element.has_trailing_semicolon();
 
-                    // Last expression without semicolon becomes tail expression
+                    // Last expression without semicolon becomes tail expression (return value)
                     if is_last && !has_semicolon {
                         tail_expr = Some(expr_id);
                     } else {
                         // Expression statement (with semicolon or not last)
+                        // All expressions need semicolons unless they're the tail expression
+                        if !is_last && !has_semicolon {
+                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
+                                span: self.span_from_node_skip_trivia(node),
+                            });
+                        }
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.text_range()));
                     }
                 }
@@ -740,12 +809,17 @@ impl LoweringContext {
                     };
 
                     // Check if this is a tail expression
-                    // Last element without semicolon becomes tail expression
-                    // TODO: in the case of optional semicolons in the future,
-                    // simply knowing whether an expr has a trailing semicolon will not be enough
-                    if is_last && !element.has_trailing_semicolon() {
+                    // Last element without semicolon becomes tail expression (return value)
+                    let has_semicolon = element.has_trailing_semicolon();
+                    if is_last && !has_semicolon {
                         tail_expr = Some(expr_id);
                     } else {
+                        // If not last and no semicolon, emit diagnostic
+                        if !is_last && !has_semicolon {
+                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
+                                span: self.span_from_range(span),
+                            });
+                        }
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
                 }

@@ -49,6 +49,17 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
+// Error: Statement must end with a semicolon.
+//     ╭─[ headers_if_then_else.baml:8:5 ]
+//     │
+//   8 │ ╭─▶     if (false) {
+//     ┆ ┆   
+//  14 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
+// ────╯
 // Error: Unknown variable `y`
 //     ╭─[ headers_if_then_else.baml:17:5 ]
 //     │
@@ -57,4 +68,15 @@ function ComplexHeaderTest(x: int) -> int {
 //     │     ╰── Unknown variable `y`
 //     │ 
 //     │ Note: Error code: E0003
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ headers_if_then_else.baml:38:5 ]
+//     │
+//  38 │ ╭─▶     if (x < 10) {
+//     ┆ ┆   
+//  44 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
 // ────╯

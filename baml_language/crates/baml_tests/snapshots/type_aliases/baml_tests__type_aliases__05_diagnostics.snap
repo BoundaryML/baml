@@ -4,21 +4,25 @@ expression: output
 ---
 === DIAGNOSTICS ===
   [type] Error: Expected `foo`, found `bool`
-   ╭─[ type_aliases.baml:1:1 ]
-   │
- 1 │ type foo = bar
-   │ │ 
-   │ ╰─ Expected `foo`, found `bool`
-   │ 
-   │ Note: Error code: E0001
-───╯
+    ╭─[ type_aliases.baml:10:22 ]
+    │
+ 10 │ ╭─▶ function Bar() -> foo {
+    ┆ ┆   
+ 12 │ ├─▶ }
+    │ │       
+    │ ╰─────── Expected `foo`, found `bool`
+    │     
+    │     Note: Error code: E0001
+────╯
 
   [type] Error: Expected `JSON`, found `NotJSON`
-   ╭─[ type_aliases.baml:1:1 ]
-   │
- 1 │ type foo = bar
-   │ │ 
-   │ ╰─ Expected `JSON`, found `NotJSON`
-   │ 
-   │ Note: Error code: E0001
-───╯
+    ╭─[ type_aliases_json.baml:8:35 ]
+    │
+  8 │ ╭─▶ function EchoJSON(i: JSON) -> JSON {
+    ┆ ┆   
+ 10 │ ├─▶ }
+    │ │       
+    │ ╰─────── Expected `JSON`, found `NotJSON`
+    │     
+    │     Note: Error code: E0001
+────╯

@@ -15,4 +15,14 @@ function SingleNestedChildMultiItems() -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Statement must end with a semicolon.
+//     ╭─[ headers_single_nested_child_multi_items.baml:5:5 ]
+//     │
+//   5 │ ╭─▶     for (let item in items) {
+//     ┆ ┆   
+//  11 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
+// ────╯

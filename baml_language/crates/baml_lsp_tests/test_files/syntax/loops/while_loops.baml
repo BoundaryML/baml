@@ -36,4 +36,25 @@ function Foo() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Statement must end with a semicolon.
+//     ╭─[ loops_while_loops.baml:21:5 ]
+//     │
+//  21 │ ╭─▶     while (a < 10) {
+//     ┆ ┆   
+//  32 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//    ╭─[ loops_while_loops.baml:3:2 ]
+//    │
+//  3 │ ╭─▶     while (a != b) {
+//    ┆ ┆   
+//  9 │ ├─▶     }
+//    │ │           
+//    │ ╰─────────── Statement must end with a semicolon.
+//    │     
+//    │     Note: Error code: E0028
+// ───╯

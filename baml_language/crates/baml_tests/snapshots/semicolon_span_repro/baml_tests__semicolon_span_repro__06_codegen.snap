@@ -1,0 +1,23 @@
+---
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+expression: output
+---
+=== BYTECODE ===
+Functions: 1
+Objects: 19
+Globals: 19
+
+Function Foo (arity: 1, kind: Exec):
+     0    LOAD_CONST 0           (null)
+     1    LOAD_CONST 1           (0)
+     2    STORE_VAR 2            (result)
+     3    LOAD_VAR 1             (x)
+     4    LOAD_CONST 1           (0)
+     5    CMP_OP >               
+     6    POP_JUMP_IF_FALSE +2   (to 8)
+     7    JUMP +2                (to 9)
+     8    JUMP +3                (to 11)
+     9    LOAD_CONST 2           (1)
+     10   STORE_VAR 2            (result)
+     11   LOAD_VAR 2             (result)
+     12   RETURN

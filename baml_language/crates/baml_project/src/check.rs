@@ -97,7 +97,12 @@ pub fn collect_diagnostics(
                 let body = function_body(db, *func_loc);
 
                 // Only infer types for expression functions (not LLM functions)
-                if matches!(*body, FunctionBody::Expr(_)) {
+                if let FunctionBody::Expr(expr_body) = &*body {
+                    // Collect body lowering diagnostics (e.g., missing semicolons)
+                    for diag in &expr_body.diagnostics {
+                        diagnostics.push(diag.to_diagnostic());
+                    }
+
                     let inference_result = baml_tir::infer_function(
                         db,
                         &signature,

@@ -2023,12 +2023,14 @@ impl<'a> Parser<'a> {
     fn parse_break_stmt(&mut self) {
         self.with_node(SyntaxKind::BREAK_STMT, |p| {
             p.expect(TokenKind::Break);
+            p.eat(TokenKind::Semicolon);
         });
     }
 
     fn parse_continue_stmt(&mut self) {
         self.with_node(SyntaxKind::CONTINUE_STMT, |p| {
             p.expect(TokenKind::Continue);
+            p.eat(TokenKind::Semicolon);
         });
     }
 

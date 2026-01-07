@@ -143,4 +143,9 @@ pub enum HirDiagnostic {
         field_name: String,
         span: Span,
     },
+
+    // ============ Syntax Diagnostics ============
+    /// Statement missing required semicolon.
+    /// In Rust-style blocks, all statements except the final expression need semicolons.
+    MissingSemicolon { span: Span },
 }

@@ -61,11 +61,13 @@ function NestedIfStatements() -> string {
 //----
 //- diagnostics
 // Error: Expected `string`, found `int`
-//    ╭─[ headers_nested_if_statements.baml:1:1 ]
-//    │
-//  1 │ //# Main Function
-//    │ │ 
-//    │ ╰─ Expected `string`, found `int`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//     ╭─[ headers_nested_if_statements.baml:2:40 ]
+//     │
+//   2 │ ╭─▶ function NestedIfStatements() -> string {
+//     ┆ ┆   
+//  59 │ ├─▶ }
+//     │ │      
+//     │ ╰────── Expected `string`, found `int`
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

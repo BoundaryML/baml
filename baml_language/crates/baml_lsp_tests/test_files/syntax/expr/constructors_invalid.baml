@@ -71,6 +71,33 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
+// Error: Statement must end with a semicolon.
+//     ╭─[ expr_constructors_invalid.baml:11:21 ]
+//     │
+//  11 │     query_params: { a 10 },
+//     │                     ┬  
+//     │                     ╰── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ expr_constructors_invalid.baml:15:16 ]
+//     │
+//  15 │     headers: { Authorization "Bearer mytoken" },
+//     │                ──────┬──────  
+//     │                      ╰──────── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ expr_constructors_invalid.baml:16:21 ]
+//     │
+//  16 │     query_params: { foo "bar" },
+//     │                     ─┬─  
+//     │                      ╰─── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
 // Error: Unknown variable `a`
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │

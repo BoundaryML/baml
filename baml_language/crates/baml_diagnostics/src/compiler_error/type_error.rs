@@ -52,6 +52,8 @@ pub enum TypeError<T> {
     WatchOnNonVariable { span: Span },
     /// Using $watch on a variable not declared with `watch let`.
     WatchOnUnwatchedVariable { name: String, span: Span },
+    /// Function body has no return expression but requires a non-void return type.
+    MissingReturnExpression { expected: T, span: Span },
 }
 
 impl<T> TypeError<T> {
@@ -131,6 +133,12 @@ impl<T> TypeError<T> {
             TypeError::WatchOnUnwatchedVariable { name, span } => {
                 TypeError::WatchOnUnwatchedVariable {
                     name: name.clone(),
+                    span: *span,
+                }
+            }
+            TypeError::MissingReturnExpression { expected, span } => {
+                TypeError::MissingReturnExpression {
+                    expected: f(expected),
                     span: *span,
                 }
             }

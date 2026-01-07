@@ -101,6 +101,26 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
+// Error: Statement must end with a semicolon.
+//    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │                        ───┬──  
+//    │                           ╰──── Statement must end with a semicolon.
+//    │ 
+//    │ Note: Error code: E0028
+// ───╯
+// Error: Statement must end with a semicolon.
+//    ╭─[ loops_header_requires_let_negative.baml:4:29 ]
+//    │
+//  4 │ ╭─▶     for (i = 0; i < 3; i += 1) {
+//    ┆ ┆   
+//  6 │ ├─▶     }
+//    │ │           
+//    │ ╰─────────── Statement must end with a semicolon.
+//    │     
+//    │     Note: Error code: E0028
+// ───╯
 // Error: Unknown variable `i`
 //    ╭─[ loops_header_requires_let_negative.baml:4:14 ]
 //    │
@@ -128,6 +148,16 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ loops_header_requires_let_negative.baml:14:2 ]
+//     │
+//  14 │ ╭─▶     for (; s < 2; i += 1) {
+//  15 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
+// ────╯
 // Error: Unknown variable `i`
 //     ╭─[ loops_header_requires_let_negative.baml:14:16 ]
 //     │

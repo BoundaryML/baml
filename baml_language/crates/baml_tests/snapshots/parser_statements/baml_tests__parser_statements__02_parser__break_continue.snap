@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -24,9 +24,9 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            BREAK_STMT "break"
+            BREAK_STMT "break;"
               KW_BREAK "break"
-            SEMICOLON ";"
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT "return 42;"
           KW_RETURN "return"
@@ -53,9 +53,9 @@ SOURCE_FILE
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            CONTINUE_STMT "continue"
+            CONTINUE_STMT "continue;"
               KW_CONTINUE "continue"
-            SEMICOLON ";"
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT "return 0;"
           KW_RETURN "return"
@@ -98,9 +98,9 @@ SOURCE_FILE
           R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            BREAK_STMT "break"
+            BREAK_STMT "break;"
               KW_BREAK "break"
-            SEMICOLON ";"
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT "return 1;"
           KW_RETURN "return"
@@ -143,9 +143,9 @@ SOURCE_FILE
           R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
-            CONTINUE_STMT "continue"
+            CONTINUE_STMT "continue;"
               KW_CONTINUE "continue"
-            SEMICOLON ";"
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT "return 2;"
           KW_RETURN "return"
@@ -180,13 +180,13 @@ SOURCE_FILE
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
-                BREAK_STMT "break"
+                BREAK_STMT "break;"
                   KW_BREAK "break"
-                SEMICOLON ";"
+                  SEMICOLON ";"
                 R_BRACE "}"
-            BREAK_STMT "break"
+            BREAK_STMT "break;"
               KW_BREAK "break"
-            SEMICOLON ";"
+              SEMICOLON ";"
             R_BRACE "}"
         RETURN_STMT "return 3;"
           KW_RETURN "return"
@@ -233,9 +233,9 @@ SOURCE_FILE
                   EQUALS "="
                   INTEGER_LITERAL "2"
                   SEMICOLON ";"
-                BREAK_STMT "break"
+                BREAK_STMT "break;"
                   KW_BREAK "break"
-                SEMICOLON ";"
+                  SEMICOLON ";"
                 R_BRACE "}"
             R_BRACE "}"
         RETURN_STMT "return 4;"
@@ -283,9 +283,9 @@ SOURCE_FILE
                   EQUALS "="
                   INTEGER_LITERAL "2"
                   SEMICOLON ";"
-                CONTINUE_STMT "continue"
+                CONTINUE_STMT "continue;"
                   KW_CONTINUE "continue"
-                SEMICOLON ";"
+                  SEMICOLON ";"
                 R_BRACE "}"
             R_BRACE "}"
         RETURN_STMT "return 5;"

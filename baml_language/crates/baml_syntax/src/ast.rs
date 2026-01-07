@@ -1079,11 +1079,31 @@ impl BlockElement {
     }
 
     /// Check if this element has a trailing semicolon.
+    ///
+    /// For most statement nodes (`LET_STMT`, `BREAK_STMT`, etc.), the semicolon is a child of the node.
+    /// For `WHILE_STMT` and `FOR_EXPR`, the semicolon is a sibling (parser doesn't consume it).
+    /// For expression nodes and tokens, the semicolon is a sibling after the node.
     pub fn has_trailing_semicolon(&self) -> bool {
         use rowan::Direction;
 
         match self {
-            BlockElement::Stmt(node) | BlockElement::ExprNode(node) => {
+            BlockElement::Stmt(node) => {
+                // WHILE_STMT and FOR_EXPR don't consume semicolons in the parser,
+                // so check siblings like expressions
+                if matches!(node.kind(), SyntaxKind::WHILE_STMT | SyntaxKind::FOR_EXPR) {
+                    return node
+                        .siblings_with_tokens(Direction::Next)
+                        .skip(1)
+                        .filter_map(rowan::NodeOrToken::into_token)
+                        .any(|token| token.kind() == SyntaxKind::SEMICOLON);
+                }
+                // For other statements, semicolon is a CHILD of the node (parsed inside the statement)
+                node.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .any(|token| token.kind() == SyntaxKind::SEMICOLON)
+            }
+            BlockElement::ExprNode(node) => {
+                // For expressions, semicolon is a SIBLING after the node
                 node.siblings_with_tokens(Direction::Next)
                     .skip(1) // Skip the node itself
                     .filter_map(rowan::NodeOrToken::into_token)

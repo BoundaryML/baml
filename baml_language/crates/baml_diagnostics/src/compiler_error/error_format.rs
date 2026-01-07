@@ -6,11 +6,12 @@ use super::{
     DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HTTP_CONFIG_NOT_BLOCK,
     HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_CLIENT_RESPONSE_TYPE,
     INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR, MISSING_GENERATOR_PROPERTY,
-    MISSING_PROVIDER, NEGATIVE_TIMEOUT, NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE,
-    NOT_INDEXABLE, NameError, ParseError, RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH,
-    TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY,
-    UNKNOWN_ENUM_VARIANT, UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE,
-    UNKNOWN_VARIABLE, UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
+    MISSING_PROVIDER, MISSING_RETURN_EXPRESSION, MISSING_SEMICOLON, NEGATIVE_TIMEOUT,
+    NO_SUCH_FIELD, NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError,
+    RESERVED_FIELD_NAME, Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF,
+    UNEXPECTED_TOKEN, UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY, UNKNOWN_ENUM_VARIANT,
+    UNKNOWN_GENERATOR_PROPERTY, UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE, UNKNOWN_VARIABLE,
+    UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
 };
 
 /// The message format and id of each compiler error variant.
@@ -127,10 +128,17 @@ where
             ),
             TypeError::WatchOnUnwatchedVariable { name, span } => simple_error(
                 format!(
-                    "Cannot use $watch on '{name}': variable must be declared with `watch let`"
+                    "Cannot use $watch on '{name}`: variable must be declared with `watch let`"
                 ),
                 span,
                 WATCH_ON_UNWATCHED_VARIABLE,
+            ),
+            TypeError::MissingReturnExpression { expected, span } => simple_error(
+                format!(
+                    "Missing return expression. Function expects `{expected}` but body has no final expression."
+                ),
+                span,
+                MISSING_RETURN_EXPRESSION,
             ),
         },
         CompilerError::NameError(name_error) => match name_error {
@@ -442,6 +450,11 @@ where
                 format!("Unknown field `{field_name}` in client. Only `provider` and `options` are supported."),
                 span,
                 UNKNOWN_CLIENT_PROPERTY,
+            ),
+            HirDiagnostic::MissingSemicolon { span } => simple_error(
+                "Statement must end with a semicolon.".to_string(),
+                span,
+                MISSING_SEMICOLON,
             ),
         },
     }

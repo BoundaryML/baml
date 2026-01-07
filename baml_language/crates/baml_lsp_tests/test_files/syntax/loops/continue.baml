@@ -44,12 +44,25 @@ function ContinueNested() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `void`
-//    ╭─[ loops_continue.baml:1:1 ]
-//    │
-//  1 │ function Factorial(limit: int) -> int {
-//    │ │ 
-//    │ ╰─ Expected `int`, found `void`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// Error: Missing return expression. Function expects `int` but body has no final expression.
+//     ╭─[ loops_continue.baml:30:33 ]
+//     │
+//  30 │ ╭─▶ function ContinueNested() -> int {
+//     ┆ ┆   
+//  36 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── Missing return expression. Function expects `int` but body has no final expression.
+//     │     
+//     │     Note: Error code: E0029
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ loops_continue.baml:8:2 ]
+//     │
+//   8 │ ╭─▶     while (should_continue) {
+//     ┆ ┆   
+//  18 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── Statement must end with a semicolon.
+//     │     
+//     │     Note: Error code: E0028
+// ────╯

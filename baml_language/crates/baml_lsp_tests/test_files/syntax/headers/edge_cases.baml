@@ -106,7 +106,7 @@ function ConsecutiveHeaders() -> string {
     "multiple consecutive headers"
 }
 
-function HeadersAroundExpressions() -> string {
+function HeadersAroundExpressions() -> int {
     //# Before Let
     let x = 5;
     //## After Let
@@ -118,14 +118,14 @@ function HeadersAroundExpressions() -> string {
     } else {
         //#### Inside Else
         0
-    }
+    };
     //### After If
 
     //## Before For
     for (let i in [1, 2, 3]) {
         //### Inside For
         i
-    }
+    };
     //## After For
 
     //# Final Section
@@ -214,12 +214,4 @@ function HeaderOnlyFunction() -> string {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
-//    ╭─[ headers_edge_cases.baml:1:1 ]
-//    │
-//  1 │ // Edge cases for MDX headers
-//    │ │ 
-//    │ ╰─ Expected `string`, found `int`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

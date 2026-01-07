@@ -772,19 +772,21 @@ pub fn infer_function_body<'db>(
     }
 
     // Type check the body and get the trailing expression type
-    let trailing_expr_type = match body {
+    let (trailing_expr_type, body_span) = match body {
         FunctionBody::Expr(expr_body) => {
             if let Some(root_expr) = expr_body.root_expr {
-                infer_expr(&mut ctx, root_expr, expr_body)
+                let ty = infer_expr(&mut ctx, root_expr, expr_body);
+                let span = expr_body.get_expr_span(root_expr).unwrap_or_default();
+                (ty, span)
             } else {
-                Ty::Void
+                (Ty::Void, Span::default())
             }
         }
         FunctionBody::Llm(_) => {
             // LLM functions return their declared return type
-            expected_return.clone()
+            (expected_return.clone(), Span::default())
         }
-        FunctionBody::Missing => Ty::Unknown,
+        FunctionBody::Missing => (Ty::Unknown, Span::default()),
     };
 
     // Check all return statement types against expected return type
@@ -809,11 +811,19 @@ pub fn infer_function_body<'db>(
         && !trailing_expr_type.is_unknown()
         && !expected_return.is_unknown()
     {
-        // TODO: we actually want the span of the last expression here.
-        let error = TypeError::TypeMismatch {
-            expected: expected_return.clone(),
-            found: trailing_expr_type.clone(),
-            span: Span::default(),
+        // If the trailing type is void (no tail expression) but we need a non-void return,
+        // emit a clearer "missing return expression" error
+        let error = if trailing_expr_type.is_void() && !expected_return.is_void() {
+            TypeError::MissingReturnExpression {
+                expected: expected_return.clone(),
+                span: body_span,
+            }
+        } else {
+            TypeError::TypeMismatch {
+                expected: expected_return.clone(),
+                found: trailing_expr_type.clone(),
+                span: body_span,
+            }
         };
         ctx.push_error(error);
     }

@@ -60,29 +60,35 @@ function IfThenOnlyHeader2() -> int {
 //    │ Note: Error code: E0011
 // ───╯
 // Error: Expected `int`, found `int | null`
-//    ╭─[ headers_if_then_only_header.baml:1:1 ]
-//    │
-//  1 │ //# Case 1
-//    │ │ 
-//    │ ╰─ Expected `int`, found `int | null`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//     ╭─[ headers_if_then_only_header.baml:15:36 ]
+//     │
+//  15 │ ╭─▶ function IfThenOnlyHeader2() -> int {
+//     ┆ ┆   
+//  29 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── Expected `int`, found `int | null`
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
 // Error: Expected `int`, found `int | null`
-//    ╭─[ headers_if_then_only_header.baml:1:1 ]
-//    │
-//  1 │ //# Case 1
-//    │ │ 
-//    │ ╰─ Expected `int`, found `int | null`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//     ╭─[ headers_if_then_only_header.baml:15:36 ]
+//     │
+//  15 │ ╭─▶ function IfThenOnlyHeader2() -> int {
+//     ┆ ┆   
+//  29 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── Expected `int`, found `int | null`
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
 // Error: Expected `int`, found `int | null`
-//    ╭─[ headers_if_then_only_header.baml:1:1 ]
-//    │
-//  1 │ //# Case 1
-//    │ │ 
-//    │ ╰─ Expected `int`, found `int | null`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//     ╭─[ headers_if_then_only_header.baml:2:35 ]
+//     │
+//   2 │ ╭─▶ function IfThenOnlyHeader() -> int {
+//     ┆ ┆   
+//  12 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── Expected `int`, found `int | null`
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

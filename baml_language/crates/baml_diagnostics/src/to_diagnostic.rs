@@ -151,6 +151,14 @@ impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
                 ),
             )
             .with_primary_span(*span),
+
+            TypeError::MissingReturnExpression { expected, span } => Diagnostic::error(
+                DiagnosticId::MissingReturnExpression,
+                format!(
+                    "Missing return expression. Function expects `{expected}` but body has no final expression."
+                ),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }
@@ -463,6 +471,12 @@ impl ToDiagnostic for HirDiagnostic {
                 format!(
                     "Unknown field `{field_name}` in client. Only `provider` and `options` are supported."
                 ),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::MissingSemicolon { span } => Diagnostic::error(
+                DiagnosticId::MissingSemicolon,
+                "Statement must end with a semicolon.",
             )
             .with_primary_span(*span),
         };

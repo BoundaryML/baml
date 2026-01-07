@@ -18,11 +18,13 @@ function BasicIf() -> string {
 //----
 //- diagnostics
 // Error: Expected `string`, found `int`
-//    ╭─[ headers_basic_if.baml:1:1 ]
-//    │
-//  1 │ //# Basic test
-//    │ │ 
-//    │ ╰─ Expected `string`, found `int`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+//     ╭─[ headers_basic_if.baml:2:29 ]
+//     │
+//   2 │ ╭─▶ function BasicIf() -> string {
+//     ┆ ┆   
+//  15 │ ├─▶ }
+//     │ │      
+//     │ ╰────── Expected `string`, found `int`
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

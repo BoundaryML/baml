@@ -677,6 +677,87 @@ function foo() -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:51:10 ]
+//     │
+//  51 │    for ;;i = x {}
+//     │          ────┬───  
+//     │              ╰───── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:55:4 ]
+//     │
+//  55 │    for let a in as {}
+//     │    ───┬───  
+//     │       ╰───── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:55:12 ]
+//     │
+//  55 │    for let a in as {}
+//     │            ┬  
+//     │            ╰── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:55:17 ]
+//     │
+//  55 │    for let a in as {}
+//     │                 ──┬──  
+//     │                   ╰──── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:57:4 ]
+//     │
+//  57 │    for (let a in as {}
+//     │    ─────────┬─────────  
+//     │             ╰─────────── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:59:4 ]
+//     │
+//  59 │    for let a in as) {}
+//     │    ───┬───  
+//     │       ╰───── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:59:12 ]
+//     │
+//  59 │    for let a in as) {}
+//     │            ┬  
+//     │            ╰── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:59:17 ]
+//     │
+//  59 │    for let a in as) {}
+//     │                 ─┬  
+//     │                  ╰── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
+// Error: Statement must end with a semicolon.
+//     ╭─[ parens.baml:59:21 ]
+//     │
+//  59 │    for let a in as) {}
+//     │                     ─┬  
+//     │                      ╰── Statement must end with a semicolon.
+//     │ 
+//     │ Note: Error code: E0028
+// ────╯
 // Error: Unknown variable `i`
 //     ╭─[ parens.baml:35:11 ]
 //     │
@@ -839,12 +920,14 @@ function foo() -> int {
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Expected `int`, found `void`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Expected `int`, found `void`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// Error: Missing return expression. Function expects `int` but body has no final expression.
+//     ╭─[ parens.baml:1:22 ]
+//     │
+//   1 │ ╭─▶ function foo() -> int {
+//     ┆ ┆   
+//  63 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── Missing return expression. Function expects `int` but body has no final expression.
+//     │     
+//     │     Note: Error code: E0029
+// ────╯

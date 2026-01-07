@@ -1,6 +1,172 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-No errors found.
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ assignments.baml:42:3 ]
+    │
+ 42 │ ╭─▶   while (i < 5) {
+    ┆ ┆   
+ 45 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:19:3 ]
+    │
+ 19 │ ╭─▶   for (let i = 0; i < 10; i = i + 1) {
+    ┆ ┆   
+ 21 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:11:3 ]
+    │
+ 11 │ ╭─▶   while (true) {
+    ┆ ┆   
+ 13 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:58:3 ]
+    │
+ 58 │ ╭─▶   while (true) {
+    ┆ ┆   
+ 64 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+   ╭─[ break_continue.baml:3:3 ]
+   │
+ 3 │ ╭─▶   while (true) {
+   ┆ ┆   
+ 5 │ ├─▶   }
+   │ │         
+   │ ╰───────── Statement must end with a semicolon.
+   │     
+   │     Note: Error code: E0028
+───╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:36:5 ]
+    │
+ 36 │ ╭─▶     while (true) {
+    ┆ ┆   
+ 38 │ ├─▶     }
+    │ │           
+    │ ╰─────────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:35:3 ]
+    │
+ 35 │ ╭─▶   while (true) {
+    ┆ ┆   
+ 40 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:27:3 ]
+    │
+ 27 │ ╭─▶   for (let i = 0; i < 10; i = i + 1) {
+    ┆ ┆   
+ 29 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ break_continue.baml:46:3 ]
+    │
+ 46 │ ╭─▶   while (true) {
+    ┆ ┆   
+ 52 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+   ╭─[ for_loops.baml:3:3 ]
+   │
+ 3 │ ╭─▶   for (let i = 0; i < 10; i += 1) {
+   ┆ ┆   
+ 5 │ ├─▶   }
+   │ │         
+   │ ╰───────── Statement must end with a semicolon.
+   │     
+   │     Note: Error code: E0028
+───╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ for_loops.baml:11:3 ]
+    │
+ 11 │ ╭─▶   for (let i in [1, 2, 3]) {
+    ┆ ┆   
+ 13 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ for_loops.baml:19:3 ]
+    │
+ 19 │ ╭─▶   for (let i in [1, 2, 3]) {
+    ┆ ┆   
+ 23 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+   ╭─[ while_loop.baml:3:3 ]
+   │
+ 3 │ ╭─▶   while (i < 10) {
+   ┆ ┆   
+ 5 │ ├─▶   }
+   │ │         
+   │ ╰───────── Statement must end with a semicolon.
+   │     
+   │     Note: Error code: E0028
+───╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ while_loop.baml:11:3 ]
+    │
+ 11 │ ╭─▶   while (i < 10) {
+    ┆ ┆   
+ 16 │ ├─▶   }
+    │ │         
+    │ ╰───────── Statement must end with a semicolon.
+    │     
+    │     Note: Error code: E0028
+────╯

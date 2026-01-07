@@ -13807,12 +13807,11 @@ expression: output
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: Expected `int`, found `void`
-   ╭─[ complex_strings.baml:1:1 ]
-   │
- 1 │ class StringTorture {
-   │ │ 
-   │ ╰─ Expected `int`, found `void`
-   │ 
-   │ Note: Error code: E0001
-───╯
+  [type] Error: Missing return expression. Function expects `int` but body has no final expression.
+    ╭─[ very_invalid.baml:5:30 ]
+    │
+  5 │ ╭─▶ function BodyTorture() -> int {
+    ┆ ┆   
+    │     
+    │     Note: Error code: E0029
+────╯

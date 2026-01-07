@@ -666,6 +666,20 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
                 tree.alloc_generator(g);
             }
         }
+        SyntaxKind::LET_STMT => {
+            // Top-level let statements require semicolons.
+            // The semicolon is a CHILD of the LET_STMT node (parsed inside the statement).
+            let has_semicolon = node
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .any(|token| token.kind() == SyntaxKind::SEMICOLON);
+
+            if !has_semicolon {
+                ctx.push_diagnostic(HirDiagnostic::MissingSemicolon {
+                    span: ctx.span(node.text_range()),
+                });
+            }
+        }
         _ => {
             // Skip other nodes (whitespace, comments, etc.)
         }
