@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [type] Error: Unknown variable baml
+  [type] Error: Unknown variable `baml`
     ╭─[ fetch_as.baml:10:16 ]
     │
  10 │         method: baml.HttpMethod.Get,
     │                ──────────┬─────────  
-    │                          ╰─────────── Unknown variable baml
+    │                          ╰─────────── Unknown variable `baml`
     │ 
     │ Note: Error code: E0003
 ────╯

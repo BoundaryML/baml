@@ -1,24 +1,24 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [type] Error: Expected foo, found bool
+  [type] Error: Expected `foo`, found `bool`
    ╭─[ type_aliases.baml:1:1 ]
    │
  1 │ type foo = bar
    │ │ 
-   │ ╰─ Expected foo, found bool
+   │ ╰─ Expected `foo`, found `bool`
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: Expected JSON, found NotJSON
+  [type] Error: Expected `JSON`, found `NotJSON`
    ╭─[ type_aliases.baml:1:1 ]
    │
  1 │ type foo = bar
    │ │ 
-   │ ╰─ Expected JSON, found NotJSON
+   │ ╰─ Expected `JSON`, found `NotJSON`
    │ 
    │ Note: Error code: E0001
 ───╯

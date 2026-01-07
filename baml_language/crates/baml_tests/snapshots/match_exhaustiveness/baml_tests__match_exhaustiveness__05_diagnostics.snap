@@ -1,446 +1,446 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:478:34 ]
      │
  478 │ ╭─▶         Status.Active => "first",
  479 │ ├─▶         Status.Active => "second",
      │ │                                        
-     │ ╰──────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰──────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: true, false
+  [type] Error: Non-exhaustive match on `bool`: missing cases true, false
      ╭─[ match_exhaustiveness.baml:744:58 ]
      │
  744 │ ╭─▶ function WrongLiteralTypeBoolWithInt(b: bool) -> string {
      ┆ ┆   
  747 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type bool not fully covered. Missing: true, false
+     │ ╰─────────── Non-exhaustive match on `bool`: missing cases true, false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
     ╭─[ match_exhaustiveness.baml:26:26 ]
     │
  26 │ ╭─▶         _ => "catch all",
  27 │ ├─▶         n: int => "unreachable 1",
     │ │                                        
-    │ ╰──────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+    │ ╰──────────────────────────────────────── Unreachable match arm
     │     
     │     Note: Error code: E0063
 ────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
     ╭─[ match_exhaustiveness.baml:27:35 ]
     │
  27 │ ╭─▶         n: int => "unreachable 1",
  28 │ ├─▶         m: int => "unreachable 2"
     │ │                                       
-    │ ╰─────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+    │ ╰─────────────────────────────────────── Unreachable match arm
     │     
     │     Note: Error code: E0063
 ────╯
 
-  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: true
+  [type] Error: Non-exhaustive match on `bool`: missing cases true
      ╭─[ match_exhaustiveness.baml:250:59 ]
      │
  250 │ ╭─▶ function NonExhaustiveBoolMissingTrue(b: bool) -> string {
      ┆ ┆   
  253 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type bool not fully covered. Missing: true
+     │ ╰─────────── Non-exhaustive match on `bool`: missing cases true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:732:35 ]
      │
  732 │ ╭─▶         x: Status => "any status",
  733 │ ├─▶         Status.Active => "unreachable"
      │ │                                            
-     │ ╰──────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰──────────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:792:31 ]
      │
  792 │ ╭─▶         x: bool => "any bool",
  793 │ ├─▶         true => "unreachable"
      │ │                                   
-     │ ╰─────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰─────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:488:26 ]
      │
  488 │ ╭─▶         1 => "first one",
  489 │ ├─▶         1 => "second one",
      │ │                                
-     │ ╰──────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰──────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Status? not fully covered. Missing: null
+  [type] Error: Non-exhaustive match on `Status?`: missing cases null
      ╭─[ match_exhaustiveness.baml:671:70 ]
      │
  671 │ ╭─▶ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
      ┆ ┆   
  676 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Status? not fully covered. Missing: null
+     │ ╰─────────── Non-exhaustive match on `Status?`: missing cases null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Result not fully covered. Missing: Failure
+  [type] Error: Non-exhaustive match on `Result`: missing cases Failure
      ╭─[ match_exhaustiveness.baml:620:65 ]
      │
  620 │ ╭─▶ function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
      ┆ ┆   
  623 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Result not fully covered. Missing: Failure
+     │ ╰─────────── Non-exhaustive match on `Result`: missing cases Failure
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type DoubleMaybe not fully covered. Missing: null
+  [type] Error: Non-exhaustive match on `DoubleMaybe`: missing cases null
      ╭─[ match_exhaustiveness.baml:607:74 ]
      │
  607 │ ╭─▶ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
      ┆ ┆   
  611 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type DoubleMaybe not fully covered. Missing: null
+     │ ╰─────────── Non-exhaustive match on `DoubleMaybe`: missing cases null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type int not fully covered. Missing: int
+  [type] Error: Non-exhaustive match on `int`: missing cases int
     ╭─[ match_exhaustiveness.baml:59:51 ]
     │
  59 │ ╭─▶ function GuardedOnlyNonExhaustive(x: int) -> int {
     ┆ ┆   
  63 │ ├─▶     }
     │ │           
-    │ ╰─────────── Non-exhaustive match: type int not fully covered. Missing: int
+    │ ╰─────────── Non-exhaustive match on `int`: missing cases int
     │     
     │     Note: Error code: E0062
 ────╯
 
-  [type] Error: Non-exhaustive match: type bool not fully covered. Missing: false
+  [type] Error: Non-exhaustive match on `bool`: missing cases false
      ╭─[ match_exhaustiveness.baml:243:60 ]
      │
  243 │ ╭─▶ function NonExhaustiveBoolMissingFalse(b: bool) -> string {
      ┆ ┆   
  246 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type bool not fully covered. Missing: false
+     │ ╰─────────── Non-exhaustive match on `bool`: missing cases false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:865:35 ]
      │
  865 │ ╭─▶         Status.Active => "active",
  866 │ ├─▶         Status.Active => "duplicate 1",
      │ │                                             
-     │ ╰───────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰───────────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:867:39 ]
      │
  867 │ ╭─▶         Status.Inactive => "inactive",
  868 │ ├─▶         Status.Active => "duplicate 2",
      │ │                                             
-     │ ╰───────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰───────────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:854:35 ]
      │
  854 │ ╭─▶             false => "zero false",
  855 │ ├─▶             true => "unreachable nested"
      │ │                                              
-     │ ╰────────────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰────────────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Non-exhaustive match: type MaybeOk not fully covered. Missing: 200
+  [type] Error: Non-exhaustive match on `MaybeOk`: missing cases 200
      ╭─[ match_exhaustiveness.baml:536:70 ]
      │
  536 │ ╭─▶ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
      ┆ ┆   
  539 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type MaybeOk not fully covered. Missing: 200
+     │ ╰─────────── Non-exhaustive match on `MaybeOk`: missing cases 200
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type MaybeOk not fully covered. Missing: null
+  [type] Error: Non-exhaustive match on `MaybeOk`: missing cases null
      ╭─[ match_exhaustiveness.baml:529:69 ]
      │
  529 │ ╭─▶ function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
      ┆ ┆   
  532 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type MaybeOk not fully covered. Missing: null
+     │ ╰─────────── Non-exhaustive match on `MaybeOk`: missing cases null
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type AlwaysTrue not fully covered. Missing: true
+  [type] Error: Non-exhaustive match on `AlwaysTrue`: missing cases true
      ╭─[ match_exhaustiveness.baml:295:70 ]
      │
  295 │ ╭─▶ function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
      ┆ ┆   
  298 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type AlwaysTrue not fully covered. Missing: true
+     │ ╰─────────── Non-exhaustive match on `AlwaysTrue`: missing cases true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type OkOrCreated not fully covered. Missing: 201
+  [type] Error: Non-exhaustive match on `OkOrCreated`: missing cases 201
      ╭─[ match_exhaustiveness.baml:583:69 ]
      │
  583 │ ╭─▶ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
      ┆ ┆   
  586 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type OkOrCreated not fully covered. Missing: 201
+     │ ╰─────────── Non-exhaustive match on `OkOrCreated`: missing cases 201
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type int not fully covered. Missing: int
+  [type] Error: Non-exhaustive match on `int`: missing cases int
      ╭─[ match_exhaustiveness.baml:751:59 ]
      │
  751 │ ╭─▶ function WrongLiteralTypeIntWithString(x: int) -> string {
      ┆ ┆   
  754 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type int not fully covered. Missing: int
+     │ ╰─────────── Non-exhaustive match on `int`: missing cases int
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+  [type] Error: Non-exhaustive match on `Status`: missing cases Status.Inactive, Status.Pending
      ╭─[ match_exhaustiveness.baml:875:60 ]
      │
  875 │ ╭─▶ function HighLineNumberNonExhaustive(s: Status) -> string {
      ┆ ┆   
  878 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+     │ ╰─────────── Non-exhaustive match on `Status`: missing cases Status.Inactive, Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Status? not fully covered. Missing: Status.Pending
+  [type] Error: Non-exhaustive match on `Status?`: missing cases Status.Pending
      ╭─[ match_exhaustiveness.baml:680:73 ]
      │
  680 │ ╭─▶ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
      ┆ ┆   
  685 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Status? not fully covered. Missing: Status.Pending
+     │ ╰─────────── Non-exhaustive match on `Status?`: missing cases Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+  [type] Error: Non-exhaustive match on `FullResult`: missing cases Pending
      ╭─[ match_exhaustiveness.baml:627:70 ]
      │
  627 │ ╭─▶ function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
      ┆ ┆   
  631 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+     │ ╰─────────── Non-exhaustive match on `FullResult`: missing cases Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type SuccessOr200 not fully covered. Missing: 200
+  [type] Error: Non-exhaustive match on `SuccessOr200`: missing cases 200
      ╭─[ match_exhaustiveness.baml:704:82 ]
      │
  704 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
      ┆ ┆   
  707 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type SuccessOr200 not fully covered. Missing: 200
+     │ ╰─────────── Non-exhaustive match on `SuccessOr200`: missing cases 200
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:506:32 ]
      │
  506 │ ╭─▶         "user" => "first user",
  507 │ ├─▶         "user" => "second user",
      │ │                                      
-     │ ╰────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Pending
+  [type] Error: Non-exhaustive match on `Status`: missing cases Status.Pending
      ╭─[ match_exhaustiveness.baml:456:60 ]
      │
  456 │ ╭─▶ function NonExhaustiveEnumMissingOne(s: Status) -> string {
      ┆ ┆   
  460 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Status not fully covered. Missing: Status.Pending
+     │ ╰─────────── Non-exhaustive match on `Status`: missing cases Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type CustomBool not fully covered. Missing: false
+  [type] Error: Non-exhaustive match on `CustomBool`: missing cases false
      ╭─[ match_exhaustiveness.baml:302:67 ]
      │
  302 │ ╭─▶ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
      ┆ ┆   
  305 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type CustomBool not fully covered. Missing: false
+     │ ╰─────────── Non-exhaustive match on `CustomBool`: missing cases false
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type MixedLiterals not fully covered. Missing: true
+  [type] Error: Non-exhaustive match on `MixedLiterals`: missing cases true
      ╭─[ match_exhaustiveness.baml:559:66 ]
      │
  559 │ ╭─▶ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
      ┆ ┆   
  563 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type MixedLiterals not fully covered. Missing: true
+     │ ╰─────────── Non-exhaustive match on `MixedLiterals`: missing cases true
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type SuccessOr200 not fully covered. Missing: Success
+  [type] Error: Non-exhaustive match on `SuccessOr200`: missing cases Success
      ╭─[ match_exhaustiveness.baml:711:80 ]
      │
  711 │ ╭─▶ function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
      ┆ ┆   
  714 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type SuccessOr200 not fully covered. Missing: Success
+     │ ╰─────────── Non-exhaustive match on `SuccessOr200`: missing cases Success
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
     ╭─[ match_exhaustiveness.baml:18:26 ]
     │
  18 │ ╭─▶         _ => "catch all",
  19 │ ├─▶         n: int => "never reached"
     │ │                                       
-    │ ╰─────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+    │ ╰─────────────────────────────────────── Unreachable match arm
     │     
     │     Note: Error code: E0063
 ────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:497:30 ]
      │
  497 │ ╭─▶         true => "first true",
  498 │ ├─▶         true => "second true",
      │ │                                    
-     │ ╰──────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰──────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:642:35 ]
      │
  642 │ ╭─▶         x: string => "any string",
  643 │ ├─▶         "hello" => "unreachable"
      │ │                                      
-     │ ╰────────────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰────────────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯
 
-  [type] Error: Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+  [type] Error: Non-exhaustive match on `FullResult`: missing cases Pending
      ╭─[ match_exhaustiveness.baml:763:64 ]
      │
  763 │ ╭─▶ function PartialUnionPatternCoverage(r: FullResult) -> string {
      ┆ ┆   
  766 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type FullResult not fully covered. Missing: Pending
+     │ ╰─────────── Non-exhaustive match on `FullResult`: missing cases Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Role not fully covered. Missing: "system"
+  [type] Error: Non-exhaustive match on `Role`: missing cases "system"
      ╭─[ match_exhaustiveness.baml:355:60 ]
      │
  355 │ ╭─▶ function NonExhaustiveStringLiteral(role: Role) -> string {
      ┆ ┆   
  359 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Role not fully covered. Missing: "system"
+     │ ╰─────────── Non-exhaustive match on `Role`: missing cases "system"
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+  [type] Error: Non-exhaustive match on `Status`: missing cases Status.Inactive, Status.Pending
      ╭─[ match_exhaustiveness.baml:464:65 ]
      │
  464 │ ╭─▶ function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
      ┆ ┆   
  467 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type Status not fully covered. Missing: Status.Inactive, Status.Pending
+     │ ╰─────────── Non-exhaustive match on `Status`: missing cases Status.Inactive, Status.Pending
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Non-exhaustive match: type SuccessCode not fully covered. Missing: 204
+  [type] Error: Non-exhaustive match on `SuccessCode`: missing cases 204
      ╭─[ match_exhaustiveness.baml:396:64 ]
      │
  396 │ ╭─▶ function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
      ┆ ┆   
  400 │ ├─▶     }
      │ │           
-     │ ╰─────────── Non-exhaustive match: type SuccessCode not fully covered. Missing: 204
+     │ ╰─────────── Non-exhaustive match on `SuccessCode`: missing cases 204
      │     
      │     Note: Error code: E0062
 ─────╯
 
-  [type] Error: Unreachable match arm: previous arms already cover all cases
+  [type] Error: Unreachable match arm
      ╭─[ match_exhaustiveness.baml:784:25 ]
      │
  784 │ ╭─▶         n: int => "int",
  785 │ ├─▶         42 => "unreachable"
      │ │                                 
-     │ ╰───────────────────────────────── Unreachable match arm: previous arms already cover all cases
+     │ ╰───────────────────────────────── Unreachable match arm
      │     
      │     Note: Error code: E0063
 ─────╯

@@ -22,7 +22,7 @@ test MyTest {
 //----
 //- diagnostics
 // Error: Expected config key, found '@'
-//     ╭─[ 0:12:5 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:12:5 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │     ┬  
@@ -31,7 +31,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected config key, found '{'
-//     ╭─[ 0:12:24 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:12:24 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │                        ┬  
@@ -40,7 +40,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected config key, found '{'
-//     ╭─[ 0:12:25 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:12:25 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │                         ┬  
@@ -49,7 +49,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:12:33 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:12:33 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │                                 ┬  
@@ -58,7 +58,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found ')'
-//     ╭─[ 0:12:34 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:12:34 ]
 //     │
 //  12 │   } @check(args_check, {{ true }})
 //     │                                  ┬  
@@ -67,7 +67,7 @@ test MyTest {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:13:1 ]
+//     ╭─[ functions_v2_tests_field_level_check.baml:13:1 ]
 //     │
 //  13 │ }
 //     │ ┬  

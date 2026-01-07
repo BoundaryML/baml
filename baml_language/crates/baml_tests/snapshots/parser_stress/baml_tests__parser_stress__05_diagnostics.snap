@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -13783,36 +13783,36 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [name] Error: Duplicate type alias 'Language'
+  [validation] Error: Duplicate type alias `Language`
    ╭─[ rust.baml:1:1 ]
    │
  1 │ // Try parsing rust source with baml.
    │ │ 
-   │ ╰─ type alias 'Language' defined in rust.baml
+   │ ╰─ type alias `Language` redefined here
    │ │ 
-   │ ╰─ 'Language' previously defined in rust.baml
+   │ ╰─ `Language` first defined in rust.baml
    │ 
    │ Note: Error code: E0011
 ───╯
 
-  [type] Error: Expected bool, found void
+  [type] Error: Expected `bool`, found `void`
     ╭─[ very_invalid.baml:8:11 ]
     │
   8 │ ╭─▶   while \ {
     ┆ ┆   
  10 │ ├─▶   }
     │ │         
-    │ ╰───────── Expected bool, found void
+    │ ╰───────── Expected `bool`, found `void`
     │     
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: Expected int, found void
+  [type] Error: Expected `int`, found `void`
    ╭─[ complex_strings.baml:1:1 ]
    │
  1 │ class StringTorture {
    │ │ 
-   │ ╰─ Expected int, found void
+   │ ╰─ Expected `int`, found `void`
    │ 
    │ Note: Error code: E0001
 ───╯

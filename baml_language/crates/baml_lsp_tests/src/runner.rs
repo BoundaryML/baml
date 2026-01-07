@@ -56,6 +56,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let check_result = lsp_db.check();
     let diagnostics = &check_result.diagnostics;
     let sources = &check_result.sources;
+    let file_paths = &check_result.file_paths;
 
     // 3. Format diagnostics output using the unified render
     let actual_diagnostics = if diagnostics.is_empty() {
@@ -65,7 +66,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         diagnostics
             .iter()
             .map(|d| {
-                let rendered = render_diagnostic(d, sources, &config);
+                let rendered = render_diagnostic(d, sources, file_paths, &config);
                 format_as_comment(rendered.trim())
             })
             .collect::<Vec<_>>()

@@ -18,7 +18,7 @@ client<llm> NegativeTimeout {
 //----
 //- diagnostics
 // Error: connect_timeout_ms must be non-negative, got: -1000ms
-//    ╭─[ 0:6:7 ]
+//    ╭─[ client_http_config_negative_timeout.baml:6:7 ]
 //    │
 //  6 │       connect_timeout_ms -1000
 //    │       ─────────┬────────  

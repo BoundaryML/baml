@@ -118,7 +118,7 @@ function Foo6(arg: int) -> float {
 //----
 //- diagnostics
 // Error: Expected LLM function missing 'prompt' field, found '}'
-//    ╭─[ 0:3:1 ]
+//    ╭─[ functions_v2_invalid2.baml:3:1 ]
 //    │
 //  3 │ }
 //    │ ┬  
@@ -127,7 +127,7 @@ function Foo6(arg: int) -> float {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected LLM function missing 'client' field, found '}'
-//    ╭─[ 0:7:1 ]
+//    ╭─[ functions_v2_invalid2.baml:7:1 ]
 //    │
 //  7 │ }
 //    │ ┬  
@@ -136,7 +136,7 @@ function Foo6(arg: int) -> float {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected prompt string, found '}'
-//     ╭─[ 0:18:1 ]
+//     ╭─[ functions_v2_invalid2.baml:18:1 ]
 //     │
 //  18 │ }
 //     │ ┬  
@@ -145,7 +145,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     ╭─[ 0:23:10 ]
+//     ╭─[ functions_v2_invalid2.baml:23:10 ]
 //     │
 //  23 │   prompt #"..."#
 //     │          ┬  
@@ -154,7 +154,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     ╭─[ 0:23:11 ]
+//     ╭─[ functions_v2_invalid2.baml:23:11 ]
 //     │
 //  23 │   prompt #"..."#
 //     │           ┬  
@@ -163,7 +163,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found '...'
-//     ╭─[ 0:23:12 ]
+//     ╭─[ functions_v2_invalid2.baml:23:12 ]
 //     │
 //  23 │   prompt #"..."#
 //     │            ─┬─  
@@ -172,7 +172,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     ╭─[ 0:23:15 ]
+//     ╭─[ functions_v2_invalid2.baml:23:15 ]
 //     │
 //  23 │   prompt #"..."#
 //     │               ┬  
@@ -181,7 +181,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     ╭─[ 0:23:16 ]
+//     ╭─[ functions_v2_invalid2.baml:23:16 ]
 //     │
 //  23 │   prompt #"..."#
 //     │                ┬  
@@ -190,7 +190,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected LLM function missing 'prompt' field, found '}'
-//     ╭─[ 0:24:1 ]
+//     ╭─[ functions_v2_invalid2.baml:24:1 ]
 //     │
 //  24 │ }
 //     │ ┬  
@@ -199,7 +199,7 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected LLM function missing 'prompt' field, found '}'
-//     ╭─[ 0:30:1 ]
+//     ╭─[ functions_v2_invalid2.baml:30:1 ]
 //     │
 //  30 │ }
 //     │ ┬  

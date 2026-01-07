@@ -26,9 +26,9 @@ pub(super) fn publish_diagnostics(
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
     _feature_flags: &[String],
-    _session: &Session,
+    session: &Session,
 ) -> Result<()> {
-    let diagnostics = project_diagnostics(project);
+    let diagnostics = project_diagnostics(project, session.position_encoding);
 
     // Calculate counts for status bar
     let error_count = diagnostics
@@ -90,7 +90,7 @@ pub fn publish_session_lsp_diagnostics(
         return Ok(());
     };
 
-    let diagnostics = project_diagnostics(project);
+    let diagnostics = project_diagnostics(project, session.position_encoding);
     for (uri, diagnostics) in diagnostics {
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
@@ -109,7 +109,10 @@ pub fn publish_session_lsp_diagnostics(
 /// This is the main entry point for diagnostics collection. It uses `LspDatabase::check()`
 /// which centralizes all diagnostic collection (parse errors, HIR diagnostics, type errors)
 /// in one place, eliminating code duplication with the test infrastructure.
-fn project_diagnostics(project: Arc<Mutex<Project>>) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
+fn project_diagnostics(
+    project: Arc<Mutex<Project>>,
+    position_encoding: crate::edit::PositionEncoding,
+) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
     let guard = project.lock();
     let lsp_db = guard.lsp_db();
 
@@ -129,6 +132,7 @@ fn project_diagnostics(project: Arc<Mutex<Project>>) -> HashMap<Url, Vec<lsp_typ
     let config = LspConversionConfig {
         file_paths: &check_result.file_paths,
         file_sources: &file_sources,
+        position_encoding,
     };
 
     // Initialize empty diagnostics for all files (so files with no errors get cleared)

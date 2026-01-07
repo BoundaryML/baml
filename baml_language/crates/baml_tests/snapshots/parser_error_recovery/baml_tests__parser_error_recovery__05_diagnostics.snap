@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -253,7 +253,7 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [hir] Error: Duplicate field 'string' in class 'Partial'
+  [hir] Error: Duplicate field `string` in class `Partial`
    ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly

@@ -20,12 +20,84 @@
 //! let concise = render_diagnostic(&diag, &sources, RenderConfig::concise());
 //! ```
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt, path::PathBuf};
 
-use ariadne::{Label, Report, ReportKind};
+use ariadne::{Label, Report, ReportKind, Source};
 use baml_base::{FileId, Span};
 
 use crate::diagnostic::{Diagnostic, Severity};
+
+// ============================================================================
+// SourceCache - Ariadne cache that displays filenames instead of file IDs
+// ============================================================================
+
+/// A cache for ariadne that displays filenames instead of file IDs.
+///
+/// This implements `ariadne::Cache<FileId>` with a `display()` method that
+/// returns the filename from `file_paths` instead of the raw `FileId` integer.
+///
+/// ## Example
+///
+/// ```ignore
+/// let cache = SourceCache::new(sources, file_paths);
+/// report.write(&mut cache, &mut output)?;
+/// // Output shows: syntax_errors.baml:18:19 (not 0:18:19)
+/// ```
+pub struct SourceCache {
+    sources: HashMap<FileId, Source<String>>,
+    file_paths: HashMap<FileId, PathBuf>,
+}
+
+impl SourceCache {
+    /// Create a new source cache from source text and file paths.
+    pub fn new(sources: HashMap<FileId, String>, file_paths: HashMap<FileId, PathBuf>) -> Self {
+        let ariadne_sources = sources
+            .into_iter()
+            .map(|(id, text)| (id, Source::from(text)))
+            .collect();
+        Self {
+            sources: ariadne_sources,
+            file_paths,
+        }
+    }
+}
+
+/// Helper struct for displaying file IDs as filenames.
+struct FilePathDisplay {
+    file_id: FileId,
+    path: Option<PathBuf>,
+}
+
+impl fmt::Display for FilePathDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ref path) = self.path {
+            // Use just the filename for cleaner output
+            if let Some(name) = path.file_name() {
+                return write!(f, "{}", name.to_string_lossy());
+            }
+            // Fall back to full path if no filename
+            return write!(f, "{}", path.display());
+        }
+        // Fall back to file ID if no path available
+        write!(f, "{}", self.file_id)
+    }
+}
+
+#[allow(refining_impl_trait)]
+impl ariadne::Cache<FileId> for SourceCache {
+    type Storage = String;
+
+    fn fetch(&mut self, id: &FileId) -> Result<&Source<Self::Storage>, Box<dyn fmt::Debug + '_>> {
+        self.sources
+            .get(id)
+            .ok_or_else(|| Box::new(format!("Unknown file ID: {id}")) as Box<dyn fmt::Debug>)
+    }
+
+    fn display<'a>(&self, id: &'a FileId) -> Option<Box<dyn fmt::Display + 'a>> {
+        let path = self.file_paths.get(id).cloned();
+        Some(Box::new(FilePathDisplay { file_id: *id, path }))
+    }
+}
 
 /// Output format for diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -88,26 +160,34 @@ impl RenderConfig {
 }
 
 /// Render a single diagnostic to a string.
+///
+/// The `file_paths` map is used to display filenames in the output instead of
+/// raw file IDs. Pass an empty map to fall back to file ID display.
 pub fn render_diagnostic(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
     match config.format {
-        DiagnosticFormat::Ariadne => render_ariadne(diagnostic, sources, config.color),
-        DiagnosticFormat::Concise => render_concise(diagnostic, sources),
+        DiagnosticFormat::Ariadne => render_ariadne(diagnostic, sources, file_paths, config.color),
+        DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
     }
 }
 
 /// Render multiple diagnostics to a string.
+///
+/// The `file_paths` map is used to display filenames in the output instead of
+/// raw file IDs. Pass an empty map to fall back to file ID display.
 pub fn render_diagnostics(
     diagnostics: &[Diagnostic],
     sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
     diagnostics
         .iter()
-        .map(|d| render_diagnostic(d, sources, config))
+        .map(|d| render_diagnostic(d, sources, file_paths, config))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -116,6 +196,7 @@ pub fn render_diagnostics(
 fn render_ariadne(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
     color: bool,
 ) -> String {
     let report_kind = match diagnostic.severity {
@@ -157,12 +238,16 @@ fn render_ariadne(
         .with_config(ariadne::Config::default().with_color(color))
         .finish();
 
-    // Render to string
-    render_report_to_string(&report, sources)
+    // Render to string using SourceCache for proper filename display
+    render_report_to_string(&report, sources, file_paths)
 }
 
 /// Render a diagnostic in concise one-line format.
-fn render_concise(diagnostic: &Diagnostic, sources: &HashMap<FileId, String>) -> String {
+fn render_concise(
+    diagnostic: &Diagnostic,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+) -> String {
     let span = diagnostic.primary_span();
 
     let location = if let Some(span) = span {
@@ -178,7 +263,15 @@ fn render_concise(diagnostic: &Diagnostic, sources: &HashMap<FileId, String>) ->
                 .unwrap_or(0);
             let col: usize = span.range.start().into();
             let col = col - line_start + 1;
-            format!("{line}:{col}:")
+
+            // Use filename if available
+            let filename = file_paths
+                .get(&span.file_id)
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| format!("{}", span.file_id));
+
+            format!("{filename}:{line}:{col}:")
         } else {
             String::new()
         }
@@ -194,13 +287,16 @@ fn render_concise(diagnostic: &Diagnostic, sources: &HashMap<FileId, String>) ->
     )
 }
 
-/// Render an ariadne Report to a String.
-fn render_report_to_string(report: &Report<'_, Span>, sources: &HashMap<FileId, String>) -> String {
+/// Render an ariadne Report to a String using SourceCache for proper filename display.
+fn render_report_to_string(
+    report: &Report<'_, Span>,
+    sources: &HashMap<FileId, String>,
+    file_paths: &HashMap<FileId, PathBuf>,
+) -> String {
     let mut output = Vec::new();
 
-    // ariadne::sources expects types that implement AsRef<str>
-    let ariadne_sources: HashMap<FileId, String> = sources.clone();
-    let mut cache = ariadne::sources(ariadne_sources);
+    // Use SourceCache for proper filename display
+    let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
 
     report.write(&mut cache, &mut output).unwrap_or_else(|_| {
         output.clear();
@@ -223,6 +319,12 @@ mod tests {
         sources
     }
 
+    fn make_file_paths() -> HashMap<FileId, PathBuf> {
+        let mut paths = HashMap::new();
+        paths.insert(FileId::new(0), PathBuf::from("test.baml"));
+        paths
+    }
+
     fn test_span() -> Span {
         Span {
             file_id: FileId::new(0),
@@ -236,11 +338,12 @@ mod tests {
             .with_primary_span(test_span());
 
         let sources = make_source();
-        let output = render_diagnostic(&diag, &sources, &RenderConfig::concise());
+        let file_paths = make_file_paths();
+        let output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::concise());
 
         assert!(output.contains("[E0011]"));
         assert!(output.contains("Duplicate class 'Foo'"));
-        assert!(output.contains("1:7:")); // line 1, column 7
+        assert!(output.contains("test.baml:1:7:")); // filename, line 1, column 7
     }
 
     #[test]
@@ -249,9 +352,31 @@ mod tests {
             .with_primary_span(test_span());
 
         let sources = make_source();
-        let output = render_diagnostic(&diag, &sources, &RenderConfig::test());
+        let file_paths = make_file_paths();
+        let output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::test());
 
         assert!(output.contains("Expected int, found string"));
         assert!(output.contains("Error code: E0001"));
+        assert!(output.contains("test.baml")); // Should show filename
+    }
+
+    #[test]
+    fn test_render_ariadne_shows_filename() {
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Test error")
+            .with_primary_span(test_span());
+
+        let sources = make_source();
+        let file_paths = make_file_paths();
+        let output = render_diagnostic(&diag, &sources, &file_paths, &RenderConfig::test());
+
+        // Should show "test.baml:1:7" instead of "0:1:7"
+        assert!(
+            output.contains("test.baml"),
+            "Expected filename in output, got: {output}"
+        );
+        assert!(
+            !output.contains("─[ 0:"),
+            "Should not show file ID, got: {output}"
+        );
     }
 }

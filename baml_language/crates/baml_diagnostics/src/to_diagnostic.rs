@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use crate::{
     compiler_error::{HirDiagnostic, NameError, ParseError, TypeError},
-    diagnostic::{Diagnostic, DiagnosticId, ToDiagnostic},
+    diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
 };
 
 // ============================================================================
@@ -16,7 +16,7 @@ use crate::{
 
 impl ToDiagnostic for ParseError {
     fn to_diagnostic(&self) -> Diagnostic {
-        match self {
+        let diag = match self {
             ParseError::UnexpectedToken {
                 expected,
                 found,
@@ -37,7 +37,8 @@ impl ToDiagnostic for ParseError {
                 Diagnostic::error(DiagnosticId::InvalidSyntax, message.clone())
                     .with_primary_span(*span)
             }
-        }
+        };
+        diag.with_phase(DiagnosticPhase::Parse)
     }
 }
 
@@ -47,7 +48,7 @@ impl ToDiagnostic for ParseError {
 
 impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
     fn to_diagnostic(&self) -> Diagnostic {
-        match self {
+        let diag = match self {
             TypeError::TypeMismatch {
                 expected,
                 found,
@@ -150,7 +151,8 @@ impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
                 ),
             )
             .with_primary_span(*span),
-        }
+        };
+        diag.with_phase(DiagnosticPhase::Type)
     }
 }
 
@@ -160,7 +162,7 @@ impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
 
 impl ToDiagnostic for NameError {
     fn to_diagnostic(&self) -> Diagnostic {
-        match self {
+        let diag = match self {
             NameError::DuplicateName {
                 name,
                 kind,
@@ -194,7 +196,8 @@ impl ToDiagnostic for NameError {
                 *first,
                 format!("test `{test_name}` for `{function_name}` first defined in {first_path}"),
             ),
-        }
+        };
+        diag.with_phase(DiagnosticPhase::Validation)
     }
 }
 
@@ -204,7 +207,7 @@ impl ToDiagnostic for NameError {
 
 impl ToDiagnostic for HirDiagnostic {
     fn to_diagnostic(&self) -> Diagnostic {
-        match self {
+        let diag = match self {
             HirDiagnostic::DuplicateField {
                 class_name,
                 field_name,
@@ -462,7 +465,8 @@ impl ToDiagnostic for HirDiagnostic {
                 ),
             )
             .with_primary_span(*span),
-        }
+        };
+        diag.with_phase(DiagnosticPhase::Hir)
     }
 }
 
@@ -472,6 +476,7 @@ mod tests {
     use text_size::TextRange;
 
     use super::*;
+    use crate::diagnostic::DiagnosticPhase;
 
     fn test_span() -> Span {
         Span {
@@ -491,6 +496,7 @@ mod tests {
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0010");
         assert!(diag.message.contains("Expected"));
+        assert_eq!(diag.phase, DiagnosticPhase::Parse);
     }
 
     #[test]
@@ -505,6 +511,7 @@ mod tests {
         assert_eq!(diag.code(), "E0001");
         assert!(diag.message.contains("int"));
         assert!(diag.message.contains("string"));
+        assert_eq!(diag.phase, DiagnosticPhase::Type);
     }
 
     #[test]
@@ -528,6 +535,7 @@ mod tests {
         assert_eq!(diag.code(), "E0011");
         assert!(diag.message.contains("Duplicate"));
         assert_eq!(diag.annotations.len(), 2); // primary + secondary
+        assert_eq!(diag.phase, DiagnosticPhase::Validation);
     }
 
     #[test]
@@ -548,5 +556,6 @@ mod tests {
         let diag = error.to_diagnostic();
         assert_eq!(diag.code(), "E0012");
         assert!(diag.message.contains("Duplicate field"));
+        assert_eq!(diag.phase, DiagnosticPhase::Hir);
     }
 }

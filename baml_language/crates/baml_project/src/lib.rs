@@ -26,7 +26,7 @@ mod lsp_db;
 pub mod position;
 pub mod symbols;
 
-pub use check::CheckResult;
+pub use check::{CheckResult, collect_diagnostics};
 pub use lsp_db::LspDatabase;
 pub use symbols::{
     Symbol, SymbolKind, find_symbol, find_symbol_locations, list_classes, list_clients, list_enums,

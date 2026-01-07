@@ -6,6 +6,39 @@
 
 use baml_base::{FileId, Span};
 
+// ============================================================================
+// DiagnosticPhase - Tracks which compiler phase produced a diagnostic
+// ============================================================================
+
+/// The compiler phase that produced a diagnostic.
+///
+/// This enables grouping diagnostics by phase for display purposes
+/// (e.g., in baml_onionskin TUI or baml_tests snapshots).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum DiagnosticPhase {
+    /// Parsing phase errors (syntax errors from the parser)
+    #[default]
+    Parse,
+    /// HIR lowering phase (per-file validation like duplicate fields)
+    Hir,
+    /// Cross-file validation (duplicate names across files)
+    Validation,
+    /// Type inference phase (type mismatches, unknown variables)
+    Type,
+}
+
+impl DiagnosticPhase {
+    /// Get a short display name for the phase.
+    pub fn name(&self) -> &'static str {
+        match self {
+            DiagnosticPhase::Parse => "parse",
+            DiagnosticPhase::Hir => "hir",
+            DiagnosticPhase::Validation => "validation",
+            DiagnosticPhase::Type => "type",
+        }
+    }
+}
+
 /// Unique identifier for a diagnostic category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiagnosticId {
@@ -203,6 +236,8 @@ pub struct Diagnostic {
     pub annotations: Vec<Annotation>,
     /// Related information (e.g., "first defined here").
     pub related_info: Vec<RelatedInfo>,
+    /// The compiler phase that produced this diagnostic.
+    pub phase: DiagnosticPhase,
 }
 
 impl Diagnostic {
@@ -214,6 +249,7 @@ impl Diagnostic {
             message: message.into(),
             annotations: Vec::new(),
             related_info: Vec::new(),
+            phase: DiagnosticPhase::default(),
         }
     }
 
@@ -225,6 +261,13 @@ impl Diagnostic {
     /// Create a warning diagnostic.
     pub fn warning(id: DiagnosticId, message: impl Into<String>) -> Self {
         Self::new(id, Severity::Warning, message)
+    }
+
+    /// Set the compiler phase for this diagnostic.
+    #[must_use]
+    pub fn with_phase(mut self, phase: DiagnosticPhase) -> Self {
+        self.phase = phase;
+        self
     }
 
     /// Add a primary annotation at a span with a message.

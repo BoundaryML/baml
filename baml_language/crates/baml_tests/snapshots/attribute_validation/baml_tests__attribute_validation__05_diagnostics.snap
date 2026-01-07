@@ -1,9 +1,9 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [hir] Error: Attribute '@@description' can only be defined once on class 'HasDuplicateDescription'
+  [hir] Error: Attribute `@@description` can only be defined once on class `HasDuplicateDescription`
    ╭─[ test.baml:7:5 ]
    │
  7 │   @@description("Second description")
@@ -19,7 +19,7 @@ expression: output
    │ Note: Error code: E0014
 ───╯
 
-  [hir] Error: Duplicate field 'name' in class 'HasDuplicateField'
+  [hir] Error: Duplicate field `name` in class `HasDuplicateField`
     ╭─[ test.baml:13:3 ]
     │
  13 │   name int
@@ -35,7 +35,7 @@ expression: output
     │ Note: Error code: E0012
 ────╯
 
-  [hir] Error: Attribute '@alias' can only be defined once on field 'name' in class 'HasDuplicateFieldAttr'
+  [hir] Error: Attribute `@alias` can only be defined once on field `name` in class `HasDuplicateFieldAttr`
     ╭─[ test.baml:17:49 ]
     │
  17 │   name string @alias("n") @description("Name") @alias("nm")
@@ -47,7 +47,7 @@ expression: output
     │ Note: Error code: E0014
 ────╯
 
-  [hir] Error: Duplicate variant 'RED' in enum 'HasDuplicateVariant'
+  [hir] Error: Duplicate variant `RED` in enum `HasDuplicateVariant`
     ╭─[ test.baml:23:3 ]
     │
  23 │   RED
@@ -63,7 +63,7 @@ expression: output
     │ Note: Error code: E0013
 ────╯
 
-  [hir] Error: Attribute '@@description' can only be defined once on enum 'HasDuplicateEnumAttr'
+  [hir] Error: Attribute `@@description` can only be defined once on enum `HasDuplicateEnumAttr`
     ╭─[ test.baml:30:5 ]
     │
  30 │   @@description("Second")
@@ -79,7 +79,7 @@ expression: output
     │ Note: Error code: E0014
 ────╯
 
-  [hir] Error: Attribute '@alias' can only be defined once on field 'ACTIVE' in enum 'HasDuplicateVariantAttr'
+  [hir] Error: Attribute `@alias` can only be defined once on field `ACTIVE` in enum `HasDuplicateVariantAttr`
     ╭─[ test.baml:34:23 ]
     │
  34 │   ACTIVE @alias("a") @alias("active")

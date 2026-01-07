@@ -13,7 +13,7 @@ template_string GoodCall2 #"
 //----
 //- diagnostics
 // Error: Expected '(', found '#'
-//    ╭─[ 0:5:27 ]
+//    ╭─[ template_string_good_calls.baml:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
@@ -22,7 +22,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '#'
-//    ╭─[ 0:5:27 ]
+//    ╭─[ template_string_good_calls.baml:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
@@ -31,7 +31,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '#'
-//    ╭─[ 0:5:27 ]
+//    ╭─[ template_string_good_calls.baml:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
@@ -40,7 +40,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '#'
-//    ╭─[ 0:5:27 ]
+//    ╭─[ template_string_good_calls.baml:5:27 ]
 //    │
 //  5 │ template_string GoodCall1 #"
 //    │                           ┬  
@@ -49,7 +49,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected '(', found '#'
-//    ╭─[ 0:9:27 ]
+//    ╭─[ template_string_good_calls.baml:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
@@ -58,7 +58,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '#'
-//    ╭─[ 0:9:27 ]
+//    ╭─[ template_string_good_calls.baml:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
@@ -67,7 +67,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '#'
-//    ╭─[ 0:9:27 ]
+//    ╭─[ template_string_good_calls.baml:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  
@@ -76,7 +76,7 @@ template_string GoodCall2 #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '#'
-//    ╭─[ 0:9:27 ]
+//    ╭─[ template_string_good_calls.baml:9:27 ]
 //    │
 //  9 │ template_string GoodCall2 #"
 //    │                           ┬  

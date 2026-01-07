@@ -1,20 +1,20 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [name] Error: Duplicate class 'Point'
+  [validation] Error: Duplicate class `Point`
    ╭─[ class_constructor.baml:1:1 ]
    │
  1 │ class Point {
    │ │ 
-   │ ╰─ class 'Point' defined in class_constructor.baml
+   │ ╰─ class `Point` redefined here
    │
    ├─[ array_constructor.baml:1:1 ]
    │
  1 │ class Point {
    │ │ 
-   │ ╰─ 'Point' previously defined in array_constructor.baml
+   │ ╰─ `Point` first defined in array_constructor.baml
    │ 
    │ Note: Error code: E0011
 ───╯
