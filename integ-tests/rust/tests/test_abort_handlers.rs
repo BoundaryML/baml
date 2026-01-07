@@ -112,10 +112,8 @@ fn test_retry_chain_cancellation() {
     // Create token with 300ms timeout
     let token = CancellationToken::new_with_timeout(Duration::from_millis(300));
 
-    let result = B
-        .TestRetryExponential
-        .with_cancellation_token(Some(token));
-        
+    let result = B.TestRetryExponential.with_cancellation_token(Some(token));
+
     let start = Instant::now();
     let result = result.call();
     let duration = start.elapsed();

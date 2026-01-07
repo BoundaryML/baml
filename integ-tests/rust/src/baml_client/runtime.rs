@@ -156,6 +156,7 @@ impl FunctionOptions {
         if let Some(cancellation_token) = &self.cancellation_token {
             args = args.with_cancellation_token(Some(cancellation_token.clone()));
         }
+
         args
     }
 }

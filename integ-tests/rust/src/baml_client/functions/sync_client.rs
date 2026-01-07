@@ -1542,7 +1542,6 @@ impl BamlSyncClient {
         }
     }
 
-
     /// Apply options to all functions. Returns a new client with the options set.
     pub fn with_options(&self, options: FunctionOptions) -> Self {
         Self {
