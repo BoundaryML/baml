@@ -146,11 +146,17 @@ fn offset_to_position(offset: u32, line_starts: &[u32]) -> lsp_types::Position {
 }
 
 /// Build line starts for a source file.
+///
+/// Returns byte offsets of each line start. Uses `char_indices()` to get
+/// byte positions rather than character indices, which is essential for
+/// files containing multi-byte UTF-8 characters.
 pub fn compute_line_starts(source: &str) -> Vec<u32> {
     let mut line_starts = vec![0];
-    for (i, c) in source.chars().enumerate() {
+    for (byte_offset, c) in source.char_indices() {
         if c == '\n' {
-            line_starts.push((i + 1) as u32);
+            // The next line starts at byte_offset + 1
+            // (newline '\n' is always 1 byte in UTF-8)
+            line_starts.push((byte_offset + 1) as u32);
         }
     }
     line_starts
@@ -169,6 +175,43 @@ mod tests {
         let source = "line1\nline2\nline3";
         let starts = compute_line_starts(source);
         assert_eq!(starts, vec![0, 6, 12]);
+    }
+
+    #[test]
+    fn test_compute_line_starts_multibyte_utf8() {
+        // Test with multi-byte UTF-8 characters
+        // "héllo" has 'é' which is 2 bytes (0xC3 0xA9), so:
+        // h=1byte, é=2bytes, l=1byte, l=1byte, o=1byte = 6 bytes total
+        // Then \n at byte 6, so next line starts at byte 7
+        let source = "héllo\nworld";
+        let starts = compute_line_starts(source);
+        // "héllo" is 6 bytes (h=1, é=2, l=1, l=1, o=1), newline at byte 6
+        // "world" starts at byte 7
+        assert_eq!(starts, vec![0, 7]);
+
+        // Verify positions work correctly
+        // 'w' in "world" is at byte offset 7
+        let pos = offset_to_position(7, &starts);
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.character, 0);
+
+        // 'o' in "héllo" is at byte offset 5 (h=1 + é=2 + l=1 + l=1 = 5)
+        let pos = offset_to_position(5, &starts);
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 5);
+    }
+
+    #[test]
+    fn test_compute_line_starts_emoji() {
+        // Emoji like 🦀 is 4 bytes
+        let source = "🦀\nrust";
+        let starts = compute_line_starts(source);
+        // 🦀 = 4 bytes, \n at byte 4, "rust" starts at byte 5
+        assert_eq!(starts, vec![0, 5]);
+
+        let pos = offset_to_position(5, &starts);
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.character, 0);
     }
 
     #[test]
