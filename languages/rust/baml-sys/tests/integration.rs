@@ -18,10 +18,11 @@ fn test_version_when_library_available() {
     match version() {
         Ok(v) => {
             assert!(!v.is_empty(), "Version should not be empty");
-            // Version should be a semver-like string
-            assert!(
-                v.chars().next().unwrap().is_ascii_digit(),
-                "Version should start with a digit: {v}"
+            // Version should match the crate's version exactly
+            assert_eq!(
+                v,
+                baml_sys::VERSION,
+                "Library version should match crate version"
             );
         }
         Err(BamlSysError::LibraryNotFound { .. }) => {
