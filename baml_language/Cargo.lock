@@ -327,7 +327,6 @@ dependencies = [
  "baml_workspace",
  "insta",
  "la-arena",
- "log",
  "salsa",
 ]
 

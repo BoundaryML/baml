@@ -527,15 +527,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     LocalClassification::Virtual => {
                         // PULL: emit the definition's rvalue inline
                         // Clone the rvalue to avoid borrow checker issues
-                        if let Some(rvalue) = self.analysis.def_use[local]
+                        let rvalue = self.analysis.def_use[local]
                             .def
                             .as_ref()
                             .map(|def| def.rvalue.clone())
-                        {
-                            self.emit_rvalue_pull(&rvalue, mir);
-                        } else {
-                            log::error!("virtual local {local} without definition");
-                        }
+                            .unwrap_or_else(|| panic!("virtual local {local} without definition"));
+                        self.emit_rvalue_pull(&rvalue, mir);
                     }
                     LocalClassification::PhiLike
                     | LocalClassification::ReturnPhi
@@ -628,10 +625,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             .class_object_indices
                             .get(class_name)
                             .copied()
-                            .unwrap_or_else(|| {
-                                log::error!("undefined class: {class_name}");
-                                0
-                            });
+                            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
 
                         // Emit AllocInstance
                         self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
@@ -651,10 +645,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             .enum_object_indices
                             .get(enum_name)
                             .copied()
-                            .unwrap_or_else(|| {
-                                log::error!("undefined enum: {enum_name}");
-                                Default::default()
-                            });
+                            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
 
                         // Look up the variant index
                         let variant_idx = self
@@ -662,10 +653,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             .get(enum_name)
                             .and_then(|variants| variants.get(variant))
                             .copied()
-                            .unwrap_or_else(|| {
-                                log::error!("undefined variant: {enum_name}.{variant}");
-                                Default::default()
-                            });
+                            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
 
                         // Load variant index onto stack, then allocate variant
                         #[allow(clippy::cast_possible_wrap)]
@@ -746,11 +734,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::Function(name) => {
                 let name_str = name.to_string();
-                if let Some(&global_idx) = self.globals.get(&name_str) {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
-                } else {
-                    log::error!("undefined function: {name_str}");
-                }
+                let global_idx = self
+                    .globals
+                    .get(&name_str)
+                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
             }
             Constant::Ty(_) => {
                 let idx = self.add_constant(Value::Null);
@@ -759,26 +747,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::EnumVariant { enum_name, variant } => {
                 // Look up the enum object index
                 let enum_name_str = enum_name.to_string();
-                let enum_obj_idx = self
+                let enum_obj_idx = *self
                     .enum_object_indices
                     .get(&enum_name_str)
-                    .copied()
-                    .unwrap_or_else(|| {
-                        log::error!("undefined enum: {enum_name_str}");
-                        Default::default()
-                    });
+                    .unwrap_or_else(|| panic!("undefined enum: {enum_name_str}"));
 
                 // Look up the variant index
                 let variant_str = variant.to_string();
-                let variant_idx = self
+                let variant_idx = *self
                     .enum_variants
                     .get(&enum_name_str)
                     .and_then(|variants| variants.get(&variant_str))
-                    .copied()
-                    .unwrap_or_else(|| {
-                        log::error!("undefined variant: {enum_name_str}.{variant_str}");
-                        Default::default()
-                    });
+                    .unwrap_or_else(|| panic!("undefined variant: {enum_name_str}.{variant_str}"));
 
                 // Load variant index onto stack, then allocate variant
                 #[allow(clippy::cast_possible_wrap)]
@@ -966,7 +946,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.bytecode.instructions[instruction_idx] =
                         Instruction::PopJumpIfFalse(offset);
                 }
-                _ => log::error!("expected jump instruction at index {instruction_idx}"),
+                _ => panic!("expected jump instruction at index {instruction_idx}"),
             }
         }
     }
@@ -982,7 +962,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Instruction::PopJumpIfFalse(_) => {
                 self.bytecode.instructions[instruction_idx] = Instruction::PopJumpIfFalse(offset);
             }
-            _ => log::error!("expected jump instruction at index {instruction_idx}"),
+            _ => panic!("expected jump instruction at index {instruction_idx}"),
         }
     }
 
