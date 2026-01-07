@@ -1,0 +1,160 @@
+name: Test Rust SDK Cross-Platform
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [canary, main]
+    paths:
+      - "languages/rust/**"
+      - "engine/language_client_cffi/**"
+      - "engine/baml-lib/**"
+      - ".github/workflows/test-rust-sdk.yml"
+  push:
+    branches: [canary]
+    paths:
+      - "languages/rust/**"
+      - "engine/language_client_cffi/**"
+  workflow_dispatch:
+
+jobs:
+  test-windows:
+    name: Test Windows Rust SDK
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies (engine)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: engine
+
+      - name: Cache Rust dependencies (languages/rust)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: languages/rust
+          prefix-key: rust-sdk
+
+      - name: Setup Protoc (Windows)
+        shell: bash
+        run: |
+          PROTOC_VERSION="27.1"
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
+          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm protoc-${PROTOC_VERSION}-win64.zip
+
+      - name: Build CFFI Library
+        run: |
+          cargo build --release -p baml_cffi
+        working-directory: engine
+        shell: bash
+
+      - name: List built artifacts
+        run: |
+          echo "Listing release directory:"
+          dir engine\target\release\*.dll
+        shell: cmd
+
+      - name: Set BAML Library Path
+        run: |
+          echo "BAML_LIBRARY_PATH=${{ github.workspace }}\engine\target\release\baml_cffi.dll" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Run Rust SDK Tests
+        run: |
+          cargo test --workspace -v
+        working-directory: languages/rust
+        shell: bash
+        env:
+          BAML_LOG: DEBUG
+
+      - name: Build Rust SDK
+        run: |
+          cargo build --workspace
+        working-directory: languages/rust
+        shell: bash
+
+  test-unix:
+    name: Test Unix Rust SDK
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies (engine)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: engine
+
+      - name: Cache Rust dependencies (languages/rust)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: languages/rust
+          prefix-key: rust-sdk
+
+      - name: Setup Protoc (Unix)
+        run: |
+          PROTOC_VERSION="27.1"
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            PROTOC_ZIP="protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          else
+            PROTOC_ZIP="protoc-${PROTOC_VERSION}-osx-universal_binary.zip"
+          fi
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}"
+          unzip -q ${PROTOC_ZIP} -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm ${PROTOC_ZIP}
+
+      - name: Build CFFI Library
+        run: |
+          cargo build --release -p baml_cffi
+        working-directory: engine
+
+      - name: List built artifacts
+        run: |
+          echo "Listing release directory:"
+          ls -la engine/target/release/libbaml_cffi.* || true
+          ls -la engine/target/release/baml_cffi.* || true
+
+      - name: Set BAML Library Path (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/release/libbaml_cffi.so" >> $GITHUB_ENV
+
+      - name: Set BAML Library Path (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "BAML_LIBRARY_PATH=${{ github.workspace }}/engine/target/release/libbaml_cffi.dylib" >> $GITHUB_ENV
+
+      - name: Run Rust SDK Tests
+        run: |
+          cargo test --workspace -v
+        working-directory: languages/rust
+        env:
+          BAML_LOG: DEBUG
+
+      - name: Build Rust SDK
+        run: |
+          cargo build --workspace
+        working-directory: languages/rust
