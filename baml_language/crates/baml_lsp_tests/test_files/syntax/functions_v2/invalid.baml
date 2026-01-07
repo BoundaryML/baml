@@ -58,12 +58,3 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: Expected `error`, found `void`
-//    ╭─[ functions_v2_invalid.baml:1:1 ]
-//    │
-//  1 │ function Foo() -> {
-//    │ │ 
-//    │ ╰─ Expected `error`, found `void`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯

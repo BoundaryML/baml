@@ -799,6 +799,7 @@ pub fn infer_function_body<'db>(
         && trailing_expr_type.is_void()
         && !expected_return.is_void()
         && !expected_return.is_unknown()
+        && !expected_return.is_error()
     {
         let error = TypeError::TypeMismatch {
             expected: expected_return.clone(),
@@ -1617,7 +1618,10 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             } else {
                 // Fall back to synthesis
                 let ty = infer_expr(ctx, expr_id, body);
-                if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() {
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
@@ -1679,7 +1683,10 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             } else {
                 // Fall back to synthesis
                 let ty = infer_expr(ctx, expr_id, body);
-                if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() {
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
@@ -1694,7 +1701,11 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
         // For all other cases, synthesize then check
         _ => {
             let ty = infer_expr(ctx, expr_id, body);
-            if !ctx.is_subtype_of(&ty, expected) && !expected.is_unknown() && !ty.is_unknown() {
+            if !ctx.is_subtype_of(&ty, expected)
+                && !expected.is_unknown()
+                && !expected.is_error()
+                && !ty.is_unknown()
+            {
                 // Generalize found type for clearer error messages
                 // e.g., "Expected int[], found int" instead of "Expected int[], found 42"
                 // But preserve literals when expected is also a literal (e.g., "Expected 4, found 3")
