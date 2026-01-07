@@ -44,6 +44,12 @@ jobs:
           workspaces: languages/rust
           prefix-key: rust-sdk
 
+      - name: Setup Go (for protoc-gen-go)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: false
+
       - name: Setup Protoc (Windows)
         shell: bash
         run: |

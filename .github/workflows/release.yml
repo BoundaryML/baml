@@ -110,8 +110,8 @@ jobs:
 
   publish-to-pypi:
     environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,8 +141,8 @@ jobs:
 
   publish-to-npm:
     environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -212,7 +212,7 @@ jobs:
   publish-to-crates-io:
     environment: release
     needs: [all-builds, determine-version]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -377,7 +377,8 @@ jobs:
           generate_release_notes: false
 
   publish-to-zed-extensions:
-    needs: [all-builds]
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     uses: ./.github/workflows/publish-zed-release.reusable.yaml
     secrets:
       SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}
