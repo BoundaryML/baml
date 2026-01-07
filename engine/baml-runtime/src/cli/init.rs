@@ -623,7 +623,7 @@ fn generate_main_baml_content(
             r#"
     // 'baml-cli generate' will run this after generating rust code
     // This command will be run from within $output_dir/baml_client
-    on_generate "cargo fmt ."
+    on_generate "cargo fmt"
     "#,
         )
     } else {
@@ -898,7 +898,7 @@ generator target {{
 
     // 'baml-cli generate' will run this after generating rust code
     // This command will be run from within $output_dir/baml_client
-    on_generate "cargo fmt ."
+    on_generate "cargo fmt"
 }}
 "#,
                 env!("CARGO_PKG_VERSION")

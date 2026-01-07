@@ -41,10 +41,7 @@ pub extern "C" fn call_function_parse_from_c(
 ) -> *const libc::c_void {
     match call_function_parse_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
-        Err(e) => {
-            println!("Error: {e}");
-            handle_ffi_error(e)
-        }
+        Err(e) => handle_ffi_error(e),
     }
 }
 
