@@ -110,15 +110,6 @@ function BreakContinue() -> int {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Cannot apply operator 'Le' to types `unknown` and `int`
-//     ╭─[ loops_c_for.baml:21:9 ]
-//     │
-//  21 │     for (; i <= 10; i += 1) {
-//     │            ───┬───  
-//     │               ╰───── Cannot apply operator 'Le' to types `unknown` and `int`
-//     │ 
-//     │ Note: Error code: E0004
-// ────╯
 // Error: Unknown variable `i`
 //     ╭─[ loops_c_for.baml:22:8 ]
 //     │

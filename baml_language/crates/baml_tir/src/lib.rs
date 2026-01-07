@@ -2008,6 +2008,12 @@ fn infer_binary_op(
 
     use crate::types::LiteralValue;
 
+    // Don't emit errors for operations involving unknown or error types - the root cause
+    // (e.g., unknown variable) has already been reported
+    if lhs.is_unknown() || lhs.is_error() || rhs.is_unknown() || rhs.is_error() {
+        return Ty::Unknown;
+    }
+
     // Helper to check if a type is int-like (Int or Int literal)
     let is_int_like = |ty: &Ty| matches!(ty, Ty::Int | Ty::Literal(LiteralValue::Int(_)));
     // Helper to check if a type is float-like (Float or Float literal)
@@ -2121,6 +2127,12 @@ fn infer_unary_op(
     use baml_hir::UnaryOp::{Neg, Not};
 
     use crate::types::LiteralValue;
+
+    // Don't emit errors for operations involving unknown or error types - the root cause
+    // has already been reported
+    if operand.is_unknown() || operand.is_error() {
+        return Ty::Unknown;
+    }
 
     match op {
         Not => {

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
+source: target/debug/build/baml_tests-9ec98c83ec13521d/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -18,26 +18,10 @@ expression: output
   Function vec2d:
     Return: Class("Vec2D")
   Function boolValues:
-    Return: Map { key: Literal(String("hello")), value: Literal(Bool(true)) }
-    Errors:
-      - Expected "hello". Found "test"
-      - Expected true. Found false
-      - Expected map<string, bool>. Found map<"hello", true>
+    Return: Map { key: String, value: Bool }
   Function intValues:
-    Return: Map { key: Literal(String("hello")), value: Literal(Int(1)) }
-    Errors:
-      - Expected "hello". Found "test"
-      - Expected 1. Found 2
-      - Expected map<string, int>. Found map<"hello", 1>
+    Return: Map { key: String, value: Int }
   Function stringValues:
-    Return: Map { key: Literal(String("hello")), value: Literal(String("world")) }
-    Errors:
-      - Expected "hello". Found "test"
-      - Expected "world". Found "test"
-      - Expected map<string, string>. Found map<"hello", "world">
+    Return: Map { key: String, value: String }
   Function floatValues:
-    Return: Map { key: Literal(String("hello")), value: Literal(Float("1.0")) }
-    Errors:
-      - Expected "hello". Found "test"
-      - Expected 1.0. Found 2.0
-      - Expected map<string, float>. Found map<"hello", 1.0>
+    Return: Map { key: String, value: Float }

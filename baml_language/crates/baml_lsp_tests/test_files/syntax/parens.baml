@@ -803,15 +803,6 @@ function foo() -> int {
 //    │ 
 //    │ Note: Error code: E0007
 // ───╯
-// Error: Cannot apply operator 'Lt' to types `int` and `unknown`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Cannot apply operator 'Lt' to types `int` and `unknown`
-//    │ 
-//    │ Note: Error code: E0004
-// ───╯
 // Error: Type `as` is not indexable
 //    ╭─[ parens.baml:1:1 ]
 //    │
@@ -847,15 +838,6 @@ function foo() -> int {
 //    │ ╰─ Unknown variable `as`
 //    │ 
 //    │ Note: Error code: E0003
-// ───╯
-// Error: Cannot apply operator 'Lt' to types `int` and `unknown`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Cannot apply operator 'Lt' to types `int` and `unknown`
-//    │ 
-//    │ Note: Error code: E0004
 // ───╯
 // Error: Expected `int`, found `void`
 //    ╭─[ parens.baml:1:1 ]

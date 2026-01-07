@@ -41,12 +41,3 @@ function CallsDedup() -> string {
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Cannot apply operator 'Add' to types `unknown` and `unknown`
-//     ╭─[ headers_duplicate_function_calls.baml:12:5 ]
-//     │
-//  12 │     a + b
-//     │     ──┬──  
-//     │       ╰──── Cannot apply operator 'Add' to types `unknown` and `unknown`
-//     │ 
-//     │ Note: Error code: E0004
-// ────╯

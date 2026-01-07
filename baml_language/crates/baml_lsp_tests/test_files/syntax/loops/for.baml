@@ -78,15 +78,6 @@ function SumUnknownType(xs: int, b: string) -> int {
 //    │ 
 //    │ Note: Error code: E0007
 // ───╯
-// Error: Cannot apply operator 'Lt' to types `int` and `unknown`
-//    ╭─[ loops_for.baml:1:1 ]
-//    │
-//  1 │ function Sum(xs: int[]) -> int {
-//    │ │ 
-//    │ ╰─ Cannot apply operator 'Lt' to types `int` and `unknown`
-//    │ 
-//    │ Note: Error code: E0004
-// ───╯
 // Error: Type `int` is not indexable
 //    ╭─[ loops_for.baml:1:1 ]
 //    │
