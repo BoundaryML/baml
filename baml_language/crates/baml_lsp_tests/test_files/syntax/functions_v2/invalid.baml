@@ -32,7 +32,7 @@ function FooBar(arg) -> bar {
 //----
 //- diagnostics
 // Error: Expected type, found '{'
-//    ╭─[ 0:1:19 ]
+//    ╭─[ functions_v2_invalid.baml:1:19 ]
 //    │
 //  1 │ function Foo() -> {
 //    │                   ┬  
@@ -41,7 +41,7 @@ function FooBar(arg) -> bar {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found ')'
-//    ╭─[ 0:6:20 ]
+//    ╭─[ functions_v2_invalid.baml:6:20 ]
 //    │
 //  6 │ function FooBar(arg) -> bar {
 //    │                    ┬  
@@ -49,12 +49,12 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Unknown type bar
-//    ╭─[ 0:1:1 ]
+// Error: Unknown type `bar`
+//    ╭─[ functions_v2_invalid.baml:1:1 ]
 //    │
 //  1 │ function Foo() -> {
 //    │ │ 
-//    │ ╰─ Unknown type bar
+//    │ ╰─ Unknown type `bar`
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

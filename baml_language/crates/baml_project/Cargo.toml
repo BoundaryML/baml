@@ -1,0 +1,29 @@
+[package]
+name = "baml_project"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Project management and centralized diagnostics for BAML"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_db = { workspace = true }
+baml_diagnostics = { workspace = true }
+baml_hir = { workspace = true }
+baml_mir = { workspace = true }
+baml_tir = { workspace = true }
+baml_workspace = { workspace = true }
+lsp-types = { workspace = true }
+salsa = { workspace = true }
+text-size = { workspace = true }

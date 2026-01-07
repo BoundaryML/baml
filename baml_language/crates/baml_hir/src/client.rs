@@ -50,11 +50,9 @@ pub(crate) fn lower_client(
     let client_name = name.to_string();
 
     // Extract provider from config block using AST accessors
-    let provider_item = client_def.config_block().and_then(|block| {
-        block
-            .items()
-            .find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
-    });
+    let provider_item = client_def
+        .config_block()
+        .and_then(|block| block.items().find(|item| item.matches_key("provider")));
 
     let provider = provider_item
         .as_ref()
@@ -92,7 +90,7 @@ pub(crate) fn lower_client(
         // Find the options block for further validation
         if let Some(options_item) = config_block
             .items()
-            .find(|item| item.key().map(|k| k.text() == "options").unwrap_or(false))
+            .find(|item| item.matches_key("options"))
         {
             if let Some(options_block) = options_item.nested_block() {
                 // Validate client_response_type
@@ -113,11 +111,10 @@ fn validate_client_response_type(
     client_name: &str,
     options_block: &ConfigBlock,
 ) {
-    if let Some(response_type_item) = options_block.items().find(|item| {
-        item.key()
-            .map(|k| k.text() == "client_response_type")
-            .unwrap_or(false)
-    }) {
+    if let Some(response_type_item) = options_block
+        .items()
+        .find(|item| item.matches_key("client_response_type"))
+    {
         if let Some(value) = response_type_item.value_str() {
             if !VALID_RESPONSE_TYPES.contains(&value.as_str()) {
                 if let Some(value_range) = response_type_item.value_text_range() {
@@ -140,10 +137,7 @@ fn validate_http_block(
     options_block: &ConfigBlock,
     is_composite: bool,
 ) {
-    if let Some(http_item) = options_block
-        .items()
-        .find(|item| item.key().map(|k| k.text() == "http").unwrap_or(false))
-    {
+    if let Some(http_item) = options_block.items().find(|item| item.matches_key("http")) {
         // Check if http has a nested block or a scalar value
         if let Some(http_block) = http_item.nested_block() {
             // Validate http config fields

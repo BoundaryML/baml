@@ -29,7 +29,7 @@ class ComplexTypes {
 //----
 //- diagnostics
 // Error: Expected ')', found '.'
-//    ╭─[ 0:4:65 ]
+//    ╭─[ class_secure_types.baml:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                 ┬  
@@ -38,7 +38,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in class body, found '.'
-//    ╭─[ 0:4:65 ]
+//    ╭─[ class_secure_types.baml:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                 ┬  
@@ -47,7 +47,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: field 'foobar' is missing a type annotation
-//    ╭─[ 0:4:66 ]
+//    ╭─[ class_secure_types.baml:4:66 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                  ───┬──  
@@ -56,7 +56,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in class body, found '['
-//    ╭─[ 0:4:72 ]
+//    ╭─[ class_secure_types.baml:4:72 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                        ┬  
@@ -65,7 +65,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in class body, found ']'
-//    ╭─[ 0:4:73 ]
+//    ╭─[ class_secure_types.baml:4:73 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                         ┬  
@@ -74,7 +74,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected Unexpected token in class body, found ')'
-//    ╭─[ 0:4:74 ]
+//    ╭─[ class_secure_types.baml:4:74 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                          ┬  
@@ -83,7 +83,7 @@ class ComplexTypes {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected '>', found '>>'
-//     ╭─[ 0:16:62 ]
+//     ╭─[ class_secure_types.baml:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  
@@ -92,7 +92,7 @@ class ComplexTypes {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '>', found '>>'
-//     ╭─[ 0:16:62 ]
+//     ╭─[ class_secure_types.baml:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  
@@ -101,7 +101,7 @@ class ComplexTypes {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Unexpected token in class body, found '>>'
-//     ╭─[ 0:16:62 ]
+//     ╭─[ class_secure_types.baml:16:62 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │                                                              ─┬  

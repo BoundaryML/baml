@@ -355,6 +355,8 @@ version = "0.0.0"
 dependencies = [
  "ariadne",
  "baml_base",
+ "baml_workspace",
+ "salsa",
  "text-size",
 ]
 
@@ -374,13 +376,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_ide"
+version = "0.0.0"
+dependencies = [
+ "baml_db",
+ "baml_project",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
 name = "baml_language_server"
 version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum 0.8.7",
  "baml_db",
+ "baml_diagnostics",
+ "baml_ide",
  "baml_lsp_types",
+ "baml_project",
  "colored",
  "console-subscriber",
  "crossbeam",
@@ -440,13 +455,13 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_diagnostics",
- "baml_hir",
- "baml_tir",
+ "baml_ide",
+ "baml_project",
  "prettyplease",
  "proc-macro2",
  "quote",
- "salsa",
  "syn",
+ "text-size",
  "walkdir",
 ]
 
@@ -494,6 +509,7 @@ dependencies = [
  "baml_lexer",
  "baml_mir",
  "baml_parser",
+ "baml_project",
  "baml_tir",
  "baml_vir",
  "baml_vm",
@@ -523,6 +539,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_project"
+version = "0.0.0"
+dependencies = [
+ "baml_db",
+ "baml_diagnostics",
+ "baml_hir",
+ "baml_mir",
+ "baml_tir",
+ "baml_workspace",
+ "lsp-types",
+ "salsa",
+ "text-size",
+]
+
+[[package]]
 name = "baml_syntax"
 version = "0.0.0"
 dependencies = [
@@ -541,6 +572,7 @@ dependencies = [
  "baml_diagnostics",
  "baml_hir",
  "baml_mir",
+ "baml_project",
  "baml_tir",
  "baml_vm",
  "baml_workspace",

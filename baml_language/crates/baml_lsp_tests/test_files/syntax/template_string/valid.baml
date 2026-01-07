@@ -9,7 +9,7 @@ template_string WithParams(a: int) #"
 //----
 //- diagnostics
 // Error: Expected '(', found '#'
-//    ╭─[ 0:1:28 ]
+//    ╭─[ template_string_valid.baml:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
@@ -18,7 +18,7 @@ template_string WithParams(a: int) #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected parameter name, found '#'
-//    ╭─[ 0:1:28 ]
+//    ╭─[ template_string_valid.baml:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
@@ -27,7 +27,7 @@ template_string WithParams(a: int) #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found '#'
-//    ╭─[ 0:1:28 ]
+//    ╭─[ template_string_valid.baml:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  
@@ -36,7 +36,7 @@ template_string WithParams(a: int) #"
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected ')', found '#'
-//    ╭─[ 0:1:28 ]
+//    ╭─[ template_string_valid.baml:1:28 ]
 //    │
 //  1 │ template_string SomeString #"
 //    │                            ┬  

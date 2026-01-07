@@ -128,6 +128,9 @@ pub fn display_instruction(
                 format!("(invalid viz index: {index})")
             }
         }
+        Instruction::JumpTable { table_idx, default } => {
+            format!("(table {table_idx}, default {default:+})")
+        }
         Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::PopReplace(_)
@@ -144,6 +147,9 @@ pub fn display_instruction(
         | Instruction::Await
         | Instruction::Call(_)
         | Instruction::Assert
+        | Instruction::Discriminant
+        | Instruction::TypeTag
+        | Instruction::Unreachable
         | Instruction::Return => String::new(),
     };
 
@@ -205,7 +211,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::BinOp(_) | Instruction::CmpOp(_) | Instruction::UnaryOp(_) => {
             Color::BrightBlue
         }
-        Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) => Color::Yellow,
+        Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
+            Color::Yellow
+        }
         Instruction::Call(_) => Color::Magenta,
         Instruction::Assert
         | Instruction::Return
@@ -221,6 +229,8 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
+        Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
+        Instruction::Unreachable => Color::BrightRed,
     }
 }
 

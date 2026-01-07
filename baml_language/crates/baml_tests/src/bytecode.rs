@@ -58,11 +58,14 @@ pub struct TestDatabase {
 impl salsa::Database for TestDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for TestDatabase {
+impl baml_workspace::Db for TestDatabase {
     fn project(&self) -> baml_workspace::Project {
         self.project.expect("project must be set before querying")
     }
 }
+
+#[salsa::db]
+impl baml_hir::Db for TestDatabase {}
 
 #[salsa::db]
 impl baml_tir::Db for TestDatabase {}
@@ -296,6 +299,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
+            jump_tables: Vec::new(),
         },
         kind: baml_vm::FunctionKind::Exec,
         locals_in_scope: {

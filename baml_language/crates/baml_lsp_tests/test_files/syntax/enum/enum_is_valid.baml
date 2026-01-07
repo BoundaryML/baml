@@ -24,12 +24,12 @@ generator target{
 
 //----
 //- diagnostics
-// Error: Enum value 'None' in enum 'Test' is a reserved keyword in Python
-//    ╭─[ 0:2:5 ]
+// Error: Enum value `None` in enum `Test` is a reserved keyword in Python
+//    ╭─[ enum_enum_is_valid.baml:2:5 ]
 //    │
 //  2 │     None
 //    │     ──┬─  
-//    │       ╰─── Enum value 'None' in enum 'Test' is a reserved keyword in Python
+//    │       ╰─── Enum value `None` in enum `Test` is a reserved keyword in Python
 //    │ 
 //    │ Note: Error code: E0020
 // ───╯

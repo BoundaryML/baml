@@ -4,21 +4,21 @@ function UseUnknown() -> int {
 
 //----
 //- diagnostics
-// Error: Unknown variable unknown_var
-//    ╭─[ 0:2:3 ]
+// Error: Unknown variable `unknown_var`
+//    ╭─[ unknown_variable.baml:2:3 ]
 //    │
 //  2 │   unknown_var + 1
 //    │   ─────┬─────  
-//    │        ╰─────── Unknown variable unknown_var
+//    │        ╰─────── Unknown variable `unknown_var`
 //    │ 
 //    │ Note: Error code: E0003
 // ───╯
-// Error: Cannot apply operator 'Add' to types unknown and int
-//    ╭─[ 0:2:3 ]
+// Error: Cannot apply operator 'Add' to types `unknown` and `int`
+//    ╭─[ unknown_variable.baml:2:3 ]
 //    │
 //  2 │   unknown_var + 1
 //    │   ───────┬───────  
-//    │          ╰───────── Cannot apply operator 'Add' to types unknown and int
+//    │          ╰───────── Cannot apply operator 'Add' to types `unknown` and `int`
 //    │ 
 //    │ Note: Error code: E0004
 // ───╯

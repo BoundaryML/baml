@@ -246,6 +246,39 @@ pub struct BamlVmProgram {
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
+/// Get the type tag for any runtime value.
+///
+/// This is a free function to avoid borrow checker issues when called
+/// from within the instruction dispatch loop.
+fn value_type_tag(value: &Value, objects: &ObjectPool) -> i64 {
+    use crate::types::type_tags;
+
+    match value {
+        Value::Int(_) => type_tags::INT,
+        Value::Float(_) => type_tags::FLOAT,
+        Value::Bool(_) => type_tags::BOOL,
+        Value::Null => type_tags::NULL,
+        Value::Object(object_idx) => match &objects[*object_idx] {
+            Object::String(_) => type_tags::STRING,
+            Object::Variant(_) => type_tags::ENUM,
+            Object::Array(_) => type_tags::LIST,
+            Object::Map(_) => type_tags::MAP,
+            Object::Function(_) => type_tags::FUNCTION,
+            Object::Future(_) => type_tags::FUTURE,
+            Object::Enum(_) => type_tags::ENUM,
+            Object::Class(_) => type_tags::UNKNOWN,
+            Object::Instance(instance) => {
+                // Instance.class must always point to a Class object.
+                // If not, there's a bug in the VM's instance allocation.
+                let Object::Class(class) = &objects[instance.class] else {
+                    unreachable!("Instance.class does not point to a Class object")
+                };
+                class.type_tag
+            }
+        },
+    }
+}
+
 impl Vm {
     pub fn new(
         BamlVmProgram {
@@ -1104,6 +1137,38 @@ impl Vm {
                             })
                         }
 
+                        // Variant comparison: compare by enum type and variant index
+                        (Value::Object(left_index), Value::Object(right_index))
+                            if matches!(self.objects[left_index], Object::Variant(_))
+                                && matches!(self.objects[right_index], Object::Variant(_)) =>
+                        {
+                            let Object::Variant(left_var) = &self.objects[left_index] else {
+                                unreachable!()
+                            };
+                            let Object::Variant(right_var) = &self.objects[right_index] else {
+                                unreachable!()
+                            };
+
+                            Value::Bool(match op {
+                                CmpOp::Eq => {
+                                    left_var.enm == right_var.enm
+                                        && left_var.index == right_var.index
+                                }
+                                CmpOp::NotEq => {
+                                    left_var.enm != right_var.enm
+                                        || left_var.index != right_var.index
+                                }
+                                _ => {
+                                    return Err(InternalError::CannotApplyCmpOp {
+                                        left: Type::Object(ObjectType::Variant),
+                                        right: Type::Object(ObjectType::Variant),
+                                        op,
+                                    }
+                                    .into());
+                                }
+                            })
+                        }
+
                         _ => Value::Bool(match op {
                             CmpOp::Eq => left == right,
                             CmpOp::NotEq => left != right,
@@ -1880,6 +1945,69 @@ impl Vm {
 
                     // borrow check.
                     function = self.objects[frame.function].as_function()?;
+                }
+
+                // ============================================================
+                // Jump Table Instructions
+                // ============================================================
+                Instruction::JumpTable { table_idx, default } => {
+                    // Pop discriminant from stack
+                    let discriminant = self.stack.ensure_pop()?;
+
+                    // Must be an integer
+                    let Value::Int(value) = discriminant else {
+                        return Err(InternalError::TypeError {
+                            expected: Type::Int,
+                            got: self.objects.type_of(&discriminant),
+                        }
+                        .into());
+                    };
+
+                    // Lookup in jump table
+                    let table = &function.bytecode.jump_tables[table_idx];
+                    let offset = table.lookup(value).unwrap_or(default);
+
+                    // Jump
+                    frame.instruction_ptr = instruction_ptr + offset;
+                }
+
+                Instruction::Discriminant => {
+                    // Pop value from stack
+                    let value = self.stack.ensure_pop()?;
+
+                    // Must be an object (variants are heap-allocated)
+                    let Value::Object(object_idx) = value else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Variant.into(),
+                            got: self.objects.type_of(&value),
+                        }
+                        .into());
+                    };
+
+                    // Must be a Variant object
+                    let Object::Variant(variant) = &self.objects[object_idx] else {
+                        return Err(InternalError::TypeError {
+                            expected: ObjectType::Variant.into(),
+                            got: ObjectType::of(&self.objects[object_idx]).into(),
+                        }
+                        .into());
+                    };
+
+                    // Variant.index is the discriminant we need
+                    #[allow(clippy::cast_possible_wrap)]
+                    self.stack.push(Value::Int(variant.index as i64));
+                }
+
+                Instruction::TypeTag => {
+                    let value = self.stack.ensure_pop()?;
+                    let tag = value_type_tag(&value, &self.objects);
+                    self.stack.push(Value::Int(tag));
+                }
+
+                Instruction::Unreachable => {
+                    // This instruction should never be executed. If we reach it,
+                    // there's a bug in the compiler or type system.
+                    return Err(RuntimeError::Unreachable.into());
                 }
             }
         }

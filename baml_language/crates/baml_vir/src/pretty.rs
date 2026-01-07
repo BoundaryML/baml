@@ -143,6 +143,12 @@ impl<'a> PrettyPrinter<'a> {
                 self.output.push_str("continue");
             }
 
+            Expr::Assert { condition } => {
+                self.indent(level);
+                self.output.push_str("assert\n");
+                self.print_expr(*condition, level + 1);
+            }
+
             Expr::Assign { target, value } => {
                 self.indent(level);
                 self.output.push_str("assign\n");

@@ -32,7 +32,7 @@ random_keyword WrongEnum {
 //----
 //- diagnostics
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:10:1 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:10:1 ]
 //     │
 //  10 │ classs WrongClass {
 //     │ ───┬──  
@@ -41,7 +41,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:10:8 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:10:8 ]
 //     │
 //  10 │ classs WrongClass {
 //     │        ─────┬────  
@@ -50,7 +50,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:10:19 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:10:19 ]
 //     │
 //  10 │ classs WrongClass {
 //     │                   ┬  
@@ -59,7 +59,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:3 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:11:3 ]
 //     │
 //  11 │   field string
 //     │   ──┬──  
@@ -68,7 +68,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:11:9 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:11:9 ]
 //     │
 //  11 │   field string
 //     │         ───┬──  
@@ -77,7 +77,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:12:1 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:12:1 ]
 //     │
 //  12 │ }
 //     │ ┬  
@@ -86,7 +86,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:14:1 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:14:1 ]
 //     │
 //  14 │ random_keyword WrongEnum {
 //     │ ───────┬──────  
@@ -95,7 +95,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:14:16 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:14:16 ]
 //     │
 //  14 │ random_keyword WrongEnum {
 //     │                ────┬────  
@@ -104,7 +104,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
-//     ╭─[ 0:14:26 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:14:26 ]
 //     │
 //  14 │ random_keyword WrongEnum {
 //     │                          ┬  
@@ -113,7 +113,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:15:3 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:15:3 ]
 //     │
 //  15 │   A
 //     │   ┬  
@@ -122,7 +122,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
-//     ╭─[ 0:16:3 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:16:3 ]
 //     │
 //  16 │   B
 //     │   ┬  
@@ -131,7 +131,7 @@ random_keyword WrongEnum {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
-//     ╭─[ 0:17:1 ]
+//     ╭─[ class_invalid_keyword_in_type_def.baml:17:1 ]
 //     │
 //  17 │ }
 //     │ ┬  

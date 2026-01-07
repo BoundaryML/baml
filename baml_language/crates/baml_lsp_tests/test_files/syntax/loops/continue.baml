@@ -44,12 +44,12 @@ function ContinueNested() -> int {
 
 //----
 //- diagnostics
-// Error: Expected int, found void
-//    ╭─[ 0:1:1 ]
+// Error: Expected `int`, found `void`
+//    ╭─[ loops_continue.baml:1:1 ]
 //    │
 //  1 │ function Factorial(limit: int) -> int {
 //    │ │ 
-//    │ ╰─ Expected int, found void
+//    │ ╰─ Expected `int`, found `void`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

@@ -68,30 +68,30 @@ client<llm> GPT4 {
 
 //----
 //- diagnostics
-// Error: Cannot apply operator '!' to type string?
-//    ╭─[ 0:6:30 ]
+// Error: Cannot apply operator '!' to type `string?`
+//    ╭─[ headers_complex_workflow.baml:6:30 ]
 //    │
 //  6 │     let computed_title = if (!title) {
 //    │                              ───┬──  
-//    │                                 ╰──── Cannot apply operator '!' to type string?
+//    │                                 ╰──── Cannot apply operator '!' to type `string?`
 //    │ 
 //    │ Note: Error code: E0004
 // ───╯
-// Error: Cannot apply operator 'Add' to types string | string? and string
-//     ╭─[ 0:17:5 ]
+// Error: Cannot apply operator 'Add' to types `string | string?` and `string`
+//     ╭─[ headers_complex_workflow.baml:17:5 ]
 //     │
 //  17 │     computed_title + ": " + summary
 //     │     ──────────┬──────────  
-//     │               ╰──────────── Cannot apply operator 'Add' to types string | string? and string
+//     │               ╰──────────── Cannot apply operator 'Add' to types `string | string?` and `string`
 //     │ 
 //     │ Note: Error code: E0004
 // ────╯
-// Error: Cannot apply operator 'Add' to types error and string
-//     ╭─[ 0:17:1 ]
+// Error: Cannot apply operator 'Add' to types `error` and `string`
+//     ╭─[ headers_complex_workflow.baml:17:1 ]
 //     │
 //  17 │     computed_title + ": " + summary
 //     │ ─────────────────┬─────────────────  
-//     │                  ╰─────────────────── Cannot apply operator 'Add' to types error and string
+//     │                  ╰─────────────────── Cannot apply operator 'Add' to types `error` and `string`
 //     │ 
 //     │ Note: Error code: E0004
 // ────╯

@@ -14,7 +14,7 @@ function NoRet(x: int) {
 //----
 //- diagnostics
 // Error: Expected return type (->), found '{'
-//    ╭─[ 0:1:24 ]
+//    ╭─[ expr_missing_return_value.baml:1:24 ]
 //    │
 //  1 │ function NoRet(x: int) {
 //    │                        ┬  

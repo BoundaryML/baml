@@ -128,7 +128,7 @@ fn format_path(path: &baml_hir::Path) -> String {
 // Helper function for formatting HIR items from a specific file
 #[cfg(test)]
 fn format_hir_file(
-    db: &baml_db::RootDatabase,
+    db: &baml_project::ProjectDatabase,
     source_file: baml_db::SourceFile,
     items: &[baml_db::baml_hir::ItemId],
 ) -> String {

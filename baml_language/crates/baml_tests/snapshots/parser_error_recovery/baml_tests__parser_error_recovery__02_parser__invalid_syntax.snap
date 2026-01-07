@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -41,7 +41,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected class name, found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -51,7 +51,7 @@ Error: Expected class name, found integer
 ───╯
 
 Error: Expected '{', found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -61,7 +61,7 @@ Error: Expected '{', found integer
 ───╯
 
 Error: Expected top-level declaration, found integer
-   ╭─[ 0:1:7 ]
+   ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
@@ -71,7 +71,7 @@ Error: Expected top-level declaration, found integer
 ───╯
 
 Error: Expected top-level declaration, found identifier
-   ╭─[ 0:1:10 ]
+   ╭─[ invalid_syntax.baml:1:10 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │          ───┬───  
@@ -81,7 +81,7 @@ Error: Expected top-level declaration, found identifier
 ───╯
 
 Error: Expected top-level declaration, found '{'
-   ╭─[ 0:1:18 ]
+   ╭─[ invalid_syntax.baml:1:18 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │                  ┬  
@@ -91,7 +91,7 @@ Error: Expected top-level declaration, found '{'
 ───╯
 
 Error: Expected top-level declaration, found identifier
-   ╭─[ 0:2:3 ]
+   ╭─[ invalid_syntax.baml:2:3 ]
    │
  2 │   field string
    │   ──┬──  
@@ -101,7 +101,7 @@ Error: Expected top-level declaration, found identifier
 ───╯
 
 Error: Expected top-level declaration, found identifier
-   ╭─[ 0:2:9 ]
+   ╭─[ invalid_syntax.baml:2:9 ]
    │
  2 │   field string
    │         ───┬──  
@@ -111,7 +111,7 @@ Error: Expected top-level declaration, found identifier
 ───╯
 
 Error: Expected top-level declaration, found '}'
-   ╭─[ 0:3:1 ]
+   ╭─[ invalid_syntax.baml:3:1 ]
    │
  3 │ }
    │ ┬  
@@ -121,7 +121,7 @@ Error: Expected top-level declaration, found '}'
 ───╯
 
 Error: Expected type, found '{'
-    ╭─[ 0:10:19 ]
+    ╭─[ invalid_syntax.baml:10:19 ]
     │
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
@@ -131,7 +131,7 @@ Error: Expected type, found '{'
 ────╯
 
 Error: Expected LLM function missing 'prompt' field, found '}'
-    ╭─[ 0:12:1 ]
+    ╭─[ invalid_syntax.baml:12:1 ]
     │
  12 │ }
     │ ┬  

@@ -16,6 +16,7 @@ baml_db = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_hir = { workspace = true }
 baml_mir = { workspace = true }
+baml_project = { workspace = true }
 baml_tir = { workspace = true }
 baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
@@ -34,7 +35,7 @@ syn = { workspace = true }
 
 [dev-dependencies]
 # For benchmarks
-divan = { package = "codspeed-divan-compat", workspace = true }
+divan = { workspace = true }
 
 [[bench]]
 name = "compiler_benchmark"

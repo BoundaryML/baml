@@ -59,8 +59,6 @@ pub use lower::{LoweringError, lower_from_hir};
 pub use pretty::pretty_print;
 pub use ty::*;
 
-/// Database trait for VIR queries.
-///
-/// Extends TIR's database since we need `InferenceResult` during lowering.
+/// Database trait for VIR queries. Extends `baml_tir::Db`.
 #[salsa::db]
 pub trait Db: baml_tir::Db {}

@@ -9,14 +9,12 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, RootDatabase, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax,
-    baml_tir, baml_workspace,
+    FileId, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax, baml_tir,
+    baml_workspace,
 };
-use baml_diagnostics::compiler_error::{
-    CompilerError, HirDiagnostic, ParseError, TypeError, render_hir_diagnostic, render_parse_error,
-    render_type_error,
-};
-use baml_hir::{ItemId, file_lowering, function_body, function_signature};
+use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
+use baml_hir::{ItemId, function_body, function_signature};
+use baml_project::{ProjectDatabase, collect_diagnostics};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
@@ -105,11 +103,8 @@ impl CompilerPhase {
     }
 }
 
-/// Stored compiler error with types converted to strings
-pub(crate) type StoredCompilerError = CompilerError<String>;
-
 pub(crate) struct CompilerRunner {
-    db: RootDatabase,
+    db: ProjectDatabase,
     project_root: baml_workspace::Project,
     is_directory: bool,
     /// Source files currently in the database (path -> `SourceFile`)
@@ -127,8 +122,8 @@ pub(crate) struct CompilerRunner {
     thir_display_mode: ThirDisplayMode,
     // THIR interactive state
     thir_interactive_state: ThirInteractiveState,
-    // Errors collected during compilation
-    diagnostic_errors: Vec<StoredCompilerError>,
+    // Unified diagnostics collected during compilation
+    diagnostics: Vec<Diagnostic>,
     // VM Runner state
     vm_runner_state: VmRunnerState,
 }
@@ -227,20 +222,22 @@ impl CompilerRunner {
 
         // Create database with event callback
         let db =
-            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
-                EventKind::WillExecute { database_key } => {
-                    recomputed_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
+            ProjectDatabase::new_with_event_callback(Box::new(move |event: Event| {
+                match event.kind {
+                    EventKind::WillExecute { database_key } => {
+                        recomputed_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    EventKind::DidValidateMemoizedValue { database_key } => {
+                        cached_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    _ => {}
                 }
-                EventKind::DidValidateMemoizedValue { database_key } => {
-                    cached_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
-                }
-                _ => {}
             }));
 
         Self {
@@ -257,7 +254,7 @@ impl CompilerRunner {
             parser_cached_elements: HashMap::new(),
             thir_display_mode: ThirDisplayMode::default(),
             thir_interactive_state: ThirInteractiveState::default(),
-            diagnostic_errors: Vec::new(),
+            diagnostics: Vec::new(),
             vm_runner_state: VmRunnerState::default(),
         }
     }
@@ -282,20 +279,22 @@ impl CompilerRunner {
         let cached_clone = self.cached_queries.clone();
 
         self.db =
-            RootDatabase::new_with_event_callback(Box::new(move |event: Event| match event.kind {
-                EventKind::WillExecute { database_key } => {
-                    recomputed_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
+            ProjectDatabase::new_with_event_callback(Box::new(move |event: Event| {
+                match event.kind {
+                    EventKind::WillExecute { database_key } => {
+                        recomputed_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    EventKind::DidValidateMemoizedValue { database_key } => {
+                        cached_clone
+                            .lock()
+                            .unwrap()
+                            .insert(format!("{database_key:?}"));
+                    }
+                    _ => {}
                 }
-                EventKind::DidValidateMemoizedValue { database_key } => {
-                    cached_clone
-                        .lock()
-                        .unwrap()
-                        .insert(format!("{database_key:?}"));
-                }
-                _ => {}
             }));
 
         // Set project root
@@ -372,7 +371,7 @@ impl CompilerRunner {
     fn run_all_phases(&mut self) {
         self.phase_outputs.clear();
         self.phase_outputs_annotated.clear();
-        self.diagnostic_errors.clear();
+        self.diagnostics.clear();
 
         for &phase in &[
             CompilerPhase::Lexer,
@@ -481,19 +480,7 @@ impl CompilerRunner {
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
 
-            // Collect parse errors for this file
-            let parse_errors = baml_parser::parse_errors(&self.db, *source_file);
-            for error in parse_errors {
-                self.diagnostic_errors
-                    .push(CompilerError::ParseError(error.clone()));
-            }
-
-            // Collect HIR lowering diagnostics for this file
-            let lowering_result = file_lowering(&self.db, *source_file);
-            for diag in lowering_result.diagnostics(&self.db) {
-                self.diagnostic_errors
-                    .push(CompilerError::HirDiagnostic(diag.clone()));
-            }
+            // Note: Diagnostic collection moved to run_diagnostics() using collect_diagnostics()
 
             let (formatted_lines, cached_ids) =
                 format_syntax_tree_with_cache(&syntax_tree, self.parser_cached_elements.get(path));
@@ -787,11 +774,19 @@ impl CompilerRunner {
         let mut interactive_state = ThirInteractiveState::default();
 
         // Build initial typing context with all function types
-        let globals = typing_context(&self.db, self.project_root);
-        let class_fields = class_field_types(&self.db, self.project_root);
-        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_fields = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
+
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -834,16 +829,12 @@ impl CompilerRunner {
                         *func_id,
                     );
 
-                    // Collect type errors from inference
-                    for error in &inference_result.errors {
-                        let stored_error = convert_type_error_to_string(error);
-                        self.diagnostic_errors
-                            .push(CompilerError::TypeError(stored_error));
-                    }
+                    // Note: Type error collection moved to run_diagnostics() using collect_diagnostics()
 
                     // Use tree view for both modes - interactive mode parses this afterward
                     let tree_output = baml_tir::render_function_tree(
                         &self.db,
+                        &resolution_ctx,
                         &func_name,
                         &signature,
                         &body,
@@ -890,11 +881,19 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Build typing context and class fields for inference
-        let globals = typing_context(&self.db, self.project_root);
-        let class_fields = class_field_types(&self.db, self.project_root);
-        let type_aliases_map = type_aliases(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_fields = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
+
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -945,7 +944,7 @@ impl CompilerRunner {
                     writeln!(output, "{}", header).ok();
                     output_annotated.push((header, status));
 
-                    match lower_from_hir(&self.db, &body, &inference_result) {
+                    match lower_from_hir(&self.db, &body, &inference_result, &resolution_ctx) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
                             let ir_output = pretty_print(&typed_ir);
@@ -982,8 +981,12 @@ impl CompilerRunner {
 
         // Build typing context and class fields map for MIR lowering
         let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = typing_context(&self.db, self.project_root);
-        let class_field_types_map = class_field_types(&self.db, self.project_root);
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_field_types_map = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -1003,6 +1006,8 @@ impl CompilerRunner {
                 }
             }
         }
+
+        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -1038,16 +1043,26 @@ impl CompilerRunner {
                     );
 
                     // Lower HIR → VIR → MIR
-                    let mir_output =
-                        match baml_vir::lower_from_hir(&self.db, &body, &inference_result) {
-                            Ok(vir) => {
-                                let mir = baml_mir::lower(&signature, &vir, &self.db, &classes);
-                                baml_mir::pretty::display_function(&mir)
-                            }
-                            Err(err) => {
-                                format!("(no MIR due to errors: {:?})", err)
-                            }
-                        };
+                    let mir_output = match baml_vir::lower_from_hir(
+                        &self.db,
+                        &body,
+                        &inference_result,
+                        &resolution_ctx,
+                    ) {
+                        Ok(vir) => {
+                            let mir = baml_mir::lower(
+                                &signature,
+                                &vir,
+                                &self.db,
+                                &classes,
+                                &resolution_ctx,
+                            );
+                            baml_mir::pretty::display_function(&mir)
+                        }
+                        Err(err) => {
+                            format!("(no MIR due to errors: {:?})", err)
+                        }
+                    };
 
                     let status = if file_recomputed {
                         LineStatus::Recomputed
@@ -1081,157 +1096,101 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Build a source map for error rendering (FileId -> source text)
+        // Collect all diagnostics using the unified collect_diagnostics function
+        let source_files: Vec<_> = self.source_files.values().copied().collect();
+        self.diagnostics = collect_diagnostics(&self.db, self.project_root, &source_files);
+
+        // Build sources and file_paths maps for rendering
         let mut sources: HashMap<FileId, String> = HashMap::new();
-        for source_file in self.source_files.values() {
+        let mut file_paths: HashMap<FileId, PathBuf> = HashMap::new();
+        for (path, source_file) in &self.source_files {
             let file_id = source_file.file_id(&self.db);
-            let text = source_file.text(&self.db).clone();
-            sources.insert(file_id, text);
+            sources.insert(file_id, source_file.text(&self.db).to_string());
+            file_paths.insert(file_id, path.clone());
         }
 
-        // Group errors by file_id and error type (parse vs type vs hir)
-        let mut parse_errors_by_file: HashMap<FileId, Vec<&ParseError>> = HashMap::new();
-        let mut type_errors_by_file: HashMap<FileId, Vec<&TypeError<String>>> = HashMap::new();
-        let mut hir_errors_by_file: HashMap<FileId, Vec<&HirDiagnostic>> = HashMap::new();
+        // Group diagnostics by phase and file
+        let mut parse_errors: Vec<&Diagnostic> = Vec::new();
+        let mut hir_errors: Vec<&Diagnostic> = Vec::new();
+        let mut validation_errors: Vec<&Diagnostic> = Vec::new();
+        let mut type_errors: Vec<&Diagnostic> = Vec::new();
 
-        for error in &self.diagnostic_errors {
-            let file_id = get_error_file_id(error);
-            match error {
-                CompilerError::ParseError(e) => {
-                    parse_errors_by_file.entry(file_id).or_default().push(e);
-                }
-                CompilerError::TypeError(e) => {
-                    type_errors_by_file.entry(file_id).or_default().push(e);
-                }
-                CompilerError::HirDiagnostic(e) => {
-                    hir_errors_by_file.entry(file_id).or_default().push(e);
-                }
-                CompilerError::NameError(_) => {
-                    // TODO: Handle name errors in diagnostics display
-                }
+        for diag in &self.diagnostics {
+            match diag.phase {
+                DiagnosticPhase::Parse => parse_errors.push(diag),
+                DiagnosticPhase::Hir => hir_errors.push(diag),
+                DiagnosticPhase::Validation => validation_errors.push(diag),
+                DiagnosticPhase::Type => type_errors.push(diag),
             }
         }
 
-        // Sort files alphabetically by path
-        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
-        sorted_files.sort_by_key(|(path, _)| path.as_path());
+        let config = RenderConfig::test();
 
-        let mut total_parse_errors = 0;
-        let mut total_hir_errors = 0;
-        let mut total_type_errors = 0;
+        // Render parse errors
+        if !parse_errors.is_empty() {
+            writeln!(output, "── Parse Errors ──").ok();
+            output_annotated.push(("── Parse Errors ──".to_string(), LineStatus::Unknown));
 
-        // Render parse errors grouped by file
-        for (path, source_file) in &sorted_files {
-            let file_id = source_file.file_id(&self.db);
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(*path);
-
-            if let Some(errors) = parse_errors_by_file.get(&file_id) {
-                writeln!(output, "── Parse Errors: {file_path} ──").ok();
-                output_annotated.push((
-                    format!("── Parse Errors: {file_path} ──"),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Unknown
-                    },
-                ));
-
-                for error in errors {
-                    total_parse_errors += 1;
-                    let rendered = render_parse_error(error, &sources, false);
-                    for line in rendered.lines() {
-                        writeln!(output, "{}", line).ok();
-                        output_annotated.push((
-                            line.to_string(),
-                            if file_recomputed {
-                                LineStatus::Recomputed
-                            } else {
-                                LineStatus::Cached
-                            },
-                        ));
-                    }
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
+            for diag in &parse_errors {
+                let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                for line in rendered.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), LineStatus::Recomputed));
                 }
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
             }
         }
 
-        // Render HIR errors grouped by file
-        for (path, source_file) in &sorted_files {
-            let file_id = source_file.file_id(&self.db);
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(*path);
+        // Render HIR errors
+        if !hir_errors.is_empty() {
+            writeln!(output, "── HIR Errors ──").ok();
+            output_annotated.push(("── HIR Errors ──".to_string(), LineStatus::Unknown));
 
-            if let Some(errors) = hir_errors_by_file.get(&file_id) {
-                writeln!(output, "── HIR Errors: {file_path} ──").ok();
-                output_annotated.push((
-                    format!("── HIR Errors: {file_path} ──"),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Unknown
-                    },
-                ));
-
-                for error in errors {
-                    total_hir_errors += 1;
-                    let rendered = render_hir_diagnostic(error, &sources, false);
-                    for line in rendered.lines() {
-                        writeln!(output, "{}", line).ok();
-                        output_annotated.push((
-                            line.to_string(),
-                            if file_recomputed {
-                                LineStatus::Recomputed
-                            } else {
-                                LineStatus::Cached
-                            },
-                        ));
-                    }
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
+            for diag in &hir_errors {
+                let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                for line in rendered.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), LineStatus::Recomputed));
                 }
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
             }
         }
 
-        // Render type errors grouped by file
-        for (path, source_file) in &sorted_files {
-            let file_id = source_file.file_id(&self.db);
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(*path);
+        // Render validation errors (cross-file duplicates)
+        if !validation_errors.is_empty() {
+            writeln!(output, "── Validation Errors ──").ok();
+            output_annotated.push(("── Validation Errors ──".to_string(), LineStatus::Unknown));
 
-            if let Some(errors) = type_errors_by_file.get(&file_id) {
-                writeln!(output, "── Type Errors: {file_path} ──").ok();
-                output_annotated.push((
-                    format!("── Type Errors: {file_path} ──"),
-                    if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Unknown
-                    },
-                ));
-
-                for error in errors {
-                    total_type_errors += 1;
-                    let rendered = render_type_error(error, &sources, false);
-                    for line in rendered.lines() {
-                        writeln!(output, "{}", line).ok();
-                        output_annotated.push((
-                            line.to_string(),
-                            if file_recomputed {
-                                LineStatus::Recomputed
-                            } else {
-                                LineStatus::Cached
-                            },
-                        ));
-                    }
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
+            for diag in &validation_errors {
+                let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                for line in rendered.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), LineStatus::Recomputed));
                 }
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
             }
         }
 
-        let total_errors = total_parse_errors + total_hir_errors + total_type_errors;
+        // Render type errors
+        if !type_errors.is_empty() {
+            writeln!(output, "── Type Errors ──").ok();
+            output_annotated.push(("── Type Errors ──".to_string(), LineStatus::Unknown));
+
+            for diag in &type_errors {
+                let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                for line in rendered.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), LineStatus::Recomputed));
+                }
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
+            }
+        }
+
+        let total_errors = self.diagnostics.len();
 
         if total_errors == 0 {
             let no_errors = "✓ No errors found".to_string();
@@ -1243,25 +1202,36 @@ impl CompilerRunner {
             output_annotated.push((summary, LineStatus::Unknown));
 
             let mut parts = Vec::new();
-            if total_parse_errors > 0 {
+            if !parse_errors.is_empty() {
                 parts.push(format!(
                     "{} parse error{}",
-                    total_parse_errors,
-                    if total_parse_errors == 1 { "" } else { "s" }
+                    parse_errors.len(),
+                    if parse_errors.len() == 1 { "" } else { "s" }
                 ));
             }
-            if total_hir_errors > 0 {
+            if !hir_errors.is_empty() {
                 parts.push(format!(
                     "{} HIR error{}",
-                    total_hir_errors,
-                    if total_hir_errors == 1 { "" } else { "s" }
+                    hir_errors.len(),
+                    if hir_errors.len() == 1 { "" } else { "s" }
                 ));
             }
-            if total_type_errors > 0 {
+            if !validation_errors.is_empty() {
+                parts.push(format!(
+                    "{} validation error{}",
+                    validation_errors.len(),
+                    if validation_errors.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
+                ));
+            }
+            if !type_errors.is_empty() {
                 parts.push(format!(
                     "{} type error{}",
-                    total_type_errors,
-                    if total_type_errors == 1 { "" } else { "s" }
+                    type_errors.len(),
+                    if type_errors.len() == 1 { "" } else { "s" }
                 ));
             }
             let total = format!("Total: {}", parts.join(", "));
@@ -2263,67 +2233,6 @@ impl GreenElementId {
             kind: GreenElementKind::Token,
         }
     }
-}
-
-/// Get the FileId from a StoredCompilerError
-fn get_error_file_id(error: &StoredCompilerError) -> FileId {
-    match error {
-        CompilerError::ParseError(e) => match e {
-            baml_diagnostics::compiler_error::ParseError::UnexpectedToken { span, .. } => {
-                span.file_id
-            }
-            baml_diagnostics::compiler_error::ParseError::UnexpectedEof { span, .. } => {
-                span.file_id
-            }
-            baml_diagnostics::compiler_error::ParseError::InvalidSyntax { span, .. } => {
-                span.file_id
-            }
-        },
-        CompilerError::TypeError(e) => match e {
-            TypeError::TypeMismatch { span, .. } => span.file_id,
-            TypeError::UnknownType { span, .. } => span.file_id,
-            TypeError::UnknownVariable { span, .. } => span.file_id,
-            TypeError::InvalidBinaryOp { span, .. } => span.file_id,
-            TypeError::InvalidUnaryOp { span, .. } => span.file_id,
-            TypeError::ArgumentCountMismatch { span, .. } => span.file_id,
-            TypeError::NotCallable { span, .. } => span.file_id,
-            TypeError::NoSuchField { span, .. } => span.file_id,
-            TypeError::NotIndexable { span, .. } => span.file_id,
-            TypeError::NonExhaustiveMatch { span, .. } => span.file_id,
-            TypeError::UnreachableArm { span, .. } => span.file_id,
-            TypeError::UnknownEnumVariant { span, .. } => span.file_id,
-            TypeError::WatchOnNonVariable { span, .. } => span.file_id,
-            TypeError::WatchOnUnwatchedVariable { span, .. } => span.file_id,
-        },
-        CompilerError::NameError(e) => match e {
-            baml_diagnostics::NameError::DuplicateName { second, .. } => second.file_id,
-            baml_diagnostics::NameError::DuplicateTestForFunction { second, .. } => second.file_id,
-        },
-        CompilerError::HirDiagnostic(e) => match e {
-            HirDiagnostic::DuplicateField { second_span, .. } => second_span.file_id,
-            HirDiagnostic::DuplicateVariant { second_span, .. } => second_span.file_id,
-            HirDiagnostic::DuplicateBlockAttribute { second_span, .. } => second_span.file_id,
-            HirDiagnostic::DuplicateFieldAttribute { second_span, .. } => second_span.file_id,
-            HirDiagnostic::UnknownAttribute { span, .. } => span.file_id,
-            HirDiagnostic::InvalidAttributeContext { span, .. } => span.file_id,
-            HirDiagnostic::UnknownGeneratorProperty { span, .. } => span.file_id,
-            HirDiagnostic::MissingGeneratorProperty { span, .. } => span.file_id,
-            HirDiagnostic::InvalidGeneratorPropertyValue { span, .. } => span.file_id,
-            HirDiagnostic::ReservedFieldName { span, .. } => span.file_id,
-            HirDiagnostic::FieldNameMatchesTypeName { span, .. } => span.file_id,
-            HirDiagnostic::InvalidClientResponseType { span, .. } => span.file_id,
-            HirDiagnostic::HttpConfigNotBlock { span, .. } => span.file_id,
-            HirDiagnostic::UnknownHttpConfigField { span, .. } => span.file_id,
-            HirDiagnostic::NegativeTimeout { span, .. } => span.file_id,
-            HirDiagnostic::MissingProvider { span, .. } => span.file_id,
-            HirDiagnostic::UnknownClientProperty { span, .. } => span.file_id,
-        },
-    }
-}
-
-/// Convert a `TypeError<Ty<'db>>` to `TypeError<String>` for storage without lifetime dependency
-fn convert_type_error_to_string<T: std::fmt::Display>(error: &TypeError<T>) -> TypeError<String> {
-    error.fmap(|ty| ty.to_string())
 }
 
 /// Helper to remove span ranges like @0..69 from CST output

@@ -33,6 +33,8 @@ baml_vir = { path = "crates/baml_vir" }
 baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
+baml_ide = { path = "crates/baml_ide" }
+baml_project = { path = "crates/baml_project" }
 baml_language_server = { path = "crates/baml_language_server" }
 
 # external dependencies
@@ -106,7 +108,6 @@ url = "2.5.2"
 tokio = { version = "1.36", features = ["full", "tracing"] }
 console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
 axum = { version = "0.8.4", features = ["ws"] }
-tokio-stream.workspace = true
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
 webbrowser = "1.0.5"

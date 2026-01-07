@@ -8,6 +8,43 @@ use crate::{
     indexable::{GlobalPool, ObjectIndex, ObjectPool},
 };
 
+// ============================================================================
+// Type Tags for Jump Table Dispatch
+// ============================================================================
+
+/// Global type tag constants for runtime type identification.
+///
+/// These are used by the `TypeTag` instruction to extract a type identifier
+/// from any value for jump table dispatch on union types.
+///
+/// Primitives have fixed tags (0-9 reserved), classes start at 100.
+pub mod type_tags {
+    /// Integer type tag.
+    pub const INT: i64 = 0;
+    /// String type tag.
+    pub const STRING: i64 = 1;
+    /// Boolean type tag.
+    pub const BOOL: i64 = 2;
+    /// Null type tag.
+    pub const NULL: i64 = 3;
+    /// Float type tag.
+    pub const FLOAT: i64 = 4;
+    /// Enum variant type tag (all variants share this).
+    pub const ENUM: i64 = 5;
+    /// List/array type tag.
+    pub const LIST: i64 = 6;
+    /// Map type tag.
+    pub const MAP: i64 = 7;
+    /// Function type tag.
+    pub const FUNCTION: i64 = 8;
+    /// Future type tag.
+    pub const FUTURE: i64 = 9;
+    /// Base value for class type tags (classes start at 100).
+    pub const CLASS_BASE: i64 = 100;
+    /// Unknown/invalid type tag.
+    pub const UNKNOWN: i64 = -1;
+}
+
 /// Compiled program ready for execution.
 ///
 /// This is what `baml_codegen` produces. It contains all the objects and globals
@@ -133,6 +170,10 @@ pub struct Class {
 
     /// Class field names. Debug info, VM doesn't need this.
     pub field_names: Vec<String>,
+
+    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
+    /// Assigned during codegen as `CLASS_BASE + class_index`.
+    pub type_tag: i64,
 }
 
 impl std::fmt::Display for Class {

@@ -18,7 +18,7 @@ client<llm> MyClient {
 //----
 //- diagnostics
 // Error: Missing `provider` field in client. e.g. `provider openai`
-//    ╭─[ 0:1:1 ]
+//    ╭─[ client_required_provider.baml:1:1 ]
 //    │
 //  1 │ ╭─▶ client<llm> MyClient {
 //    ┆ ┆   

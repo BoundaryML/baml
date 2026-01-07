@@ -1,18 +1,137 @@
-//! Hover text extraction for inline tests.
-//!
-//! This module provides hover functionality without the full LSP infrastructure.
+//! Hover information for BAML symbols.
 
 use baml_db::{
-    RootDatabase,
-    baml_hir::{self, ItemId, file_item_tree, project_items},
+    Name, SourceFile,
+    baml_hir::{self, Db, ItemId, file_item_tree, project_items},
     baml_workspace::Project,
 };
+use text_size::{TextRange, TextSize};
+
+use crate::{MarkupKind, RangedValue};
+
+/// Hover information for a symbol.
+#[derive(Debug, Clone)]
+pub struct Hover {
+    contents: Vec<HoverContent>,
+}
+
+/// Content within a hover popup.
+#[derive(Debug, Clone)]
+pub enum HoverContent {
+    /// A code signature (function, class, etc.).
+    Signature(String),
+    /// Documentation text.
+    Docstring(String),
+}
+
+impl Hover {
+    /// Create a new hover with signature content.
+    pub fn with_signature(signature: String) -> Self {
+        Self {
+            contents: vec![HoverContent::Signature(signature)],
+        }
+    }
+
+    /// Check if hover has any content.
+    pub fn is_empty(&self) -> bool {
+        self.contents.is_empty()
+    }
+
+    /// Format the hover for display.
+    pub fn display(&self, kind: MarkupKind) -> String {
+        let mut result = String::new();
+        for content in &self.contents {
+            match content {
+                HoverContent::Signature(sig) => match kind {
+                    MarkupKind::PlainText => result.push_str(sig),
+                    MarkupKind::Markdown => {
+                        result.push_str("```baml\n");
+                        result.push_str(sig);
+                        result.push_str("\n```");
+                    }
+                },
+                HoverContent::Docstring(doc) => {
+                    if !result.is_empty() {
+                        result.push_str("\n\n");
+                    }
+                    result.push_str(doc);
+                }
+            }
+        }
+        result
+    }
+}
+
+/// Get hover information at the given position.
+///
+/// Returns `None` if there's nothing to show at this position.
+pub fn hover(
+    db: &dyn Db,
+    file: SourceFile,
+    project: Project,
+    offset: TextSize,
+) -> Option<RangedValue<Hover>> {
+    let text = file.text(db);
+
+    // Get the word at the cursor position
+    let (word, word_range) = get_word_at_offset(text, offset)?;
+
+    // Look up the symbol by name
+    let hover_text = get_hover_text_for_symbol(db, project, &word)?;
+
+    Some(RangedValue::new(
+        word_range,
+        Hover::with_signature(hover_text),
+    ))
+}
+
+/// Extract the word (identifier) at the given byte offset.
+fn get_word_at_offset(text: &str, offset: TextSize) -> Option<(String, TextRange)> {
+    let offset_usize: usize = offset.into();
+
+    if offset_usize > text.len() {
+        return None;
+    }
+
+    let bytes = text.as_bytes();
+
+    // Find word start (scan backward)
+    let mut start = offset_usize;
+    while start > 0 {
+        let prev = start - 1;
+        if !is_identifier_char(bytes[prev]) {
+            break;
+        }
+        start = prev;
+    }
+
+    // Find word end (scan forward)
+    let mut end = offset_usize;
+    while end < bytes.len() && is_identifier_char(bytes[end]) {
+        end += 1;
+    }
+
+    if start == end {
+        return None;
+    }
+
+    let word = text[start..end].to_string();
+    let range = TextRange::new(
+        TextSize::from(to_u32_saturating(start)),
+        TextSize::from(to_u32_saturating(end)),
+    );
+
+    Some((word, range))
+}
+
+fn is_identifier_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
 
 /// Get hover text for a symbol by name.
-///
-/// Looks up the symbol in the project and returns formatted hover text.
-pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str) -> Option<String> {
-    let items = project_items(db, root);
+fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Option<String> {
+    let name_to_find = Name::new(name);
+    let items = project_items(db, project);
 
     for item in items.items(db) {
         match item {
@@ -21,7 +140,7 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
                 let item_tree = file_item_tree(db, file);
                 let func = &item_tree[func_loc.id(db)];
 
-                if func.name.as_str() == symbol_name {
+                if func.name == name_to_find {
                     let sig = baml_hir::function_signature(db, *func_loc);
                     return Some(format_function_signature(&sig));
                 }
@@ -31,7 +150,7 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
                 let item_tree = file_item_tree(db, file);
                 let class = &item_tree[class_loc.id(db)];
 
-                if class.name.as_str() == symbol_name {
+                if class.name == name_to_find {
                     return Some(format_class_definition(class));
                 }
             }
@@ -40,7 +159,7 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
                 let item_tree = file_item_tree(db, file);
                 let enum_def = &item_tree[enum_loc.id(db)];
 
-                if enum_def.name.as_str() == symbol_name {
+                if enum_def.name == name_to_find {
                     return Some(format_enum_definition(enum_def));
                 }
             }
@@ -49,7 +168,7 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
                 let item_tree = file_item_tree(db, file);
                 let alias = &item_tree[alias_loc.id(db)];
 
-                if alias.name.as_str() == symbol_name {
+                if alias.name == name_to_find {
                     return Some(format!(
                         "type {} = {}",
                         alias.name,
@@ -62,31 +181,26 @@ pub fn get_hover_for_symbol(db: &RootDatabase, root: Project, symbol_name: &str)
                 let item_tree = file_item_tree(db, file);
                 let client = &item_tree[client_loc.id(db)];
 
-                if client.name.as_str() == symbol_name {
-                    return Some(format!(
-                        "client {} {{\n  provider: {}\n}}",
-                        client.name, client.provider
-                    ));
+                if client.name == name_to_find {
+                    return Some(format!("client {}", client.name));
                 }
-            }
-            ItemId::Test(_) => {
-                // Tests don't have hover
             }
             ItemId::Generator(gen_loc) => {
                 let file = gen_loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let generator = &item_tree[gen_loc.id(db)];
 
-                if generator.name.as_str() == symbol_name {
-                    let mut lines = vec![format!("generator {} {{", generator.name)];
-                    if let Some(ref output_type) = generator.output_type {
-                        lines.push(format!("  output_type: {}", output_type));
-                    }
-                    if let Some(ref output_dir) = generator.output_dir {
-                        lines.push(format!("  output_dir: {}", output_dir));
-                    }
-                    lines.push("}".to_string());
-                    return Some(lines.join("\n"));
+                if generator.name == name_to_find {
+                    return Some(format!("generator {}", generator.name));
+                }
+            }
+            ItemId::Test(test_loc) => {
+                let file = test_loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let test = &item_tree[test_loc.id(db)];
+
+                if test.name == name_to_find {
+                    return Some(format!("test {}", test.name));
                 }
             }
         }
@@ -111,15 +225,15 @@ fn format_function_signature(sig: &baml_hir::FunctionSignature) -> String {
     )
 }
 
-/// Format a TypeRef for display.
+/// Format a `TypeRef` for display.
 fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
-    use baml_db::baml_hir::TypeRef;
+    use baml_hir::TypeRef;
 
     match ty {
         TypeRef::Path(path) => path
             .segments
             .iter()
-            .map(|s| s.as_str())
+            .map(smol_str::SmolStr::as_str)
             .collect::<Vec<_>>()
             .join("::"),
         TypeRef::Int => "int".to_string(),
@@ -141,7 +255,7 @@ fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
             .map(format_type_ref)
             .collect::<Vec<_>>()
             .join(" | "),
-        TypeRef::StringLiteral(s) => format!("\"{}\"", s),
+        TypeRef::StringLiteral(s) => format!("\"{s}\""),
         TypeRef::IntLiteral(i) => i.to_string(),
         TypeRef::FloatLiteral(f) => f.clone(),
         TypeRef::BoolLiteral(b) => b.to_string(),
@@ -192,73 +306,6 @@ fn format_enum_definition(enum_def: &baml_hir::Enum) -> String {
     lines.join("\n")
 }
 
-#[cfg(test)]
-mod tests {
-    use salsa::Setter;
-
-    use super::*;
-
-    #[test]
-    fn test_hover_class() {
-        let mut db = RootDatabase::new();
-        let root = db.set_project_root(std::path::PathBuf::from("."));
-
-        let content = r#"class Person {
-    name string
-    age int
-}"#;
-
-        let source_file = db.add_file("test.baml", content);
-        root.set_files(&mut db).to(vec![source_file]);
-
-        let hover = get_hover_for_symbol(&db, root, "Person");
-        assert!(hover.is_some());
-        let hover_text = hover.unwrap();
-        assert!(hover_text.contains("class Person"));
-        assert!(hover_text.contains("name string"));
-        assert!(hover_text.contains("age int"));
-    }
-
-    #[test]
-    fn test_hover_function() {
-        let mut db = RootDatabase::new();
-        let root = db.set_project_root(std::path::PathBuf::from("."));
-
-        let content = r#"function Add(a: int, b: int) -> int {
-    a + b
-}"#;
-
-        let source_file = db.add_file("test.baml", content);
-        root.set_files(&mut db).to(vec![source_file]);
-
-        let hover = get_hover_for_symbol(&db, root, "Add");
-        assert!(hover.is_some());
-        let hover_text = hover.unwrap();
-        assert!(hover_text.contains("function Add"));
-        assert!(hover_text.contains("a: int"));
-        assert!(hover_text.contains("-> int"));
-    }
-
-    #[test]
-    fn test_hover_enum() {
-        let mut db = RootDatabase::new();
-        let root = db.set_project_root(std::path::PathBuf::from("."));
-
-        let content = r#"enum Color {
-    Red
-    Green
-    Blue
-}"#;
-
-        let source_file = db.add_file("test.baml", content);
-        root.set_files(&mut db).to(vec![source_file]);
-
-        let hover = get_hover_for_symbol(&db, root, "Color");
-        assert!(hover.is_some());
-        let hover_text = hover.unwrap();
-        assert!(hover_text.contains("enum Color"));
-        assert!(hover_text.contains("Red"));
-        assert!(hover_text.contains("Green"));
-        assert!(hover_text.contains("Blue"));
-    }
+fn to_u32_saturating(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }

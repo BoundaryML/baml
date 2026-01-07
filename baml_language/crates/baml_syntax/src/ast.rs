@@ -65,6 +65,9 @@ ast_node!(Field, FIELD);
 ast_node!(EnumVariant, ENUM_VARIANT);
 ast_node!(ConfigBlock, CONFIG_BLOCK);
 ast_node!(ConfigItem, CONFIG_ITEM);
+ast_node!(ClientField, CLIENT_FIELD);
+ast_node!(PromptField, PROMPT_FIELD);
+ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
@@ -121,6 +124,13 @@ impl TypeExpr {
         }
 
         parts
+    }
+
+    /// Get the text range of this type expression.
+    ///
+    /// This is useful for error reporting and span creation.
+    pub fn text_range(&self) -> rowan::TextRange {
+        self.syntax.text_range()
     }
 }
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
@@ -222,6 +232,52 @@ impl FunctionDef {
     /// Check if this is an expression function.
     pub fn is_expr_function(&self) -> bool {
         self.expr_body().is_some()
+    }
+}
+
+impl LlmFunctionBody {
+    /// Get the client field if present.
+    ///
+    /// For `function Foo() -> string { client GPT4 ... }`, returns the `client GPT4` field.
+    pub fn client_field(&self) -> Option<ClientField> {
+        self.syntax.children().find_map(ClientField::cast)
+    }
+
+    /// Get the prompt field if present.
+    ///
+    /// For `function Foo() -> string { ... prompt #"..."# }`, returns the `prompt #"..."#` field.
+    pub fn prompt_field(&self) -> Option<PromptField> {
+        self.syntax.children().find_map(PromptField::cast)
+    }
+}
+
+impl ClientField {
+    /// Get the client name token.
+    ///
+    /// For `client GPT4`, returns the `GPT4` token.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
+impl PromptField {
+    /// Get the raw string literal node containing the prompt.
+    ///
+    /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node.
+    pub fn raw_string(&self) -> Option<RawStringLiteral> {
+        self.syntax.children().find_map(RawStringLiteral::cast)
+    }
+}
+
+impl RawStringLiteral {
+    /// Get the full text of the raw string literal, including delimiters.
+    ///
+    /// For `#"Hello"#`, returns `#"Hello"#`.
+    pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
     }
 }
 
@@ -488,6 +544,23 @@ impl ConfigItem {
             })
             .unwrap_or(false)
     }
+
+    /// Check if this config item's key matches the given name.
+    ///
+    /// This is a convenience method to avoid the common pattern:
+    /// `item.key().map(|k| k.text() == "name").unwrap_or(false)`
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Instead of:
+    /// block.items().find(|item| item.key().map(|k| k.text() == "provider").unwrap_or(false))
+    ///
+    /// // Use:
+    /// block.items().find(|item| item.matches_key("provider"))
+    /// ```
+    pub fn matches_key(&self, name: &str) -> bool {
+        self.key().is_some_and(|k| k.text() == name)
+    }
 }
 
 impl TestDef {
@@ -516,7 +589,7 @@ impl TestDef {
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
-            .find(|item| item.key().map(|k| k.text() == "functions").unwrap_or(false))
+            .find(|item| item.matches_key("functions"))
             .map(|item| {
                 // Look for WORD tokens within the config item's descendants
                 // Skip the first one (which is the key "functions")
@@ -925,20 +998,31 @@ impl LetStmt {
         })
     }
 
-    /// Get the initializer as a token (for direct literals like integers, bools, null).
-    /// Returns the literal token if the initializer is a simple literal.
+    /// Get the initializer as a token (for direct literals like integers, bools, null,
+    /// or simple variable references).
+    /// Returns the literal/identifier token if the initializer is a simple token.
     pub fn initializer_token(&self) -> Option<SyntaxToken> {
+        // We need to find tokens AFTER the '=' sign, since the first WORD is the variable name
+        let mut seen_equals = false;
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| {
+                if token.kind() == SyntaxKind::EQUALS {
+                    seen_equals = true;
+                    return false;
+                }
+                // Only consider tokens after the '='
+                if !seen_equals {
+                    return false;
+                }
                 match token.kind() {
                     SyntaxKind::INTEGER_LITERAL
                     | SyntaxKind::FLOAT_LITERAL
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL => true,
-                    // Boolean and null literals are parsed as WORD tokens
-                    SyntaxKind::WORD => matches!(token.text(), "true" | "false" | "null"),
+                    // WORD tokens can be boolean/null literals or variable references
+                    SyntaxKind::WORD => true,
                     _ => false,
                 }
             })
@@ -1035,7 +1119,8 @@ impl BlockExpr {
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
-                        | SyntaxKind::CONTINUE_STMT => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::CONTINUE_STMT
+                        | SyntaxKind::ASSERT_STMT => Some(BlockElement::Stmt(n)),
                         // Header comment (//# name)
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes

@@ -138,6 +138,13 @@ fn convert_instruction(
         baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
         baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
         baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
+        baml_vm::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
+            table_idx: *table_idx,
+            default: *default,
+        },
+        baml_vm::Instruction::Discriminant => Instruction::Discriminant,
+        baml_vm::Instruction::TypeTag => Instruction::TypeTag,
+        baml_vm::Instruction::Unreachable => Instruction::Unreachable,
     })
 }
 

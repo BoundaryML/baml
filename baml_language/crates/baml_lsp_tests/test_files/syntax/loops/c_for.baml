@@ -101,30 +101,30 @@ function BreakContinue() -> int {
 
 //----
 //- diagnostics
-// Error: Unknown variable i
-//     ╭─[ 0:21:9 ]
+// Error: Unknown variable `i`
+//     ╭─[ loops_c_for.baml:21:9 ]
 //     │
 //  21 │     for (; i <= 10; i += 1) {
 //     │            ┬  
-//     │            ╰── Unknown variable i
+//     │            ╰── Unknown variable `i`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Unknown variable i
-//     ╭─[ 0:22:8 ]
+// Error: Unknown variable `i`
+//     ╭─[ loops_c_for.baml:22:8 ]
 //     │
 //  22 │        s += i;
 //     │             ┬  
-//     │             ╰── Unknown variable i
+//     │             ╰── Unknown variable `i`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯
-// Error: Unknown variable i
-//     ╭─[ 0:21:18 ]
+// Error: Unknown variable `i`
+//     ╭─[ loops_c_for.baml:21:18 ]
 //     │
 //  21 │     for (; i <= 10; i += 1) {
 //     │                     ┬  
-//     │                     ╰── Unknown variable i
+//     │                     ╰── Unknown variable `i`
 //     │ 
 //     │ Note: Error code: E0003
 // ────╯

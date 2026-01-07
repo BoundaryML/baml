@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -48,9 +48,6 @@ expression: output
     Return: String
   Function ExhaustiveStringLiterals:
     Return: String
-    Errors:
-      - Unreachable match arm
-      - Unreachable match arm
   Function ExhaustiveTypeAliasWithCatchAll:
     Return: String
   Function DuplicateIntLiteral:
@@ -73,8 +70,6 @@ expression: output
     Return: String
   Function StringLiteralUnionPattern:
     Return: String
-    Errors:
-      - Unreachable match arm
   Function ExhaustiveBool:
     Return: String
   Function NonExhaustiveDoubleMaybeMissingNull:
@@ -97,6 +92,8 @@ expression: output
       - Non-exhaustive match on bool: missing false
   Function IntLiteralUnionPattern:
     Return: String
+  Function ThreeLevelNestedMatch:
+    Return: String
   Function MultipleUnreachableSpans:
     Return: String
     Errors:
@@ -104,10 +101,10 @@ expression: output
       - Unreachable match arm
   Function ExhaustiveCustomBool:
     Return: String
+  Function NestedEnumMatch:
+    Return: String
   Function ExhaustiveMixedLiterals:
     Return: String
-    Errors:
-      - Unreachable match arm
   Function PartialUnionPlusCatchAll:
     Return: String
   Function ExhaustiveTrueType:
@@ -120,6 +117,8 @@ expression: output
     Return: String
     Errors:
       - Non-exhaustive match on MaybeOk: missing 200
+  Function GetStatus:
+    Return: Named("Status")
   Function EnumVariantUnion:
     Return: String
   Function NestedTypeAlias:
@@ -146,10 +145,14 @@ expression: output
     Return: String
   Function WrongLiteralTypeIntWithString:
     Return: String
+    Errors:
+      - Non-exhaustive match on int: missing int
   Function ExhaustiveEnumWithCatchAll:
     Return: String
   Function GuardedWithFallback:
     Return: Int
+  Function MatchArithmeticScrutinee:
+    Return: String
   Function HighLineNumberNonExhaustive:
     Return: String
     Errors:
@@ -176,12 +179,12 @@ expression: output
     Return: String
     Errors:
       - Unreachable match arm
-      - Unreachable match arm
-      - Unreachable match arm
   Function NonExhaustiveEnumMissingOne:
     Return: String
     Errors:
       - Non-exhaustive match on Status: missing Status.Pending
+  Function MatchComplexScrutinee:
+    Return: String
   Function ExhaustiveOptional:
     Return: String
   Function NonExhaustiveCustomBoolMissing:
@@ -190,6 +193,8 @@ expression: output
       - Non-exhaustive match on CustomBool: missing false
   Function NonExhaustiveMixedLiterals:
     Return: String
+    Errors:
+      - Non-exhaustive match on MixedLiterals: missing true
   Function NonExhaustiveClassPlusLiteralMissingClass:
     Return: String
     Errors:
@@ -208,6 +213,8 @@ expression: output
     Return: String
   Function StringLiteralAfterStringType:
     Return: String
+    Errors:
+      - Unreachable match arm
   Function NestedEnumVariantUnions:
     Return: String
   Function UnionPatternCoversAll:
@@ -221,12 +228,11 @@ expression: output
   Function NonExhaustiveStringLiteral:
     Return: String
     Errors:
-      - Unreachable match arm
+      - Non-exhaustive match on Role: missing "system"
+  Function MatchFunctionCallScrutinee:
+    Return: String
   Function StringLiteralWithCatchAll:
     Return: String
-    Errors:
-      - Unreachable match arm
-      - Unreachable match arm
   Function NonExhaustiveEnumMissingMultiple:
     Return: String
     Errors:

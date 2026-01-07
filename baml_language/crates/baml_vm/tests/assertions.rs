@@ -6,7 +6,6 @@ use baml_tests::bytecode::{
 use baml_vm::RuntimeError;
 
 #[test]
-#[ignore = "assert statements not yet implemented in HIR"]
 fn assert_ok() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
@@ -23,7 +22,6 @@ fn assert_ok() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "assertion error handling not matching expected"]
 fn assert_not_ok() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"

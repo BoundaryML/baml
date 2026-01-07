@@ -18,6 +18,7 @@ use url::Url;
 use crate::{server::schedule::Task, session::Session};
 
 mod diagnostics;
+pub(crate) mod lsp_diagnostic;
 pub(crate) mod notifications;
 mod requests;
 mod traits;
@@ -94,8 +95,8 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     for (_, project) in projects.iter() {
                         let functions = project
                             .lock()
-                            .baml_project
-                            .list_functions(effective_flags, None)
+                            .list_functions()
+                            .unwrap_or_default()
                             .iter()
                             .map(|f| BamlFunctionResult {
                                 name: f.name.clone(),

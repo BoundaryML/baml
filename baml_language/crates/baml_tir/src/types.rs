@@ -3,7 +3,6 @@
 use std::fmt;
 
 use baml_base::Name;
-use baml_hir::{ClassId, EnumId};
 
 /// The value component of a literal type.
 ///
@@ -38,7 +37,7 @@ impl fmt::Display for LiteralValue {
 
 /// A resolved type in BAML.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Ty<'db> {
+pub enum Ty {
     // Primitive types
     Int,
     Float,
@@ -60,27 +59,27 @@ pub enum Ty<'db> {
     /// for convenience, since null is fundamental to optional types.
     Literal(LiteralValue),
 
-    // User-defined types (fully resolved with IDs)
-    Class(ClassId<'db>),
-    Enum(EnumId<'db>),
+    // User-defined types (resolved by name)
+    Class(Name),
+    Enum(Name),
 
     /// Named type (unresolved class/enum by name).
     /// Used when we know the type name but haven't resolved it to an ID yet.
     Named(Name),
 
     // Type constructors
-    Optional(Box<Ty<'db>>),
-    List(Box<Ty<'db>>),
+    Optional(Box<Ty>),
+    List(Box<Ty>),
     Map {
-        key: Box<Ty<'db>>,
-        value: Box<Ty<'db>>,
+        key: Box<Ty>,
+        value: Box<Ty>,
     },
-    Union(Vec<Ty<'db>>),
+    Union(Vec<Ty>),
 
     /// Function/arrow type: `(T1, T2, ...) -> R`
     Function {
-        params: Vec<Ty<'db>>,
-        ret: Box<Ty<'db>>,
+        params: Vec<Ty>,
+        ret: Box<Ty>,
     },
 
     // Special types
@@ -90,10 +89,10 @@ pub enum Ty<'db> {
 
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
-    WatchAccessor(Box<Ty<'db>>),
+    WatchAccessor(Box<Ty>),
 }
 
-impl Ty<'_> {
+impl Ty {
     /// Check if this type is an error type.
     pub fn is_error(&self) -> bool {
         matches!(self, Ty::Error)
@@ -120,8 +119,8 @@ impl Ty<'_> {
     /// - `Ty::Union(vec![])`: An empty union has no members, so no values
     ///
     /// Possible future cases to consider:
-    /// - Zero-variant enums: `Ty::Enum(id)` where the enum has no variants defined
-    ///   (would require access to the database to check variant count)
+    /// - Zero-variant enums: `Ty::Enum(name)` where the enum has no variants defined
+    ///   (would require access to the enum variants map to check variant count)
     /// - Recursive uninhabited types: e.g., `List<Never>` is inhabited (by empty list),
     ///   but some recursive structures could be uninhabited
     /// - Intersection of incompatible types (if the type system supports intersections)
@@ -132,8 +131,8 @@ impl Ty<'_> {
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
-            // TODO(exhaustiveness): Check for zero-variant enums. This requires database
-            // access to look up enum definitions. Currently only empty unions are detected.
+            // TODO(exhaustiveness): Check for zero-variant enums. This requires access
+            // to enum variants map. Currently only empty unions are detected.
             _ => false,
         }
     }
@@ -163,62 +162,9 @@ impl Ty<'_> {
         Ty::List(Box::new(self))
     }
 
-    /// Check if this type is a subtype of another.
-    ///
-    /// Returns true if `self` can be used where `other` is expected.
-    pub fn is_subtype_of(&self, other: &Ty) -> bool {
-        // Same types are subtypes
-        if self == other {
-            return true;
-        }
-
-        // Unknown is compatible with everything (for error recovery)
-        if self.is_unknown() || other.is_unknown() {
-            return true;
-        }
-
-        // Error type is compatible with everything (for error recovery)
-        if self.is_error() || other.is_error() {
-            return true;
-        }
-
-        match (self, other) {
-            // Null is a subtype of Optional<T>
-            (Ty::Null, Ty::Optional(_)) => true,
-
-            // T is a subtype of Optional<T>
-            (inner, Ty::Optional(opt_inner)) => inner.is_subtype_of(opt_inner),
-
-            // Optional<T> is a subtype of T | null (Union containing null)
-            (Ty::Optional(inner), Ty::Union(types)) => {
-                types.contains(&Ty::Null) && types.iter().any(|t| inner.is_subtype_of(t))
-            }
-
-            // T is a subtype of T | U (union containing T)
-            (inner, Ty::Union(types)) => types.iter().any(|t| inner.is_subtype_of(t)),
-
-            // Union<T1, T2> is a subtype of U if all Ti are subtypes of U
-            (Ty::Union(types), other) => types.iter().all(|t| t.is_subtype_of(other)),
-
-            // List covariance: List<T> is a subtype of List<U> if T is a subtype of U
-            (Ty::List(inner1), Ty::List(inner2)) => inner1.is_subtype_of(inner2),
-
-            // Map covariance in value: Map<K, V1> is a subtype of Map<K, V2> if V1 is a subtype of V2
-            // Key types must be equal (invariant)
-            (Ty::Map { key: k1, value: v1 }, Ty::Map { key: k2, value: v2 }) => {
-                k1 == k2 && v1.is_subtype_of(v2)
-            }
-
-            // Int is a subtype of Float (numeric widening)
-            (Ty::Int, Ty::Float) => true,
-
-            _ => false,
-        }
-    }
-
     /// Get the element type if this is a list type.
     #[allow(dead_code)]
-    pub fn list_element(&self) -> Option<&Ty<'_>> {
+    pub fn list_element(&self) -> Option<&Ty> {
         match self {
             Ty::List(inner) => Some(inner),
             _ => None,
@@ -227,7 +173,7 @@ impl Ty<'_> {
 
     /// Get the key and value types if this is a map type.
     #[allow(dead_code)]
-    pub fn map_types(&self) -> Option<(&Ty<'_>, &Ty<'_>)> {
+    pub fn map_types(&self) -> Option<(&Ty, &Ty)> {
         match self {
             Ty::Map { key, value } => Some((key, value)),
             _ => None,
@@ -236,7 +182,7 @@ impl Ty<'_> {
 
     /// Unwrap optional type.
     #[allow(dead_code)]
-    pub fn unwrap_optional(&self) -> &Ty<'_> {
+    pub fn unwrap_optional(&self) -> &Ty {
         match self {
             Ty::Optional(inner) => inner,
             _ => self,
@@ -244,7 +190,7 @@ impl Ty<'_> {
     }
 }
 
-impl fmt::Display for Ty<'_> {
+impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Ty::Int => write!(f, "int"),
@@ -257,8 +203,8 @@ impl fmt::Display for Ty<'_> {
             Ty::Video => write!(f, "video"),
             Ty::Pdf => write!(f, "pdf"),
             Ty::Literal(val) => write!(f, "{val}"),
-            Ty::Class(_) => write!(f, "<class>"),
-            Ty::Enum(_) => write!(f, "<enum>"),
+            Ty::Class(name) => write!(f, "{name}"),
+            Ty::Enum(name) => write!(f, "{name}"),
             Ty::Named(name) => write!(f, "{name}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
@@ -287,52 +233,16 @@ impl fmt::Display for Ty<'_> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_subtype_same() {
-        assert!(Ty::<'_>::Int.is_subtype_of(&Ty::Int));
-        assert!(Ty::<'_>::String.is_subtype_of(&Ty::String));
-    }
-
-    #[test]
-    fn test_subtype_numeric_widening() {
-        assert!(Ty::<'_>::Int.is_subtype_of(&Ty::Float));
-        assert!(!Ty::<'_>::Float.is_subtype_of(&Ty::Int));
-    }
-
-    #[test]
-    fn test_subtype_optional() {
-        let opt_int: Ty<'_> = Ty::Optional(Box::new(Ty::Int));
-        assert!(Ty::<'_>::Int.is_subtype_of(&opt_int));
-        assert!(Ty::<'_>::Null.is_subtype_of(&opt_int));
-        assert!(!Ty::<'_>::String.is_subtype_of(&opt_int));
-    }
-
-    #[test]
-    fn test_subtype_union() {
-        let union: Ty<'_> = Ty::Union(vec![Ty::Int, Ty::String]);
-        assert!(Ty::<'_>::Int.is_subtype_of(&union));
-        assert!(Ty::<'_>::String.is_subtype_of(&union));
-        assert!(!Ty::<'_>::Bool.is_subtype_of(&union));
-    }
-
-    #[test]
-    fn test_subtype_list_covariance() {
-        let list_int: Ty<'_> = Ty::List(Box::new(Ty::Int));
-        let list_float: Ty<'_> = Ty::List(Box::new(Ty::Float));
-        assert!(list_int.is_subtype_of(&list_float));
-        assert!(!list_float.is_subtype_of(&list_int));
-    }
+    // NOTE: Subtyping tests are now in normalize.rs which handles
+    // type alias resolution and equirecursive subtyping.
 
     #[test]
     fn test_display() {
-        assert_eq!(Ty::<'_>::Int.to_string(), "int");
+        assert_eq!(Ty::Int.to_string(), "int");
+        assert_eq!(Ty::Optional(Box::new(Ty::String)).to_string(), "string?");
+        assert_eq!(Ty::List(Box::new(Ty::Int)).to_string(), "int[]");
         assert_eq!(
-            Ty::<'_>::Optional(Box::new(Ty::String)).to_string(),
-            "string?"
-        );
-        assert_eq!(Ty::<'_>::List(Box::new(Ty::Int)).to_string(), "int[]");
-        assert_eq!(
-            Ty::<'_>::Union(vec![Ty::Int, Ty::String]).to_string(),
+            Ty::Union(vec![Ty::Int, Ty::String]).to_string(),
             "int | string"
         );
     }
@@ -340,23 +250,23 @@ mod tests {
     #[test]
     fn test_is_uninhabited() {
         // Unknown and Error are treated as uninhabited for error recovery
-        assert!(Ty::<'_>::Unknown.is_uninhabited());
-        assert!(Ty::<'_>::Error.is_uninhabited());
+        assert!(Ty::Unknown.is_uninhabited());
+        assert!(Ty::Error.is_uninhabited());
 
         // Empty union is uninhabited (no possible values)
-        assert!(Ty::<'_>::Union(vec![]).is_uninhabited());
+        assert!(Ty::Union(vec![]).is_uninhabited());
 
         // Non-empty union is inhabited
-        assert!(!Ty::<'_>::Union(vec![Ty::Int]).is_uninhabited());
-        assert!(!Ty::<'_>::Union(vec![Ty::Int, Ty::String]).is_uninhabited());
+        assert!(!Ty::Union(vec![Ty::Int]).is_uninhabited());
+        assert!(!Ty::Union(vec![Ty::Int, Ty::String]).is_uninhabited());
 
         // Regular types are inhabited
-        assert!(!Ty::<'_>::Int.is_uninhabited());
-        assert!(!Ty::<'_>::String.is_uninhabited());
-        assert!(!Ty::<'_>::Bool.is_uninhabited());
-        assert!(!Ty::<'_>::Null.is_uninhabited());
-        assert!(!Ty::<'_>::Void.is_uninhabited());
-        assert!(!Ty::<'_>::List(Box::new(Ty::Int)).is_uninhabited());
-        assert!(!Ty::<'_>::Optional(Box::new(Ty::Int)).is_uninhabited());
+        assert!(!Ty::Int.is_uninhabited());
+        assert!(!Ty::String.is_uninhabited());
+        assert!(!Ty::Bool.is_uninhabited());
+        assert!(!Ty::Null.is_uninhabited());
+        assert!(!Ty::Void.is_uninhabited());
+        assert!(!Ty::List(Box::new(Ty::Int)).is_uninhabited());
+        assert!(!Ty::Optional(Box::new(Ty::Int)).is_uninhabited());
     }
 }

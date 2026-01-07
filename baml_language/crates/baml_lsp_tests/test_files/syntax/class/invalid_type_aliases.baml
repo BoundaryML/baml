@@ -58,7 +58,7 @@ type Four = int | string | b
 //----
 //- diagnostics
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:1 ]
+//    ╭─[ class_invalid_type_aliases.baml:9:1 ]
 //    │
 //  9 │ typpe Two = float
 //    │ ──┬──  
@@ -67,7 +67,7 @@ type Four = int | string | b
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:7 ]
+//    ╭─[ class_invalid_type_aliases.baml:9:7 ]
 //    │
 //  9 │ typpe Two = float
 //    │       ─┬─  
@@ -76,7 +76,7 @@ type Four = int | string | b
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found '='
-//    ╭─[ 0:9:11 ]
+//    ╭─[ class_invalid_type_aliases.baml:9:11 ]
 //    │
 //  9 │ typpe Two = float
 //    │           ┬  
@@ -85,7 +85,7 @@ type Four = int | string | b
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected top-level declaration, found identifier
-//    ╭─[ 0:9:13 ]
+//    ╭─[ class_invalid_type_aliases.baml:9:13 ]
 //    │
 //  9 │ typpe Two = float
 //    │             ──┬──  
@@ -93,14 +93,14 @@ type Four = int | string | b
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Duplicate type alias 'One'
-//    ╭─[ 0:1:1 ]
+// Error: Duplicate type alias `One`
+//    ╭─[ class_invalid_type_aliases.baml:1:1 ]
 //    │
 //  1 │ class One {
 //    │ │ 
-//    │ ╰─ type alias 'One' defined in class_invalid_type_aliases.baml
+//    │ ╰─ type alias `One` redefined here
 //    │ │ 
-//    │ ╰─ 'One' previously defined in class_invalid_type_aliases.baml
+//    │ ╰─ `One` first defined in class_invalid_type_aliases.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

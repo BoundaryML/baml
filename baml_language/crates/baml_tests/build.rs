@@ -227,9 +227,10 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_hir::{function_body, function_signature};
-            use baml_tir::{typing_context, class_field_types, type_aliases, enum_variants};
+            use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
-            use baml_diagnostics::{render_hir_diagnostic, render_name_error, render_parse_error, render_type_error};
+            use baml_diagnostics::{DbSourceCache, render_parse_error};
+            use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
@@ -263,7 +264,7 @@ fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
             let content = #include_content;
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let tokens = baml_lexer::lex_file(&db, source_file);
 
@@ -298,10 +299,10 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             let content = #include_content;
             // Normalize line endings for cross-platform compatibility
             let content = content.replace("\r\n", "\n");
-            let mut db = RootDatabase::new();
-            let mut sources = HashMap::new();
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let source_file = db.add_file(#relative_path, &content);
-            sources.insert(source_file.file_id(&db), content.clone());
+            root.set_files(&mut db).to(vec![source_file]);
             let tree = baml_parser::syntax_tree(&db, source_file);
             let errors = baml_parser::parse_errors(&db, source_file);
 
@@ -312,8 +313,9 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             if errors.is_empty() {
                 writeln!(output, "None").unwrap();
             } else {
+                let mut cache = DbSourceCache::new(&db, root);
                 for error in errors.iter() {
-                    writeln!(output, "{}", render_parse_error(error, &sources, false)).unwrap();
+                    writeln!(output, "{}", render_parse_error(error, &mut cache, false)).unwrap();
                 }
             }
 
@@ -355,7 +357,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_03_hir() {
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let mut output = String::new();
             writeln!(output, "=== HIR ITEMS ===").unwrap();
 
@@ -398,8 +400,8 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_04_tir() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -411,9 +413,9 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = typing_context(&db, root);
-            let class_fields = class_field_types(&db, root);
-            let type_aliases_map = type_aliases(&db, root);
+            let globals = typing_context(&db, root).functions(&db).clone();
+            let class_fields = class_field_types(&db, root).classes(&db).clone();
+            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
             let enum_variants_map = enum_variants(&db, root);
             let enum_variants_data = enum_variants_map.enums(&db).clone();
 
@@ -472,8 +474,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_04_5_mir() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -485,8 +487,10 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             writeln!(output, "=== MIR ===").unwrap();
 
             // Build initial typing context with all function types
-            let globals = typing_context(&db, root);
-            let class_field_types_map = class_field_types(&db, root);
+            let globals = typing_context(&db, root).functions(&db).clone();
+            let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
+
+            let resolution_ctx = baml_tir::TypeResolutionContext::new(&db, root);
 
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -517,9 +521,9 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let inference = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference) {
+                        let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {
                             Ok(vir) => {
-                                let mir = baml_mir::lower(&signature, &vir, &db, &classes);
+                                let mir = baml_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
                                 baml_mir::pretty::display_function(&mir)
                             }
                             Err(err) => {
@@ -540,6 +544,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 }
 
 fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
+    // File loaders just load files, don't collect errors yet
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -556,13 +561,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                         #relative_path,
                         &content,
                     );
-                    sources.insert(source_file.file_id(&db), content.clone());
                     source_files.push(source_file);
-
-                    let errors = baml_parser::parse_errors(&db, source_file);
-                    for error in errors {
-                        all_errors.push(("parse".to_string(), render_parse_error(&error, &sources, false)));
-                    }
                 }
             }
         })
@@ -571,63 +570,47 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_05_diagnostics() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
-            let mut sources = HashMap::new();
+            use baml_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
+            use baml_project::collect_diagnostics;
+            use std::path::PathBuf;
+
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
-            let mut all_errors = Vec::new();
 
             #file_loaders
 
             // Update project root with the list of files for proper Salsa tracking
             root.set_files(&mut db).to(source_files.clone());
 
-            // Collect HIR lowering diagnostics (per-file validation)
+            // Collect all diagnostics using the unified collect_diagnostics function
+            let diagnostics = collect_diagnostics(&db, root, &source_files);
+
+            // Build sources and file_paths maps for rendering
+            let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
+            let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();
             for source_file in &source_files {
-                let lowering_result = baml_hir::file_lowering(&db, *source_file);
-                for diag in lowering_result.diagnostics(&db) {
-                    all_errors.push(("hir".to_string(), render_hir_diagnostic(diag, &sources, false)));
-                }
+                let file_id = source_file.file_id(&db);
+                sources.insert(file_id, source_file.text(&db).to_string());
+                file_paths.insert(file_id, source_file.path(&db));
             }
 
-            // Check for validation errors (project-wide validation)
-            let validation_result = baml_hir::validate_hir(&db, root);
-            for diag in validation_result.hir_diagnostics {
-                all_errors.push(("hir".to_string(), render_hir_diagnostic(&diag, &sources, false)));
-            }
-            for error in validation_result.name_errors {
-                all_errors.push(("name".to_string(), render_name_error(&error, &sources, false)));
-            }
-
-            // Build typing context and run type inference
-            let globals = typing_context(&db, root);
-            let class_fields = class_field_types(&db, root);
-            let type_aliases_map = type_aliases(&db, root);
-            let enum_variants_map = enum_variants(&db, root);
-            let enum_variants_data = enum_variants_map.enums(&db).clone();
-
-            for source_file in &source_files {
-                let items_struct = baml_hir::file_items(&db, *source_file);
-                let items = items_struct.items(&db);
-                for item in items.iter() {
-                    if let baml_hir::ItemId::Function(func_id) = item {
-                        let signature = function_signature(&db, *func_id);
-                        let body = function_body(&db, *func_id);
-                        let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
-                        for error in &result.errors {
-                            all_errors.push(("type".to_string(), render_type_error(error, &sources, false)));
-                        }
-                    }
-                }
-            }
+            let config = RenderConfig::test();
 
             let mut output = String::new();
             writeln!(output, "=== DIAGNOSTICS ===").unwrap();
-            if all_errors.is_empty() {
+            if diagnostics.is_empty() {
                 writeln!(output, "No errors found.").unwrap();
             } else {
-                for (phase, message) in all_errors {
-                    writeln!(output, "  [{}] {}", phase, message).unwrap();
+                for diag in &diagnostics {
+                    let phase_name = match diag.phase {
+                        DiagnosticPhase::Parse => "parse",
+                        DiagnosticPhase::Hir => "hir",
+                        DiagnosticPhase::Validation => "validation",
+                        DiagnosticPhase::Type => "type",
+                    };
+                    let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                    writeln!(output, "  [{}] {}", phase_name, rendered).unwrap();
                 }
             }
 
@@ -664,8 +647,8 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_06_codegen() {
-            let mut db = RootDatabase::new();
-            let root = db.set_project_root(std::path::PathBuf::from("."));
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
@@ -734,7 +717,7 @@ fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
             let content = content.replace("\r\n", "\n");
 
             // Test single character edits maintain correctness
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let original_tree = baml_parser::syntax_tree(&db, source_file);
 
@@ -763,7 +746,7 @@ fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
             let content = content.replace("\r\n", "\n");
 
             // Measure node reuse for single character edit
-            let mut db = RootDatabase::new();
+            let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
             let original_tree = baml_parser::syntax_tree(&db, source_file);
 
@@ -793,7 +776,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let mut db = RootDatabase::new();
+                    let mut db = ProjectDatabase::new();
                     let source_file = db.add_file(#relative_path, &content);
                     let tree = baml_parser::syntax_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
@@ -991,8 +974,8 @@ fn generate_incremental_benchmark(
             #after_includes
 
             bencher.bench_local(|| {
-                let mut db = RootDatabase::new();
-                let root = db.set_project_root(std::path::PathBuf::from("."));
+                let mut db = ProjectDatabase::new();
+                let root = db.set_project_root(std::path::Path::new("."));
 
                 // Initial compilation
                 #initial_loads
@@ -1019,8 +1002,8 @@ fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
             let content = content_raw.replace("\r\n", "\n");
 
             bencher.bench_local(|| {
-                let mut db = RootDatabase::new();
-                let root = db.set_project_root(std::path::PathBuf::from("."));
+                let mut db = ProjectDatabase::new();
+                let root = db.set_project_root(std::path::Path::new("."));
                 db.add_file(#file_name, &content);
                 let _ = black_box(baml_hir::project_items(&db, root));
             });

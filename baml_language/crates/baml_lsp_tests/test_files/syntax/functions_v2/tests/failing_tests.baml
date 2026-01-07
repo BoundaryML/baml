@@ -127,25 +127,25 @@ test Bar {
 
 //----
 //- diagnostics
-// Error: Duplicate test 'Bar' for function 'InputEnum'
-//    ╭─[ 0:1:1 ]
+// Error: Duplicate test `Bar` for function `InputEnum`
+//    ╭─[ functions_v2_tests_failing_tests.baml:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
-//    │ ╰─ test 'Bar' for function 'InputEnum' defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test `Bar` for `InputEnum` redefined here
 //    │ │ 
-//    │ ╰─ 'Bar' for 'InputEnum' previously defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test `Bar` for `InputEnum` first defined in functions_v2_tests_failing_tests.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯
-// Error: Duplicate test 'Foo' for function 'InputImage'
-//    ╭─[ 0:1:1 ]
+// Error: Duplicate test `Foo` for function `InputImage`
+//    ╭─[ functions_v2_tests_failing_tests.baml:1:1 ]
 //    │
 //  1 │ client<llm> Bar {
 //    │ │ 
-//    │ ╰─ test 'Foo' for function 'InputImage' defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test `Foo` for `InputImage` redefined here
 //    │ │ 
-//    │ ╰─ 'Foo' for 'InputImage' previously defined in functions_v2_tests_failing_tests.baml
+//    │ ╰─ test `Foo` for `InputImage` first defined in functions_v2_tests_failing_tests.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

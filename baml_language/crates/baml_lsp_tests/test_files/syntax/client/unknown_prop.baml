@@ -16,7 +16,7 @@ client<llm> MyClient {
 //----
 //- diagnostics
 // Error: Unknown field `myExtraProp` in client. Only `provider` and `options` are supported.
-//    ╭─[ 0:3:3 ]
+//    ╭─[ client_unknown_prop.baml:3:3 ]
 //    │
 //  3 │   myExtraProp "hello"
 //    │   ─────┬─────  

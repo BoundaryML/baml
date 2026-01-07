@@ -31,6 +31,9 @@ axum.workspace = true
 #     "internal",
 # ], default-features = false }
 baml_db.workspace = true
+baml_diagnostics.workspace = true
+baml_ide.workspace = true
+baml_project.workspace = true
 baml_lsp_types.workspace = true
 colored.workspace = true
 

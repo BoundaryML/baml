@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -95,7 +95,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Header comments (//#) are not allowed inside LLM functions
-    ╭─[ 0:13:5 ]
+    ╭─[ test.baml:13:5 ]
     │
  13 │     //# collect source material
     │     ─────────────┬─────────────  

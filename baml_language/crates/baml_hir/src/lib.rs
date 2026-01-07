@@ -56,22 +56,10 @@ pub use type_ref::*;
 
 /// Database trait for HIR queries.
 ///
-/// This is the base trait for the BAML compiler's Db hierarchy.
-/// It provides access to the project being compiled and is extended by
-/// downstream crates (`baml_tir::Db`, `baml_mir::Db`, etc.) to add
-/// phase-specific queries.
-///
-/// The Db trait hierarchy starts here because this is the first compiler
-/// phase that needs project context. Earlier phases (lexer, parser) only
-/// need `salsa::Database` for interning/tracking.
+/// Extends `baml_workspace::Db`. Use the free functions in this crate
+/// (e.g., `project_items`, `file_items`) for HIR queries.
 #[salsa::db]
-pub trait Db: salsa::Database {
-    /// Returns the project being analyzed.
-    ///
-    /// The project contains all source files (both user files and dependencies)
-    /// and is the root input for all queries.
-    fn project(&self) -> baml_workspace::Project;
-}
+pub trait Db: baml_workspace::Db {}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -198,11 +186,10 @@ pub fn file_items(db: &dyn Db, file: SourceFile) -> FileItems<'_> {
 /// Tracked: Get all items in the entire project.
 #[salsa::tracked]
 pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems<'_> {
-    let files = baml_workspace::project_files(db, root);
     let mut all_items = Vec::new();
 
-    for file in files {
-        let items_struct = file_items(db, file);
+    for file in root.files(db) {
+        let items_struct = file_items(db, *file);
         all_items.extend(items_struct.items(db).iter().copied());
     }
 

@@ -13,7 +13,7 @@ class Foo2 {
 //----
 //- diagnostics
 // Error: Expected Unexpected token in class body, found '.'
-//     ╭─[ 0:10:13 ]
+//     ╭─[ streaming_streaming_ok.baml:10:13 ]
 //     │
 //  10 │     @@stream.done
 //     │             ┬  
@@ -22,7 +22,7 @@ class Foo2 {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: field 'done' is missing a type annotation
-//     ╭─[ 0:10:14 ]
+//     ╭─[ streaming_streaming_ok.baml:10:14 ]
 //     │
 //  10 │     @@stream.done
 //     │              ──┬─  

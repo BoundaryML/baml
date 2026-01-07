@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -165,7 +165,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected '>', found '>>'
-    ╭─[ 0:28:69 ]
+    ╭─[ deeply_nested.baml:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
@@ -175,7 +175,7 @@ Error: Expected '>', found '>>'
 ────╯
 
 Error: Expected '>', found '>>'
-    ╭─[ 0:28:69 ]
+    ╭─[ deeply_nested.baml:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
@@ -185,7 +185,7 @@ Error: Expected '>', found '>>'
 ────╯
 
 Error: Expected '>', found '>>'
-    ╭─[ 0:28:69 ]
+    ╭─[ deeply_nested.baml:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
@@ -195,7 +195,7 @@ Error: Expected '>', found '>>'
 ────╯
 
 Error: Expected function body, found '>>'
-    ╭─[ 0:28:69 ]
+    ╭─[ deeply_nested.baml:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
@@ -205,7 +205,7 @@ Error: Expected function body, found '>>'
 ────╯
 
 Error: Expected top-level declaration, found '>>'
-    ╭─[ 0:28:69 ]
+    ╭─[ deeply_nested.baml:28:69 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                     ─┬  
@@ -215,7 +215,7 @@ Error: Expected top-level declaration, found '>>'
 ────╯
 
 Error: Expected top-level declaration, found '>'
-    ╭─[ 0:28:71 ]
+    ╭─[ deeply_nested.baml:28:71 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                       ┬  
@@ -225,7 +225,7 @@ Error: Expected top-level declaration, found '>'
 ────╯
 
 Error: Expected top-level declaration, found '{'
-    ╭─[ 0:28:73 ]
+    ╭─[ deeply_nested.baml:28:73 ]
     │
  28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     │                                                                         ┬  
@@ -235,7 +235,7 @@ Error: Expected top-level declaration, found '{'
 ────╯
 
 Error: Expected top-level declaration, found return
-    ╭─[ 0:30:3 ]
+    ╭─[ deeply_nested.baml:30:3 ]
     │
  30 │   return {}
     │   ───┬──  
@@ -245,7 +245,7 @@ Error: Expected top-level declaration, found return
 ────╯
 
 Error: Expected top-level declaration, found '{'
-    ╭─[ 0:30:10 ]
+    ╭─[ deeply_nested.baml:30:10 ]
     │
  30 │   return {}
     │          ┬  
@@ -255,7 +255,7 @@ Error: Expected top-level declaration, found '{'
 ────╯
 
 Error: Expected top-level declaration, found '}'
-    ╭─[ 0:30:11 ]
+    ╭─[ deeply_nested.baml:30:11 ]
     │
  30 │   return {}
     │           ┬  
@@ -265,7 +265,7 @@ Error: Expected top-level declaration, found '}'
 ────╯
 
 Error: Expected top-level declaration, found '}'
-    ╭─[ 0:31:1 ]
+    ╭─[ deeply_nested.baml:31:1 ]
     │
  31 │ }
     │ ┬  

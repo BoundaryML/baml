@@ -60,7 +60,7 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //----
 //- diagnostics
 // Error: Expected type, found '>'
-//     ╭─[ 0:26:10 ]
+//     ╭─[ class_map_types2.baml:26:10 ]
 //     │
 //  26 │   d1 map<>
 //     │          ┬  

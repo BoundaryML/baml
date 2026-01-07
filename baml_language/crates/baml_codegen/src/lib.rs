@@ -46,12 +46,13 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 use std::collections::HashMap;
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, Span};
 use baml_hir::{self, ItemId, function_body, function_signature};
+use baml_tir::TypeResolutionContext;
 pub use baml_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
-    ObjectIndex, Program, UnaryOp, Value,
+    ObjectIndex, Program, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -63,8 +64,7 @@ pub use baml_vm::{
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
 pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
-    let files = baml_workspace::project_files(db, project);
-    compile_files(db, &files)
+    compile_files(db, project.files(db))
 }
 
 /// Generate bytecode for a list of source files.
@@ -77,9 +77,12 @@ pub fn compile_files(
     files: &[SourceFile],
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
+    let project = db.project();
+
+    let resolution_ctx = TypeResolutionContext::new(db, project);
 
     // Build typing context (maps function names to their types)
-    let typing_context = build_typing_context(db, files);
+    let typing_context = build_typing_context(db, files, &resolution_ctx);
 
     // Build globals map (function name -> global index)
     // Register builtins first for stable indices, then user functions
@@ -110,6 +113,7 @@ pub fn compile_files(
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut class_field_types: HashMap<Name, HashMap<Name, baml_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
+    let mut class_type_tag_counter = 0i64;
 
     for file in files {
         let item_tree = baml_hir::file_item_tree(db, *file);
@@ -126,7 +130,7 @@ pub fn compile_files(
                     field_indices.insert(field.name.to_string(), idx);
                     field_names.push(field.name.to_string());
                     // Lower TypeRef to Ty for type inference
-                    let ty = baml_tir::lower_type_ref(db, &field.type_ref);
+                    let (ty, _) = resolution_ctx.lower_type_ref(&field.type_ref, Span::default());
                     field_types.insert(field.name.clone(), ty);
                 }
 
@@ -134,7 +138,9 @@ pub fn compile_files(
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
                     field_names,
+                    type_tag: type_tags::CLASS_BASE + class_type_tag_counter,
                 });
+                class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
                 class_object_indices.insert(class_name.clone(), class_obj_idx);
 
@@ -266,8 +272,8 @@ pub fn compile_files(
 
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let vir = baml_vir::lower_from_hir(db, &body, &inference)?;
-                        let mir = baml_mir::lower(&signature, &vir, db, &classes);
+                        let vir = baml_vir::lower_from_hir(db, &body, &inference, &resolution_ctx)?;
+                        let mir = baml_mir::lower(&signature, &vir, db, &classes, &resolution_ctx);
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {
@@ -302,10 +308,11 @@ pub fn compile_files(
 /// Build typing context from source files.
 ///
 /// Maps function names to their arrow types for use during type inference.
-fn build_typing_context<'db>(
-    db: &'db dyn baml_mir::Db,
+fn build_typing_context(
+    db: &dyn baml_mir::Db,
     files: &[SourceFile],
-) -> HashMap<Name, baml_tir::Ty<'db>> {
+    resolution_ctx: &TypeResolutionContext,
+) -> HashMap<Name, baml_tir::Ty> {
     let mut context = HashMap::new();
 
     for file in files {
@@ -315,13 +322,18 @@ fn build_typing_context<'db>(
                 let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_tir::Ty<'db>> = signature
+                let param_types: Vec<baml_tir::Ty> = signature
                     .params
                     .iter()
-                    .map(|p| baml_tir::lower_type_ref(db, &p.type_ref))
+                    .map(|p| {
+                        resolution_ctx
+                            .lower_type_ref(&p.type_ref, Span::default())
+                            .0
+                    })
                     .collect();
 
-                let return_type = baml_tir::lower_type_ref(db, &signature.return_type);
+                let (return_type, _) =
+                    resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
 
                 let func_type = baml_tir::Ty::Function {
                     params: param_types,

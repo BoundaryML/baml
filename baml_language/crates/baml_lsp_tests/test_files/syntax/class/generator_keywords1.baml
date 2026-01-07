@@ -29,7 +29,7 @@ class Foo {
 //----
 //- diagnostics
 // Error: Expected Unexpected token in class body, found if
-//     ╭─[ 0:12:5 ]
+//     ╭─[ class_generator_keywords1.baml:12:5 ]
 //     │
 //  12 │     if string
 //     │     ─┬  
@@ -38,7 +38,7 @@ class Foo {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: field 'string' is missing a type annotation
-//     ╭─[ 0:12:8 ]
+//     ╭─[ class_generator_keywords1.baml:12:8 ]
 //     │
 //  12 │     if string
 //     │        ───┬──  
@@ -46,12 +46,12 @@ class Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Error validating field `ETA` in class `Foo`: When using the python/pydantic generator, a field name must not be exactly equal to the type name (`ETA`). Consider changing the field name or using an @alias.
-//     ╭─[ 0:13:5 ]
+// Error: Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
+//     ╭─[ class_generator_keywords1.baml:13:5 ]
 //     │
 //  13 │     ETA ETA?
 //     │     ─┬─  
-//     │      ╰─── Error validating field `ETA` in class `Foo`: When using the python/pydantic generator, a field name must not be exactly equal to the type name (`ETA`). Consider changing the field name or using an @alias.
+//     │      ╰─── Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
 //     │ 
 //     │ Note: Error code: E0021
 // ────╯

@@ -26,7 +26,7 @@ function FetchDatax(user_id: string) -> Hi {
 //----
 //- diagnostics
 // Error: Header comments (//#) are not allowed inside LLM functions
-//     ╭─[ 0:13:5 ]
+//     ╭─[ headers_header_in_llm_function.baml:13:5 ]
 //     │
 //  13 │     //# collect source material
 //     │     ─────────────┬─────────────  

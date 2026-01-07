@@ -6,7 +6,7 @@
 //!
 //! Test files have two sections separated by `//----`:
 //!
-//! 1. **Source section** (before `//----`): Contains BAML code and inline assertions
+//! 1. **Source section** (before `//----`): Contains BAML code with cursor markers
 //! 2. **Expectations section** (after `//----`): Contains expected diagnostics and hover output
 //!
 //! ## Virtual Files
@@ -21,14 +21,14 @@
 //! let x = Foo(...)
 //! ```
 //!
-//! ## Inline Hover Assertions
+//! ## Cursor Markers
 //!
-//! Single-line: `// on_hover `symbol`: expected text`
-//! Multi-line:
+//! Use `<[CURSOR]` to mark cursor position for hover tests:
+//!
 //! ```text
-//! // on_hover `symbol`: expected text
-//! //   continues on next line
-//! //   and more lines
+//! class Person<[CURSOR] {
+//!     name string
+//! }
 //! ```
 
 use std::collections::HashMap;
@@ -37,10 +37,10 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct ParsedTestFile {
     /// Virtual files extracted from the test (filename -> content).
-    /// Content excludes the `// file:` marker line.
+    /// Content excludes the `// file:` marker line and any cursor markers.
     pub files: HashMap<String, VirtualFile>,
-    /// Hover assertions found in the source.
-    pub hover_assertions: Vec<HoverAssertion>,
+    /// Cursor markers found in the source.
+    pub cursor_markers: Vec<CursorMarker>,
     /// Expected diagnostics section (raw text after `//- diagnostics`).
     pub expected_diagnostics: String,
     /// Expected hover section (raw text after `//- on_hover expressions`).
@@ -65,26 +65,29 @@ pub struct VirtualFile {
     pub start_line: usize,
 }
 
-/// A hover assertion from the source code.
+/// A cursor position marker found in source.
 #[derive(Debug, Clone)]
-pub struct HoverAssertion {
-    /// The symbol to hover over (e.g., "x", "Bar").
-    pub symbol: String,
-    /// The expected hover text.
-    pub expected_text: String,
-    /// The virtual file containing this assertion.
+pub struct CursorMarker {
+    /// The virtual file containing the cursor.
     pub file: String,
+    /// The byte offset within the file (position to LEFT of marker).
+    pub offset: usize,
     /// Line number within the virtual file (0-indexed).
     pub line: usize,
+    /// Column number within the line (0-indexed).
+    pub column: usize,
 }
+
+/// The cursor marker used in test sources.
+pub const CURSOR_MARKER: &str = "<[CURSOR]";
 
 /// Parse a test file into its components.
 pub fn parse_test_file(content: &str, default_filename: &str) -> ParsedTestFile {
     // Split on `//----` to separate source from expectations
     let (source, expectations) = split_on_separator(content);
 
-    // Parse source section for `// file:` markers and hover assertions
-    let (files, hover_assertions) = parse_source_section(source, default_filename);
+    // Parse source section for `// file:` markers and cursor markers
+    let (files, cursor_markers) = parse_source_section(source, default_filename);
 
     // Parse expectations section for `//- diagnostics` and `//- on_hover expressions`
     let (expected_diagnostics, expected_hovers, diagnostics_comments, hovers_comments) =
@@ -92,7 +95,7 @@ pub fn parse_test_file(content: &str, default_filename: &str) -> ParsedTestFile 
 
     ParsedTestFile {
         files,
-        hover_assertions,
+        cursor_markers,
         expected_diagnostics,
         expected_hovers,
         diagnostics_comments,
@@ -126,36 +129,18 @@ fn split_on_separator(content: &str) -> (&str, &str) {
 fn parse_source_section(
     source: &str,
     default_filename: &str,
-) -> (HashMap<String, VirtualFile>, Vec<HoverAssertion>) {
+) -> (HashMap<String, VirtualFile>, Vec<CursorMarker>) {
     let mut files: HashMap<String, VirtualFile> = HashMap::new();
-    let mut hover_assertions: Vec<HoverAssertion> = Vec::new();
 
     let mut current_filename = default_filename.to_string();
     let mut current_content = String::new();
     let mut current_start_line: usize = 0;
-    let mut line_in_current_file: usize = 0;
-
-    // State for multi-line hover assertion parsing
-    let mut pending_hover: Option<(String, String, String, usize)> = None; // (symbol, expected_text, file, line)
 
     let lines: Vec<&str> = source.lines().collect();
-    let mut i = 0;
 
-    while i < lines.len() {
-        let line = lines[i];
-
+    for (i, line) in lines.iter().enumerate() {
         // Check for `// file:` marker
         if let Some(filename) = parse_file_marker(line) {
-            // Finalize any pending hover assertion
-            if let Some((symbol, expected_text, file, hover_line)) = pending_hover.take() {
-                hover_assertions.push(HoverAssertion {
-                    symbol,
-                    expected_text,
-                    file,
-                    line: hover_line,
-                });
-            }
-
             // Save the current file if it has content
             if !current_content.is_empty() {
                 files.insert(
@@ -172,71 +157,7 @@ fn parse_source_section(
             current_filename = filename;
             current_content = String::new();
             current_start_line = i + 1; // Next line is the start
-            line_in_current_file = 0;
-            i += 1;
             continue;
-        }
-
-        // Check for hover assertion start
-        if let Some((symbol, first_line_text)) = parse_inline_hover(line) {
-            // Finalize any previous pending hover assertion
-            if let Some((prev_symbol, prev_text, prev_file, prev_line)) = pending_hover.take() {
-                hover_assertions.push(HoverAssertion {
-                    symbol: prev_symbol,
-                    expected_text: prev_text,
-                    file: prev_file,
-                    line: prev_line,
-                });
-            }
-
-            // Start new hover assertion
-            pending_hover = Some((
-                symbol,
-                first_line_text,
-                current_filename.clone(),
-                line_in_current_file.saturating_sub(1), // Hover is for the previous line
-            ));
-
-            // Add line to current file content
-            if !current_content.is_empty() {
-                current_content.push('\n');
-            }
-            current_content.push_str(line);
-            line_in_current_file += 1;
-            i += 1;
-            continue;
-        }
-
-        // Check for hover assertion continuation
-        if pending_hover.is_some() && is_hover_continuation(line) {
-            // Append to pending hover's expected text
-            if let Some((symbol, expected_text, file, hover_line)) = pending_hover.as_mut() {
-                let continuation = extract_hover_continuation(line);
-                expected_text.push('\n');
-                expected_text.push_str(&continuation);
-
-                // Add line to current file content
-                if !current_content.is_empty() {
-                    current_content.push('\n');
-                }
-                current_content.push_str(line);
-                line_in_current_file += 1;
-                i += 1;
-
-                // Clone values to avoid borrow issues
-                let _ = (symbol, file, hover_line);
-                continue;
-            }
-        }
-
-        // Not a continuation - finalize any pending hover
-        if let Some((symbol, expected_text, file, hover_line)) = pending_hover.take() {
-            hover_assertions.push(HoverAssertion {
-                symbol,
-                expected_text,
-                file,
-                line: hover_line,
-            });
         }
 
         // Add line to current file content
@@ -244,18 +165,6 @@ fn parse_source_section(
             current_content.push('\n');
         }
         current_content.push_str(line);
-        line_in_current_file += 1;
-        i += 1;
-    }
-
-    // Finalize any pending hover assertion
-    if let Some((symbol, expected_text, file, hover_line)) = pending_hover.take() {
-        hover_assertions.push(HoverAssertion {
-            symbol,
-            expected_text,
-            file,
-            line: hover_line,
-        });
     }
 
     // Don't forget the last file
@@ -280,35 +189,43 @@ fn parse_source_section(
         );
     }
 
-    (files, hover_assertions)
-}
-
-/// Check if a line is a continuation of a multi-line hover assertion.
-/// Continuation lines start with `//` followed by space or more content.
-fn is_hover_continuation(line: &str) -> bool {
-    let trimmed = line.trim();
-    // Must start with // but NOT be a new on_hover, expect on_hover, or file marker
-    trimmed.starts_with("//")
-        && !trimmed.starts_with("// on_hover")
-        && !trimmed.starts_with("// expect on_hover")
-        && !trimmed.starts_with("// file:")
-        && !trimmed.starts_with("//----")
-}
-
-/// Extract the content from a hover continuation line.
-/// Removes the leading `//` and preserves the rest (including leading spaces for indentation).
-fn extract_hover_continuation(line: &str) -> String {
-    let trimmed = line.trim();
-    if trimmed == "//" {
-        // Empty line
-        String::new()
-    } else if let Some(rest) = trimmed.strip_prefix("// ") {
-        rest.to_string()
-    } else if let Some(rest) = trimmed.strip_prefix("//") {
-        rest.to_string()
-    } else {
-        trimmed.to_string()
+    // Extract cursor markers from each file and update the content
+    let mut cursor_markers: Vec<CursorMarker> = Vec::new();
+    for (filename, vfile) in files.iter_mut() {
+        if let Some((clean_content, marker)) = extract_cursor_from_content(&vfile.content, filename)
+        {
+            vfile.content = clean_content;
+            cursor_markers.push(marker);
+        }
     }
+
+    (files, cursor_markers)
+}
+
+/// Extract cursor marker from file content.
+fn extract_cursor_from_content(content: &str, filename: &str) -> Option<(String, CursorMarker)> {
+    let marker_pos = content.find(CURSOR_MARKER)?;
+
+    // Calculate line and column
+    let before_marker = &content[..marker_pos];
+    let line = before_marker.matches('\n').count();
+    let last_newline = before_marker.rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let column = marker_pos - last_newline;
+
+    // Remove marker from content
+    let mut clean = String::with_capacity(content.len() - CURSOR_MARKER.len());
+    clean.push_str(&content[..marker_pos]);
+    clean.push_str(&content[marker_pos + CURSOR_MARKER.len()..]);
+
+    Some((
+        clean,
+        CursorMarker {
+            file: filename.to_string(),
+            offset: marker_pos,
+            line,
+            column,
+        },
+    ))
 }
 
 /// Parse a `// file: <filename>` marker.
@@ -454,33 +371,6 @@ fn save_section_with_comments(
     }
 }
 
-/// Extract hover assertions from a single line comment.
-/// Formats:
-/// - `// on_hover `symbol`: expected_text`
-/// - `// expect on_hover `symbol`: expected_text`
-fn parse_inline_hover(line: &str) -> Option<(String, String)> {
-    let trimmed = line.trim();
-
-    // Check for both on_hover patterns
-    let rest = if trimmed.starts_with("// on_hover `") {
-        trimmed.strip_prefix("// on_hover `")?
-    } else if trimmed.starts_with("// expect on_hover `") {
-        trimmed.strip_prefix("// expect on_hover `")?
-    } else {
-        return None;
-    };
-
-    // Extract the symbol between backticks
-    let backtick_end = rest.find('`')?;
-    let symbol = &rest[..backtick_end];
-
-    // Get the expected text after `: `
-    let after_symbol = &rest[backtick_end + 1..];
-    let expected = after_symbol.strip_prefix(": ")?.trim();
-
-    Some((symbol.to_string(), expected.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -536,24 +426,6 @@ class Person {
     }
 
     #[test]
-    fn test_parse_hover_assertion() {
-        let content = r#"let x = 42
-// on_hover `x`: int
-
-//----
-//- diagnostics
-// <no-diagnostics-expected>"#;
-
-        let parsed = parse_test_file(content, "test.baml");
-
-        assert_eq!(parsed.hover_assertions.len(), 1);
-        let assertion = &parsed.hover_assertions[0];
-        assert_eq!(assertion.symbol, "x");
-        assert_eq!(assertion.expected_text, "int");
-        assert_eq!(assertion.file, "test.baml");
-    }
-
-    #[test]
     fn test_parse_expectations_with_hovers() {
         let content = r#"class Foo {}
 
@@ -598,33 +470,6 @@ class Person {
         );
         assert_eq!(parse_file_marker("// not a file marker"), None);
         assert_eq!(parse_file_marker("class Foo {}"), None);
-    }
-
-    #[test]
-    fn test_inline_hover_parsing() {
-        assert_eq!(
-            parse_inline_hover("// on_hover `x`: int"),
-            Some(("x".to_string(), "int".to_string()))
-        );
-        assert_eq!(
-            parse_inline_hover("// on_hover `Foo`: class Foo {}"),
-            Some(("Foo".to_string(), "class Foo {}".to_string()))
-        );
-        assert_eq!(parse_inline_hover("// not a hover"), None);
-        assert_eq!(parse_inline_hover("class Foo {}"), None);
-    }
-
-    #[test]
-    fn test_expect_on_hover_parsing() {
-        // Test the alternative `// expect on_hover` syntax
-        assert_eq!(
-            parse_inline_hover("// expect on_hover `x`: int"),
-            Some(("x".to_string(), "int".to_string()))
-        );
-        assert_eq!(
-            parse_inline_hover("// expect on_hover `Foo`: class Foo {}"),
-            Some(("Foo".to_string(), "class Foo {}".to_string()))
-        );
     }
 
     #[test]
@@ -707,13 +552,49 @@ class Person {
     }
 
     #[test]
-    fn test_multiline_hover_assertion() {
-        let content = r#"class Foo {
-    x int
+    fn test_extract_cursor_from_content() {
+        let content = "class Foo<[CURSOR] {}";
+        let result = extract_cursor_from_content(content, "test.baml");
+
+        assert!(result.is_some());
+        let (clean, marker) = result.unwrap();
+        assert_eq!(clean, "class Foo {}");
+        assert_eq!(marker.file, "test.baml");
+        assert_eq!(marker.offset, 9);
+        assert_eq!(marker.line, 0);
+        assert_eq!(marker.column, 9);
+    }
+
+    #[test]
+    fn test_extract_cursor_no_marker() {
+        let content = "class Foo {}";
+        let result = extract_cursor_from_content(content, "test.baml");
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_cursor_marker_multiline() {
+        // "class Foo {\n    name<[CURSOR] string\n}"
+        // Line 0: "class Foo {\n" = 12 bytes
+        // Line 1: "    name" = 8 bytes, so offset = 12 + 8 = 20
+        let content = "class Foo {\n    name<[CURSOR] string\n}";
+        let result = extract_cursor_from_content(content, "test.baml");
+
+        assert!(result.is_some());
+        let (clean, marker) = result.unwrap();
+        assert_eq!(clean, "class Foo {\n    name string\n}");
+        assert_eq!(marker.file, "test.baml");
+        assert_eq!(marker.offset, 20); // "class Foo {\n" (12) + "    name" (8) = 20
+        assert_eq!(marker.line, 1);
+        assert_eq!(marker.column, 8); // 4 spaces + "name" (4) = 8 chars from start of line
+    }
+
+    #[test]
+    fn test_parse_test_file_with_cursor() {
+        let content = r#"class Person<[CURSOR] {
+    name string
 }
-// on_hover `Foo`: class Foo {
-//   x int
-// }
 
 //----
 //- diagnostics
@@ -721,20 +602,32 @@ class Person {
 
         let parsed = parse_test_file(content, "test.baml");
 
-        assert_eq!(parsed.hover_assertions.len(), 1);
-        let assertion = &parsed.hover_assertions[0];
-        assert_eq!(assertion.symbol, "Foo");
-        assert_eq!(assertion.expected_text, "class Foo {\n  x int\n}");
+        assert_eq!(parsed.files.len(), 1);
+        assert_eq!(parsed.cursor_markers.len(), 1);
+
+        let marker = &parsed.cursor_markers[0];
+        assert_eq!(marker.file, "test.baml");
+        assert_eq!(marker.offset, 12); // Right after "Person"
+        assert_eq!(marker.line, 0);
+        assert_eq!(marker.column, 12);
+
+        // Content should have marker removed
+        let file = &parsed.files["test.baml"];
+        assert!(!file.content.contains("<[CURSOR]"));
+        assert!(file.content.contains("class Person {"));
     }
 
     #[test]
-    fn test_multiline_expect_on_hover() {
-        let content = r#"class Bar {
-    y string
+    fn test_parse_multi_file_with_cursor() {
+        let content = r#"// file: types.baml
+class Address {
+    street string
 }
-// expect on_hover `Bar`: class Bar {
-//   y string
-// }
+
+// file: main.baml
+class Person<[CURSOR] {
+    home Address
+}
 
 //----
 //- diagnostics
@@ -742,20 +635,14 @@ class Person {
 
         let parsed = parse_test_file(content, "test.baml");
 
-        assert_eq!(parsed.hover_assertions.len(), 1);
-        let assertion = &parsed.hover_assertions[0];
-        assert_eq!(assertion.symbol, "Bar");
-        assert_eq!(assertion.expected_text, "class Bar {\n  y string\n}");
-    }
+        assert_eq!(parsed.files.len(), 2);
+        assert_eq!(parsed.cursor_markers.len(), 1);
 
-    #[test]
-    fn test_is_hover_continuation() {
-        assert!(is_hover_continuation("//   continued"));
-        assert!(is_hover_continuation("// }"));
-        assert!(!is_hover_continuation("// on_hover `x`: int"));
-        assert!(!is_hover_continuation("// expect on_hover `x`: int"));
-        assert!(!is_hover_continuation("// file: test.baml"));
-        assert!(!is_hover_continuation("//----"));
-        assert!(!is_hover_continuation("class Foo {}"));
+        let marker = &parsed.cursor_markers[0];
+        assert_eq!(marker.file, "main.baml");
+
+        // Verify content is clean
+        assert!(!parsed.files["main.baml"].content.contains("<[CURSOR]"));
+        assert!(!parsed.files["types.baml"].content.contains("<[CURSOR]"));
     }
 }

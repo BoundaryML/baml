@@ -4,14 +4,89 @@ pub mod name_error;
 pub mod parse_error;
 pub mod type_error;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
-use ariadne::{Report, ReportKind};
+use ariadne::{Report, ReportKind, Source};
 use baml_base::{FileId, Span};
+use baml_workspace::Project;
 pub use hir_diagnostic::HirDiagnostic;
 pub use name_error::NameError;
 pub use parse_error::ParseError;
 pub use type_error::TypeError;
+
+/// A cache for ariadne that lazily loads sources from the Salsa database.
+///
+/// This avoids copying source text by using `&str` references into the database.
+pub struct DbSourceCache<'db> {
+    db: &'db dyn salsa::Database,
+    project: Project,
+    sources: HashMap<FileId, Source<&'db str>>,
+    filenames: HashMap<FileId, String>,
+}
+
+impl<'db> DbSourceCache<'db> {
+    /// Create a new source cache backed by the database.
+    pub fn new(db: &'db dyn salsa::Database, project: Project) -> Self {
+        DbSourceCache {
+            db,
+            project,
+            sources: HashMap::new(),
+            filenames: HashMap::new(),
+        }
+    }
+}
+
+/// A wrapper type for displaying file IDs as filenames.
+struct FileIdDisplay {
+    file_id: FileId,
+    filename: Option<String>,
+}
+
+impl fmt::Display for FileIdDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ref name) = self.filename {
+            write!(f, "{name}")
+        } else {
+            write!(f, "{}", self.file_id)
+        }
+    }
+}
+
+#[allow(refining_impl_trait)]
+impl<'db> ariadne::Cache<FileId> for DbSourceCache<'db> {
+    type Storage = &'db str;
+
+    fn fetch(&mut self, id: &FileId) -> Result<&Source<Self::Storage>, Box<dyn fmt::Debug + '_>> {
+        if !self.sources.contains_key(id) {
+            // Find the file with this FileId
+            let file = self
+                .project
+                .files(self.db)
+                .iter()
+                .find(|f| f.file_id(self.db) == *id)
+                .copied()
+                .ok_or_else(|| Box::new(format!("Unknown file ID: {id}")) as Box<dyn fmt::Debug>)?;
+
+            let text: &'db str = file.text(self.db);
+            self.sources.insert(*id, Source::from(text));
+            self.filenames
+                .insert(*id, file.path(self.db).display().to_string());
+        }
+
+        self.sources
+            .get(id)
+            .ok_or_else(|| Box::new(format!("Unknown file ID: {id}")) as Box<dyn fmt::Debug>)
+    }
+
+    fn display<'a>(&self, id: &'a FileId) -> Option<Box<dyn fmt::Display + 'a>> {
+        // Return the filename if available, otherwise fall back to the file ID
+        let filename = self.filenames.get(id).cloned();
+        Some(Box::new(FileIdDisplay {
+            file_id: *id,
+            filename,
+        }))
+    }
+}
 
 /// Every compiler error that can occur in the compiler.
 /// It is parameterized by several types that are owned by the different compiler phases,
@@ -95,21 +170,13 @@ const WATCH_ON_UNWATCHED_VARIABLE: ErrorCode = ErrorCode(66);
 
 /// Render an ariadne Report to a String.
 ///
-/// The `sources` map should contain the source text for each `FileId` referenced
-/// in the report's spans.
-pub fn render_report_to_string(
-    report: &Report<'_, Span>,
-    sources: &HashMap<FileId, String>,
-) -> String {
+/// Uses the provided cache to look up source text and filenames for the spans
+/// referenced in the report. Reusing the same cache across multiple renders
+/// avoids redundant lookups.
+pub fn render_report_to_string(report: &Report<'_, Span>, cache: &mut DbSourceCache<'_>) -> String {
     let mut output = Vec::new();
 
-    // ariadne::sources expects types that implement AsRef<str>, so we pass String directly
-    let ariadne_sources: HashMap<FileId, String> = sources.clone();
-
-    // Use ariadne's sources helper which creates a cache from a HashMap
-    let mut cache = ariadne::sources(ariadne_sources);
-
-    report.write(&mut cache, &mut output).unwrap_or_else(|_| {
+    report.write(cache, &mut output).unwrap_or_else(|_| {
         // If writing fails, provide a fallback
         output.clear();
         output.extend_from_slice(b"<error rendering diagnostic>");
@@ -124,7 +191,7 @@ pub fn render_report_to_string(
 /// of rendering parse errors.
 pub fn render_parse_error(
     error: &ParseError,
-    sources: &HashMap<FileId, String>,
+    cache: &mut DbSourceCache<'_>,
     color: bool,
 ) -> String {
     let color_mode = if color {
@@ -134,7 +201,7 @@ pub fn render_parse_error(
     };
     let compiler_error: CompilerError<String> = CompilerError::ParseError(error.clone());
     let report = render_error(&color_mode, compiler_error);
-    render_report_to_string(&report, sources)
+    render_report_to_string(&report, cache)
 }
 
 /// Convenience function to render a `TypeError` directly to a string.
@@ -143,7 +210,7 @@ pub fn render_parse_error(
 /// of rendering type errors. The type parameter `Ty` must implement `Display` and `Clone`.
 pub fn render_type_error<Ty: std::fmt::Display + Clone>(
     error: &TypeError<Ty>,
-    sources: &HashMap<FileId, String>,
+    cache: &mut DbSourceCache<'_>,
     color: bool,
 ) -> String {
     let color_mode = if color {
@@ -153,18 +220,14 @@ pub fn render_type_error<Ty: std::fmt::Display + Clone>(
     };
     let compiler_error: CompilerError<Ty> = CompilerError::TypeError(error.clone());
     let report = render_error(&color_mode, compiler_error);
-    render_report_to_string(&report, sources)
+    render_report_to_string(&report, cache)
 }
 
 /// Convenience function to render a `NameError` directly to a string.
 ///
 /// This combines `render_error` and `render_report_to_string` for the common case
 /// of rendering name resolution errors.
-pub fn render_name_error(
-    error: &NameError,
-    sources: &HashMap<FileId, String>,
-    color: bool,
-) -> String {
+pub fn render_name_error(error: &NameError, cache: &mut DbSourceCache<'_>, color: bool) -> String {
     let color_mode = if color {
         ColorMode::Color
     } else {
@@ -173,7 +236,7 @@ pub fn render_name_error(
     // Use String as the type parameter since NameError doesn't use it
     let compiler_error: CompilerError<String> = CompilerError::NameError(error.clone());
     let report = render_error(&color_mode, compiler_error);
-    render_report_to_string(&report, sources)
+    render_report_to_string(&report, cache)
 }
 
 /// Convenience function to render a `HirDiagnostic` directly to a string.
@@ -182,7 +245,7 @@ pub fn render_name_error(
 /// of rendering HIR lowering diagnostics.
 pub fn render_hir_diagnostic(
     error: &HirDiagnostic,
-    sources: &HashMap<FileId, String>,
+    cache: &mut DbSourceCache<'_>,
     color: bool,
 ) -> String {
     let color_mode = if color {
@@ -192,5 +255,5 @@ pub fn render_hir_diagnostic(
     };
     let compiler_error: CompilerError<String> = CompilerError::HirDiagnostic(error.clone());
     let report = render_error(&color_mode, compiler_error);
-    render_report_to_string(&report, sources)
+    render_report_to_string(&report, cache)
 }

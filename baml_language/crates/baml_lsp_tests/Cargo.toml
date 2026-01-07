@@ -12,9 +12,9 @@ doctest = false
 [dependencies]
 baml_db = { workspace = true }
 baml_diagnostics = { workspace = true }
-baml_hir = { workspace = true }
-baml_tir = { workspace = true }
-salsa = { workspace = true }
+baml_ide = { workspace = true }
+baml_project = { workspace = true }
+text-size = { workspace = true }
 
 [build-dependencies]
 walkdir = { workspace = true }
