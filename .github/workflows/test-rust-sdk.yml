@@ -27,10 +27,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust
+      - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: "1.70"
 
       - name: Cache Rust dependencies (engine)
         uses: Swatinem/rust-cache@v2
@@ -102,10 +102,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Rust
+      - name: Setup Rust (MSRV 1.70)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: "1.70"
 
       - name: Cache Rust dependencies (engine)
         uses: Swatinem/rust-cache@v2
