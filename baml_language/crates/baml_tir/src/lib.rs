@@ -1571,8 +1571,20 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             // Check condition against Bool type (checking mode)
             check_expr(ctx, *condition, body, &Ty::Bool);
 
-            // Check both branches against the expected type
-            let then_ty = check_expr(ctx, *then_branch, body, expected);
+            // Check for instanceof narrowing (same as infer_expr)
+            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
+
+            // Check then-branch with narrowed type if applicable
+            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+                ctx.push_scope();
+                ctx.define(var_name.clone(), narrowed_ty.clone());
+                let ty = check_expr(ctx, *then_branch, body, expected);
+                ctx.pop_scope();
+                ty
+            } else {
+                check_expr(ctx, *then_branch, body, expected)
+            };
+
             let else_ty = if let Some(else_expr) = else_branch {
                 check_expr(ctx, *else_expr, body, expected)
             } else {
