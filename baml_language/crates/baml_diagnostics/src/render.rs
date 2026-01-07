@@ -178,7 +178,7 @@ fn render_concise(diagnostic: &Diagnostic, sources: &HashMap<FileId, String>) ->
                 .unwrap_or(0);
             let col: usize = span.range.start().into();
             let col = col - line_start + 1;
-            format!("{}:{}:", line, col)
+            format!("{line}:{col}:")
         } else {
             String::new()
         }

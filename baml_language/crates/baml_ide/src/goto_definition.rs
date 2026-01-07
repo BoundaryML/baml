@@ -55,6 +55,7 @@ pub fn find_word_at_offset(text: &str, offset: TextSize) -> Option<TextRange> {
         return None;
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     Some(TextRange::new(
         TextSize::new(start as u32),
         TextSize::new(end as u32),

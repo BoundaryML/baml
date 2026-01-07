@@ -32,9 +32,9 @@ use crate::LspDatabase;
 pub struct CheckResult {
     /// The collected diagnostics.
     pub diagnostics: Vec<Diagnostic>,
-    /// Maps FileId to source text (for Ariadne rendering).
+    /// Maps `FileId` to source text (for Ariadne rendering).
     pub sources: HashMap<FileId, String>,
-    /// Maps FileId to file path (for URL generation).
+    /// Maps `FileId` to file path (for URL generation).
     pub file_paths: HashMap<FileId, PathBuf>,
 }
 
@@ -99,6 +99,7 @@ impl LspDatabase {
     }
 
     /// Internal method to collect diagnostics from the given source files.
+    #[allow(clippy::unused_self)]
     fn check_project(
         &self,
         db: &RootDatabase,
@@ -110,7 +111,7 @@ impl LspDatabase {
         // 1. Collect parse errors
         for source_file in source_files {
             let parse_errors = baml_parser::parse_errors(db, *source_file);
-            for error in parse_errors.iter() {
+            for error in &parse_errors {
                 diagnostics.push(error.to_diagnostic());
             }
         }

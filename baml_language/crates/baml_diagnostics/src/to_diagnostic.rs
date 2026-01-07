@@ -3,6 +3,8 @@
 //! This module provides conversions from the various compiler error types
 //! to the unified `Diagnostic` type.
 
+use std::fmt::Write;
+
 use crate::{
     compiler_error::{HirDiagnostic, NameError, ParseError, TypeError},
     diagnostic::{Diagnostic, DiagnosticId, ToDiagnostic},
@@ -326,10 +328,10 @@ impl ToDiagnostic for HirDiagnostic {
                     "Invalid value `{value}` for property `{property_name}` in generator `{generator_name}`"
                 );
                 if let Some(valid) = valid_values {
-                    msg.push_str(&format!(". Valid values: {}", valid.join(", ")));
+                    let _ = write!(msg, ". Valid values: {}", valid.join(", "));
                 }
                 if let Some(h) = help {
-                    msg.push_str(&format!(". {h}"));
+                    let _ = write!(msg, ". {h}");
                 }
                 Diagnostic::error(DiagnosticId::InvalidGeneratorPropertyValue, msg)
                     .with_primary_span(*span)
@@ -411,17 +413,19 @@ impl ToDiagnostic for HirDiagnostic {
                     format!("Unrecognized field `{field_name}` in http configuration block.");
 
                 if let Some(suggested) = suggestion {
-                    msg.push_str(&format!(" Did you mean `{suggested}`?"));
+                    let _ = write!(msg, " Did you mean `{suggested}`?");
                 }
 
                 if *is_composite {
-                    msg.push_str(&format!(
+                    let _ = write!(
+                        msg,
                         " Composite clients (fallback/round-robin) only support: {valid_fields}"
-                    ));
+                    );
                 } else if field_name == "total_timeout_ms" {
-                    msg.push_str(&format!(
+                    let _ = write!(
+                        msg,
                         " `total_timeout_ms` is only available for composite clients. For regular clients, use: {valid_fields}"
-                    ));
+                    );
                 }
 
                 Diagnostic::error(DiagnosticId::UnknownHttpConfigField, msg).with_primary_span(*span)
