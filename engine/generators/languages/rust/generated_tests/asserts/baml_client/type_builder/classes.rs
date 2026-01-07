@@ -29,7 +29,7 @@ impl PersonClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Person type lookup failed")
+            .expect("Person is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -40,15 +40,13 @@ impl PersonClassBuilder {
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Person.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `age` field builder.
     pub fn property_age(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
-            .expect("field age lookup failed")
-            .expect("field age is defined in schema")
+            .expect("Person.age is statically defined in .baml and should always be present")
     }
 }

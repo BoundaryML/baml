@@ -29,7 +29,7 @@ impl BooleanLiteralsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class BooleanLiterals type lookup failed")
+            .expect("BooleanLiterals is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -38,26 +38,20 @@ impl BooleanLiteralsClassBuilder {
 
     /// Access the `alwaysTrue` field builder.
     pub fn property_alwaysTrue(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("alwaysTrue")
-            .expect("field alwaysTrue lookup failed")
-            .expect("field alwaysTrue is defined in schema")
+        self.inner.get_property("alwaysTrue")
+            .expect("BooleanLiterals.alwaysTrue is statically defined in .baml and should always be present")
     }
 
     /// Access the `alwaysFalse` field builder.
     pub fn property_alwaysFalse(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("alwaysFalse")
-            .expect("field alwaysFalse lookup failed")
-            .expect("field alwaysFalse is defined in schema")
+        self.inner.get_property("alwaysFalse")
+            .expect("BooleanLiterals.alwaysFalse is statically defined in .baml and should always be present")
     }
 
     /// Access the `eitherBool` field builder.
     pub fn property_eitherBool(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("eitherBool")
-            .expect("field eitherBool lookup failed")
-            .expect("field eitherBool is defined in schema")
+        self.inner.get_property("eitherBool")
+            .expect("BooleanLiterals.eitherBool is statically defined in .baml and should always be present")
     }
 }
 
@@ -85,7 +79,7 @@ impl ComplexLiteralsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class ComplexLiterals type lookup failed")
+            .expect("ComplexLiterals is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -94,42 +88,36 @@ impl ComplexLiteralsClassBuilder {
 
     /// Access the `state` field builder.
     pub fn property_state(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("state")
-            .expect("field state lookup failed")
-            .expect("field state is defined in schema")
+        self.inner.get_property("state").expect(
+            "ComplexLiterals.state is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `retryCount` field builder.
     pub fn property_retryCount(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("retryCount")
-            .expect("field retryCount lookup failed")
-            .expect("field retryCount is defined in schema")
+        self.inner.get_property("retryCount")
+            .expect("ComplexLiterals.retryCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `response` field builder.
     pub fn property_response(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("response")
-            .expect("field response lookup failed")
-            .expect("field response is defined in schema")
+        self.inner.get_property("response").expect(
+            "ComplexLiterals.response is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `flags` field builder.
     pub fn property_flags(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("flags")
-            .expect("field flags lookup failed")
-            .expect("field flags is defined in schema")
+        self.inner.get_property("flags").expect(
+            "ComplexLiterals.flags is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `codes` field builder.
     pub fn property_codes(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("codes")
-            .expect("field codes lookup failed")
-            .expect("field codes is defined in schema")
+        self.inner.get_property("codes").expect(
+            "ComplexLiterals.codes is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -157,7 +145,7 @@ impl IntegerLiteralsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class IntegerLiterals type lookup failed")
+            .expect("IntegerLiterals is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -166,26 +154,21 @@ impl IntegerLiteralsClassBuilder {
 
     /// Access the `priority` field builder.
     pub fn property_priority(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("priority")
-            .expect("field priority lookup failed")
-            .expect("field priority is defined in schema")
+        self.inner.get_property("priority").expect(
+            "IntegerLiterals.priority is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `httpStatus` field builder.
     pub fn property_httpStatus(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("httpStatus")
-            .expect("field httpStatus lookup failed")
-            .expect("field httpStatus is defined in schema")
+        self.inner.get_property("httpStatus")
+            .expect("IntegerLiterals.httpStatus is statically defined in .baml and should always be present")
     }
 
     /// Access the `maxRetries` field builder.
     pub fn property_maxRetries(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("maxRetries")
-            .expect("field maxRetries lookup failed")
-            .expect("field maxRetries is defined in schema")
+        self.inner.get_property("maxRetries")
+            .expect("IntegerLiterals.maxRetries is statically defined in .baml and should always be present")
     }
 }
 
@@ -213,7 +196,7 @@ impl MixedLiteralsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class MixedLiterals type lookup failed")
+            .expect("MixedLiterals is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -224,40 +207,35 @@ impl MixedLiteralsClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("MixedLiterals.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `r#type` field builder.
     pub fn property_type(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("type")
-            .expect("field type lookup failed")
-            .expect("field type is defined in schema")
+        self.inner.get_property("type").expect(
+            "MixedLiterals.type is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `level` field builder.
     pub fn property_level(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("level")
-            .expect("field level lookup failed")
-            .expect("field level is defined in schema")
+        self.inner.get_property("level").expect(
+            "MixedLiterals.level is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `isActive` field builder.
     pub fn property_isActive(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("isActive")
-            .expect("field isActive lookup failed")
-            .expect("field isActive is defined in schema")
+        self.inner.get_property("isActive").expect(
+            "MixedLiterals.isActive is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `apiVersion` field builder.
     pub fn property_apiVersion(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("apiVersion")
-            .expect("field apiVersion lookup failed")
-            .expect("field apiVersion is defined in schema")
+        self.inner.get_property("apiVersion").expect(
+            "MixedLiterals.apiVersion is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -285,7 +263,7 @@ impl StringLiteralsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class StringLiterals type lookup failed")
+            .expect("StringLiterals is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -294,25 +272,21 @@ impl StringLiteralsClassBuilder {
 
     /// Access the `status` field builder.
     pub fn property_status(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("status")
-            .expect("field status lookup failed")
-            .expect("field status is defined in schema")
+        self.inner.get_property("status").expect(
+            "StringLiterals.status is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `environment` field builder.
     pub fn property_environment(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("environment")
-            .expect("field environment lookup failed")
-            .expect("field environment is defined in schema")
+        self.inner.get_property("environment")
+            .expect("StringLiterals.environment is statically defined in .baml and should always be present")
     }
 
     /// Access the `method` field builder.
     pub fn property_method(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("method")
-            .expect("field method lookup failed")
-            .expect("field method is defined in schema")
+        self.inner.get_property("method").expect(
+            "StringLiterals.method is statically defined in .baml and should always be present",
+        )
     }
 }

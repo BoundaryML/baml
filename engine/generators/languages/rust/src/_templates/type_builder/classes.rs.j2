@@ -27,7 +27,7 @@ impl {{ cls.name }}ClassBuilder {
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner.as_type()
-            .expect("class {{ cls.name }} type lookup failed")
+            .expect("{{ cls.name }} is statically defined in .baml and should always have a type")
     }
 
 {% if cls.dynamic %}
@@ -45,8 +45,7 @@ impl {{ cls.name }}ClassBuilder {
     /// Access the `{{ field.name }}` field builder.
     pub fn property_{{ field.raw_name }}(&self) -> baml::ClassPropertyBuilder {
         self.inner.get_property("{{ field.raw_name }}")
-            .expect("field {{ field.raw_name }} lookup failed")
-            .expect("field {{ field.raw_name }} is defined in schema")
+            .expect("{{ cls.name }}.{{ field.raw_name }} is statically defined in .baml and should always be present")
     }
 {% endfor %}
 }

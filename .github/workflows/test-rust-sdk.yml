@@ -8,14 +8,16 @@ on:
     branches: [canary, main]
     paths:
       - "languages/rust/**"
-      - "engine/language_client_cffi/**"
-      - "engine/baml-lib/**"
+      - "engine/**/*.rs"
+      - "engine/**/*.proto"
       - ".github/workflows/test-rust-sdk.yml"
   push:
     branches: [canary]
     paths:
       - "languages/rust/**"
-      - "engine/language_client_cffi/**"
+      - "engine/**/*.rs"
+      - "engine/**/*.proto"
+      - ".github/workflows/test-rust-sdk.yml"
   workflow_dispatch:
 
 jobs:

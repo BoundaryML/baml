@@ -27,7 +27,7 @@ impl {{ enm.name }}EnumBuilder {
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner.as_type()
-            .expect("enum {{ enm.name }} type lookup failed")
+            .expect("{{ enm.name }} is statically defined in .baml and should always have a type")
     }
 
 {% if enm.dynamic %}
@@ -45,8 +45,7 @@ impl {{ enm.name }}EnumBuilder {
     /// Access the `{{ val }}` value builder.
     pub fn value_{{ val }}(&self) -> baml::EnumValueBuilder {
         self.inner.get_value("{{ val }}")
-            .expect("value {{ val }} lookup failed")
-            .expect("value {{ val }} is defined in schema")
+            .expect("{{ enm.name }}.{{ val }} is statically defined in .baml and should always be present")
     }
 {% endfor %}
 }

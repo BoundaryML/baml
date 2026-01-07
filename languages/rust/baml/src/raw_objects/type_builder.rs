@@ -111,9 +111,10 @@ impl EnumBuilder {
     }
 
     /// Get a value by name (if it exists)
-    pub fn get_value(&self, name: &str) -> Result<Option<EnumValueBuilder>, BamlError> {
+    pub fn get_value(&self, name: &str) -> Option<EnumValueBuilder> {
         self.raw
-            .call_method_for_object_optional("value", ("name", name))
+            .call_method_for_object("value", ("name", name))
+            .ok()
     }
 
     /// List all values
@@ -228,9 +229,10 @@ impl ClassBuilder {
     }
 
     /// Get a property by name (if it exists)
-    pub fn get_property(&self, name: &str) -> Result<Option<ClassPropertyBuilder>, BamlError> {
+    pub fn get_property(&self, name: &str) -> Option<ClassPropertyBuilder> {
         self.raw
-            .call_method_for_object_optional("property", ("name", name))
+            .call_method_for_object("property", ("name", name))
+            .ok()
     }
 
     /// List all properties
