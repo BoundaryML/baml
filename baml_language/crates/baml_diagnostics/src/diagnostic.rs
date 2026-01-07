@@ -354,7 +354,7 @@ mod tests {
 
         for id in ids {
             let code = id.code();
-            assert!(code.starts_with('E'), "Code should start with E: {}", code);
+            assert!(code.starts_with('E'), "Code should start with E: {code}");
         }
     }
 }
