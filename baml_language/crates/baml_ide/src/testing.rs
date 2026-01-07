@@ -168,6 +168,7 @@ fn extract_cursor_marker(source: &str) -> (String, Option<TextSize>) {
     if let Some(marker_pos) = source.find(CURSOR_MARKER) {
         // The cursor is at the position where the marker starts
         // (i.e., to the LEFT of the marker)
+        #[allow(clippy::cast_possible_truncation)]
         let cursor_offset = TextSize::from(marker_pos as u32);
 
         // Remove the marker from the source
