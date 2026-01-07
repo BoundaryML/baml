@@ -50,6 +50,12 @@ jobs:
           go-version: "1.22"
           cache: false
 
+      - name: Install protoc-gen-go
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+        shell: bash
+
       - name: Setup Protoc (Windows)
         shell: bash
         run: |
@@ -118,6 +124,18 @@ jobs:
         with:
           workspaces: languages/rust
           prefix-key: rust-sdk
+
+      - name: Setup Go (for protoc-gen-go)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: false
+
+      - name: Install protoc-gen-go
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+        shell: bash
 
       - name: Setup Protoc (Unix)
         run: |
