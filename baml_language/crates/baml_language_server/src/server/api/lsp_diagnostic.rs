@@ -250,8 +250,12 @@ mod tests {
         let diag =
             Diagnostic::error(DiagnosticId::TypeMismatch, "Type mismatch").with_primary_span(span);
 
+        // Use a cross-platform path (temp_dir works on all platforms)
+        let mut test_path = std::env::temp_dir();
+        test_path.push("test.baml");
+
         let mut file_paths = HashMap::new();
-        file_paths.insert(file_id, PathBuf::from("/tmp/test.baml"));
+        file_paths.insert(file_id, test_path);
 
         let source = "hello\nworld";
         let line_starts = compute_line_starts(source);
