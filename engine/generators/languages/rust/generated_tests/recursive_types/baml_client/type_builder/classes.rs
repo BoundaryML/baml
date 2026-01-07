@@ -29,7 +29,7 @@ impl UseMyUnionClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class UseMyUnion type lookup failed")
+            .expect("UseMyUnion is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -40,7 +40,6 @@ impl UseMyUnionClassBuilder {
     pub fn property_u(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("u")
-            .expect("field u lookup failed")
-            .expect("field u is defined in schema")
+            .expect("UseMyUnion.u is statically defined in .baml and should always be present")
     }
 }
