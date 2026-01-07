@@ -1,4 +1,4 @@
-//! ProjectDatabase - the main database for BAML projects.
+//! `ProjectDatabase` - the main database for BAML projects.
 //!
 //! This module provides `ProjectDatabase`, which owns the Salsa storage directly
 //! (following the ty/ruff pattern) and implements all the compiler `Db` traits.
@@ -44,7 +44,7 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 pub struct ProjectDatabase {
     /// The Salsa storage - owned directly, not via wrapper.
     storage: salsa::Storage<ProjectDatabase>,
-    /// Counter for generating unique FileIds.
+    /// Counter for generating unique `FileId`s.
     next_file_id: Arc<AtomicU32>,
     /// The current project. Set via `set_project_root()`.
     project: Option<Project>,

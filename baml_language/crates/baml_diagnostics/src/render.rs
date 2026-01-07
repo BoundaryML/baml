@@ -287,7 +287,7 @@ fn render_concise(
     )
 }
 
-/// Render an ariadne Report to a String using SourceCache for proper filename display.
+/// Render an ariadne Report to a String using `SourceCache` for proper filename display.
 fn render_report_to_string(
     report: &Report<'_, Span>,
     sources: &HashMap<FileId, String>,

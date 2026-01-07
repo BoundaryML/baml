@@ -3,7 +3,7 @@
 //! This crate provides project-aware functionality like file tracking, symbol
 //! listing, and position/span utilities for use by LSP servers and tests.
 //!
-//! ## ProjectDatabase
+//! ## `ProjectDatabase`
 //!
 //! The main database type is `ProjectDatabase`, which owns the Salsa storage
 //! directly (following the ty/ruff pattern) and provides centralized diagnostic
