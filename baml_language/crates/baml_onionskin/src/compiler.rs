@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_lexer, baml_parser, baml_syntax, baml_compiler_tir,
+    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_parser, baml_syntax, baml_compiler_tir,
     baml_workspace,
 };
 use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
@@ -454,7 +454,7 @@ impl CompilerRunner {
                 },
             ));
 
-            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             for token in tokens {
                 let line = format!("{:?} {:?}", token.kind, token.text);
                 writeln!(output, "{line}").ok();
@@ -499,7 +499,7 @@ impl CompilerRunner {
                 },
             ));
 
-            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
@@ -549,7 +549,7 @@ impl CompilerRunner {
             ));
 
             // Parse and get CST root
-            let tokens = baml_lexer::lex_file(&self.db, *source_file);
+            let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());

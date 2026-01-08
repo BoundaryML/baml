@@ -96,7 +96,7 @@ cargo insta review
 
 ## Key Files
 
-- **Lexer**: `crates/baml_lexer/src/tokens.rs`
+- **Lexer**: `crates/baml_compiler_lexer/src/tokens.rs`
 - **Parser**: `crates/baml_parser/src/parser.rs`
 - **Syntax kinds**: `crates/baml_syntax/src/syntax_kind.rs`
 - **AST helpers**: `crates/baml_syntax/src/ast.rs`

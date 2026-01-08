@@ -23,7 +23,7 @@ rowan = { workspace = true }
 # All compiler crates
 baml_base = { workspace = true }
 baml_workspace = { workspace = true }
-baml_lexer = { workspace = true }
+baml_compiler_lexer = { workspace = true }
 baml_syntax = { workspace = true }
 baml_parser = { workspace = true }
 baml_compiler_hir = { workspace = true }

@@ -346,6 +346,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_lexer"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "logos",
+ "salsa",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler_tir"
 version = "0.0.0"
 dependencies = [
@@ -366,9 +376,9 @@ dependencies = [
  "baml_base",
  "baml_codegen",
  "baml_compiler_hir",
+ "baml_compiler_lexer",
  "baml_compiler_tir",
  "baml_diagnostics",
- "baml_lexer",
  "baml_mir",
  "baml_parser",
  "baml_syntax",
@@ -454,16 +464,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_lexer"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "logos",
- "salsa",
- "text-size",
-]
-
-[[package]]
 name = "baml_lsp_tests"
 version = "0.0.0"
 dependencies = [
@@ -519,10 +519,10 @@ dependencies = [
  "baml_base",
  "baml_codegen",
  "baml_compiler_hir",
+ "baml_compiler_lexer",
  "baml_compiler_tir",
  "baml_db",
  "baml_diagnostics",
- "baml_lexer",
  "baml_mir",
  "baml_parser",
  "baml_project",
@@ -545,8 +545,8 @@ name = "baml_parser"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_lexer",
  "baml_diagnostics",
- "baml_lexer",
  "baml_syntax",
  "rowan",
  "salsa",

@@ -219,7 +219,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         #[cfg(test)]
         mod #module_name {
             use baml_db::*;
-            use baml_db::baml_lexer;
+            use baml_db::baml_compiler_lexer;
             use baml_db::baml_parser;
             use baml_db::baml_compiler_hir;
             use baml_db::baml_compiler_tir;
@@ -266,14 +266,14 @@ fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
             let content = content.replace("\r\n", "\n");
             let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
-            let tokens = baml_lexer::lex_file(&db, source_file);
+            let tokens = baml_compiler_lexer::lex_file(&db, source_file);
 
             // Format tokens as readable text
             let mut output = String::new();
             for token in tokens.iter() {
                 if !matches!(token.kind,
-                    baml_lexer::TokenKind::Whitespace |
-                    baml_lexer::TokenKind::Newline
+                    baml_compiler_lexer::TokenKind::Whitespace |
+                    baml_compiler_lexer::TokenKind::Newline
                 ) {
                     writeln!(output, "{:?} {:?}", token.kind, token.text).unwrap();
                 }
