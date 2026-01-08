@@ -129,7 +129,7 @@ define_builtins! {
     // =========================================================================
     // Array methods
     // =========================================================================
-    ARRAY_LENGTHS = "baml.Array.length" {
+    ARRAY_LENGTH = "baml.Array.length" {
         receiver: Some(TypePattern::Array(Box::new(TypePattern::Var("T")))),
         params: [],
         returns: TypePattern::Int,
