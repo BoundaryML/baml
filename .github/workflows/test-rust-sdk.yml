@@ -58,14 +58,8 @@ jobs:
           echo "$HOME/go/bin" >> $GITHUB_PATH
         shell: bash
 
-      - name: Setup Protoc (Windows)
-        shell: bash
-        run: |
-          PROTOC_VERSION="27.1"
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
-          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          rm protoc-${PROTOC_VERSION}-win64.zip
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
 
       - name: Build CFFI Library
         run: |
@@ -139,18 +133,8 @@ jobs:
           echo "$HOME/go/bin" >> $GITHUB_PATH
         shell: bash
 
-      - name: Setup Protoc (Unix)
-        run: |
-          PROTOC_VERSION="27.1"
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            PROTOC_ZIP="protoc-${PROTOC_VERSION}-linux-x86_64.zip"
-          else
-            PROTOC_ZIP="protoc-${PROTOC_VERSION}-osx-universal_binary.zip"
-          fi
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}"
-          unzip -q ${PROTOC_ZIP} -d $HOME/.local
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          rm ${PROTOC_ZIP}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
 
       - name: Build CFFI Library
         run: |

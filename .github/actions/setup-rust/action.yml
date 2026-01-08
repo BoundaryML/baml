@@ -108,6 +108,5 @@ runs:
       run: cargo install cross --git https://github.com/cross-rs/cross
       shell: bash
 
-    # only on debian-based runners
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
