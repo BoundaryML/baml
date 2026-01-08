@@ -59,8 +59,8 @@ static NATIVE_FUNCTIONS: LazyLock<IndexMap<&'static str, NativeFunction>> = Lazy
         baml_builtins::for_all_builtins!(make_native_fn_entries);
 
     native_fns
-        .into_iter()
-        .map(|(path, fn_ptr)| (*path, fn_ptr.clone()))
+        .iter()
+        .map(|(path, fn_ptr)| (*path, *fn_ptr))
         .collect()
 });
 
@@ -104,8 +104,7 @@ mod tests {
         for path in NATIVE_FUNCTIONS.keys() {
             assert!(
                 baml_builtins::find_builtin_by_path(path).is_some(),
-                "Native function has no signature: {}",
-                path
+                "Native function has no signature: {path}"
             );
         }
     }
