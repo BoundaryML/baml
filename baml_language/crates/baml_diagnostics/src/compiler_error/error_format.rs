@@ -42,18 +42,33 @@ where
             }
         },
         CompilerError::TypeError(type_error) => match type_error {
-            // TODO: This error should provide a second span that indicates the source
-            // of the type judgment - the reason why we thought this type is a mismatch.
-            // ... where the expectation came from.
             TypeError::TypeMismatch {
                 expected,
                 found,
                 span,
-            } => simple_error(
-                format!("Expected {expected}, found {found}"),
-                span,
-                TYPE_MISMATCH,
-            ),
+                info_span,
+            } => {
+                let message = format!("Expected `{expected}`, found `{found}`");
+                // Use info_span as the primary location if available, since it's the "cause"
+                let primary_span = info_span.unwrap_or(span);
+                let mut report = Report::build(ReportKind::Error, primary_span)
+                    .with_message(&message);
+                // Add the info label first (the cause/constraint source)
+                if let Some(info) = info_span {
+                    report = report.with_label(
+                        Label::new(info)
+                            .with_message(format!("expected `{expected}` because of return type"))
+                            .with_order(0),
+                    );
+                }
+                // Add the error label second (the actual mismatch)
+                report = report.with_label(
+                    Label::new(span)
+                        .with_message(&message)
+                        .with_order(1),
+                );
+                (report, TYPE_MISMATCH)
+            }
             TypeError::UnknownType { name, span } => {
                 simple_error(format!("Unknown type {name}"), span, UNKNOWN_TYPE)
             }

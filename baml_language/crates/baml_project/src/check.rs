@@ -143,7 +143,7 @@ impl ProjectDatabase {
         // Build all maps
         for source_file in &source_files {
             let file_id = source_file.file_id(self);
-            let text = source_file.text(self).to_string();
+            let text = source_file.text(self).clone();
             let path = source_file.path(self);
 
             sources.insert(file_id, text);

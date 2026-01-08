@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function HeaderOnlyFunction:
-    Return: String
+    Return: Literal(String("default"))
   Function VeryLongHeaderTitle:
-    Return: String
+    Return: Literal(String("long headers"))
   Function HeadersAroundExpressions:
     Return: Int
     Errors:
@@ -16,12 +16,12 @@ expression: output
   Function HeadersAndComments:
     Return: String
   Function ConsecutiveHeaders:
-    Return: String
+    Return: Literal(String("multiple consecutive headers"))
   Function UnicodeHeaders:
-    Return: String
+    Return: Literal(String("test"))
   Function HeaderLevels:
-    Return: String
+    Return: Literal(String("deep nesting"))
   Function HeadersWithSpecialChars:
-    Return: String
+    Return: Literal(String("special chars"))
   Function HeadersWithWhitespace:
     Return: String

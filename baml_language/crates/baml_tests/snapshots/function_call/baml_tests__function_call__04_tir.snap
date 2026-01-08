@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -8,7 +8,7 @@ expression: output
   Function Greeting:
     Return: String
   Function param_in_if_statement:
-    Return: Int
+    Return: Union([Literal(Int(1)), Literal(Int(2))])
   Function Bar:
     Return: Int
   Function Foo:

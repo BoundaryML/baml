@@ -149,6 +149,13 @@ impl StructuralTy {
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,
 
+            // Literal types are subtypes of their base types
+            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
+            (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Float) => true,
+            (StructuralTy::Literal(LiteralValue::Float(_)), StructuralTy::Float) => true,
+            (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
+            (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
+
             _ => false,
         };
 

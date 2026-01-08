@@ -86,12 +86,3 @@ client<llm> GPT4 {
 //     │ 
 //     │ Note: Error code: E0004
 // ────╯
-// Error: Cannot apply operator 'Add' to types `error` and `string`
-//     ╭─[ headers_complex_workflow.baml:17:1 ]
-//     │
-//  17 │     computed_title + ": " + summary
-//     │ ─────────────────┬─────────────────  
-//     │                  ╰─────────────────── Cannot apply operator 'Add' to types `error` and `string`
-//     │ 
-//     │ Note: Error code: E0004
-// ────╯

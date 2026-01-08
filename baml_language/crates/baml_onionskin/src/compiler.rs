@@ -373,6 +373,7 @@ impl CompilerRunner {
         self.phase_outputs_annotated.clear();
         self.diagnostics.clear();
 
+        // Run frontend phases that don't panic
         for &phase in &[
             CompilerPhase::Lexer,
             CompilerPhase::Parser,
@@ -380,12 +381,35 @@ impl CompilerRunner {
             CompilerPhase::Hir,
             CompilerPhase::Thir,
             CompilerPhase::TypedIr,
-            CompilerPhase::Mir,
-            CompilerPhase::Diagnostics,
-            CompilerPhase::Codegen,
-            CompilerPhase::VmRunner,
         ] {
             self.run_single_phase(phase);
+        }
+
+        // Collect diagnostics early to determine if we have errors
+        self.run_single_phase(CompilerPhase::Diagnostics);
+
+        // Only run MIR, Codegen, and VmRunner if there are no errors
+        // These phases may panic on invalid input, so we skip them when errors exist
+        if self.diagnostics.is_empty() {
+            for &phase in &[
+                CompilerPhase::Mir,
+                CompilerPhase::Codegen,
+                CompilerPhase::VmRunner,
+            ] {
+                self.run_single_phase(phase);
+            }
+        } else {
+            // Insert placeholder outputs for skipped phases
+            let skip_message = "(skipped due to errors)".to_string();
+            for &phase in &[
+                CompilerPhase::Mir,
+                CompilerPhase::Codegen,
+                CompilerPhase::VmRunner,
+            ] {
+                self.phase_outputs.insert(phase, skip_message.clone());
+                self.phase_outputs_annotated
+                    .insert(phase, vec![(skip_message.clone(), LineStatus::Unknown)]);
+            }
         }
 
         self.run_single_phase(CompilerPhase::Metrics);

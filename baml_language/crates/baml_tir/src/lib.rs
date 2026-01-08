@@ -744,6 +744,7 @@ pub fn infer_function_body<'db>(
     body: &FunctionBody,
     param_types: HashMap<Name, Ty>,
     expected_return: &Ty,
+    return_type_span: Option<Span>,
     globals: Option<HashMap<Name, Ty>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty>>>,
     type_aliases: Option<HashMap<Name, Ty>>,
@@ -771,11 +772,12 @@ pub fn infer_function_body<'db>(
         ctx.define(name.clone(), ty.clone());
     }
 
-    // Type check the body and get the trailing expression type
+    // Type check the body against the expected return type (checking mode for bidirectional typing)
     let trailing_expr_type = match body {
         FunctionBody::Expr(expr_body) => {
             if let Some(root_expr) = expr_body.root_expr {
-                infer_expr(&mut ctx, root_expr, expr_body)
+                // Use check_expr for bidirectional typing - check body against expected return type
+                check_expr(&mut ctx, root_expr, expr_body, expected_return)
             } else {
                 Ty::Void
             }
@@ -787,33 +789,23 @@ pub fn infer_function_body<'db>(
         FunctionBody::Missing => Ty::Unknown,
     };
 
-    // Check all return statement types against expected return type
-    for (return_ty, span) in &ctx.return_types {
-        if !ctx.is_subtype_of(return_ty, expected_return)
-            && !return_ty.is_unknown()
-            && !expected_return.is_unknown()
-        {
-            ctx.errors.push(TypeError::TypeMismatch {
-                expected: expected_return.clone(),
-                found: return_ty.clone(),
-                span: *span,
-            });
-        }
-    }
+    // With bidirectional type checking, return statements are already checked
+    // via check_stmt_with_return, so we don't need to check them again here.
 
-    // Check trailing expression type against expected return type
-    // A trailing expression is an implicit return, so it must match
-    // BUT only if there are no explicit return statements (those are checked separately)
+    // With bidirectional type checking, check_expr already reported any mismatches
+    // between the body and expected return type. We only need to check one case:
+    // If there are no returns and no tail expression, and we expected a non-void type
     if ctx.return_types.is_empty()
-        && !ctx.is_subtype_of(&trailing_expr_type, expected_return)
-        && !trailing_expr_type.is_unknown()
+        && trailing_expr_type.is_void()
+        && !expected_return.is_void()
         && !expected_return.is_unknown()
+        && !expected_return.is_error()
     {
-        // TODO: we actually want the span of the last expression here.
         let error = TypeError::TypeMismatch {
             expected: expected_return.clone(),
-            found: trailing_expr_type.clone(),
+            found: Ty::Void,
             span: Span::default(),
+            info_span: return_type_span,
         };
         ctx.push_error(error);
     }
@@ -906,12 +898,18 @@ pub fn infer_function<'db>(
     );
     type_errors.extend(errors);
 
+    // Convert return type TextRange to Span for diagnostics
+    let return_type_span = signature
+        .return_type_span
+        .map(|range| Span::new(file_id, range));
+
     // Delegate to the body inference function
     let mut result = infer_function_body(
         db,
         body,
         param_types,
         &expected_return,
+        return_type_span,
         globals,
         class_fields,
         type_aliases,
@@ -1056,18 +1054,24 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
         Expr::Call { callee, args } => {
             // Check if this is a method call (callee is a FieldAccess or multi-segment Path)
-            // If so, we need to pass the receiver as the first argument
-            let (callee_ty, effective_args) = match &body.exprs[*callee] {
+            // If so, we need to pass the receiver as the first argument.
+            // We track (type, Option<span>) for each argument so we can report errors
+            // at the correct location. Implicit receiver args have None for span.
+            let (callee_ty, effective_args): (Ty, Vec<(Ty, Option<Span>)>) = match &body.exprs
+                [*callee]
+            {
                 Expr::FieldAccess { base, field: _ } => {
                     // Method call: receiver.method(args) -> Type.method(receiver, args)
                     // This handles complex expressions like `f().method()` or `arr[0].method()`
                     let receiver_ty = infer_expr(ctx, *base, body);
                     let callee_ty = infer_expr(ctx, *callee, body);
 
-                    // Build effective args: [receiver_type, ...explicit_args]
-                    let mut effective_args = vec![receiver_ty];
+                    // Build effective args: [(receiver_type, None), ...explicit_args with spans]
+                    let mut effective_args = vec![(receiver_ty, None)];
                     for arg in args {
-                        effective_args.push(infer_expr(ctx, *arg, body));
+                        let arg_ty = infer_expr(ctx, *arg, body);
+                        let arg_span = body.get_expr_span(*arg);
+                        effective_args.push((arg_ty, arg_span));
                     }
                     (callee_ty, effective_args)
                 }
@@ -1082,8 +1086,18 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
                         // It's a builtin function - infer argument types first so we can
                         // bind type variables (e.g., T in deep_copy(x: T) -> T)
-                        let arg_types: Vec<Ty> =
-                            args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
+                        let arg_types_with_spans: Vec<(Ty, Option<Span>)> = args
+                            .iter()
+                            .map(|arg| {
+                                let ty = infer_expr(ctx, *arg, body);
+                                let arg_span = body.get_expr_span(*arg);
+                                (ty, arg_span)
+                            })
+                            .collect();
+                        let arg_types: Vec<Ty> = arg_types_with_spans
+                            .iter()
+                            .map(|(ty, _)| ty.clone())
+                            .collect();
 
                         // Build parameter patterns and match against argument types to
                         // extract type variable bindings
@@ -1130,7 +1144,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             params: param_types,
                             ret: Box::new(return_type),
                         };
-                        (callee_ty, arg_types)
+                        (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`
                         // For multi-segment paths like `baz.Greeting()`, the first segment(s)
@@ -1158,10 +1172,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                         let callee_ty = infer_expr(ctx, *callee, body);
 
-                        // Build effective args: [receiver_type, ...explicit_args]
-                        let mut effective_args = vec![receiver_ty];
+                        // Build effective args: [(receiver_type, None), ...explicit_args with spans]
+                        let mut effective_args = vec![(receiver_ty, None)];
                         for arg in args {
-                            effective_args.push(infer_expr(ctx, *arg, body));
+                            let arg_ty = infer_expr(ctx, *arg, body);
+                            let arg_span = body.get_expr_span(*arg);
+                            effective_args.push((arg_ty, arg_span));
                         }
                         (callee_ty, effective_args)
                     }
@@ -1169,9 +1185,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 _ => {
                     // Regular function call (single-segment Path or other expression)
                     let callee_ty = infer_expr(ctx, *callee, body);
-                    let arg_types: Vec<Ty> =
-                        args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
-                    (callee_ty, arg_types)
+                    let arg_types_with_spans: Vec<(Ty, Option<Span>)> = args
+                        .iter()
+                        .map(|arg| {
+                            let ty = infer_expr(ctx, *arg, body);
+                            let arg_span = body.get_expr_span(*arg);
+                            (ty, arg_span)
+                        })
+                        .collect();
+                    (callee_ty, arg_types_with_spans)
                 }
             };
 
@@ -1187,13 +1209,16 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         });
                     }
 
-                    // Check argument types
-                    for (arg_ty, param_ty) in effective_args.iter().zip(params.iter()) {
+                    // Check argument types - use each argument's span for precise error location
+                    for ((arg_ty, arg_span), param_ty) in effective_args.iter().zip(params.iter()) {
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
+                            // Use the argument's span if available, otherwise fall back to call span
+                            let error_span = arg_span.unwrap_or(span);
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
-                                found: arg_ty.clone(),
-                                span, // Ideally we'd have the span of each arg
+                                found: generalize_for_error(param_ty, arg_ty),
+                                span: error_span,
+                                info_span: None,
                             });
                         }
                     }
@@ -1249,8 +1274,11 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             if elements.is_empty() {
                 Ty::List(Box::new(Ty::Unknown))
             } else {
-                // Infer element type from first element
-                let elem_ty = infer_expr(ctx, elements[0], body);
+                // Infer element type from first element, but generalize literals to base types
+                // This ensures [1, 2, 3] is int[] not "1"[]
+                let first_ty = infer_expr(ctx, elements[0], body);
+                let elem_ty = generalize(&first_ty);
+
                 // Check all elements have compatible types
                 for &elem in &elements[1..] {
                     let other_ty = infer_expr(ctx, elem, body);
@@ -1259,6 +1287,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             expected: elem_ty.clone(),
                             found: other_ty,
                             span,
+                            info_span: None,
                         });
                     }
                 }
@@ -1292,6 +1321,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         expected: obj_ty.clone(),
                         found: spread_ty,
                         span,
+                        info_span: None,
                     });
                 }
             }
@@ -1306,9 +1336,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     value: Box::new(Ty::Unknown),
                 }
             } else {
-                // Infer key and value types from first entry
-                let key_ty = infer_expr(ctx, entries[0].0, body);
-                let value_ty = infer_expr(ctx, entries[0].1, body);
+                // Infer key and value types from first entry, but generalize literals to base types
+                // This ensures {"x": 1} is map<string, int> not map<"x", 1>
+                let first_key_ty = infer_expr(ctx, entries[0].0, body);
+                let first_value_ty = infer_expr(ctx, entries[0].1, body);
+                let key_ty = generalize(&first_key_ty);
+                let value_ty = generalize(&first_value_ty);
 
                 // Check all entries have compatible types
                 for &(key, value) in &entries[1..] {
@@ -1317,15 +1350,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if !ctx.is_subtype_of(&other_key_ty, &key_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: key_ty.clone(),
-                            found: other_key_ty,
+                            found: generalize_for_error(&key_ty, &other_key_ty),
                             span,
+                            info_span: None,
                         });
                     }
                     if !ctx.is_subtype_of(&other_value_ty, &value_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: value_ty.clone(),
-                            found: other_value_ty,
+                            found: generalize_for_error(&value_ty, &other_value_ty),
                             span,
+                            info_span: None,
                         });
                     }
                 }
@@ -1367,6 +1402,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     expected: Ty::Bool,
                     found: cond_ty,
                     span,
+                    info_span: None,
                 });
             }
 
@@ -1389,6 +1425,11 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 Ty::Void
             };
+
+            // Generalize literal types for the result, similar to arrays.
+            // This ensures `if (c) { 1 } else { 2 }` is `int` not `1 | 2`.
+            let then_ty = generalize(&then_ty);
+            let else_ty = generalize(&else_ty);
 
             // Result is union of branches (simplified)
             if then_ty == else_ty {
@@ -1451,6 +1492,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                     expected: Ty::Bool,
                                     found: guard_ty,
                                     span,
+                                    info_span: None,
                                 });
                             }
                         }
@@ -1473,6 +1515,266 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Missing => Ty::Unknown,
+    };
+
+    ctx.set_expr_type(expr_id, ty.clone());
+    ty
+}
+
+/// Check that an expression has the expected type (checking mode).
+///
+/// In bidirectional type checking, checking mode is used when we know what type
+/// we expect an expression to have. This allows for better type inference in many
+/// cases compared to synthesis followed by subtype checking.
+///
+/// Returns the actual type of the expression (which should be a subtype of expected).
+fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+    use baml_hir::Expr;
+
+    let expr = &body.exprs[expr_id];
+    let span = body.get_expr_span(expr_id).unwrap_or_default();
+
+    let ty = match expr {
+        // For most cases, we synthesize then check subtyping
+        // But some cases can use the expected type for better inference
+        Expr::Block { stmts, tail_expr } => {
+            ctx.push_scope();
+
+            // Type check statements with expected return type for better checking
+            for &stmt_id in stmts {
+                check_stmt_with_return(ctx, stmt_id, body, Some(expected));
+            }
+
+            // Check tail expression against expected type
+            let result = if let Some(tail) = tail_expr {
+                check_expr(ctx, *tail, body, expected)
+            } else {
+                // No tail expression means the block evaluates to void
+                // This is fine - the function might return via explicit return statements
+                Ty::Void
+            };
+
+            ctx.pop_scope();
+            result
+        }
+
+        Expr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            // Check condition against Bool type (checking mode)
+            check_expr(ctx, *condition, body, &Ty::Bool);
+
+            // Check for instanceof narrowing (same as infer_expr)
+            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
+
+            // Check then-branch with narrowed type if applicable
+            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+                ctx.push_scope();
+                ctx.define(var_name.clone(), narrowed_ty.clone());
+                let ty = check_expr(ctx, *then_branch, body, expected);
+                ctx.pop_scope();
+                ty
+            } else {
+                check_expr(ctx, *then_branch, body, expected)
+            };
+
+            let else_ty = if let Some(else_expr) = else_branch {
+                check_expr(ctx, *else_expr, body, expected)
+            } else {
+                Ty::Void
+            };
+
+            // In checking mode, don't generalize - the branches were checked against
+            // the expected type, so return the union of actual types (or expected if they match)
+            if then_ty == else_ty {
+                then_ty
+            } else if else_branch.is_none() {
+                // if without else returns optional
+                Ty::Union(vec![then_ty, Ty::Null])
+            } else {
+                Ty::Union(vec![then_ty, else_ty])
+            }
+        }
+
+        Expr::Array { elements } => {
+            // If we expect a specific list type, use it to check elements
+            if let Ty::List(expected_elem) = expected {
+                if elements.is_empty() {
+                    Ty::List(expected_elem.clone())
+                } else {
+                    // Check all elements against the expected element type
+                    for &elem in elements {
+                        let elem_ty = check_expr(ctx, elem, body, expected_elem);
+                        if !ctx.is_subtype_of(&elem_ty, expected_elem) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: (**expected_elem).clone(),
+                                found: generalize_for_error(expected_elem, &elem_ty),
+                                span,
+                                info_span: None,
+                            });
+                        }
+                    }
+                    expected.clone()
+                }
+            } else {
+                // Fall back to synthesis
+                let ty = infer_expr(ctx, expr_id, body);
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        found: generalize_for_error(expected, &ty),
+                        span,
+                        info_span: None,
+                    });
+                }
+                ty
+            }
+        }
+
+        Expr::Object {
+            type_name,
+            fields,
+            spreads: _,
+        } => {
+            // If we expect a specific class type, we can use its field types
+            if let Ty::Class(expected_name) = expected {
+                // Check field types against the expected class fields
+                for (field_name, value_expr) in fields {
+                    // Clone the field type to avoid borrow issues
+                    let expected_field_ty =
+                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    if let Some(field_ty) = expected_field_ty {
+                        check_expr(ctx, *value_expr, body, &field_ty);
+                    } else {
+                        // Field doesn't exist in expected type - still infer it for error reporting
+                        infer_expr(ctx, *value_expr, body);
+                    }
+                }
+
+                // Return the expected type if type_name matches
+                if type_name.as_ref() == Some(expected_name) {
+                    expected.clone()
+                } else if let Some(name) = type_name {
+                    Ty::Class(name.clone())
+                } else {
+                    Ty::Unknown
+                }
+            } else if let Ty::Named(expected_name) = expected {
+                // Similar handling for Named types (type aliases)
+                for (field_name, value_expr) in fields {
+                    let expected_field_ty =
+                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    if let Some(field_ty) = expected_field_ty {
+                        check_expr(ctx, *value_expr, body, &field_ty);
+                    } else {
+                        infer_expr(ctx, *value_expr, body);
+                    }
+                }
+
+                if type_name.as_ref() == Some(expected_name) {
+                    expected.clone()
+                } else if let Some(name) = type_name {
+                    Ty::Named(name.clone())
+                } else {
+                    Ty::Unknown
+                }
+            } else {
+                // Fall back to synthesis
+                let ty = infer_expr(ctx, expr_id, body);
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        found: generalize_for_error(expected, &ty),
+                        span,
+                        info_span: None,
+                    });
+                }
+                ty
+            }
+        }
+
+        Expr::Map { entries } => {
+            // If we expect a specific map type, use it to check entries
+            if let Ty::Map {
+                key: expected_key,
+                value: expected_value,
+            } = expected
+            {
+                if entries.is_empty() {
+                    Ty::Map {
+                        key: expected_key.clone(),
+                        value: expected_value.clone(),
+                    }
+                } else {
+                    // Check all entries against the expected key/value types
+                    for &(key_expr, value_expr) in entries {
+                        let key_ty = check_expr(ctx, key_expr, body, expected_key);
+                        if !ctx.is_subtype_of(&key_ty, expected_key) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: (**expected_key).clone(),
+                                found: generalize_for_error(expected_key, &key_ty),
+                                span,
+                                info_span: None,
+                            });
+                        }
+                        let value_ty = check_expr(ctx, value_expr, body, expected_value);
+                        if !ctx.is_subtype_of(&value_ty, expected_value) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: (**expected_value).clone(),
+                                found: generalize_for_error(expected_value, &value_ty),
+                                span,
+                                info_span: None,
+                            });
+                        }
+                    }
+                    expected.clone()
+                }
+            } else {
+                // Fall back to synthesis
+                let ty = infer_expr(ctx, expr_id, body);
+                if !ctx.is_subtype_of(&ty, expected)
+                    && !expected.is_unknown()
+                    && !expected.is_error()
+                {
+                    ctx.push_error(TypeError::TypeMismatch {
+                        expected: expected.clone(),
+                        found: generalize_for_error(expected, &ty),
+                        span,
+                        info_span: None,
+                    });
+                }
+                ty
+            }
+        }
+
+        // For all other cases, synthesize then check
+        _ => {
+            let ty = infer_expr(ctx, expr_id, body);
+            if !ctx.is_subtype_of(&ty, expected)
+                && !expected.is_unknown()
+                && !expected.is_error()
+                && !ty.is_unknown()
+            {
+                // Generalize found type for clearer error messages
+                // e.g., "Expected int[], found int" instead of "Expected int[], found 42"
+                // But preserve literals when expected is also a literal (e.g., "Expected 4, found 3")
+                ctx.push_error(TypeError::TypeMismatch {
+                    expected: expected.clone(),
+                    found: generalize_for_error(expected, &ty),
+                    span,
+                    info_span: None,
+                });
+            }
+            ty
+        }
     };
 
     ctx.set_expr_type(expr_id, ty.clone());
@@ -1609,13 +1911,47 @@ fn check_match_exhaustiveness(
 }
 
 /// Infer the type of a literal.
+///
+/// Returns literal types (singleton types) for better bidirectional type checking.
+/// For example, the literal `42` has type `Ty::Literal(LiteralValue::Int(42))`,
+/// which is a subtype of `Ty::Int`.
 fn infer_literal(lit: &baml_hir::Literal) -> Ty {
+    use crate::types::LiteralValue;
     match lit {
-        baml_hir::Literal::Int(_) => Ty::Int,
-        baml_hir::Literal::Float(_) => Ty::Float,
-        baml_hir::Literal::String(_) => Ty::String,
-        baml_hir::Literal::Bool(_) => Ty::Bool,
+        baml_hir::Literal::Int(n) => Ty::Literal(LiteralValue::Int(*n)),
+        baml_hir::Literal::Float(f) => Ty::Literal(LiteralValue::Float(f.clone())),
+        baml_hir::Literal::String(s) => Ty::Literal(LiteralValue::String(s.clone())),
+        baml_hir::Literal::Bool(b) => Ty::Literal(LiteralValue::Bool(*b)),
         baml_hir::Literal::Null => Ty::Null,
+    }
+}
+
+/// Generalize a literal type to its base type (reference version for error messages).
+///
+/// Used in error messages where we want to show "int" instead of "42".
+/// For operator errors, the issue is type compatibility, not the specific value.
+fn generalize(ty: &Ty) -> Ty {
+    use crate::types::LiteralValue;
+    match ty {
+        Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
+        Ty::Literal(LiteralValue::Float(_)) => Ty::Float,
+        Ty::Literal(LiteralValue::String(_)) => Ty::String,
+        Ty::Literal(LiteralValue::Bool(_)) => Ty::Bool,
+        other => other.clone(),
+    }
+}
+
+/// Generalize the found type for error messages, but preserve literals when expected is also a literal.
+///
+/// When expected is a literal type (like `4`), we want to show "Expected `4`, found `3`"
+/// rather than "Expected `4`, found `int`". But when expected is a base type like `int[]`,
+/// we want to show "Expected `int[]`, found `int`" rather than "Expected `int[]`, found `42`".
+fn generalize_for_error(expected: &Ty, found: &Ty) -> Ty {
+    if matches!(expected, Ty::Literal(_)) {
+        // Keep literal types when expected is also a literal
+        found.clone()
+    } else {
+        generalize(found)
     }
 }
 
@@ -1670,54 +2006,76 @@ fn infer_binary_op(
         Shl, Shr, Sub,
     };
 
+    use crate::types::LiteralValue;
+
+    // Don't emit errors for operations involving unknown or error types - the root cause
+    // (e.g., unknown variable) has already been reported
+    if lhs.is_unknown() || lhs.is_error() || rhs.is_unknown() || rhs.is_error() {
+        return Ty::Unknown;
+    }
+
+    // Helper to check if a type is int-like (Int or Int literal)
+    let is_int_like = |ty: &Ty| matches!(ty, Ty::Int | Ty::Literal(LiteralValue::Int(_)));
+    // Helper to check if a type is float-like (Float or Float literal)
+    let is_float_like = |ty: &Ty| matches!(ty, Ty::Float | Ty::Literal(LiteralValue::Float(_)));
+    // Helper to check if a type is string-like (String or String literal)
+    let is_string_like = |ty: &Ty| matches!(ty, Ty::String | Ty::Literal(LiteralValue::String(_)));
+    // Helper to check if a type is bool-like (Bool or Bool literal)
+    let is_bool_like = |ty: &Ty| matches!(ty, Ty::Bool | Ty::Literal(LiteralValue::Bool(_)));
+
     match op {
         // Arithmetic operations (and string concatenation for Add)
-        Add => match (lhs, rhs) {
-            (Ty::Int, Ty::Int) => Ty::Int,
-            (Ty::Float, Ty::Float) => Ty::Float,
-            (Ty::Int, Ty::Float) => Ty::Float,
-            (Ty::Float, Ty::Int) => Ty::Float,
-            // String concatenation
-            (Ty::String, Ty::String) => Ty::String,
-            _ => {
+        Add => {
+            if is_int_like(lhs) && is_int_like(rhs) {
+                Ty::Int
+            } else if (is_int_like(lhs) || is_float_like(lhs))
+                && (is_int_like(rhs) || is_float_like(rhs))
+            {
+                Ty::Float
+            } else if is_string_like(lhs) && is_string_like(rhs) {
+                // String concatenation
+                Ty::String
+            } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
-                    lhs: lhs.clone(),
-                    rhs: rhs.clone(),
+                    lhs: generalize(lhs),
+                    rhs: generalize(rhs),
                     span,
                 });
                 Ty::Error
             }
-        },
-        Sub | Mul | Div | Mod => match (lhs, rhs) {
-            (Ty::Int, Ty::Int) => Ty::Int,
-            (Ty::Float, Ty::Float) => Ty::Float,
-            (Ty::Int, Ty::Float) => Ty::Float,
-            (Ty::Float, Ty::Int) => Ty::Float,
-            _ => {
+        }
+        Sub | Mul | Div | Mod => {
+            if is_int_like(lhs) && is_int_like(rhs) {
+                Ty::Int
+            } else if (is_int_like(lhs) || is_float_like(lhs))
+                && (is_int_like(rhs) || is_float_like(rhs))
+            {
+                Ty::Float
+            } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
-                    lhs: lhs.clone(),
-                    rhs: rhs.clone(),
+                    lhs: generalize(lhs),
+                    rhs: generalize(rhs),
                     span,
                 });
                 Ty::Error
             }
-        },
+        }
 
         // Comparison operations
         Eq | Ne => Ty::Bool,
 
         Lt | Le | Gt | Ge => {
-            if (ctx.is_subtype_of(lhs, &Ty::Int) || ctx.is_subtype_of(lhs, &Ty::Float))
-                && (ctx.is_subtype_of(rhs, &Ty::Int) || ctx.is_subtype_of(rhs, &Ty::Float))
-            {
+            let numeric_lhs = is_int_like(lhs) || is_float_like(lhs);
+            let numeric_rhs = is_int_like(rhs) || is_float_like(rhs);
+            if numeric_lhs && numeric_rhs {
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
-                    lhs: lhs.clone(),
-                    rhs: rhs.clone(),
+                    lhs: generalize(lhs),
+                    rhs: generalize(rhs),
                     span,
                 });
                 Ty::Error
@@ -1726,13 +2084,13 @@ fn infer_binary_op(
 
         // Logical operations
         And | Or => {
-            if ctx.is_subtype_of(lhs, &Ty::Bool) && ctx.is_subtype_of(rhs, &Ty::Bool) {
+            if is_bool_like(lhs) && is_bool_like(rhs) {
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
-                    lhs: lhs.clone(),
-                    rhs: rhs.clone(),
+                    lhs: generalize(lhs),
+                    rhs: generalize(rhs),
                     span,
                 });
                 Ty::Error
@@ -1741,13 +2099,13 @@ fn infer_binary_op(
 
         // Bitwise operations
         BitAnd | BitOr | BitXor | Shl | Shr => {
-            if ctx.is_subtype_of(lhs, &Ty::Int) && ctx.is_subtype_of(rhs, &Ty::Int) {
+            if is_int_like(lhs) && is_int_like(rhs) {
                 Ty::Int
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
-                    lhs: lhs.clone(),
-                    rhs: rhs.clone(),
+                    lhs: generalize(lhs),
+                    rhs: generalize(rhs),
                     span,
                 });
                 Ty::Error
@@ -1768,33 +2126,39 @@ fn infer_unary_op(
 ) -> Ty {
     use baml_hir::UnaryOp::{Neg, Not};
 
+    use crate::types::LiteralValue;
+
+    // Don't emit errors for operations involving unknown or error types - the root cause
+    // has already been reported
+    if operand.is_unknown() || operand.is_error() {
+        return Ty::Unknown;
+    }
+
     match op {
         Not => {
-            if ctx.is_subtype_of(operand, &Ty::Bool) {
+            if matches!(operand, Ty::Bool | Ty::Literal(LiteralValue::Bool(_))) {
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidUnaryOp {
                     op: "!".to_string(),
-                    operand: operand.clone(),
+                    operand: generalize(operand),
                     span,
                 });
                 Ty::Error
             }
         }
-        Neg => {
-            if ctx.is_subtype_of(operand, &Ty::Int) {
-                Ty::Int
-            } else if ctx.is_subtype_of(operand, &Ty::Float) {
-                Ty::Float
-            } else {
+        Neg => match operand {
+            Ty::Int | Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
+            Ty::Float | Ty::Literal(LiteralValue::Float(_)) => Ty::Float,
+            _ => {
                 ctx.push_error(TypeError::InvalidUnaryOp {
                     op: "-".to_string(),
-                    operand: operand.clone(),
+                    operand: generalize(operand),
                     span,
                 });
                 Ty::Error
             }
-        }
+        },
     }
 }
 
@@ -1901,6 +2265,7 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                     expected: Ty::Int,
                     found: index.clone(),
                     span,
+                    info_span: None,
                 });
             }
             (**elem).clone()
@@ -1912,6 +2277,7 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                     expected: (**key).clone(),
                     found: index.clone(),
                     span,
+                    info_span: None,
                 });
             }
             (**value).clone()
@@ -1923,6 +2289,7 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                     expected: Ty::Int,
                     found: index.clone(),
                     span,
+                    info_span: None,
                 });
             }
             Ty::String
@@ -1940,6 +2307,19 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
 
 /// Type check a statement.
 fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
+    check_stmt_with_return(ctx, stmt_id, body, None);
+}
+
+/// Type check a statement with an optional expected return type for better checking.
+///
+/// When `expected_return` is provided, return statements and let initializers
+/// can use bidirectional type checking for better error messages and inference.
+fn check_stmt_with_return(
+    ctx: &mut TypeContext<'_>,
+    stmt_id: StmtId,
+    body: &ExprBody,
+    expected_return: Option<&Ty>,
+) {
     use baml_hir::Stmt;
 
     let stmt = &body.stmts[stmt_id];
@@ -1953,25 +2333,19 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             is_watched,
         } => {
             let ty = if let Some(init) = initializer {
-                let init_ty = infer_expr(ctx, *init, body);
-
-                // If there's a type annotation, check it matches
+                // If there's a type annotation, use check_expr for bidirectional typing
                 if let Some(annot) = type_annotation {
-                    // TODO: currently type_span and type_annotations are separate `Option`s
-                    // turn it into one tuple.
-                    // this unwrap is safe because if type_ann is populated, so is type_span
                     let span = ctx.build_span_default(type_span);
                     let annot_ty = ctx.lower_type_resolved(annot, span);
-                    if !ctx.is_subtype_of(&init_ty, &annot_ty) {
-                        ctx.push_error(TypeError::TypeMismatch {
-                            expected: annot_ty.clone(),
-                            found: init_ty,
-                            span,
-                        });
-                    }
+                    // Use check_expr when we have an expected type
+                    // check_expr already reports any type mismatch errors
+                    check_expr(ctx, *init, body, &annot_ty);
                     annot_ty
                 } else {
-                    init_ty
+                    // No type annotation - infer and generalize for mutable variables
+                    // This ensures `let x = 5` gives `x : int`, not `x : 5`
+                    let inferred = infer_expr(ctx, *init, body);
+                    generalize(&inferred)
                 }
             } else if let Some(annot) = type_annotation {
                 ctx.lower_type_resolved(annot, Span::default())
@@ -2007,14 +2381,20 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
         }
 
         Stmt::Return(expr) => {
-            let span = Span::new(
-                baml_base::FileId::new(0),
-                text_size::TextRange::empty(0.into()),
-            );
-            let return_ty = if let Some(e) = expr {
-                infer_expr(ctx, *e, body)
+            let (return_ty, span) = if let Some(e) = expr {
+                // If we have an expected return type, use check_expr for bidirectional typing
+                let ty = if let Some(expected) = expected_return {
+                    check_expr(ctx, *e, body, expected)
+                } else {
+                    infer_expr(ctx, *e, body)
+                };
+                // Use the return expression's span for more precise error location
+                let span = body.get_expr_span(*e).unwrap_or_default();
+                (ty, span)
             } else {
-                Ty::Void
+                // For bare `return;`, use the statement span
+                let span = body.get_stmt_span(stmt_id).unwrap_or_default();
+                (Ty::Void, span)
             };
             ctx.record_return(return_ty, span);
         }
@@ -2025,19 +2405,12 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             after,
             origin: _, // origin is used for diagnostics, not type checking
         } => {
-            let cond_ty = infer_expr(ctx, *condition, body);
-            if !ctx.is_subtype_of(&cond_ty, &Ty::Bool) {
-                let span = body.get_expr_span(*condition).unwrap_or_default();
-                ctx.push_error(TypeError::TypeMismatch {
-                    expected: Ty::Bool,
-                    found: cond_ty,
-                    span,
-                });
-            }
+            // Check condition against Bool (bidirectional)
+            check_expr(ctx, *condition, body, &Ty::Bool);
             infer_expr(ctx, *while_body, body);
             // Type-check the after statement (for desugared C-style for loops)
             if let Some(after_stmt) = after {
-                check_stmt(ctx, *after_stmt, body);
+                check_stmt_with_return(ctx, *after_stmt, body, expected_return);
             }
         }
 
@@ -2054,9 +2427,10 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
                 let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: target_ty,
-                    found: value_ty,
+                    expected: target_ty.clone(),
+                    found: generalize_for_error(&target_ty, &value_ty),
                     span,
+                    info_span: None,
                 });
             }
         }
@@ -2073,24 +2447,17 @@ fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
                 let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: target_ty,
-                    found: value_ty,
+                    expected: target_ty.clone(),
+                    found: generalize_for_error(&target_ty, &value_ty),
                     span,
+                    info_span: None,
                 });
             }
         }
 
         Stmt::Assert { condition } => {
-            // Type-check the condition expression
-            let cond_ty = infer_expr(ctx, *condition, body);
-            if !ctx.is_subtype_of(&cond_ty, &Ty::Bool) {
-                let span = body.get_expr_span(*condition).unwrap_or_default();
-                ctx.push_error(TypeError::TypeMismatch {
-                    expected: Ty::Bool,
-                    found: cond_ty,
-                    span,
-                });
-            }
+            // Type-check the condition expression (bidirectional)
+            check_expr(ctx, *condition, body, &Ty::Bool);
         }
 
         Stmt::Missing => {}

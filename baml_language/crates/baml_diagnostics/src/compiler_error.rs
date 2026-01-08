@@ -120,7 +120,11 @@ pub fn render_error<'a, Ty: std::fmt::Display>(
 ) -> Report<'a, Span> {
     let (report_builder, code) = error_format::error_report_and_code(err);
     report_builder
-        .with_config(ariadne::Config::default().with_color(*color_mode == ColorMode::Color))
+        .with_config(
+            ariadne::Config::default()
+                .with_color(*color_mode == ColorMode::Color)
+                .with_compact(false),
+        )
         .with_note(format!("Error code: {code}"))
         .finish()
 }

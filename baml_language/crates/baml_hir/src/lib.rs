@@ -256,6 +256,7 @@ pub fn function_signature<'db>(
         name: func.name.clone(),
         params: vec![],
         return_type: TypeRef::Unknown,
+        return_type_span: None,
     });
 
     let function_def = source_file.items().find_map(|item| match item {
@@ -313,16 +314,19 @@ fn lower_method_signature(
         }
     }
 
-    // Extract return type
-    let return_type = method_node
-        .return_type()
-        .map(|t| TypeRef::from_ast(&t))
+    // Extract return type and its span
+    let return_type_node = method_node.return_type();
+    let return_type = return_type_node
+        .as_ref()
+        .map(TypeRef::from_ast)
         .unwrap_or(TypeRef::Unknown);
+    let return_type_span = return_type_node.map(|t| t.text_range());
 
     Arc::new(FunctionSignature {
         name: method_name.clone(),
         params,
         return_type,
+        return_type_span,
     })
 }
 

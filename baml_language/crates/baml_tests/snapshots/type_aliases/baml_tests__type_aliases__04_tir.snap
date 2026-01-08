@@ -1,19 +1,17 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-9ec98c83ec13521d/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function Bar:
-    Return: Bool
+    Return: Literal(Bool(true))
     Errors:
       - Expected foo. Found bool
   Function Foo:
-    Return: Int
+    Return: Literal(Int(1))
   Function Baz:
-    Return: String
+    Return: Literal(String("hello"))
   Function EchoJSON:
-    Return: Class("NotJSON")
-    Errors:
-      - Expected JSON. Found NotJSON
+    Return: Named("NotJSON")
   Function MakeJSON:
     Return: Error

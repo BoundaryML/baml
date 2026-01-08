@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -13794,18 +13794,6 @@ expression: output
    │ 
    │ Note: Error code: E0011
 ───╯
-
-  [type] Error: Expected `bool`, found `void`
-    ╭─[ very_invalid.baml:8:11 ]
-    │
-  8 │ ╭─▶   while \ {
-    ┆ ┆   
- 10 │ ├─▶   }
-    │ │         
-    │ ╰───────── Expected `bool`, found `void`
-    │     
-    │     Note: Error code: E0001
-────╯
 
   [type] Error: Expected `int`, found `void`
    ╭─[ complex_strings.baml:1:1 ]
