@@ -10,7 +10,7 @@ use std::cell::RefCell;
 /// A debug message with its source module path.
 #[derive(Debug, Clone)]
 pub struct DebugMessage {
-    /// The module path where this message originated (e.g., "baml_compiler_tir::infer")
+    /// The module path where this message originated (e.g., "`baml_compiler_tir::infer`")
     pub module: &'static str,
     /// The actual debug message
     pub message: String,
@@ -24,7 +24,12 @@ thread_local! {
 /// This is typically called via the `baml_debug!` macro.
 #[cfg(debug_assertions)]
 pub fn push_debug(module: &'static str, msg: String) {
-    DEBUG_LOG.with(|log| log.borrow_mut().push(DebugMessage { module, message: msg }));
+    DEBUG_LOG.with(|log| {
+        log.borrow_mut().push(DebugMessage {
+            module,
+            message: msg,
+        });
+    });
 }
 
 /// Stub for release builds - does nothing.
@@ -64,4 +69,3 @@ macro_rules! baml_debug {
         }
     };
 }
-

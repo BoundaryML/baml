@@ -60,11 +60,11 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
     }
     if show_debug_banner {
         // Dynamic height based on number of messages (min 3, max 8)
-        let debug_height = (app.debug_messages().len() + 2).min(8).max(3) as u16;
+        let debug_height = (app.debug_messages().len() + 2).clamp(3, 8) as u16;
         constraints.push(Constraint::Length(debug_height)); // Debug log banner
     }
 
-    constraints.push(Constraint::Min(0));    // Content
+    constraints.push(Constraint::Min(0)); // Content
     constraints.push(Constraint::Length(3)); // Status bar
 
     let chunks = Layout::default()
@@ -213,20 +213,16 @@ fn draw_rebuild_banner(frame: &mut Frame, area: Rect, app: &App) {
         ),
         RebuildState::Failed(error) => (
             format!("✗ Build failed: {}", error),
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
     };
 
-    let paragraph = Paragraph::new(message)
-        .style(style)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Compiler Hot-Reload")
-                .border_style(style),
-        );
+    let paragraph = Paragraph::new(message).style(style).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Compiler Hot-Reload")
+            .border_style(style),
+    );
 
     frame.render_widget(paragraph, area);
 }

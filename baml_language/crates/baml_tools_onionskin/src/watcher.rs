@@ -85,11 +85,7 @@ impl FileWatcher {
                     let crate_src = crates_dir.join(crate_name).join("src");
                     if crate_src.exists() {
                         if let Err(e) = watcher.watch(&crate_src, RecursiveMode::Recursive) {
-                            eprintln!(
-                                "Warning: Could not watch {}: {}",
-                                crate_src.display(),
-                                e
-                            );
+                            eprintln!("Warning: Could not watch {}: {}", crate_src.display(), e);
                         } else {
                             compiler_paths.insert(crate_src);
                         }
@@ -138,7 +134,7 @@ impl FileWatcher {
     /// Check if a path is within the compiler source directories
     fn is_compiler_path(&self, path: &Path) -> bool {
         // Check if the path is a Rust file
-        if !path.extension().is_some_and(|ext| ext == "rs") {
+        if path.extension().is_none_or(|ext| ext != "rs") {
             return false;
         }
 

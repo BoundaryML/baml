@@ -154,25 +154,25 @@ impl App {
             }
 
             // Check for background build completion
-            if let Some(ref rx) = self.build_result_rx {
-                if let Ok(result) = rx.try_recv() {
-                    match result {
-                        BuildResult::Success => {
-                            self.rebuild_state = RebuildState::Success;
-                            self.rebuild_state_time = Some(Instant::now());
-                            self.build_result_rx = None;
+            if let Some(ref rx) = self.build_result_rx
+                && let Ok(result) = rx.try_recv()
+            {
+                match result {
+                    BuildResult::Success => {
+                        self.rebuild_state = RebuildState::Success;
+                        self.rebuild_state_time = Some(Instant::now());
+                        self.build_result_rx = None;
 
-                            // Draw one more frame to show success, then restart
-                            terminal.draw(|frame| ui::draw(frame, self))?;
+                        // Draw one more frame to show success, then restart
+                        terminal.draw(|frame| ui::draw(frame, self))?;
 
-                            // Restart by exec'ing into the new binary
-                            self.exec_restart();
-                        }
-                        BuildResult::Failed(error) => {
-                            self.rebuild_state = RebuildState::Failed(error);
-                            self.rebuild_state_time = Some(Instant::now());
-                            self.build_result_rx = None;
-                        }
+                        // Restart by exec'ing into the new binary
+                        self.exec_restart();
+                    }
+                    BuildResult::Failed(error) => {
+                        self.rebuild_state = RebuildState::Failed(error);
+                        self.rebuild_state_time = Some(Instant::now());
+                        self.build_result_rx = None;
                     }
                 }
             }
@@ -190,15 +190,14 @@ impl App {
             }
 
             // Clear old rebuild status messages
-            if let Some(time) = self.rebuild_state_time {
-                if time.elapsed() > REBUILD_STATUS_DURATION {
-                    if matches!(self.rebuild_state, RebuildState::Failed(_)) {
-                        // Keep failed state visible longer, but clear after 10 seconds
-                        if time.elapsed() > Duration::from_secs(10) {
-                            self.rebuild_state = RebuildState::Idle;
-                            self.rebuild_state_time = None;
-                        }
-                    }
+            if let Some(time) = self.rebuild_state_time
+                && time.elapsed() > REBUILD_STATUS_DURATION
+                && matches!(self.rebuild_state, RebuildState::Failed(_))
+            {
+                // Keep failed state visible longer, but clear after 10 seconds
+                if time.elapsed() > Duration::from_secs(10) {
+                    self.rebuild_state = RebuildState::Idle;
+                    self.rebuild_state_time = None;
                 }
             }
         }
