@@ -218,7 +218,7 @@ jobs:
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: codspeed-macro
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: |
       (
