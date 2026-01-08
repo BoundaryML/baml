@@ -101,6 +101,23 @@ impl CompilerPhase {
             CompilerPhase::Metrics => CompilerPhase::VmRunner,
         }
     }
+
+    /// Returns a short name suitable for CLI arguments
+    pub(crate) fn cli_name(self) -> &'static str {
+        match self {
+            CompilerPhase::Lexer => "lexer",
+            CompilerPhase::Parser => "parser",
+            CompilerPhase::Ast => "ast",
+            CompilerPhase::Hir => "hir",
+            CompilerPhase::Thir => "thir",
+            CompilerPhase::TypedIr => "typedir",
+            CompilerPhase::Mir => "mir",
+            CompilerPhase::Diagnostics => "diagnostics",
+            CompilerPhase::Codegen => "codegen",
+            CompilerPhase::VmRunner => "vmrunner",
+            CompilerPhase::Metrics => "metrics",
+        }
+    }
 }
 
 pub(crate) struct CompilerRunner {

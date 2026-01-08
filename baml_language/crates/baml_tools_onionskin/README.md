@@ -25,6 +25,30 @@ cargo run --bin baml_tools_onionskin -- --from path/to/your/file.baml
 cargo run --bin baml_tools_onionskin -- --from path/to/your/directory
 ```
 
+### Compiler Hot-Reload 🔥
+
+When running from within the `baml_language` workspace, onionskin **automatically enables hot-reload** for compiler development. It detects the workspace by looking for the `crates/baml_compiler_lexer` directory.
+
+```bash
+# Hot-reload is automatic when running from the workspace
+cd /path/to/baml_language
+cargo run --bin baml_tools_onionskin -- --from test.baml
+
+# Explicitly specify workspace root (if auto-detection fails)
+cargo run --bin baml_tools_onionskin -- --from path/to/file.baml --workspace /path/to/baml_language
+
+# Disable hot-reload if you don't want it
+cargo run --bin baml_tools_onionskin -- --from test.baml --no-hot-reload
+```
+
+With hot-reload enabled (shown as `🔥 Hot-Reload` in the header):
+- Onionskin watches all compiler crate source files (e.g., `baml_compiler_lexer`, `baml_compiler_hir`, etc.)
+- When a `.rs` file in any compiler crate changes, a banner appears prompting you to rebuild
+- Press **Enter** to trigger a rebuild, or **Esc** to dismiss
+- Press **Shift+R** anytime to manually trigger a rebuild
+- After a successful rebuild, onionskin automatically restarts with the new compiler
+
+
 ### Keyboard Shortcuts
 
 | Key | Action |
@@ -38,6 +62,9 @@ cargo run --bin baml_tools_onionskin -- --from path/to/your/directory
 | `S` (Shift+S) | Delete snapshot |
 | `c` / `y` | Copy current output to clipboard |
 | `p` | Paste/show clipboard contents |
+| `R` (Shift+R) | Trigger compiler rebuild (with --workspace) |
+| `Enter` | Confirm pending rebuild |
+| `Esc` | Dismiss rebuild prompt |
 | `q` | Quit |
 | `Ctrl+C` | Exit |
 

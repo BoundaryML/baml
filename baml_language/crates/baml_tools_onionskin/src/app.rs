@@ -1,11 +1,15 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
+    process::Command,
+    sync::mpsc::{Receiver, channel},
+    thread,
     time::{Duration, Instant},
 };
 
 use anyhow::Result;
 use arboard::Clipboard;
+use baml_base::DebugMessage;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -15,14 +19,40 @@ use crate::{
         read_files_from_disk,
     },
     ui,
-    watcher::FileWatcher,
+    watcher::{ChangeKind, FileWatcher},
 };
+
+/// Result of a background build
+pub(crate) enum BuildResult {
+    Success,
+    Failed(String),
+}
 
 /// Duration to show the "Copied!" message
 const COPY_FEEDBACK_DURATION: Duration = Duration::from_secs(2);
 
+/// Duration to show rebuild status
+const REBUILD_STATUS_DURATION: Duration = Duration::from_secs(5);
+
+/// State of compiler rebuild process
+#[derive(Debug, Clone)]
+pub(crate) enum RebuildState {
+    /// No rebuild in progress
+    Idle,
+    /// Rebuild detected, waiting for user confirmation or auto-rebuild
+    Pending,
+    /// Currently rebuilding
+    Building,
+    /// Rebuild completed successfully, will restart
+    Success,
+    /// Rebuild failed with error
+    Failed(String),
+}
+
 pub(crate) struct App {
     file_path: PathBuf,
+    /// Workspace root for compiler hot-reload (if enabled)
+    workspace_root: Option<PathBuf>,
     /// Which tab is shown in the TUI.
     current_phase: CompilerPhase,
     /// Current files from disk (fake filesystem).
@@ -45,11 +75,29 @@ pub(crate) struct App {
     last_copy_time: Option<Instant>,
     /// Error message from last clipboard operation
     clipboard_error: Option<String>,
+    /// Current rebuild state
+    rebuild_state: RebuildState,
+    /// Timestamp when rebuild state was last updated
+    rebuild_state_time: Option<Instant>,
+    /// Receiver for background build results
+    build_result_rx: Option<Receiver<BuildResult>>,
+    /// Debug messages collected from the compiler (via baml_debug! macro)
+    debug_messages: Vec<DebugMessage>,
 }
 
 impl App {
-    pub(crate) fn new(path: PathBuf) -> Result<Self> {
-        let watcher = FileWatcher::new(&path)?;
+    pub(crate) fn new(
+        path: PathBuf,
+        workspace_root: Option<PathBuf>,
+        initial_phase: Option<CompilerPhase>,
+    ) -> Result<Self> {
+        // Create watcher - with or without compiler watching
+        let watcher = if let Some(ref workspace) = workspace_root {
+            FileWatcher::new_with_compiler_watch(&path, workspace)?
+        } else {
+            FileWatcher::new(&path)?
+        };
+
         let mut compiler = CompilerRunner::new(&path);
 
         // Read initial files from disk
@@ -59,9 +107,13 @@ impl App {
         // Initial compilation (no snapshot)
         compiler.compile_from_filesystem(&current_files, None);
 
+        // Drain any debug messages from initial compilation
+        let debug_messages = baml_base::drain_debug_log();
+
         Ok(Self {
             file_path: path,
-            current_phase: CompilerPhase::Lexer,
+            workspace_root,
+            current_phase: initial_phase.unwrap_or(CompilerPhase::Lexer),
             current_files,
             snapshot_files: None,
             snapshot_compiler: None,
@@ -75,6 +127,10 @@ impl App {
             thir_interactive_active: false,
             last_copy_time: None,
             clipboard_error: None,
+            rebuild_state: RebuildState::Idle,
+            rebuild_state_time: None,
+            build_result_rx: None,
+            debug_messages,
         })
     }
 
@@ -84,8 +140,41 @@ impl App {
     ) -> Result<()> {
         while !self.should_quit {
             // Check for file changes
-            if self.watcher.check_for_changes() {
-                self.reload_file()?;
+            if let Some(change_kind) = self.watcher.check_for_changes() {
+                match change_kind {
+                    ChangeKind::BamlFile => {
+                        self.reload_file()?;
+                    }
+                    ChangeKind::CompilerSource => {
+                        // Compiler source changed - trigger rebuild
+                        self.rebuild_state = RebuildState::Pending;
+                        self.rebuild_state_time = Some(Instant::now());
+                    }
+                }
+            }
+
+            // Check for background build completion
+            if let Some(ref rx) = self.build_result_rx
+                && let Ok(result) = rx.try_recv()
+            {
+                match result {
+                    BuildResult::Success => {
+                        self.rebuild_state = RebuildState::Success;
+                        self.rebuild_state_time = Some(Instant::now());
+                        self.build_result_rx = None;
+
+                        // Draw one more frame to show success, then restart
+                        terminal.draw(|frame| ui::draw(frame, self))?;
+
+                        // Restart by exec'ing into the new binary
+                        self.exec_restart();
+                    }
+                    BuildResult::Failed(error) => {
+                        self.rebuild_state = RebuildState::Failed(error);
+                        self.rebuild_state_time = Some(Instant::now());
+                        self.build_result_rx = None;
+                    }
+                }
             }
 
             // Draw UI
@@ -97,6 +186,18 @@ impl App {
                     Event::Key(key) => self.handle_key_event(key),
                     Event::Mouse(mouse) => self.handle_mouse_event(mouse),
                     _ => {}
+                }
+            }
+
+            // Clear old rebuild status messages
+            if let Some(time) = self.rebuild_state_time
+                && time.elapsed() > REBUILD_STATUS_DURATION
+                && matches!(self.rebuild_state, RebuildState::Failed(_))
+            {
+                // Keep failed state visible longer, but clear after 10 seconds
+                if time.elapsed() > Duration::from_secs(10) {
+                    self.rebuild_state = RebuildState::Idle;
+                    self.rebuild_state_time = None;
                 }
             }
         }
@@ -116,6 +217,119 @@ impl App {
         self.compile_current_state();
     }
 
+    /// Trigger a compiler rebuild and restart (runs in background thread)
+    fn trigger_rebuild(&mut self) {
+        // Don't start another build if one is already running
+        if self.build_result_rx.is_some() {
+            return;
+        }
+
+        self.rebuild_state = RebuildState::Building;
+        self.rebuild_state_time = Some(Instant::now());
+
+        // Create channel for build result
+        let (tx, rx) = channel();
+        self.build_result_rx = Some(rx);
+
+        // Clone workspace root for the thread
+        let workspace_dir = self
+            .workspace_root
+            .clone()
+            .unwrap_or_else(|| self.file_path.clone());
+
+        // Spawn background thread to run cargo build
+        thread::spawn(move || {
+            let result = Command::new("cargo")
+                .args(["build", "--bin", "baml_tools_onionskin"])
+                .current_dir(&workspace_dir)
+                .output();
+
+            let build_result = match result {
+                Ok(output) => {
+                    if output.status.success() {
+                        BuildResult::Success
+                    } else {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        // Extract just the first few lines of error
+                        let error_summary: String = stderr
+                            .lines()
+                            .filter(|line| line.contains("error"))
+                            .take(3)
+                            .collect::<Vec<_>>()
+                            .join("\n");
+
+                        BuildResult::Failed(if error_summary.is_empty() {
+                            "Build failed (see terminal)".to_string()
+                        } else {
+                            error_summary
+                        })
+                    }
+                }
+                Err(e) => BuildResult::Failed(format!("Failed to run cargo: {}", e)),
+            };
+
+            // Send result back (ignore error if receiver dropped)
+            let _ = tx.send(build_result);
+        });
+    }
+
+    /// Restart by exec'ing into the new binary
+    fn exec_restart(&self) -> ! {
+        // Restore terminal before exec
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture
+        );
+
+        // Get current exe path
+        let exe = std::env::current_exe().expect("Failed to get current executable path");
+
+        // Collect current args, filtering out any existing --phase argument
+        let mut args: Vec<String> = std::env::args()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .fold((Vec::new(), false), |(mut acc, skip_next), arg| {
+                if skip_next {
+                    // Skip this arg (it's the value after --phase)
+                    (acc, false)
+                } else if arg == "--phase" {
+                    // Skip --phase and mark next arg to skip
+                    (acc, true)
+                } else if arg.starts_with("--phase=") {
+                    // Skip --phase=value
+                    (acc, false)
+                } else {
+                    acc.push(arg);
+                    (acc, false)
+                }
+            })
+            .0;
+
+        // Add current phase to preserve the view
+        args.push("--phase".to_string());
+        args.push(self.current_phase.cli_name().to_string());
+
+        // On Unix, use exec to replace the current process
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = Command::new(&exe).args(&args).exec();
+            // exec only returns on error
+            eprintln!("Failed to exec: {}", err);
+            std::process::exit(1);
+        }
+
+        // On non-Unix, spawn a new process and exit
+        #[cfg(not(unix))]
+        {
+            let _ = Command::new(&exe).args(&args).spawn();
+            std::process::exit(0);
+        }
+    }
+
     fn handle_key_event(&mut self, key: KeyEvent) {
         // Check if we're in THIR interactive sub-mode
         let in_thir_interactive = self.current_phase == CompilerPhase::Thir
@@ -124,6 +338,9 @@ impl App {
 
         // Check if we're on the VM Runner tab
         let in_vm_runner = self.current_phase == CompilerPhase::VmRunner;
+
+        // Check if rebuild is pending
+        let rebuild_pending = matches!(self.rebuild_state, RebuildState::Pending);
 
         match (key.code, key.modifiers) {
             // Quit on Ctrl+C or 'q'
@@ -147,6 +364,24 @@ impl App {
             // Manual recompile on 'r'
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
                 self.recompile();
+            }
+            // Trigger compiler rebuild on 'R' (Shift+R) or Enter when rebuild pending
+            (KeyCode::Char('R'), KeyModifiers::SHIFT) => {
+                if self.watcher.is_watching_compiler() {
+                    self.trigger_rebuild();
+                }
+            }
+            (KeyCode::Enter, KeyModifiers::NONE) if rebuild_pending => {
+                self.trigger_rebuild();
+            }
+            // Dismiss rebuild pending with Escape
+            (KeyCode::Esc, KeyModifiers::NONE) => {
+                if rebuild_pending {
+                    self.rebuild_state = RebuildState::Idle;
+                    self.rebuild_state_time = None;
+                } else if self.thir_interactive_active {
+                    self.thir_interactive_active = false;
+                }
             }
             // Navigate phases with left/right arrow keys (only when not in THIR interactive mode)
             (KeyCode::Left, _) => {
@@ -240,9 +475,9 @@ impl App {
                     self.thir_cursor_right();
                 }
             }
-            // Execute function on Enter when on VM Runner tab
+            // Execute function on Enter when on VM Runner tab (and not rebuild pending)
             (KeyCode::Enter, KeyModifiers::NONE) => {
-                if in_vm_runner {
+                if in_vm_runner && !rebuild_pending {
                     self.vm_runner_execute();
                 }
             }
@@ -253,6 +488,10 @@ impl App {
             // Paste from clipboard with 'p' (shows clipboard contents in a message)
             (KeyCode::Char('p'), KeyModifiers::NONE) => {
                 self.paste_from_clipboard();
+            }
+            // Dismiss debug messages with 'd'
+            (KeyCode::Char('d'), KeyModifiers::NONE) => {
+                self.debug_messages.clear();
             }
             _ => {}
         }
@@ -474,6 +713,9 @@ impl App {
                 .compile_from_filesystem(&self.current_files, None);
         }
 
+        // Collect any debug messages emitted during compilation
+        self.debug_messages = baml_base::drain_debug_log();
+
         self.last_compiled_files = self.current_files.clone();
     }
 
@@ -554,5 +796,20 @@ impl App {
         } else {
             None
         }
+    }
+
+    /// Get the current rebuild state
+    pub(crate) fn rebuild_state(&self) -> &RebuildState {
+        &self.rebuild_state
+    }
+
+    /// Check if compiler hot-reload is enabled
+    pub(crate) fn is_hot_reload_enabled(&self) -> bool {
+        self.watcher.is_watching_compiler()
+    }
+
+    /// Get debug messages collected from the compiler
+    pub(crate) fn debug_messages(&self) -> &[DebugMessage] {
+        &self.debug_messages
     }
 }

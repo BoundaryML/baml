@@ -16,7 +16,7 @@ use ratatui::{
 use similar::{ChangeTag, TextDiff};
 
 use crate::{
-    app::App,
+    app::{App, RebuildState},
     compiler::{CompilerPhase, LineStatus, ThirDisplayMode, VisualizationMode},
 };
 
@@ -45,31 +45,65 @@ pub(crate) fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>
 }
 
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
+    // Check which banners to show
+    let show_rebuild_banner = !matches!(app.rebuild_state(), RebuildState::Idle);
+    let show_debug_banner = !app.debug_messages().is_empty();
+
+    // Build constraints dynamically based on which banners are shown
+    let mut constraints = vec![
+        Constraint::Length(3), // Header
+        Constraint::Length(3), // Phase tabs
+    ];
+
+    if show_rebuild_banner {
+        constraints.push(Constraint::Length(3)); // Rebuild status banner
+    }
+    if show_debug_banner {
+        // Dynamic height based on number of messages (min 3, max 8)
+        let debug_height = (app.debug_messages().len() + 2).clamp(3, 8) as u16;
+        constraints.push(Constraint::Length(debug_height)); // Debug log banner
+    }
+
+    constraints.push(Constraint::Min(0)); // Content
+    constraints.push(Constraint::Length(3)); // Status bar
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Length(3), // Phase tabs
-            Constraint::Min(0),    // Content
-            Constraint::Length(3), // Status bar with shortcuts
-        ])
+        .constraints(constraints)
         .split(frame.area());
 
+    let mut chunk_idx = 0;
+
     // Draw header
-    draw_header(frame, chunks[0], app);
+    draw_header(frame, chunks[chunk_idx], app);
+    chunk_idx += 1;
 
     // Draw phase tabs
-    draw_phase_tabs(frame, chunks[1], app);
+    draw_phase_tabs(frame, chunks[chunk_idx], app);
+    chunk_idx += 1;
+
+    // Draw rebuild banner if needed
+    if show_rebuild_banner {
+        draw_rebuild_banner(frame, chunks[chunk_idx], app);
+        chunk_idx += 1;
+    }
+
+    // Draw debug banner if needed
+    if show_debug_banner {
+        draw_debug_banner(frame, chunks[chunk_idx], app);
+        chunk_idx += 1;
+    }
 
     // Draw content (either single view or diff view)
     if app.has_snapshot() {
-        draw_diff_view(frame, chunks[2], app);
+        draw_diff_view(frame, chunks[chunk_idx], app);
     } else {
-        draw_single_view(frame, chunks[2], app);
+        draw_single_view(frame, chunks[chunk_idx], app);
     }
+    chunk_idx += 1;
 
     // Draw status bar
-    draw_status_bar(frame, chunks[3], app);
+    draw_status_bar(frame, chunks[chunk_idx], app);
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -79,15 +113,22 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
         "File"
     };
 
+    let hot_reload_indicator = if app.is_hot_reload_enabled() {
+        " | 🔥 Hot-Reload"
+    } else {
+        ""
+    };
+
     let title = format!(
-        "BAML Onionskin [{}]: {}{}",
+        "BAML Onionskin [{}]: {}{}{}",
         mode,
         app.file_path().display(),
         if app.has_snapshot() {
             " | Snapshot: ON"
         } else {
             ""
-        }
+        },
+        hot_reload_indicator
     );
     let block = Block::default()
         .borders(Borders::ALL)
@@ -145,6 +186,83 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
             .borders(Borders::ALL)
             .title("Compiler Phase"),
     );
+
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_rebuild_banner(frame: &mut Frame, area: Rect, app: &App) {
+    let (message, style) = match app.rebuild_state() {
+        RebuildState::Idle => ("".to_string(), Style::default()),
+        RebuildState::Pending => (
+            "⚡ Compiler source changed! Press [Enter] to rebuild, [Esc] to dismiss".to_string(),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        RebuildState::Building => (
+            "🔨 Building... (this may take a moment)".to_string(),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        RebuildState::Success => (
+            "✓ Build successful! Restarting...".to_string(),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        RebuildState::Failed(error) => (
+            format!("✗ Build failed: {}", error),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+    };
+
+    let paragraph = Paragraph::new(message).style(style).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Compiler Hot-Reload")
+            .border_style(style),
+    );
+
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_debug_banner(frame: &mut Frame, area: Rect, app: &App) {
+    let messages = app.debug_messages();
+    let count = messages.len();
+
+    // Build lines for display
+    let mut lines: Vec<Line> = Vec::new();
+
+    for msg in messages.iter().take(6) {
+        // Extract just the crate name from the module path for brevity
+        let crate_name = msg.module.split("::").next().unwrap_or(msg.module);
+        let line = Line::from(vec![
+            Span::styled(
+                format!("[{}] ", crate_name),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::raw(&msg.message),
+        ]);
+        lines.push(line);
+    }
+
+    if count > 6 {
+        lines.push(Line::from(Span::styled(
+            format!("... and {} more", count - 6),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let title = format!("Debug Log ({} messages) - [d] Dismiss", count);
+    let paragraph = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
 }
@@ -384,6 +502,13 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         format!("[m] Mode: {}", app.visualization_mode_name())
     };
 
+    // Add hot-reload rebuild shortcut if enabled
+    let rebuild_str = if app.is_hot_reload_enabled() {
+        "  |  [Shift+R] Rebuild"
+    } else {
+        ""
+    };
+
     // Show THIR-specific navigation help when in interactive mode
     let line2 = if app.current_phase() == CompilerPhase::Thir
         && app.thir_display_mode() == ThirDisplayMode::Interactive
@@ -428,8 +553,8 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         let status_color = if is_error { Color::Red } else { Color::Green };
         vec![
             Span::raw(format!(
-                "Snapshot: {}  |  [r] Recompile  |  {}  |  [c/y] Copy  |  ",
-                snapshot_help, mode_str
+                "Snapshot: {}  |  [r] Recompile  |  {}{}  |  [c/y] Copy  |  ",
+                snapshot_help, mode_str, rebuild_str
             )),
             Span::styled(
                 status,
@@ -440,8 +565,8 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         ]
     } else {
         vec![Span::raw(format!(
-            "Snapshot: {}  |  [r] Recompile  |  {}  |  [c/y] Copy",
-            snapshot_help, mode_str
+            "Snapshot: {}  |  [r] Recompile  |  {}{}  |  [c/y] Copy",
+            snapshot_help, mode_str, rebuild_str
         ))]
     };
 
