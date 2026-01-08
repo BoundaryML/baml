@@ -142,7 +142,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_compiler_bytecode/**' \
+            ':baml_language/crates/baml_compiler_emit/**' \
             ':baml_language/crates/baml_thir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then

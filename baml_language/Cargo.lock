@@ -313,7 +313,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_compiler_bytecode"
+name = "baml_compiler_diagnostics"
+version = "0.0.0"
+dependencies = [
+ "ariadne",
+ "baml_base",
+ "baml_workspace",
+ "salsa",
+ "text-size",
+]
+
+[[package]]
+name = "baml_compiler_emit"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -328,17 +339,6 @@ dependencies = [
  "insta",
  "la-arena",
  "salsa",
-]
-
-[[package]]
-name = "baml_compiler_diagnostics"
-version = "0.0.0"
-dependencies = [
- "ariadne",
- "baml_base",
- "baml_workspace",
- "salsa",
- "text-size",
 ]
 
 [[package]]
@@ -440,8 +440,8 @@ name = "baml_db"
 version = "0.0.0"
 dependencies = [
  "baml_base",
- "baml_compiler_bytecode",
  "baml_compiler_diagnostics",
+ "baml_compiler_emit",
  "baml_compiler_hir",
  "baml_compiler_lexer",
  "baml_compiler_mir",
@@ -568,8 +568,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_compiler_bytecode",
  "baml_compiler_diagnostics",
+ "baml_compiler_emit",
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
@@ -596,8 +596,8 @@ dependencies = [
  "arboard",
  "ariadne",
  "baml_base",
- "baml_compiler_bytecode",
  "baml_compiler_diagnostics",
+ "baml_compiler_emit",
  "baml_compiler_hir",
  "baml_compiler_lexer",
  "baml_compiler_mir",
@@ -625,7 +625,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_compiler_bytecode",
+ "baml_compiler_emit",
  "baml_tests",
  "codspeed-divan-compat",
  "colored",

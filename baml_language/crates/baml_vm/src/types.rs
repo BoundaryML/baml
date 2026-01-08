@@ -47,7 +47,7 @@ pub mod type_tags {
 
 /// Compiled program ready for execution.
 ///
-/// This is what `baml_compiler_bytecode` produces. It contains all the objects and globals
+/// This is what `baml_compiler_emit` produces. It contains all the objects and globals
 /// needed to run a BAML program.
 #[derive(Clone, Debug)]
 pub struct Program {

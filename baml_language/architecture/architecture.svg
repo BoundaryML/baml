@@ -97,26 +97,8 @@
 <path fill="none" stroke="#555555" d="M316.96,-1108.3C307.85,-1100.22 297.27,-1090.84 287.41,-1082.08"/>
 <polygon fill="#555555" stroke="#555555" points="290.37,-1079.1 278.61,-1074.27 284.8,-1085.38 290.37,-1079.1"/>
 </g>
-<!-- baml_compiler_bytecode -->
-<g id="node5" class="node">
-<title>baml_compiler_bytecode</title>
-<path fill="white" stroke="black" d="M677.09,-756C677.09,-756 428.38,-756 428.38,-756 422.38,-756 416.38,-750 416.38,-744 416.38,-744 416.38,-724.8 416.38,-724.8 416.38,-718.8 422.38,-712.8 428.38,-712.8 428.38,-712.8 677.09,-712.8 677.09,-712.8 683.09,-712.8 689.09,-718.8 689.09,-724.8 689.09,-724.8 689.09,-744 689.09,-744 689.09,-750 683.09,-756 677.09,-756"/>
-<text text-anchor="middle" x="552.73" y="-727.2" font-family="Times,serif" font-size="24.00">baml_compiler_bytecode</text>
-</g>
-<!-- baml_compiler_mir -->
-<g id="node9" class="node">
-<title>baml_compiler_mir</title>
-<path fill="white" stroke="black" d="M650.44,-676.8C650.44,-676.8 455.02,-676.8 455.02,-676.8 449.02,-676.8 443.02,-670.8 443.02,-664.8 443.02,-664.8 443.02,-645.6 443.02,-645.6 443.02,-639.6 449.02,-633.6 455.02,-633.6 455.02,-633.6 650.44,-633.6 650.44,-633.6 656.44,-633.6 662.44,-639.6 662.44,-645.6 662.44,-645.6 662.44,-664.8 662.44,-664.8 662.44,-670.8 656.44,-676.8 650.44,-676.8"/>
-<text text-anchor="middle" x="552.73" y="-648" font-family="Times,serif" font-size="24.00">baml_compiler_mir</text>
-</g>
-<!-- baml_compiler_bytecode&#45;&gt;baml_compiler_mir -->
-<g id="edge7" class="edge">
-<title>baml_compiler_bytecode&#45;&gt;baml_compiler_mir</title>
-<path fill="none" stroke="#555555" d="M552.73,-712.3C552.73,-705.58 552.73,-697.96 552.73,-690.55"/>
-<polygon fill="#555555" stroke="#555555" points="556.93,-690.78 552.73,-678.78 548.53,-690.78 556.93,-690.78"/>
-</g>
 <!-- baml_compiler_diagnostics -->
-<g id="node6" class="node">
+<g id="node5" class="node">
 <title>baml_compiler_diagnostics</title>
 <path fill="white" stroke="black" d="M325.77,-280.8C325.77,-280.8 55.69,-280.8 55.69,-280.8 49.69,-280.8 43.69,-274.8 43.69,-268.8 43.69,-268.8 43.69,-249.6 43.69,-249.6 43.69,-243.6 49.69,-237.6 55.69,-237.6 55.69,-237.6 325.77,-237.6 325.77,-237.6 331.77,-237.6 337.77,-243.6 337.77,-249.6 337.77,-249.6 337.77,-268.8 337.77,-268.8 337.77,-274.8 331.77,-280.8 325.77,-280.8"/>
 <text text-anchor="middle" x="190.73" y="-252" font-family="Times,serif" font-size="24.00">baml_compiler_diagnostics</text>
@@ -128,10 +110,28 @@
 <text text-anchor="middle" x="166.73" y="-172.8" font-family="Times,serif" font-size="24.00">baml_workspace</text>
 </g>
 <!-- baml_compiler_diagnostics&#45;&gt;baml_workspace -->
-<g id="edge8" class="edge">
+<g id="edge7" class="edge">
 <title>baml_compiler_diagnostics&#45;&gt;baml_workspace</title>
 <path fill="none" stroke="#555555" d="M184.17,-237.1C182.03,-230.21 179.59,-222.37 177.24,-214.79"/>
 <polygon fill="#555555" stroke="#555555" points="181.3,-213.73 173.73,-203.52 173.28,-216.22 181.3,-213.73"/>
+</g>
+<!-- baml_compiler_emit -->
+<g id="node6" class="node">
+<title>baml_compiler_emit</title>
+<path fill="white" stroke="black" d="M655.1,-756C655.1,-756 450.36,-756 450.36,-756 444.36,-756 438.36,-750 438.36,-744 438.36,-744 438.36,-724.8 438.36,-724.8 438.36,-718.8 444.36,-712.8 450.36,-712.8 450.36,-712.8 655.1,-712.8 655.1,-712.8 661.1,-712.8 667.1,-718.8 667.1,-724.8 667.1,-724.8 667.1,-744 667.1,-744 667.1,-750 661.1,-756 655.1,-756"/>
+<text text-anchor="middle" x="552.73" y="-727.2" font-family="Times,serif" font-size="24.00">baml_compiler_emit</text>
+</g>
+<!-- baml_compiler_mir -->
+<g id="node9" class="node">
+<title>baml_compiler_mir</title>
+<path fill="white" stroke="black" d="M650.44,-676.8C650.44,-676.8 455.02,-676.8 455.02,-676.8 449.02,-676.8 443.02,-670.8 443.02,-664.8 443.02,-664.8 443.02,-645.6 443.02,-645.6 443.02,-639.6 449.02,-633.6 455.02,-633.6 455.02,-633.6 650.44,-633.6 650.44,-633.6 656.44,-633.6 662.44,-639.6 662.44,-645.6 662.44,-645.6 662.44,-664.8 662.44,-664.8 662.44,-670.8 656.44,-676.8 650.44,-676.8"/>
+<text text-anchor="middle" x="552.73" y="-648" font-family="Times,serif" font-size="24.00">baml_compiler_mir</text>
+</g>
+<!-- baml_compiler_emit&#45;&gt;baml_compiler_mir -->
+<g id="edge8" class="edge">
+<title>baml_compiler_emit&#45;&gt;baml_compiler_mir</title>
+<path fill="none" stroke="#555555" d="M552.73,-712.3C552.73,-705.58 552.73,-697.96 552.73,-690.55"/>
+<polygon fill="#555555" stroke="#555555" points="556.93,-690.78 552.73,-678.78 548.53,-690.78 556.93,-690.78"/>
 </g>
 <!-- baml_compiler_hir -->
 <g id="node7" class="node">
@@ -253,9 +253,9 @@
 <path fill="white" stroke="black" d="M597.13,-835.2C597.13,-835.2 508.34,-835.2 508.34,-835.2 502.34,-835.2 496.34,-829.2 496.34,-823.2 496.34,-823.2 496.34,-804 496.34,-804 496.34,-798 502.34,-792 508.34,-792 508.34,-792 597.13,-792 597.13,-792 603.13,-792 609.13,-798 609.13,-804 609.13,-804 609.13,-823.2 609.13,-823.2 609.13,-829.2 603.13,-835.2 597.13,-835.2"/>
 <text text-anchor="middle" x="552.73" y="-806.4" font-family="Times,serif" font-size="24.00">baml_db</text>
 </g>
-<!-- baml_db&#45;&gt;baml_compiler_bytecode -->
+<!-- baml_db&#45;&gt;baml_compiler_emit -->
 <g id="edge20" class="edge">
-<title>baml_db&#45;&gt;baml_compiler_bytecode</title>
+<title>baml_db&#45;&gt;baml_compiler_emit</title>
 <path fill="none" stroke="#555555" d="M552.73,-791.5C552.73,-784.78 552.73,-777.16 552.73,-769.75"/>
 <polygon fill="#555555" stroke="#555555" points="556.93,-769.98 552.73,-757.98 548.53,-769.98 556.93,-769.98"/>
 </g>
