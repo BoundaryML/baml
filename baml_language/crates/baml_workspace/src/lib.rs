@@ -11,7 +11,7 @@
 //! ## Architecture Note
 //!
 //! `Project` is defined here (rather than in `baml_project`) because:
-//! - Lower-level crates (`baml_compiler_hir`, `baml_tir`, `baml_mir`) need the `Project` type
+//! - Lower-level crates (`baml_compiler_hir`, `baml_compiler_tir`, `baml_mir`) need the `Project` type
 //!   in their query signatures (e.g., `validate_hir(db, project)`)
 //! - If `Project` were in `baml_project`, those crates would need to depend on
 //!   `baml_project`, creating a circular dependency
@@ -32,7 +32,7 @@ pub use discovery::discover_baml_files;
 /// Database trait for workspace/project context.
 ///
 /// Provides access to the project being compiled. Extended by downstream
-/// crates (`baml_compiler_hir::Db`, `baml_tir::Db`, etc.).
+/// crates (`baml_compiler_hir::Db`, `baml_compiler_tir::Db`, etc.).
 #[salsa::db]
 pub trait Db: salsa::Database {
     /// Returns the project being analyzed.

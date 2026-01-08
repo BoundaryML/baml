@@ -222,13 +222,13 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_lexer;
             use baml_db::baml_parser;
             use baml_db::baml_compiler_hir;
-            use baml_db::baml_tir;
+            use baml_db::baml_compiler_tir;
             use baml_db::baml_vir;
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
             use baml_compiler_hir::{function_body, function_signature};
-            use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
-            use baml_tir::pretty::short_display;
+            use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
+            use baml_compiler_tir::pretty::short_display;
             use baml_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
@@ -435,7 +435,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
+                        let result = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -498,7 +498,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             let globals = typing_context(&db, root).functions(&db).clone();
             let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
 
-            let resolution_ctx = baml_tir::TypeResolutionContext::new(&db, root);
+            let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&db, root);
 
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
@@ -526,7 +526,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
+                        let inference = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
                         let mir_output = match baml_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {

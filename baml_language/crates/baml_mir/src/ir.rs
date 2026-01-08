@@ -6,7 +6,7 @@
 use std::fmt;
 
 use baml_base::Name;
-use baml_tir::Ty;
+use baml_compiler_tir::Ty;
 use text_size::TextRange;
 
 // ============================================================================

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, Span};
 use baml_compiler_hir::FunctionSignature;
-use baml_tir::{Ty, TypeResolutionContext};
+use baml_compiler_tir::{Ty, TypeResolutionContext};
 use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
@@ -1557,7 +1557,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             let base_ty = body.ty(*base);
             let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-            if let Some((def, _)) = baml_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
+            if let Some((def, _)) = baml_compiler_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
             {
                 // Found a builtin method - pass receiver as first argument
                 let mut all_args = vec![self.lower_to_operand(*base, body)];

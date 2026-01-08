@@ -48,7 +48,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{self, ItemId, function_body, function_signature};
-use baml_tir::TypeResolutionContext;
+use baml_compiler_tir::TypeResolutionContext;
 pub use baml_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
@@ -111,7 +111,7 @@ pub fn compile_files(
     // Build classes map (class name -> field name -> field index) and add Class objects to program
     // Also build class_field_types for type inference (class name -> field name -> Ty)
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_field_types: HashMap<Name, HashMap<Name, baml_tir::Ty>> = HashMap::new();
+    let mut class_field_types: HashMap<Name, HashMap<Name, baml_compiler_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
     let mut class_type_tag_counter = 0i64;
 
@@ -259,7 +259,7 @@ pub fn compile_files(
                         // checking for type aliases won't work. This is acceptable
                         // since codegen is for runtime execution, and type errors
                         // should be caught in the TIR phase.
-                        let inference = baml_tir::infer_function(
+                        let inference = baml_compiler_tir::infer_function(
                             db,
                             &signature,
                             &body,
@@ -312,7 +312,7 @@ fn build_typing_context(
     db: &dyn baml_mir::Db,
     files: &[SourceFile],
     resolution_ctx: &TypeResolutionContext,
-) -> HashMap<Name, baml_tir::Ty> {
+) -> HashMap<Name, baml_compiler_tir::Ty> {
     let mut context = HashMap::new();
 
     for file in files {
@@ -322,7 +322,7 @@ fn build_typing_context(
                 let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_tir::Ty> = signature
+                let param_types: Vec<baml_compiler_tir::Ty> = signature
                     .params
                     .iter()
                     .map(|p| {
@@ -335,7 +335,7 @@ fn build_typing_context(
                 let (return_type, _) =
                     resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
 
-                let func_type = baml_tir::Ty::Function {
+                let func_type = baml_compiler_tir::Ty::Function {
                     params: param_types,
                     ret: Box::new(return_type),
                 };

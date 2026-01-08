@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_lexer, baml_parser, baml_syntax, baml_tir,
+    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_lexer, baml_parser, baml_syntax, baml_compiler_tir,
     baml_workspace,
 };
 use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
@@ -19,7 +19,7 @@ use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
+use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -810,7 +810,7 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
-        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -842,7 +842,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types and type validation
-                    let inference_result = baml_tir::infer_function(
+                    let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
@@ -856,7 +856,7 @@ impl CompilerRunner {
                     // Note: Type error collection moved to run_diagnostics() using collect_diagnostics()
 
                     // Use tree view for both modes - interactive mode parses this afterward
-                    let tree_output = baml_tir::render_function_tree(
+                    let tree_output = baml_compiler_tir::render_function_tree(
                         &self.db,
                         &resolution_ctx,
                         &func_name,
@@ -917,7 +917,7 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
-        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -946,7 +946,7 @@ impl CompilerRunner {
                     };
 
                     // Run type inference
-                    let inference_result = baml_tir::infer_function(
+                    let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,
@@ -1031,7 +1031,7 @@ impl CompilerRunner {
             }
         }
 
-        let resolution_ctx = baml_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -1055,7 +1055,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Run type inference with global function types
-                    let inference_result = baml_tir::infer_function(
+                    let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
                         &body,

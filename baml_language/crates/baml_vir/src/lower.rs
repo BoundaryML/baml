@@ -23,7 +23,7 @@
 
 use baml_base::Span;
 use baml_compiler_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
-use baml_tir::{InferenceResult, TypeResolutionContext};
+use baml_compiler_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
@@ -76,10 +76,10 @@ impl std::error::Error for LoweringError {}
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise
 /// not suitable for code generation.
 ///
-/// Note: Takes `baml_tir::Db` instead of `baml_vir::Db` for broader compatibility.
+/// Note: Takes `baml_compiler_tir::Db` instead of `baml_vir::Db` for broader compatibility.
 /// This allows callers with `baml_mir::Db` to use this function directly.
 pub fn lower_from_hir(
-    db: &dyn baml_tir::Db,
+    db: &dyn baml_compiler_tir::Db,
     body: &FunctionBody,
     inference: &InferenceResult,
     resolution_ctx: &TypeResolutionContext,
@@ -165,7 +165,7 @@ impl ExprBodyBuilder {
 /// Context for lowering HIR to VIR.
 struct LoweringContext<'a> {
     #[allow(dead_code)]
-    db: &'a dyn baml_tir::Db,
+    db: &'a dyn baml_compiler_tir::Db,
     inference: &'a InferenceResult,
     resolution_ctx: &'a TypeResolutionContext,
     builder: ExprBodyBuilder,
@@ -173,7 +173,7 @@ struct LoweringContext<'a> {
 
 impl<'a> LoweringContext<'a> {
     fn new(
-        db: &'a dyn baml_tir::Db,
+        db: &'a dyn baml_compiler_tir::Db,
         inference: &'a InferenceResult,
         resolution_ctx: &'a TypeResolutionContext,
     ) -> Self {
@@ -726,52 +726,52 @@ impl<'a> LoweringContext<'a> {
     }
 
     /// Lower a TIR type to VIR type, resolving all IDs.
-    fn lower_ty(thir_ty: &baml_tir::Ty) -> Ty {
+    fn lower_ty(thir_ty: &baml_compiler_tir::Ty) -> Ty {
         match thir_ty {
-            baml_tir::Ty::Int => Ty::Int,
-            baml_tir::Ty::Float => Ty::Float,
-            baml_tir::Ty::String => Ty::String,
-            baml_tir::Ty::Bool => Ty::Bool,
-            baml_tir::Ty::Null => Ty::Null,
-            baml_tir::Ty::Image => Ty::Image,
-            baml_tir::Ty::Audio => Ty::Audio,
-            baml_tir::Ty::Video => Ty::Video,
-            baml_tir::Ty::Pdf => Ty::Pdf,
+            baml_compiler_tir::Ty::Int => Ty::Int,
+            baml_compiler_tir::Ty::Float => Ty::Float,
+            baml_compiler_tir::Ty::String => Ty::String,
+            baml_compiler_tir::Ty::Bool => Ty::Bool,
+            baml_compiler_tir::Ty::Null => Ty::Null,
+            baml_compiler_tir::Ty::Image => Ty::Image,
+            baml_compiler_tir::Ty::Audio => Ty::Audio,
+            baml_compiler_tir::Ty::Video => Ty::Video,
+            baml_compiler_tir::Ty::Pdf => Ty::Pdf,
 
-            baml_tir::Ty::Named(name) => Ty::Class(name.clone()),
+            baml_compiler_tir::Ty::Named(name) => Ty::Class(name.clone()),
 
-            baml_tir::Ty::Class(name) => Ty::Class(name.clone()),
+            baml_compiler_tir::Ty::Class(name) => Ty::Class(name.clone()),
 
-            baml_tir::Ty::Enum(name) => Ty::Enum(name.clone()),
+            baml_compiler_tir::Ty::Enum(name) => Ty::Enum(name.clone()),
 
-            baml_tir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_ty(inner))),
+            baml_compiler_tir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_ty(inner))),
 
-            baml_tir::Ty::List(inner) => Ty::List(Box::new(Self::lower_ty(inner))),
+            baml_compiler_tir::Ty::List(inner) => Ty::List(Box::new(Self::lower_ty(inner))),
 
-            baml_tir::Ty::Map { key, value } => Ty::Map {
+            baml_compiler_tir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(Self::lower_ty(key)),
                 value: Box::new(Self::lower_ty(value)),
             },
 
-            baml_tir::Ty::Union(types) => Ty::Union(types.iter().map(Self::lower_ty).collect()),
+            baml_compiler_tir::Ty::Union(types) => Ty::Union(types.iter().map(Self::lower_ty).collect()),
 
-            baml_tir::Ty::Function { params, ret } => Ty::Function {
+            baml_compiler_tir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(Self::lower_ty).collect(),
                 ret: Box::new(Self::lower_ty(ret)),
             },
 
-            baml_tir::Ty::Unknown => Ty::Unknown,
-            baml_tir::Ty::Error => Ty::Error,
-            baml_tir::Ty::Void => Ty::Unit,
+            baml_compiler_tir::Ty::Unknown => Ty::Unknown,
+            baml_compiler_tir::Ty::Error => Ty::Error,
+            baml_compiler_tir::Ty::Void => Ty::Unit,
             // Map literal types to their underlying primitive types
-            baml_tir::Ty::Literal(lit) => match lit {
-                baml_tir::LiteralValue::Int(_) => Ty::Int,
-                baml_tir::LiteralValue::Float(_) => Ty::Float,
-                baml_tir::LiteralValue::String(_) => Ty::String,
-                baml_tir::LiteralValue::Bool(_) => Ty::Bool,
+            baml_compiler_tir::Ty::Literal(lit) => match lit {
+                baml_compiler_tir::LiteralValue::Int(_) => Ty::Int,
+                baml_compiler_tir::LiteralValue::Float(_) => Ty::Float,
+                baml_compiler_tir::LiteralValue::String(_) => Ty::String,
+                baml_compiler_tir::LiteralValue::Bool(_) => Ty::Bool,
             },
             // WatchAccessor is a special type that wraps another type
-            baml_tir::Ty::WatchAccessor(inner) => {
+            baml_compiler_tir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_ty(inner)))
             }
         }

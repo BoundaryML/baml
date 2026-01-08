@@ -19,7 +19,7 @@ use baml_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
 };
-use baml_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
+use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_workspace::Project;
 
 use crate::ProjectDatabase;
@@ -103,7 +103,7 @@ pub fn collect_diagnostics(
                         diagnostics.push(diag.to_diagnostic());
                     }
 
-                    let inference_result = baml_tir::infer_function(
+                    let inference_result = baml_compiler_tir::infer_function(
                         db,
                         &signature,
                         &body,

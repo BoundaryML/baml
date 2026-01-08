@@ -23,7 +23,7 @@ baml_compiler_hir = { workspace = true }
 baml_mir = { workspace = true }
 baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
-baml_tir = { workspace = true }
+baml_compiler_tir = { workspace = true }
 baml_vir = { workspace = true }
 
 [dev-dependencies]

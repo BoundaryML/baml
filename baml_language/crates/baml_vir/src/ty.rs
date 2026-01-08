@@ -9,7 +9,7 @@ use baml_base::Name;
 
 /// A resolved type in BAML.
 ///
-/// Unlike `baml_tir::Ty` which may contain `ClassId` and `EnumId` references,
+/// Unlike `baml_compiler_tir::Ty` which may contain `ClassId` and `EnumId` references,
 /// this type is fully resolved with all names known.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {

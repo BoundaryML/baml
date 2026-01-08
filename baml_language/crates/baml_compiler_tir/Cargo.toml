@@ -1,5 +1,5 @@
 [package]
-name = "baml_tir"
+name = "baml_compiler_tir"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }

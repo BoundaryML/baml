@@ -56,6 +56,6 @@ pub use lower::lower;
 // Database Trait
 // ============================================================================
 
-/// Database trait for MIR queries. Extends `baml_tir::Db`.
+/// Database trait for MIR queries. Extends `baml_compiler_tir::Db`.
 #[salsa::db]
-pub trait Db: baml_tir::Db {}
+pub trait Db: baml_compiler_tir::Db {}

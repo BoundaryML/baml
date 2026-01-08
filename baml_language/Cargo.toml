@@ -28,7 +28,7 @@ baml_parser = { path = "crates/baml_parser" }
 baml_onionskin = { path = "crates/baml_onionskin" }
 baml_syntax = { path = "crates/baml_syntax" }
 baml_tests = { path = "crates/baml_tests" }
-baml_tir = { path = "crates/baml_tir" }
+baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_vir = { path = "crates/baml_vir" }
 baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
