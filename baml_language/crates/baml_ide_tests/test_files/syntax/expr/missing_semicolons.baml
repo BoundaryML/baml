@@ -97,6 +97,12 @@ function InvalidLet(x: int) -> int {
     x
 }
 
+// let with if expression missing semicolon
+function InvalidLetWithIf(x: int) -> int {
+    let y = if (x > 0) { 1 } else { 2 }  // ERROR: needs semicolon
+    y
+}
+
 // Top-level let missing semicolon
 let topLevel = 1  // ERROR: needs semicolon
 
@@ -159,15 +165,24 @@ function MissingReturnExpression() -> int {
 //----
 //- diagnostics
 // Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:98:2 ]
+//      ╭─[ expr_missing_semicolons.baml:104:2 ]
 //      │
-//   98 │ ╭─▶ }
+//  104 │ ╭─▶ }
 //      ┆ ┆   
-//  101 │ ├─▶ let topLevel = 1  // ERROR: needs semicolon
+//  107 │ ├─▶ let topLevel = 1  // ERROR: needs semicolon
 //      │ │                                                 
 //      │ ╰───────────────────────────────────────────────── Statement must end with a semicolon.
 //      │     
 //      │     Note: Error code: E0028
+// ─────╯
+// Error: Statement must end with a semicolon.
+//      ╭─[ expr_missing_semicolons.baml:102:5 ]
+//      │
+//  102 │     let y = if (x > 0) { 1 } else { 2 }  // ERROR: needs semicolon
+//      │     ─────────────────┬─────────────────  
+//      │                      ╰─────────────────── Statement must end with a semicolon.
+//      │ 
+//      │ Note: Error code: E0028
 // ─────╯
 // Error: Statement must end with a semicolon.
 //     ╭─[ expr_missing_semicolons.baml:96:5 ]
@@ -179,11 +194,11 @@ function MissingReturnExpression() -> int {
 //     │ Note: Error code: E0028
 // ────╯
 // Error: Missing return expression. Function expects `int` but body has no final expression.
-//      ╭─[ expr_missing_semicolons.baml:154:42 ]
+//      ╭─[ expr_missing_semicolons.baml:160:42 ]
 //      │
-//  154 │ ╭─▶ function MissingReturnExpression() -> int {
+//  160 │ ╭─▶ function MissingReturnExpression() -> int {
 //      ┆ ┆   
-//  157 │ ├─▶ }
+//  163 │ ├─▶ }
 //      │ │      
 //      │ ╰────── Missing return expression. Function expects `int` but body has no final expression.
 //      │     
