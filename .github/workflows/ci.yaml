@@ -252,7 +252,7 @@ jobs:
           tool: cargo-codspeed
 
       - name: "Build benchmarks"
-        run: cargo codspeed build -p baml_tests
+        run: cargo codspeed build -p baml_tests -m walltime
         working-directory: baml_language
 
       - name: "Run benchmarks"
