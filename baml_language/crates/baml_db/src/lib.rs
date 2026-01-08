@@ -17,7 +17,7 @@ pub use baml_compiler_hir;
 pub use baml_compiler_lexer;
 pub use baml_compiler_mir;
 pub use baml_parser;
-pub use baml_syntax;
+pub use baml_compiler_syntax;
 pub use baml_compiler_tir;
 pub use baml_compiler_vir;
 pub use baml_workspace;

@@ -5,7 +5,7 @@
 use baml_base::SourceFile;
 use baml_compiler_diagnostics::ParseError;
 use baml_compiler_lexer::lex_file;
-use baml_syntax::SyntaxNode;
+use baml_compiler_syntax::SyntaxNode;
 use rowan::GreenNode;
 
 mod parser;

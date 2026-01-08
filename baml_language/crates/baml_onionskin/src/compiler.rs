@@ -9,13 +9,13 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_parser, baml_syntax, baml_compiler_tir,
+    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_parser, baml_compiler_syntax, baml_compiler_tir,
     baml_workspace,
 };
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
 use baml_compiler_hir::{ItemId, function_body, function_signature};
 use baml_project::{ProjectDatabase, collect_diagnostics};
-use baml_syntax::{
+use baml_compiler_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
@@ -502,7 +502,7 @@ impl CompilerRunner {
             let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
-            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+            let syntax_tree = baml_compiler_syntax::SyntaxNode::new_root(green.clone());
 
             // Note: Diagnostic collection moved to run_diagnostics() using collect_diagnostics()
 
@@ -552,7 +552,7 @@ impl CompilerRunner {
             let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
                 baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
-            let syntax_tree = baml_syntax::SyntaxNode::new_root(green.clone());
+            let syntax_tree = baml_compiler_syntax::SyntaxNode::new_root(green.clone());
 
             // Cast to AST SourceFile to access typed API
             if let Some(ast_file) = AstSourceFile::cast(syntax_tree) {
@@ -1785,7 +1785,7 @@ fn format_ast_item(item: &AstItem) -> String {
 
 /// Recursively format an AST item as a tree
 fn format_item_tree(item: &AstItem, output: &mut String, indent: usize) {
-    use baml_syntax::ast::*;
+    use baml_compiler_syntax::ast::*;
 
     match item {
         Item::Function(func) => format_function(func, output, indent),
@@ -1803,7 +1803,7 @@ fn write_indent(output: &mut String, indent: usize) {
     output.push_str(&"  ".repeat(indent));
 }
 
-fn format_function(func: &baml_syntax::ast::FunctionDef, output: &mut String, indent: usize) {
+fn format_function(func: &baml_compiler_syntax::ast::FunctionDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "FUNCTION").ok();
 
@@ -1843,7 +1843,7 @@ fn format_function(func: &baml_syntax::ast::FunctionDef, output: &mut String, in
     }
 }
 
-fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, indent: usize) {
+fn format_parameter(param: &baml_compiler_syntax::ast::Parameter, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "PARAM").ok();
 
@@ -1852,7 +1852,7 @@ fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, in
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .find(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
     {
         write_indent(output, indent + 1);
         writeln!(output, "NAME {}", name_token.text()).ok();
@@ -1862,7 +1862,7 @@ fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, in
     if let Some(ty) = param
         .syntax()
         .children()
-        .find_map(baml_syntax::ast::TypeExpr::cast)
+        .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
     {
         write_indent(output, indent + 1);
         writeln!(output, "TYPE {}", ty.syntax().text()).ok();
@@ -1870,11 +1870,11 @@ fn format_parameter(param: &baml_syntax::ast::Parameter, output: &mut String, in
 }
 
 fn format_expr_function_body(
-    body: &baml_syntax::ast::ExprFunctionBody,
+    body: &baml_compiler_syntax::ast::ExprFunctionBody,
     output: &mut String,
     indent: usize,
 ) {
-    use baml_syntax::ast::*;
+    use baml_compiler_syntax::ast::*;
 
     // Look for block expression or other expression types
     if let Some(block) = body.syntax().children().find_map(BlockExpr::cast) {
@@ -1891,7 +1891,7 @@ fn format_expr_function_body(
 }
 
 fn format_llm_function_body(
-    body: &baml_syntax::ast::LlmFunctionBody,
+    body: &baml_compiler_syntax::ast::LlmFunctionBody,
     output: &mut String,
     indent: usize,
 ) {
@@ -1902,13 +1902,13 @@ fn format_llm_function_body(
     for config_item in body
         .syntax()
         .children()
-        .filter_map(baml_syntax::ast::ConfigItem::cast)
+        .filter_map(baml_compiler_syntax::ast::ConfigItem::cast)
     {
         format_config_item(&config_item, output, indent + 1);
     }
 }
 
-fn format_config_item(item: &baml_syntax::ast::ConfigItem, output: &mut String, indent: usize) {
+fn format_config_item(item: &baml_compiler_syntax::ast::ConfigItem, output: &mut String, indent: usize) {
     write_indent(output, indent);
     let text = item.syntax().text().to_string();
     // Truncate long config values
@@ -1919,8 +1919,8 @@ fn format_config_item(item: &baml_syntax::ast::ConfigItem, output: &mut String, 
     }
 }
 
-fn format_block_expr(block: &baml_syntax::ast::BlockExpr, output: &mut String, indent: usize) {
-    use baml_syntax::ast::*;
+fn format_block_expr(block: &baml_compiler_syntax::ast::BlockExpr, output: &mut String, indent: usize) {
+    use baml_compiler_syntax::ast::*;
 
     // Iterate through statements in the block
     for child in block.syntax().children() {
@@ -1934,8 +1934,8 @@ fn format_block_expr(block: &baml_syntax::ast::BlockExpr, output: &mut String, i
     }
 }
 
-fn format_let_stmt(stmt: &baml_syntax::ast::LetStmt, output: &mut String, indent: usize) {
-    use baml_syntax::ast::*;
+fn format_let_stmt(stmt: &baml_compiler_syntax::ast::LetStmt, output: &mut String, indent: usize) {
+    use baml_compiler_syntax::ast::*;
 
     write_indent(output, indent);
     writeln!(output, "STMT_LET").ok();
@@ -1945,7 +1945,7 @@ fn format_let_stmt(stmt: &baml_syntax::ast::LetStmt, output: &mut String, indent
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .find(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .find(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
     {
         write_indent(output, indent + 1);
         writeln!(output, "NAME {}", name_token.text()).ok();
@@ -1959,7 +1959,7 @@ fn format_let_stmt(stmt: &baml_syntax::ast::LetStmt, output: &mut String, indent
     }
 }
 
-fn format_if_expr(if_expr: &baml_syntax::ast::IfExpr, output: &mut String, indent: usize) {
+fn format_if_expr(if_expr: &baml_compiler_syntax::ast::IfExpr, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "EXPR_IF").ok();
 
@@ -1969,7 +1969,7 @@ fn format_if_expr(if_expr: &baml_syntax::ast::IfExpr, output: &mut String, inden
     if let Some(cond) = if_expr
         .syntax()
         .children()
-        .find_map(baml_syntax::ast::Expr::cast)
+        .find_map(baml_compiler_syntax::ast::Expr::cast)
     {
         format_expr(&cond, output, indent + 2);
     }
@@ -1980,14 +1980,14 @@ fn format_if_expr(if_expr: &baml_syntax::ast::IfExpr, output: &mut String, inden
     if let Some(then_block) = if_expr
         .syntax()
         .children()
-        .filter_map(baml_syntax::ast::BlockExpr::cast)
+        .filter_map(baml_compiler_syntax::ast::BlockExpr::cast)
         .next()
     {
         format_block_expr(&then_block, output, indent + 2);
     }
 }
 
-fn format_expr(expr: &baml_syntax::ast::Expr, output: &mut String, indent: usize) {
+fn format_expr(expr: &baml_compiler_syntax::ast::Expr, output: &mut String, indent: usize) {
     let text = expr.syntax().text().to_string();
 
     // If expression is simple (< 40 chars), inline it
@@ -2003,7 +2003,7 @@ fn format_expr(expr: &baml_syntax::ast::Expr, output: &mut String, indent: usize
     }
 }
 
-fn format_class(class: &baml_syntax::ast::ClassDef, output: &mut String, indent: usize) {
+fn format_class(class: &baml_compiler_syntax::ast::ClassDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "CLASS").ok();
 
@@ -2024,7 +2024,7 @@ fn format_class(class: &baml_syntax::ast::ClassDef, output: &mut String, indent:
     }
 }
 
-fn format_field(field: &baml_syntax::ast::Field, output: &mut String, indent: usize) {
+fn format_field(field: &baml_compiler_syntax::ast::Field, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "FIELD").ok();
 
@@ -2041,7 +2041,7 @@ fn format_field(field: &baml_syntax::ast::Field, output: &mut String, indent: us
     }
 }
 
-fn format_enum(enum_def: &baml_syntax::ast::EnumDef, output: &mut String, indent: usize) {
+fn format_enum(enum_def: &baml_compiler_syntax::ast::EnumDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "ENUM").ok();
 
@@ -2050,7 +2050,7 @@ fn format_enum(enum_def: &baml_syntax::ast::EnumDef, output: &mut String, indent
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);
@@ -2058,7 +2058,7 @@ fn format_enum(enum_def: &baml_syntax::ast::EnumDef, output: &mut String, indent
     }
 }
 
-fn format_client(client: &baml_syntax::ast::ClientDef, output: &mut String, indent: usize) {
+fn format_client(client: &baml_compiler_syntax::ast::ClientDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "CLIENT").ok();
 
@@ -2067,7 +2067,7 @@ fn format_client(client: &baml_syntax::ast::ClientDef, output: &mut String, inde
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);
@@ -2075,7 +2075,7 @@ fn format_client(client: &baml_syntax::ast::ClientDef, output: &mut String, inde
     }
 }
 
-fn format_test(test: &baml_syntax::ast::TestDef, output: &mut String, indent: usize) {
+fn format_test(test: &baml_compiler_syntax::ast::TestDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "TEST").ok();
 
@@ -2084,7 +2084,7 @@ fn format_test(test: &baml_syntax::ast::TestDef, output: &mut String, indent: us
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);
@@ -2093,7 +2093,7 @@ fn format_test(test: &baml_syntax::ast::TestDef, output: &mut String, indent: us
 }
 
 fn format_retry_policy(
-    policy: &baml_syntax::ast::RetryPolicyDef,
+    policy: &baml_compiler_syntax::ast::RetryPolicyDef,
     output: &mut String,
     indent: usize,
 ) {
@@ -2105,7 +2105,7 @@ fn format_retry_policy(
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);
@@ -2114,7 +2114,7 @@ fn format_retry_policy(
 }
 
 fn format_template_string(
-    template: &baml_syntax::ast::TemplateStringDef,
+    template: &baml_compiler_syntax::ast::TemplateStringDef,
     output: &mut String,
     indent: usize,
 ) {
@@ -2126,7 +2126,7 @@ fn format_template_string(
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);
@@ -2134,7 +2134,7 @@ fn format_template_string(
     }
 }
 
-fn format_type_alias(alias: &baml_syntax::ast::TypeAliasDef, output: &mut String, indent: usize) {
+fn format_type_alias(alias: &baml_compiler_syntax::ast::TypeAliasDef, output: &mut String, indent: usize) {
     write_indent(output, indent);
     writeln!(output, "TYPE_ALIAS").ok();
 
@@ -2143,7 +2143,7 @@ fn format_type_alias(alias: &baml_syntax::ast::TypeAliasDef, output: &mut String
         .syntax()
         .children_with_tokens()
         .filter_map(|n| n.into_token())
-        .filter(|t| t.kind() == baml_syntax::SyntaxKind::WORD)
+        .filter(|t| t.kind() == baml_compiler_syntax::SyntaxKind::WORD)
         .nth(1)
     {
         write_indent(output, indent + 1);

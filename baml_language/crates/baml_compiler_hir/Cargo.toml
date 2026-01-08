@@ -20,7 +20,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_parser = { workspace = true }
-baml_syntax = { workspace = true }
+baml_compiler_syntax = { workspace = true }
 baml_workspace = { workspace = true }
 
 la-arena = { workspace = true }

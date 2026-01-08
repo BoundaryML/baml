@@ -34,7 +34,7 @@ pub struct Param {
 
 impl FunctionSignature {
     /// Lower a function signature from CST.
-    pub fn lower(func_node: &baml_syntax::ast::FunctionDef) -> Arc<FunctionSignature> {
+    pub fn lower(func_node: &baml_compiler_syntax::ast::FunctionDef) -> Arc<FunctionSignature> {
         let name = func_node
             .name()
             .map(|n| Name::new(n.text()))

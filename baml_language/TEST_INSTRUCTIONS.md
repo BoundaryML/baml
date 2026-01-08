@@ -55,7 +55,7 @@ Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
 
 ### 5. Fix the issue
 
-Edit the relevant crate (`baml_parser`, `baml_syntax`, `baml_compiler_hir`, etc.).
+Edit the relevant crate (`baml_parser`, `baml_compiler_syntax`, `baml_compiler_hir`, etc.).
 
 ### 6. Re-run and update snapshots
 
@@ -98,8 +98,8 @@ cargo insta review
 
 - **Lexer**: `crates/baml_compiler_lexer/src/tokens.rs`
 - **Parser**: `crates/baml_parser/src/parser.rs`
-- **Syntax kinds**: `crates/baml_syntax/src/syntax_kind.rs`
-- **AST helpers**: `crates/baml_syntax/src/ast.rs`
+- **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
+- **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
 - **HIR lowering**: `crates/baml_compiler_hir/src/body.rs`
 - **Type checking**: `crates/baml_thir/src/lower.rs`
 

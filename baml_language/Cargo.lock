@@ -347,8 +347,8 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_compiler_diagnostics",
+ "baml_compiler_syntax",
  "baml_parser",
- "baml_syntax",
  "baml_workspace",
  "la-arena",
  "rowan",
@@ -381,6 +381,14 @@ dependencies = [
  "salsa",
  "smol_str",
  "text-size",
+]
+
+[[package]]
+name = "baml_compiler_syntax"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "rowan",
 ]
 
 [[package]]
@@ -424,10 +432,10 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_lexer",
  "baml_compiler_mir",
+ "baml_compiler_syntax",
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_parser",
- "baml_syntax",
  "baml_workspace",
  "rowan",
  "salsa",
@@ -564,7 +572,7 @@ dependencies = [
  "baml_base",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
- "baml_syntax",
+ "baml_compiler_syntax",
  "rowan",
  "salsa",
  "text-size",
@@ -583,14 +591,6 @@ dependencies = [
  "lsp-types",
  "salsa",
  "text-size",
-]
-
-[[package]]
-name = "baml_syntax"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "rowan",
 ]
 
 [[package]]

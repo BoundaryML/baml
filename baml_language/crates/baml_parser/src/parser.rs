@@ -4,7 +4,7 @@
 
 use baml_base::Span;
 use baml_compiler_lexer::{Token, TokenKind};
-use baml_syntax::SyntaxKind;
+use baml_compiler_syntax::SyntaxKind;
 use rowan::{GreenNode, GreenNodeBuilder, NodeCache};
 use text_size::TextRange;
 

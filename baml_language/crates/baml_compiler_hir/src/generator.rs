@@ -7,7 +7,7 @@
 
 use baml_base::Name;
 use baml_compiler_diagnostics::HirDiagnostic;
-use baml_syntax::SyntaxNode;
+use baml_compiler_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 
 use crate::{LoweringContext, item_tree::Generator};
@@ -44,7 +44,7 @@ pub(crate) const VALID_MODULE_FORMATS: &[&str] = &["cjs", "esm"];
 
 /// Extract generator definition from CST with validation.
 pub(crate) fn lower_generator(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Generator> {
-    use baml_syntax::ast::GeneratorDef;
+    use baml_compiler_syntax::ast::GeneratorDef;
 
     let generator = GeneratorDef::cast(node.clone())?;
 

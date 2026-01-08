@@ -97,7 +97,7 @@ impl TypeRef {
     ///
     /// NOTE: Type parsing occurs here, which is somewhat brittle for edge cases
     /// like `int??` or `int[][]`. See canary TODO for future improvements.
-    pub fn from_ast(type_expr: &baml_syntax::ast::TypeExpr) -> Self {
+    pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         let parts = type_expr.parts();
 
         // If multiple parts, this is a union type

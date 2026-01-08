@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_base::{FileId, Span};
 use baml_compiler_diagnostics::HirDiagnostic;
-use baml_syntax::TypeExpr;
+use baml_compiler_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
 use rowan::{TextRange, ast::AstNode};
 
@@ -434,7 +434,7 @@ impl FunctionBody {
     /// # Arguments
     /// - `func_node`: The function definition AST node
     /// - `file_id`: The file ID for span tracking
-    pub fn lower(func_node: &baml_syntax::ast::FunctionDef, file_id: FileId) -> Arc<FunctionBody> {
+    pub fn lower(func_node: &baml_compiler_syntax::ast::FunctionDef, file_id: FileId) -> Arc<FunctionBody> {
         // Collect parameter names to add to scope so gensym avoids them
         let param_names: Vec<String> = func_node
             .param_list()
@@ -459,7 +459,7 @@ impl FunctionBody {
         }
     }
 
-    fn lower_llm_body(llm_body: &baml_syntax::ast::LlmFunctionBody) -> LlmBody {
+    fn lower_llm_body(llm_body: &baml_compiler_syntax::ast::LlmFunctionBody) -> LlmBody {
         // Extract client name using AST accessor
         let client = llm_body
             .client_field()
@@ -521,7 +521,7 @@ impl FunctionBody {
     }
 
     fn lower_expr_body(
-        expr_body: &baml_syntax::ast::ExprFunctionBody,
+        expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
         file_id: FileId,
         param_names: &[String],
     ) -> ExprBody {
@@ -537,7 +537,7 @@ impl FunctionBody {
         let root_expr = expr_body
             .syntax()
             .children()
-            .find_map(baml_syntax::ast::BlockExpr::cast)
+            .find_map(baml_compiler_syntax::ast::BlockExpr::cast)
             .map(|block| ctx.lower_block_expr(&block));
 
         ctx.finish(root_expr)
@@ -601,13 +601,13 @@ impl LoweringContext {
     }
 
     /// Create a span from a syntax node's text range.
-    fn span_from_node(&self, node: &baml_syntax::SyntaxNode) -> Span {
+    fn span_from_node(&self, node: &baml_compiler_syntax::SyntaxNode) -> Span {
         Span::new(self.file_id, node.text_range())
     }
 
     /// Create a span from a syntax node, but skip any leading trivia (whitespace, newlines, comments).
     /// This is useful for error spans that should point to the actual code, not preceding whitespace.
-    fn span_from_node_skip_trivia(&self, node: &baml_syntax::SyntaxNode) -> Span {
+    fn span_from_node_skip_trivia(&self, node: &baml_compiler_syntax::SyntaxNode) -> Span {
         // Find the first non-trivia token
         let mut first_significant_start = node.text_range().start();
         for element in node.descendants_with_tokens() {
@@ -692,8 +692,8 @@ impl LoweringContext {
         self.names_in_scope.insert(name.to_string());
     }
 
-    fn lower_block_expr(&mut self, block: &baml_syntax::ast::BlockExpr) -> ExprId {
-        use baml_syntax::{SyntaxKind, ast::BlockElement};
+    fn lower_block_expr(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
+        use baml_compiler_syntax::{SyntaxKind, ast::BlockElement};
 
         let mut stmts = Vec::new();
         let mut tail_expr = None;
@@ -836,8 +836,8 @@ impl LoweringContext {
         )
     }
 
-    fn lower_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         match node.kind() {
             SyntaxKind::BINARY_EXPR => self.lower_binary_expr(node),
@@ -846,7 +846,7 @@ impl LoweringContext {
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::BLOCK_EXPR => {
-                if let Some(block) = baml_syntax::ast::BlockExpr::cast(node.clone()) {
+                if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
                 } else {
                     self.alloc_expr(Expr::Missing, node.text_range())
@@ -885,8 +885,8 @@ impl LoweringContext {
         }
     }
 
-    fn lower_binary_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_binary_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Binary expressions can have: child nodes (other exprs) OR direct tokens (literals/identifiers)
         // We need to handle both cases
@@ -982,8 +982,8 @@ impl LoweringContext {
 
     /// Try to lower a `BINARY_EXPR` as an assignment statement.
     /// Returns Some(StmtId) if it's an assignment, None otherwise.
-    fn try_lower_assignment(&mut self, node: &baml_syntax::SyntaxNode) -> Option<StmtId> {
-        use baml_syntax::SyntaxKind;
+    fn try_lower_assignment(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> Option<StmtId> {
+        use baml_compiler_syntax::SyntaxKind;
 
         if node.kind() != SyntaxKind::BINARY_EXPR {
             return None;
@@ -1074,8 +1074,8 @@ impl LoweringContext {
         Some(self.alloc_stmt(stmt, node.text_range()))
     }
 
-    fn lower_unary_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_unary_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Unary expressions can have: child nodes (other exprs) OR direct tokens (literals/identifiers)
         // We need to handle both cases, similar to lower_binary_expr.
@@ -1156,8 +1156,8 @@ impl LoweringContext {
         }
     }
 
-    fn lower_if_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_if_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // IF_EXPR structure: condition (EXPR), then_branch (BLOCK_EXPR), optional else_branch
         let children: Vec<_> = node.children().collect();
@@ -1204,8 +1204,8 @@ impl LoweringContext {
     /// `MATCH_EXPR` structure (from parser):
     /// - Scrutinee expression (could be a `PAREN_EXPR` wrapping the actual expr, or a literal token)
     /// - One or more `MATCH_ARM` nodes
-    fn lower_match_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_match_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         let match_span = self.span_from_node(node);
         let mut scrutinee = None;
@@ -1295,8 +1295,8 @@ impl LoweringContext {
     /// - Body expression (`BLOCK_EXPR` or other expression, or literal token)
     ///
     /// Returns both the lowered arm and its span information.
-    fn lower_match_arm(&mut self, node: &baml_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
-        use baml_syntax::SyntaxKind;
+    fn lower_match_arm(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
+        use baml_compiler_syntax::SyntaxKind;
 
         let arm_span = self.span_from_node(node);
         let mut pattern = None;
@@ -1447,8 +1447,8 @@ impl LoweringContext {
     /// - Literal: `null`, `true`, `42`, `"hello"`
     /// - Enum variant: `Status.Active`
     /// - Union: `200 | 201` or `Status.Active | Status.Pending`
-    fn lower_match_pattern(&mut self, node: &baml_syntax::SyntaxNode) -> PatId {
-        use baml_syntax::SyntaxKind;
+    fn lower_match_pattern(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> PatId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Collect pattern elements separated by PIPE
         let mut elements: Vec<PatId> = Vec::new();
@@ -1608,7 +1608,7 @@ impl LoweringContext {
                                 current_element.take()
                             {
                                 if let Some(type_expr) =
-                                    baml_syntax::ast::TypeExpr::cast(child_node)
+                                    baml_compiler_syntax::ast::TypeExpr::cast(child_node)
                                 {
                                     let ty = crate::type_ref::TypeRef::from_ast(&type_expr);
                                     elements.push(
@@ -1678,8 +1678,8 @@ impl LoweringContext {
         }
     }
 
-    fn lower_call_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_call_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // CALL_EXPR structure: callee (PATH_EXPR, WORD token, or other expr), CALL_ARGS
         // The callee can be either:
@@ -1698,7 +1698,7 @@ impl LoweringContext {
             // No callee node - check for a WORD token (simple function name)
             let word_token = node
                 .children_with_tokens()
-                .filter_map(baml_syntax::NodeOrToken::into_token)
+                .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                 .find(|t| t.kind() == SyntaxKind::WORD);
 
             if let Some(token) = word_token {
@@ -1720,7 +1720,7 @@ impl LoweringContext {
 
                 for element in args_node.children_with_tokens() {
                     match element {
-                        baml_syntax::NodeOrToken::Node(child_node) => {
+                        baml_compiler_syntax::NodeOrToken::Node(child_node) => {
                             // Handle expression nodes
                             if matches!(
                                 child_node.kind(),
@@ -1742,7 +1742,7 @@ impl LoweringContext {
                                 args.push(self.lower_expr(&child_node));
                             }
                         }
-                        baml_syntax::NodeOrToken::Token(token) => {
+                        baml_compiler_syntax::NodeOrToken::Token(token) => {
                             // Handle bare tokens (literals, identifiers)
                             let span = token.text_range();
                             let expr = match token.kind() {
@@ -1832,8 +1832,8 @@ impl LoweringContext {
     /// The key distinction:
     /// - `Expr::Path` - all segments are identifiers, resolution deferred to THIR
     /// - `Expr::FieldAccess` - base is a computed value, always a field access
-    fn lower_field_access_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::ast::FieldAccessExpr;
+    fn lower_field_access_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast::FieldAccessExpr;
         use rowan::ast::AstNode;
 
         // FIELD_ACCESS_EXPR structure: base expression, DOT token, field name (WORD)
@@ -1854,8 +1854,8 @@ impl LoweringContext {
         self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range())
     }
 
-    fn lower_index_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_index_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // INDEX_EXPR structure: base (node or token), L_BRACKET, index (node or token), R_BRACKET
         // Similar to BINARY_EXPR, the base and index can be either child nodes or direct tokens
@@ -1933,8 +1933,8 @@ impl LoweringContext {
         self.alloc_expr(Expr::Index { base, index }, node.text_range())
     }
 
-    fn lower_path_expr(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::ast::PathExpr;
+    fn lower_path_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast::PathExpr;
         use rowan::ast::AstNode;
 
         // PATH_EXPR contains one or more segments separated by dots.
@@ -1962,14 +1962,14 @@ impl LoweringContext {
         self.alloc_expr(Expr::Path(segments), node.text_range())
     }
 
-    fn lower_string_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_string_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Find the actual STRING_LITERAL or RAW_STRING_LITERAL token inside the node.
         // This avoids including trivia/whitespace that might be part of the node's text span.
         let text = node
             .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
+            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
             .find(|t| {
                 matches!(
                     t.kind(),
@@ -1991,8 +1991,8 @@ impl LoweringContext {
         )
     }
 
-    fn lower_array_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_array_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Collect elements from both child nodes and direct tokens
         let mut elements = Vec::new();
@@ -2018,13 +2018,13 @@ impl LoweringContext {
         self.alloc_expr(Expr::Array { elements }, node.text_range())
     }
 
-    fn lower_object_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_object_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Extract type name if present (before the brace)
         let type_name = node
             .children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
+            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
             .map(|token| Name::new(token.text()));
 
@@ -2041,7 +2041,7 @@ impl LoweringContext {
                     // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
                     let field_name = child
                         .children_with_tokens()
-                        .filter_map(baml_syntax::NodeOrToken::into_token)
+                        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                         .find(|token| token.kind() == SyntaxKind::WORD)
                         .map(|token| Name::new(token.text()));
 
@@ -2057,7 +2057,7 @@ impl LoweringContext {
                                 let mut seen_colon = false;
                                 child
                                     .children_with_tokens()
-                                    .filter_map(baml_syntax::NodeOrToken::into_token)
+                                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                                     .find_map(|token| {
                                         if token.kind() == SyntaxKind::COLON {
                                             seen_colon = true;
@@ -2104,8 +2104,8 @@ impl LoweringContext {
         )
     }
 
-    fn lower_map_literal(&mut self, node: &baml_syntax::SyntaxNode) -> ExprId {
-        use baml_syntax::SyntaxKind;
+    fn lower_map_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Extract entries from OBJECT_FIELD children (parser reuses this node type for map entries)
         let entries =
@@ -2123,7 +2123,7 @@ impl LoweringContext {
                             // Try to get key as identifier token
                             field_node
                                 .children_with_tokens()
-                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                                 .find(|token| token.kind() == SyntaxKind::WORD)
                                 .map(|token| {
                                     let span = token.text_range();
@@ -2176,7 +2176,7 @@ impl LoweringContext {
                             let mut seen_colon = false;
                             field_node
                                 .children_with_tokens()
-                                .filter_map(baml_syntax::NodeOrToken::into_token)
+                                .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                                 .find_map(|token| {
                                     if token.kind() == SyntaxKind::COLON {
                                         seen_colon = true;
@@ -2231,15 +2231,15 @@ impl LoweringContext {
         self.alloc_expr(Expr::Map { entries }, node.text_range())
     }
 
-    fn try_lower_literal_token(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
+    fn try_lower_literal_token(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> Option<ExprId> {
         // Check if this node contains a value token (literal or identifier)
         node.children_with_tokens()
-            .filter_map(baml_syntax::NodeOrToken::into_token)
+            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
             .find_map(|token| self.lower_value_token(&token))
     }
 
     /// Lower a bare token (WORD, `INTEGER_LITERAL`, `FLOAT_LITERAL`) to an expression.
-    fn lower_bare_token(&mut self, token: &baml_syntax::SyntaxToken) -> ExprId {
+    fn lower_bare_token(&mut self, token: &baml_compiler_syntax::SyntaxToken) -> ExprId {
         self.lower_value_token(token)
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, token.text_range()))
     }
@@ -2255,8 +2255,8 @@ impl LoweringContext {
     /// - Variable references (WORD tokens that aren't literals)
     ///
     /// Returns `None` for non-value tokens (operators, brackets, etc.).
-    fn lower_value_token(&mut self, token: &baml_syntax::SyntaxToken) -> Option<ExprId> {
-        use baml_syntax::SyntaxKind;
+    fn lower_value_token(&mut self, token: &baml_compiler_syntax::SyntaxToken) -> Option<ExprId> {
+        use baml_compiler_syntax::SyntaxKind;
 
         let span = token.text_range();
         match token.kind() {
@@ -2290,8 +2290,8 @@ impl LoweringContext {
     ///
     /// This handles the case where `PAREN_EXPR` contains only tokens (no child nodes),
     /// such as `(b)` where `b` is a variable reference, or `(42)` where 42 is a literal.
-    fn try_lower_paren_token_content(&mut self, node: &baml_syntax::SyntaxNode) -> Option<ExprId> {
-        use baml_syntax::SyntaxKind;
+    fn try_lower_paren_token_content(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> Option<ExprId> {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Look for value tokens inside the parentheses (skip L_PAREN and R_PAREN)
         for elem in node.children_with_tokens() {
@@ -2312,14 +2312,14 @@ impl LoweringContext {
         None
     }
 
-    fn lower_let_stmt(&mut self, node: &baml_syntax::SyntaxNode, is_watched: bool) -> StmtId {
+    fn lower_let_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode, is_watched: bool) -> StmtId {
         // Use the LetStmt AST wrapper for cleaner access
-        let let_stmt = baml_syntax::ast::LetStmt::cast(node.clone());
+        let let_stmt = baml_compiler_syntax::ast::LetStmt::cast(node.clone());
 
         // Extract pattern (variable name)
         let pattern = let_stmt
             .as_ref()
-            .and_then(baml_syntax::LetStmt::name)
+            .and_then(baml_compiler_syntax::LetStmt::name)
             .map(|token| {
                 let name_str = token.text();
                 self.add_name_to_scope(name_str);
@@ -2333,7 +2333,7 @@ impl LoweringContext {
                 )
             });
 
-        let type_node = let_stmt.as_ref().and_then(baml_syntax::LetStmt::ty);
+        let type_node = let_stmt.as_ref().and_then(baml_compiler_syntax::LetStmt::ty);
 
         // Extract type annotation if present
         let type_annotation = type_node.as_ref().map(TypeRef::from_ast);
@@ -2343,13 +2343,13 @@ impl LoweringContext {
         // Extract initializer expression - first try as a node, then as a token
         let initializer = let_stmt
             .as_ref()
-            .and_then(baml_syntax::LetStmt::initializer)
+            .and_then(baml_compiler_syntax::LetStmt::initializer)
             .map(|n| self.lower_expr(&n))
             .or_else(|| {
                 // Try to get initializer as a direct token (for simple literals/vars)
                 let_stmt
                     .as_ref()
-                    .and_then(baml_syntax::LetStmt::initializer_token)
+                    .and_then(baml_compiler_syntax::LetStmt::initializer_token)
                     .and_then(|token| self.lower_value_token(&token))
             });
 
@@ -2365,8 +2365,8 @@ impl LoweringContext {
         )
     }
 
-    fn lower_return_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
-        use baml_syntax::SyntaxKind;
+    fn lower_return_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // RETURN_STMT structure: return keyword, optional expression (which might be a node or a direct token)
         let return_value = if let Some(child_node) = node.children().find(|n| {
@@ -2390,7 +2390,7 @@ impl LoweringContext {
         } else {
             // Check for direct tokens (literals, identifiers)
             node.children_with_tokens()
-                .filter_map(baml_syntax::NodeOrToken::into_token)
+                .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                 .find_map(|token| {
                     let span = token.text_range();
                     match token.kind() {
@@ -2437,8 +2437,8 @@ impl LoweringContext {
         self.alloc_stmt(Stmt::Return(return_value), node.text_range())
     }
 
-    fn lower_assert_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
-        use baml_syntax::SyntaxKind;
+    fn lower_assert_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // ASSERT_STMT structure: assert keyword, expression
         let condition = node
@@ -2464,16 +2464,16 @@ impl LoweringContext {
         self.alloc_stmt(Stmt::Assert { condition }, node.text_range())
     }
 
-    fn lower_while_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
-        use baml_syntax::SyntaxKind;
+    fn lower_while_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Use the WhileStmt AST wrapper for cleaner access
-        let while_stmt = baml_syntax::ast::WhileStmt::cast(node.clone());
+        let while_stmt = baml_compiler_syntax::ast::WhileStmt::cast(node.clone());
 
         // Get the raw condition node to check if it's wrapped in parentheses
         let condition_node = while_stmt
             .as_ref()
-            .and_then(baml_syntax::WhileStmt::condition);
+            .and_then(baml_compiler_syntax::WhileStmt::condition);
 
         // Validate that condition is wrapped in parentheses
         if let Some(ref cond) = condition_node {
@@ -2502,9 +2502,9 @@ impl LoweringContext {
         })
     }
 
-    fn lower_for_stmt(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
+    fn lower_for_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
         // Use the ForExpr AST wrapper for cleaner access
-        let for_expr = baml_syntax::ast::ForExpr::cast(node.clone());
+        let for_expr = baml_compiler_syntax::ast::ForExpr::cast(node.clone());
 
         let Some(for_expr) = for_expr else {
             return self.alloc_stmt(Stmt::Missing, node.text_range());
@@ -2543,7 +2543,7 @@ impl LoweringContext {
     /// ```
     ///
     /// If there's no condition, it becomes `while (true)` (infinite loop).
-    fn desugar_c_style_for(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
+    fn desugar_c_style_for(&mut self, for_expr: &baml_compiler_syntax::ast::ForExpr) -> StmtId {
         // 1. Lower the initializer (if present)
         let initializer = for_expr
             .let_stmt()
@@ -2629,7 +2629,7 @@ impl LoweringContext {
     }
 
     /// Lower an update expression AST node to a statement.
-    fn lower_update_stmt(&mut self, update_node: &baml_syntax::SyntaxNode) -> StmtId {
+    fn lower_update_stmt(&mut self, update_node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
         if let Some(assign_stmt) = self.try_lower_assignment(update_node) {
             assign_stmt
         } else {
@@ -2643,7 +2643,7 @@ impl LoweringContext {
     fn transform_continues_in_expr_with_update(
         &mut self,
         expr_id: ExprId,
-        update_ast: &baml_syntax::SyntaxNode,
+        update_ast: &baml_compiler_syntax::SyntaxNode,
     ) -> ExprId {
         let expr = self.exprs[expr_id].clone();
         let new_expr = match expr {
@@ -2684,7 +2684,7 @@ impl LoweringContext {
     fn transform_continues_in_stmt_with_update(
         &mut self,
         stmt_id: StmtId,
-        update_ast: &baml_syntax::SyntaxNode,
+        update_ast: &baml_compiler_syntax::SyntaxNode,
     ) -> StmtId {
         // Clone the statement to avoid borrow checker issues when calling mutable methods
         let stmt = self.stmts[stmt_id].clone();
@@ -2735,7 +2735,7 @@ impl LoweringContext {
     ///     }
     /// }
     /// ```
-    fn desugar_for_in(&mut self, for_expr: &baml_syntax::ast::ForExpr) -> StmtId {
+    fn desugar_for_in(&mut self, for_expr: &baml_compiler_syntax::ast::ForExpr) -> StmtId {
         // Generate unique names for synthetic variables FIRST
         // This ensures outer loops claim _iter, _len, _i before inner loops
         let arr_name = self.gensym("iter");
@@ -2757,11 +2757,11 @@ impl LoweringContext {
             .or_else(|| {
                 // Look for a bare WORD token after 'in' keyword
                 // The iterator could be a simple identifier that wasn't wrapped in a node
-                use baml_syntax::SyntaxKind;
+                use baml_compiler_syntax::SyntaxKind;
                 let mut seen_in = false;
                 for element in for_expr.syntax().children_with_tokens() {
                     match element {
-                        baml_syntax::NodeOrToken::Token(token) => {
+                        baml_compiler_syntax::NodeOrToken::Token(token) => {
                             if token.kind() == SyntaxKind::KW_IN {
                                 seen_in = true;
                             } else if seen_in && token.kind() == SyntaxKind::WORD {
@@ -2771,7 +2771,7 @@ impl LoweringContext {
                                 );
                             }
                         }
-                        baml_syntax::NodeOrToken::Node(_) => {}
+                        baml_compiler_syntax::NodeOrToken::Node(_) => {}
                     }
                 }
                 None
@@ -2908,8 +2908,8 @@ impl LoweringContext {
     }
 
     /// Lower a header comment (`//# name`) to a `HeaderComment` statement.
-    fn lower_header_comment(&mut self, node: &baml_syntax::SyntaxNode) -> StmtId {
-        use baml_syntax::SyntaxKind;
+    fn lower_header_comment(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
+        use baml_compiler_syntax::SyntaxKind;
 
         // Count the # tokens to determine level, and collect the title text
         let mut level = 0;

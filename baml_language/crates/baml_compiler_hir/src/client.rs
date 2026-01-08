@@ -6,7 +6,7 @@
 
 use baml_base::Name;
 use baml_compiler_diagnostics::HirDiagnostic;
-use baml_syntax::ast::{ClientDef, ConfigBlock};
+use baml_compiler_syntax::ast::{ClientDef, ConfigBlock};
 use rowan::ast::AstNode;
 
 use crate::{LoweringContext, item_tree::Client};
@@ -37,7 +37,7 @@ pub(crate) const COMPOSITE_PROVIDERS: &[&str] = &["fallback", "round-robin"];
 
 /// Extract client configuration from CST with validation.
 pub(crate) fn lower_client(
-    node: &baml_syntax::SyntaxNode,
+    node: &baml_compiler_syntax::SyntaxNode,
     ctx: &mut LoweringContext,
 ) -> Option<Client> {
     let client_def = ClientDef::cast(node.clone())?;
@@ -56,7 +56,7 @@ pub(crate) fn lower_client(
 
     let provider = provider_item
         .as_ref()
-        .and_then(baml_syntax::ast::ConfigItem::value_word)
+        .and_then(baml_compiler_syntax::ast::ConfigItem::value_word)
         .map(|t| Name::new(t.text()))
         .unwrap_or_else(|| Name::new("unknown"));
 

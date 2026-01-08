@@ -20,7 +20,7 @@ use std::sync::Arc;
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{HirDiagnostic, NameError};
 use baml_parser::syntax_tree;
-use baml_syntax::SyntaxNode;
+use baml_compiler_syntax::SyntaxNode;
 use rowan::{SyntaxToken, TextRange, ast::AstNode};
 
 // Module declarations
@@ -245,7 +245,7 @@ pub fn function_signature<'db>(
 ) -> Arc<FunctionSignature> {
     let file = function.file(db);
     let tree = syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
     // Find the function node by name
     let item_tree = file_item_tree(db, file);
@@ -260,7 +260,7 @@ pub fn function_signature<'db>(
     });
 
     let function_def = source_file.items().find_map(|item| match item {
-        baml_syntax::ast::Item::Function(func_node) => {
+        baml_compiler_syntax::ast::Item::Function(func_node) => {
             let func_node_name = func_node.name();
             if func_node_name.as_ref()?.text() == func_name {
                 Some(FunctionSignature::lower(&func_node))
@@ -268,7 +268,7 @@ pub fn function_signature<'db>(
                 None
             }
         }
-        baml_syntax::ast::Item::Class(class_node) => class_node.methods().find_map(|method| {
+        baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().find_map(|method| {
             let method_name = method.name()?;
             let class_name = class_node.name();
             let class_name_text = class_name.as_ref()?.text();
@@ -286,7 +286,7 @@ pub fn function_signature<'db>(
 
 /// Lower a method signature, replacing 'self' parameter with the class type.
 fn lower_method_signature(
-    method_node: &baml_syntax::ast::FunctionDef,
+    method_node: &baml_compiler_syntax::ast::FunctionDef,
     method_name: &Name,
     class_name: &str,
 ) -> Arc<FunctionSignature> {
@@ -462,15 +462,15 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
 
             // Get the span from the CST
             let tree = syntax_tree(db, file);
-            let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+            let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
             let file_id = file.file_id(db);
 
             // Find the function in the CST to get its name span
             let span = source_file
                 .items()
                 .flat_map(|item| match item {
-                    baml_syntax::ast::Item::Function(func_node) => vec![func_node],
-                    baml_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+                    baml_compiler_syntax::ast::Item::Function(func_node) => vec![func_node],
+                    baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
                     _ => vec![],
                 })
                 .find(|function_def| {
@@ -498,7 +498,7 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
 pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<FunctionBody> {
     let file = function.file(db);
     let tree = syntax_tree(db, file);
-    let source_file = baml_syntax::ast::SourceFile::cast(tree).unwrap();
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
@@ -508,8 +508,8 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     let function_def = source_file
         .items()
         .flat_map(|item| match item {
-            baml_syntax::ast::Item::Function(func_node) => vec![func_node],
-            baml_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+            baml_compiler_syntax::ast::Item::Function(func_node) => vec![func_node],
+            baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
             _ => vec![],
         })
         .find(|function_def| {
@@ -628,7 +628,7 @@ fn lower_file_with_ctx(root: &SyntaxNode, file_id: FileId) -> (ItemTree, Vec<Hir
 
 /// Lower a single item from the CST.
 fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext) {
-    use baml_syntax::SyntaxKind;
+    use baml_compiler_syntax::SyntaxKind;
 
     match node.kind() {
         SyntaxKind::CLASS_DEF => {
@@ -692,7 +692,7 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
 
 /// Extract class definition from CST with validation.
 fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
-    use baml_syntax::ast::ClassDef;
+    use baml_compiler_syntax::ast::ClassDef;
 
     let class = ClassDef::cast(node.clone())?;
     let name_token = class.name()?;
@@ -810,7 +810,7 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
 /// Methods like `class Baz { function Greeting(self) }` become top-level functions `Greeting(self: Baz)`.
 /// The method name is NOT namespaced - this keeps HIR lowering simple and type-free.
 fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
-    use baml_syntax::ast::ClassDef;
+    use baml_compiler_syntax::ast::ClassDef;
 
     let Some(class) = ClassDef::cast(node.clone()) else {
         return Vec::new();
@@ -831,7 +831,7 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
 
 /// Extract enum definition from CST with validation.
 fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
-    use baml_syntax::ast::EnumDef;
+    use baml_compiler_syntax::ast::EnumDef;
 
     let enum_def = EnumDef::cast(node.clone())?;
 
@@ -940,7 +940,7 @@ fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
 /// Extract function definition from CST - MINIMAL VERSION.
 /// Only extracts the name. Signature and body are in separate queries.
 fn lower_function(node: &SyntaxNode) -> Option<Function> {
-    use baml_syntax::ast::FunctionDef;
+    use baml_compiler_syntax::ast::FunctionDef;
 
     let func = FunctionDef::cast(node.clone())?;
     let name = func.name()?.text().into();
@@ -950,7 +950,7 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
 
 /// Extract type alias from CST.
 fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
-    use baml_syntax::ast::TypeAliasDef;
+    use baml_compiler_syntax::ast::TypeAliasDef;
 
     let alias = TypeAliasDef::cast(node.clone())?;
 
@@ -971,7 +971,7 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
 
 /// Extract test definition from CST.
 fn lower_test(node: &SyntaxNode) -> Option<Test> {
-    use baml_syntax::ast::TestDef;
+    use baml_compiler_syntax::ast::TestDef;
 
     let test = TestDef::cast(node.clone())?;
 
@@ -1217,7 +1217,7 @@ fn get_class_field_info(
     class_name: &str,
     field_name: &str,
 ) -> Option<FieldInfo> {
-    use baml_syntax::{SyntaxKind, ast::ClassDef};
+    use baml_compiler_syntax::{SyntaxKind, ast::ClassDef};
 
     let tree = baml_parser::syntax_tree(db, file);
 
@@ -1261,7 +1261,7 @@ fn get_enum_variant_info(
     enum_name: &str,
     variant_name: &str,
 ) -> Option<FieldInfo> {
-    use baml_syntax::{SyntaxKind, ast::EnumDef};
+    use baml_compiler_syntax::{SyntaxKind, ast::EnumDef};
 
     let tree = baml_parser::syntax_tree(db, file);
 

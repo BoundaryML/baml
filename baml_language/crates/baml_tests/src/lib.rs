@@ -22,13 +22,13 @@ include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
 
 // Helper function for formatting syntax trees
 #[cfg(test)]
-fn format_syntax_tree(node: &baml_db::baml_syntax::SyntaxNode) -> String {
+fn format_syntax_tree(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> String {
     format_node_recursive(node, 0)
 }
 
 #[cfg(test)]
-fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) -> String {
-    use baml_db::baml_syntax::NodeOrToken;
+fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth: usize) -> String {
+    use baml_db::baml_compiler_syntax::NodeOrToken;
 
     let mut result = String::new();
     let indent = "  ".repeat(depth);
