@@ -20,7 +20,6 @@ workspace = true
 [dependencies]
 colored = "2"
 indexmap = "2"
-tokio = { version = "1", features = ["sync"] }
 baml_base = { workspace = true }
 
 [dev-dependencies]
