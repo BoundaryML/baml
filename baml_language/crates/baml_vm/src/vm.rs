@@ -607,7 +607,7 @@ impl Vm {
 
         for root in self.watch.copy_roots_reaching(watched_node) {
             if let Some(state) = self.watch.root_state(root) {
-                let deep_copy = crate::native::deep_copy_object(self, &[state.value])?;
+                let deep_copy = crate::native::deep_copy(self, &[state.value])?;
                 old_roots_copies.push(deep_copy);
             }
         }
@@ -784,8 +784,7 @@ impl Vm {
                             );
                         }
 
-                        let old_value_deep_copy =
-                            crate::native::deep_copy_object(self, &[old_value])?;
+                        let old_value_deep_copy = crate::native::deep_copy(self, &[old_value])?;
 
                         if let Some(state) = self.watch.root_state_mut(watched_node) {
                             state.last_assigned = Some(old_value_deep_copy);

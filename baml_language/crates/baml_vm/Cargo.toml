@@ -20,7 +20,9 @@ workspace = true
 [dependencies]
 colored = "2"
 indexmap = "2"
+paste = { workspace = true }
 baml_base = { workspace = true }
+baml_builtins = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1"

@@ -1,6 +1,17 @@
-//! Native functions and methods.
+//! Native function implementations for BAML builtins.
 //!
-//! We need to find a better pattern for this, but this works for now.
+//! # Naming Convention
+//!
+//! Each function here corresponds to a builtin defined in `baml_builtins`.
+//! The function name must be the lowercase version of the constant name:
+//!
+//! | Builtin Constant     | Native Function           |
+//! |---------------------|---------------------------|
+//! | `ARRAY_LENGTH`      | `pub fn array_length`     |
+//! | `STRING_TO_UPPER_CASE` | `pub fn string_to_upper_case` |
+//!
+//! If you see a compile error like "cannot find function `xyz` in module `native`",
+//! you need to add `pub fn xyz(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult`.
 
 use std::{collections::HashMap, fmt::Write};
 
@@ -15,17 +26,9 @@ use crate::{
 
 type NativeFunctionResult = Result<Value, VmError>;
 
-/// String length.
-#[allow(clippy::cast_possible_wrap)] // string length won't exceed i64::MAX
-pub fn string_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let s = vm.objects.as_string(&args[0])?;
-    Ok(Value::Int(s.chars().count() as i64))
-}
-
 /// Array length.
 #[allow(clippy::cast_possible_wrap)] // array length won't exceed i64::MAX
-pub fn array_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+pub fn array_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
 
     let expected = ObjectType::Array;
@@ -67,7 +70,7 @@ pub fn array_push(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 
 /// Length of map
 #[allow(clippy::cast_possible_wrap)] // map length won't exceed i64::MAX
-pub fn map_len(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+pub fn map_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
 
     let expected = ObjectType::Map;
@@ -242,12 +245,12 @@ pub fn env_get(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
 //     Ok(vm.alloc_string(media.mime_type.clone().unwrap_or(String::new())))
 // }
 
-/// String length
+/// String length.
 #[allow(clippy::cast_possible_wrap)] // string length won't exceed i64::MAX
 pub fn string_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
-    let string = vm.objects.as_string(&args[0])?;
-    Ok(Value::Int(string.len() as i64))
+    let s = vm.objects.as_string(&args[0])?;
+    Ok(Value::Int(s.chars().count() as i64))
 }
 
 /// String to lowercase
@@ -346,7 +349,7 @@ pub fn string_replace(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     Ok(vm.alloc_string(result))
 }
 
-pub fn deep_copy_object(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+pub fn deep_copy(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let mut copied_objects = HashMap::new();
     deep_copy_value_recursive(vm, args[0], &mut copied_objects)
@@ -590,7 +593,7 @@ fn deep_equals_recursive(
     }
 }
 
-pub fn any_value_to_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+pub fn unstable_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
     // Arity is already checked by the VM.
     let formatted = format_value_recursive(vm, &args[0], 0)?;
 

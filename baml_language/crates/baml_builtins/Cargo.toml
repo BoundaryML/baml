@@ -1,5 +1,5 @@
 [package]
-name = "baml_compiler_tir"
+name = "baml_builtins"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,6 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
+description = "Type signatures for BAML built-in functions (compile-time only)"
 
 [lib]
 doctest = false
@@ -17,11 +18,5 @@ doctest = false
 workspace = true
 
 [dependencies]
-baml_base = { workspace = true }
-baml_compiler_diagnostics = { workspace = true }
-baml_compiler_hir = { workspace = true }
-baml_builtins = { workspace = true }
-baml_workspace = { workspace = true }
-salsa = { workspace = true }
-smol_str = { workspace = true }
-text-size = { workspace = true }
+# No dependencies - this is a pure data crate
+

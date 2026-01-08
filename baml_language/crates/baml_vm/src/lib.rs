@@ -20,9 +20,9 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use builtins::{
-    FunctionDef, TypePattern, builtins, find_builtin_by_path, find_function, find_method, functions,
-};
+// Re-export lookup functions from baml_builtins for convenience.
+pub use baml_builtins::{builtins, find_builtin_by_path, find_function, find_method};
+pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
 pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,

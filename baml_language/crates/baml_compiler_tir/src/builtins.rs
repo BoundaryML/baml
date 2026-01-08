@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use baml_vm::{FunctionDef, TypePattern};
+use baml_builtins::{BuiltinSignature, TypePattern};
 
 use crate::Ty;
 
@@ -152,21 +152,21 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
 
 /// Find a matching built-in method for a receiver type and method name.
 ///
-/// Returns the `FunctionDef` and type variable bindings if found.
+/// Returns the `BuiltinSignature` and type variable bindings if found.
 ///
 /// # Examples
 ///
 /// ```ignore
 /// // Looking up: arr.length() where arr: int[]
 /// let result = lookup_method(&Ty::List(Box::new(Ty::Int)), "length");
-/// // result = Some((FunctionDef for Array.length, {"T" => int}))
+/// // result = Some((BuiltinSignature for Array.length, {"T" => int}))
 /// // Return type: substitute(&def.returns, &bindings) => Ty::Int
 /// ```
 pub fn lookup_method(
     receiver_ty: &Ty,
     method_name: &str,
-) -> Option<(&'static FunctionDef, Bindings)> {
-    for def in baml_vm::find_method(method_name) {
+) -> Option<(&'static BuiltinSignature, Bindings)> {
+    for def in baml_builtins::find_method(method_name) {
         if let Some(ref receiver_pattern) = def.receiver {
             if let Some(bindings) = match_pattern(receiver_pattern, receiver_ty) {
                 return Some((def, bindings));
@@ -178,16 +178,16 @@ pub fn lookup_method(
 
 /// Look up a built-in free function by path (functions without a receiver).
 ///
-/// Returns the `FunctionDef` if found.
-pub fn lookup_function(path: &str) -> Option<&'static FunctionDef> {
-    baml_vm::find_function(path)
+/// Returns the `BuiltinSignature` if found.
+pub fn lookup_function(path: &str) -> Option<&'static BuiltinSignature> {
+    baml_builtins::find_function(path)
 }
 
 /// Look up any built-in by path (including methods).
 ///
 /// This is useful for direct builtin calls like `baml.Array.length(arr)`.
-pub fn lookup_builtin_by_path(path: &str) -> Option<&'static FunctionDef> {
-    baml_vm::find_builtin_by_path(path)
+pub fn lookup_builtin_by_path(path: &str) -> Option<&'static BuiltinSignature> {
+    baml_builtins::find_builtin_by_path(path)
 }
 
 /// Get the return type of a built-in method for a specific receiver type.

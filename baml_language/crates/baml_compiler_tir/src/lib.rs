@@ -41,8 +41,8 @@ pub use types::*;
 ///
 /// This is used for builtin function type inference where some type variables may be
 /// bound from arguments but others might not be.
-fn substitute_with_fallback(pattern: &baml_vm::TypePattern, bindings: &Bindings) -> Ty {
-    use baml_vm::TypePattern;
+fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bindings) -> Ty {
+    use baml_builtins::TypePattern;
     match pattern {
         TypePattern::Var(name) => bindings.get(name).cloned().unwrap_or(Ty::Unknown),
         TypePattern::Int => Ty::Int,
@@ -1114,7 +1114,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                         // Build parameter patterns and match against argument types to
                         // extract type variable bindings
-                        let mut param_patterns: Vec<&baml_vm::TypePattern> = Vec::new();
+                        let mut param_patterns: Vec<&baml_builtins::TypePattern> = Vec::new();
                         if let Some(ref receiver_pattern) = def.receiver {
                             param_patterns.push(receiver_pattern);
                         }

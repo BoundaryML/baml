@@ -300,6 +300,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_builtins"
+version = "0.0.0"
+
+[[package]]
 name = "baml_cli"
 version = "0.0.0"
 dependencies = [
@@ -409,9 +413,9 @@ name = "baml_compiler_tir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
- "baml_vm",
  "baml_workspace",
  "salsa",
  "smol_str",
@@ -462,6 +466,22 @@ dependencies = [
  "baml_project",
  "smol_str",
  "text-size",
+]
+
+[[package]]
+name = "baml_ide_tests"
+version = "0.0.0"
+dependencies = [
+ "baml_compiler_diagnostics",
+ "baml_db",
+ "baml_ide",
+ "baml_project",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "text-size",
+ "walkdir",
 ]
 
 [[package]]
@@ -516,22 +536,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "webbrowser",
-]
-
-[[package]]
-name = "baml_ide_tests"
-version = "0.0.0"
-dependencies = [
- "baml_compiler_diagnostics",
- "baml_db",
- "baml_ide",
- "baml_project",
- "prettyplease",
- "proc-macro2",
- "quote",
- "syn",
- "text-size",
- "walkdir",
 ]
 
 [[package]]
@@ -625,11 +629,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
+ "baml_builtins",
  "baml_compiler_emit",
  "baml_tests",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.12.0",
+ "paste",
  "tokio",
 ]
 

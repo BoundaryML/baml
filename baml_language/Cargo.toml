@@ -18,6 +18,7 @@ version = "0.0.0"
 [workspace.dependencies]
 # workspace dependencies
 baml_base = { path = "crates/baml_base" }
+baml_builtins = { path = "crates/baml_builtins" }
 baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_db = { path = "crates/baml_db" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
@@ -63,7 +64,7 @@ reqwest = { version = "0.12.12", features = [
   "stream",
 ] }
 cfg-if = "1.0.0"
-
+paste = "1.0"
 
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "env-filter",
