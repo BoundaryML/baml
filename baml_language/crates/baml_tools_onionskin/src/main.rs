@@ -7,6 +7,25 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use compiler::CompilerPhase;
+
+/// Parse a phase name string into a CompilerPhase
+fn parse_phase(name: &str) -> Option<CompilerPhase> {
+    match name.to_lowercase().as_str() {
+        "lexer" => Some(CompilerPhase::Lexer),
+        "parser" => Some(CompilerPhase::Parser),
+        "ast" => Some(CompilerPhase::Ast),
+        "hir" => Some(CompilerPhase::Hir),
+        "thir" => Some(CompilerPhase::Thir),
+        "typedir" | "typed_ir" | "typed-ir" => Some(CompilerPhase::TypedIr),
+        "mir" => Some(CompilerPhase::Mir),
+        "diagnostics" => Some(CompilerPhase::Diagnostics),
+        "codegen" => Some(CompilerPhase::Codegen),
+        "vmrunner" | "vm_runner" | "vm-runner" => Some(CompilerPhase::VmRunner),
+        "metrics" => Some(CompilerPhase::Metrics),
+        _ => None,
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "baml_tools_onionskin")]
@@ -18,6 +37,21 @@ struct Args {
     /// Path to the BAML file or directory to watch (for TUI mode)
     #[arg(long = "from")]
     path: Option<PathBuf>,
+
+    /// Path to the workspace root (for compiler hot-reload)
+    /// If not specified, auto-detects by searching for a 'crates' directory
+    /// containing compiler crates. Use --no-hot-reload to disable.
+    #[arg(long = "workspace")]
+    workspace: Option<PathBuf>,
+
+    /// Disable compiler hot-reload (don't watch compiler source files)
+    #[arg(long = "no-hot-reload")]
+    no_hot_reload: bool,
+
+    /// Initial compiler phase to display (used to restore view after restart)
+    /// Values: lexer, parser, ast, hir, thir, typedir, mir, diagnostics, codegen, vmrunner, metrics
+    #[arg(long = "phase", hide = true)]
+    phase: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -35,6 +69,40 @@ enum Command {
     },
 }
 
+/// Try to auto-detect the workspace root by searching for a directory containing
+/// 'crates/baml_compiler_lexer' (a distinctive marker of the baml_language workspace)
+fn detect_workspace_root() -> Option<PathBuf> {
+    // Start from current directory
+    let mut current = std::env::current_dir().ok()?;
+
+    // Walk up the directory tree
+    loop {
+        // Check if this looks like the workspace root
+        let crates_dir = current.join("crates");
+        if crates_dir.exists() && crates_dir.join("baml_compiler_lexer").exists() {
+            return Some(current);
+        }
+
+        // Move up one directory
+        if !current.pop() {
+            break;
+        }
+    }
+
+    // Also try from the executable's location (useful when running via cargo run)
+    if let Ok(exe_path) = std::env::current_exe() {
+        let mut current = exe_path;
+        while current.pop() {
+            let crates_dir = current.join("crates");
+            if crates_dir.exists() && crates_dir.join("baml_compiler_lexer").exists() {
+                return Some(current);
+            }
+        }
+    }
+
+    None
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -49,6 +117,26 @@ fn main() -> Result<()> {
             if !path.exists() {
                 anyhow::bail!("Path does not exist: {}", path.display());
             }
+
+            // Determine workspace root for hot-reload
+            let workspace = if args.no_hot_reload {
+                None
+            } else if let Some(ref workspace) = args.workspace {
+                // Explicit workspace provided - validate it
+                if !workspace.exists() {
+                    anyhow::bail!("Workspace path does not exist: {}", workspace.display());
+                }
+                if !workspace.join("crates").exists() {
+                    anyhow::bail!(
+                        "Workspace path doesn't appear to be a valid workspace (no 'crates' directory): {}",
+                        workspace.display()
+                    );
+                }
+                Some(workspace.clone())
+            } else {
+                // Try to auto-detect
+                detect_workspace_root()
+            };
 
             // Set up panic hook to restore terminal
             let original_hook = std::panic::take_hook();
@@ -67,8 +155,11 @@ fn main() -> Result<()> {
             // Initialize terminal
             let mut terminal = ui::init_terminal()?;
 
+            // Parse initial phase if provided
+            let initial_phase = args.phase.as_deref().and_then(parse_phase);
+
             // Create and run the app
-            let mut app = app::App::new(path)?;
+            let mut app = app::App::new(path, workspace, initial_phase)?;
             let result = app.run(&mut terminal);
 
             // Restore terminal
