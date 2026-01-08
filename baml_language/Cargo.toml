@@ -35,7 +35,7 @@ baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_ide = { path = "crates/baml_ide" }
 baml_project = { path = "crates/baml_project" }
-baml_language_server = { path = "crates/baml_language_server" }
+baml_lsp = { path = "crates/baml_lsp" }
 
 # external dependencies
 anyhow = { version = "1" }

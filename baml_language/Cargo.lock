@@ -304,7 +304,7 @@ name = "baml_cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "baml_language_server",
+ "baml_lsp",
  "cfg-if",
  "clap",
  "clap-cargo",
@@ -465,7 +465,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_language_server"
+name = "baml_lsp"
 version = "0.0.0"
 dependencies = [
  "anyhow",

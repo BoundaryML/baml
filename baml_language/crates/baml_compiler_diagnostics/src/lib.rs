@@ -28,7 +28,7 @@
 //! ## LSP Conversion
 //!
 //! LSP-specific conversion (to `lsp_types::Diagnostic`) lives in the
-//! `baml_language_server` crate, keeping this crate free of LSP dependencies.
+//! `baml_lsp` crate, keeping this crate free of LSP dependencies.
 
 pub mod diagnostic;
 pub mod errors;

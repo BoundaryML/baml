@@ -1,5 +1,5 @@
 [package]
-name = "baml_language_server"
+name = "baml_lsp"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
