@@ -3,7 +3,7 @@
 //! Implements incremental parsing with error recovery.
 
 use baml_base::SourceFile;
-use baml_diagnostics::compiler_error::parse_error::ParseError;
+use baml_diagnostics::ParseError;
 use baml_lexer::lex_file;
 use baml_syntax::SyntaxNode;
 use rowan::GreenNode;

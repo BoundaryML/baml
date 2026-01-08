@@ -10,7 +10,7 @@
 use std::collections::HashSet;
 
 use baml_base::{Name, Span};
-use baml_diagnostics::compiler_error::TypeError;
+use baml_diagnostics::TypeError;
 use baml_hir::TypeRef;
 
 use crate::{LiteralValue, Ty};

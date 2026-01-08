@@ -6,7 +6,7 @@
 use std::fmt::Write;
 
 use baml_base::Span;
-use baml_diagnostics::compiler_error::TypeError;
+use baml_diagnostics::TypeError;
 use baml_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
     Stmt, StmtId, UnaryOp,

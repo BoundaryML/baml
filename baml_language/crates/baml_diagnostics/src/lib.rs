@@ -7,34 +7,40 @@
 //!
 //! ## Architecture
 //!
-//! Following ty's design pattern, all compiler phases produce their own error
-//! types (`ParseError`, `TypeError`, etc.) but they all implement `ToDiagnostic`
-//! to convert to a unified `Diagnostic` type. This enables:
+//! All compiler phases produce their own error types (`ParseError`, `TypeError`, etc.)
+//! but they all implement `ToDiagnostic` to convert to a unified `Diagnostic` type.
+//! This enables:
 //!
 //! - Centralized diagnostic collection via `baml_project::collect_diagnostics()`
 //! - Multi-format rendering without duplication
 //! - Consistent error handling across all compiler phases
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use baml_diagnostics::{ParseError, ToDiagnostic, RenderConfig, render_diagnostic};
+//!
+//! let error = ParseError::UnexpectedToken { ... };
+//! let diagnostic = error.to_diagnostic();
+//! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::cli());
+//! ```
 //!
 //! ## LSP Conversion
 //!
 //! LSP-specific conversion (to `lsp_types::Diagnostic`) lives in the
 //! `baml_language_server` crate, keeping this crate free of LSP dependencies.
 
-pub mod compiler_error;
 pub mod diagnostic;
+pub mod errors;
 pub mod render;
 pub mod to_diagnostic;
 
+// Re-export error types
 // Re-export the unified diagnostic types
-// Re-export the legacy error types and rendering (for backwards compatibility during migration)
-pub use compiler_error::{
-    ColorMode, CompilerError, DbSourceCache, HirDiagnostic, NameError, ParseError, TypeError,
-    render_error, render_hir_diagnostic, render_name_error, render_parse_error,
-    render_report_to_string, render_type_error,
-};
 pub use diagnostic::{
     Annotation, Diagnostic, DiagnosticId, DiagnosticPhase, RelatedInfo, Severity, ToDiagnostic,
 };
+pub use errors::{HirDiagnostic, NameError, ParseError, TypeError};
 // Re-export the rendering functions and types
 pub use render::{
     DiagnosticFormat, RenderConfig, SourceCache, render_diagnostic, render_diagnostics,

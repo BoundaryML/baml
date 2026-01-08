@@ -229,7 +229,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_hir::{function_body, function_signature};
             use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
-            use baml_diagnostics::{DbSourceCache, render_parse_error};
+            use baml_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
@@ -313,9 +313,17 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             if errors.is_empty() {
                 writeln!(output, "None").unwrap();
             } else {
-                let mut cache = DbSourceCache::new(&db, root);
+                // Build sources map for rendering
+                let file_id = source_file.file_id(&db);
+                let mut sources = HashMap::new();
+                let mut file_paths = HashMap::new();
+                sources.insert(file_id, content.clone());
+                file_paths.insert(file_id, source_file.path(&db));
+                let config = RenderConfig::test();
+
                 for error in errors.iter() {
-                    writeln!(output, "{}", render_parse_error(error, &mut cache, false)).unwrap();
+                    let diag = error.to_diagnostic();
+                    writeln!(output, "{}", render_diagnostic(&diag, &sources, &file_paths, &config)).unwrap();
                 }
             }
 

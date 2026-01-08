@@ -13,7 +13,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{FileId, Name, Span};
-use baml_diagnostics::compiler_error::TypeError;
+use baml_diagnostics::TypeError;
 use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
 use baml_workspace::Project;
 

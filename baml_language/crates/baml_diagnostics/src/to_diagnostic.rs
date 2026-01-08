@@ -6,8 +6,8 @@
 use std::fmt::Write;
 
 use crate::{
-    compiler_error::{HirDiagnostic, NameError, ParseError, TypeError},
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
+    errors::{HirDiagnostic, NameError, ParseError, TypeError},
 };
 
 // ============================================================================
