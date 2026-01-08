@@ -1327,8 +1327,7 @@ impl CompilerRunner {
         func_names.sort();
         for func_name in func_names {
             if let Some(&idx) = program.function_indices.get(func_name)
-                && let Some(baml_compiler_emit::Object::Function(func)) =
-                    program.objects.get(idx)
+                && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
             {
                 let func_header = format!(
                     "\nFunction {} (arity: {}, kind: {:?}):",
