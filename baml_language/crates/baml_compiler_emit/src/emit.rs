@@ -690,8 +690,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(operand, mir);
                 // Emit instanceof check using CmpOp::InstanceOf
                 // The type should be a class name - look up the class object
-                if let Ty::Named(class_name) = ty {
-                    let class_name_str = class_name.as_str();
+                if let Ty::Class(fqn) | Ty::TypeAlias(fqn) = ty {
+                    let class_name_str = fqn.name.as_str();
                     if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                         // Load the Class object for the type check
                         let class_const =

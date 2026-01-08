@@ -112,10 +112,11 @@ impl<'a> TypeLoweringContextResolved<'a> {
     }
 
     fn resolve_name(&self, name: &Name) -> Option<Ty> {
+        use baml_compiler_hir::FullyQualifiedName;
         if self.class_names.contains(name) {
-            Some(Ty::Class(name.clone()))
+            Some(Ty::Class(FullyQualifiedName::local(name.clone())))
         } else if self.enum_names.contains(name) {
-            Some(Ty::Enum(name.clone()))
+            Some(Ty::Enum(FullyQualifiedName::local(name.clone())))
         } else {
             None
         }
@@ -205,9 +206,11 @@ fn lower_path_type_resolved_with_ctx(
                 "pdf" => Ty::Media(baml_base::MediaKind::Pdf),
                 // User-defined type - resolve to Class/Enum or validate
                 _ => {
+                    use baml_compiler_hir::FullyQualifiedName;
+
                     // Skip validation for complex type expressions
                     if !is_simple_type_name(name.as_str()) {
-                        return Ty::Named(name.clone());
+                        return Ty::TypeAlias(FullyQualifiedName::local(name.clone()));
                     }
 
                     // Try to resolve to Class/Enum
@@ -217,7 +220,7 @@ fn lower_path_type_resolved_with_ctx(
 
                     // Check if it's a known type (could be a type alias)
                     if ctx.is_known_type(name) {
-                        Ty::Named(name.clone())
+                        Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
                     } else {
                         ctx.unknown_type_error(name)
                     }
@@ -225,6 +228,8 @@ fn lower_path_type_resolved_with_ctx(
             }
         }
         _ => {
+            use baml_compiler_hir::FullyQualifiedName;
+
             let full_path = path
                 .segments
                 .iter()
@@ -233,7 +238,7 @@ fn lower_path_type_resolved_with_ctx(
                 .join(".");
             let name = Name::new(&full_path);
             if !is_simple_type_name(&full_path) || ctx.is_known_type(&name) {
-                Ty::Named(name)
+                Ty::TypeAlias(FullyQualifiedName::local(name))
             } else {
                 ctx.unknown_type_error(&name)
             }

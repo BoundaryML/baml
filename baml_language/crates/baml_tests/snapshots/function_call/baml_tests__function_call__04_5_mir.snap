@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -38,14 +38,14 @@ fn array_length() -> Int {
 
 }
 
-fn Greeting(self: Class("Baz")) -> String {
+fn Greeting(self: Class(FullyQualifiedName { namespace: Local, name: "Baz" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class("Baz") // self // param
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // self // param
     let _2: String
     let _3: String
     let _4: String
-    let _5: Named("Baz")
+    let _5: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
     let _6: String
 
     bb0: {
@@ -143,10 +143,10 @@ fn GreetBaz(n: String) -> String {
     // Locals:
     let _0: String // return
     let _1: String // n // param
-    let _2: Named("Baz") // baz
+    let _2: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // baz
     let _3: String
-    let _4: Named("Baz")
-    let _5: Function { params: [Named("Baz")], ret: String }
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
+    let _5: Function { params: [Class(FullyQualifiedName { namespace: Local, name: "Baz" })], ret: String }
 
     bb0: {
         _3 = copy _1;

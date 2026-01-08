@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span};
-use baml_compiler_hir::FunctionSignature;
+use baml_compiler_hir::{FullyQualifiedName, FunctionSignature};
 use baml_compiler_tir::{Ty, TypeResolutionContext};
 use baml_compiler_vir::{
     AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
@@ -1253,7 +1253,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 dest,
                 Rvalue::IsType {
                     operand: lhs_operand,
-                    ty: Ty::Named(type_name),
+                    ty: Ty::TypeAlias(FullyQualifiedName::local(type_name)),
                 },
             );
             return;
@@ -1702,7 +1702,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// Extract class name from a Ty.
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::Named(name) | Ty::Class(name) => Some(name.to_string()),
+            Ty::TypeAlias(fqn) | Ty::Class(fqn) => Some(fqn.name.to_string()),
             _ => None,
         }
     }
@@ -1743,9 +1743,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::Bool => Ty::Bool,
             baml_compiler_vir::Ty::Null => Ty::Null,
             baml_compiler_vir::Ty::Media(kind) => Ty::Media(kind.clone()),
-            baml_compiler_vir::Ty::Class(name) | baml_compiler_vir::Ty::Enum(name) => {
-                Ty::Named(name.clone())
-            }
+            baml_compiler_vir::Ty::Class(fqn) => Ty::Class(fqn.clone()),
+            baml_compiler_vir::Ty::Enum(fqn) => Ty::Enum(fqn.clone()),
+            baml_compiler_vir::Ty::TypeAlias(fqn) => Ty::TypeAlias(fqn.clone()),
             baml_compiler_vir::Ty::Optional(inner) => {
                 Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
             }

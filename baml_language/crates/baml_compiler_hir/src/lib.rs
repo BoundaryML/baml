@@ -26,6 +26,7 @@ use rowan::{SyntaxToken, TextRange, ast::AstNode};
 // Module declarations
 mod body;
 mod client;
+pub mod fqn;
 mod generator;
 mod generics;
 mod ids;
@@ -35,11 +36,13 @@ mod path;
 pub mod pretty;
 pub mod reserved_names;
 mod signature;
+pub mod symbol_table;
 mod test;
 mod type_ref;
 
 // Re-exports
 pub use body::*;
+pub use fqn::*;
 pub use generics::*;
 pub use ids::*;
 pub use item_tree::*;
@@ -49,6 +52,7 @@ pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
 pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};
+pub use symbol_table::*;
 pub use type_ref::*;
 
 //

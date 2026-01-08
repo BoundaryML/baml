@@ -24,6 +24,7 @@ mod exhaustiveness;
 mod lower;
 mod normalize;
 pub mod pretty;
+mod resolve;
 mod types;
 
 pub use builtins::{
@@ -33,6 +34,7 @@ pub use builtins::{
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
+pub use resolve::{ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
 pub use types::*;
 
@@ -615,16 +617,17 @@ impl<'db> TypeContext<'db> {
 
     /// Resolve a named type to its proper Ty representation.
     ///
-    /// This resolves class and enum names to `Ty::Class` and `Ty::Enum` with their names,
-    /// while type aliases and unknown types stay as `Ty::Named`.
+    /// This resolves class and enum names to `Ty::Class` and `Ty::Enum` with FQNs,
+    /// while type aliases and unknown types stay as `Ty::TypeAlias`.
     pub fn resolve_named_type(&self, name: &Name) -> Ty {
+        use baml_compiler_hir::FullyQualifiedName;
         if self.class_names.contains(name) {
-            Ty::Class(name.clone())
+            Ty::Class(FullyQualifiedName::local(name.clone()))
         } else if self.enum_names.contains(name) {
-            Ty::Enum(name.clone())
+            Ty::Enum(FullyQualifiedName::local(name.clone()))
         } else {
-            // Type alias or unknown type - stays as Named, will be resolved during normalization
-            Ty::Named(name.clone())
+            // Type alias or unknown type - stays as TypeAlias, will be resolved during normalization
+            Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
         }
     }
 
@@ -954,10 +957,11 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                     if let Some(variants) = ctx.lookup_enum_variants(enum_name) {
                         if variants.contains(variant_name) {
+                            use baml_compiler_hir::FullyQualifiedName;
                             // This is a valid enum variant - record it and return the enum type
                             ctx.enum_variant_exprs
                                 .insert(expr_id, (enum_name.clone(), variant_name.clone()));
-                            return Ty::Named(enum_name.clone());
+                            return Ty::Enum(FullyQualifiedName::local(enum_name.clone()));
                         }
                         // Enum exists but variant doesn't
                         ctx.push_error(TypeError::UnknownEnumVariant {
@@ -1607,12 +1611,14 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             spreads: _,
         } => {
             // If we expect a specific class type, we can use its field types
-            if let Ty::Class(expected_name) = expected {
+            if let Ty::Class(expected_fqn) = expected {
+                use baml_compiler_hir::FullyQualifiedName;
                 // Check field types against the expected class fields
                 for (field_name, value_expr) in fields {
                     // Clone the field type to avoid borrow issues
-                    let expected_field_ty =
-                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    let expected_field_ty = ctx
+                        .lookup_class_field(&expected_fqn.name, field_name)
+                        .cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -1622,18 +1628,20 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 }
 
                 // Return the expected type if type_name matches
-                if type_name.as_ref() == Some(expected_name) {
+                if type_name.as_ref() == Some(&expected_fqn.name) {
                     expected.clone()
                 } else if let Some(name) = type_name {
-                    Ty::Class(name.clone())
+                    Ty::Class(FullyQualifiedName::local(name.clone()))
                 } else {
                     Ty::Unknown
                 }
-            } else if let Ty::Named(expected_name) = expected {
-                // Similar handling for Named types (type aliases)
+            } else if let Ty::TypeAlias(expected_fqn) = expected {
+                use baml_compiler_hir::FullyQualifiedName;
+                // Similar handling for TypeAlias types
                 for (field_name, value_expr) in fields {
-                    let expected_field_ty =
-                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    let expected_field_ty = ctx
+                        .lookup_class_field(&expected_fqn.name, field_name)
+                        .cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -1641,10 +1649,10 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     }
                 }
 
-                if type_name.as_ref() == Some(expected_name) {
+                if type_name.as_ref() == Some(&expected_fqn.name) {
                     expected.clone()
                 } else if let Some(name) = type_name {
-                    Ty::Named(name.clone())
+                    Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
                 } else {
                     Ty::Unknown
                 }
@@ -1944,10 +1952,14 @@ fn extract_instanceof_narrowing(
                     // RHS should be a simple path (type name)
                     if let Expr::Path(type_segments) = &body.exprs[*rhs] {
                         if type_segments.len() == 1 {
+                            use baml_compiler_hir::FullyQualifiedName;
                             let type_name = type_segments[0].clone();
                             // Return the variable name and the narrowed type
-                            // We use Ty::Named here since user-defined types are represented this way
-                            return Some((var_name, Ty::Named(type_name)));
+                            // Use TypeAlias as a fallback - will be resolved during normalization
+                            return Some((
+                                var_name,
+                                Ty::TypeAlias(FullyQualifiedName::local(type_name)),
+                            ));
                         }
                     }
                 }
@@ -2171,17 +2183,17 @@ fn infer_field_access(ctx: &mut TypeContext<'_>, base: &Ty, field: &Name, span: 
 
     // First, try class field lookup for named types
     let found_field = match base {
-        Ty::Named(class_name) => ctx
+        Ty::TypeAlias(fqn) => ctx
             .lookup(field)
-            .or(ctx.lookup_class_field(class_name, field))
+            .or(ctx.lookup_class_field(&fqn.name, field))
             .cloned(),
-        Ty::Class(class_name) => {
+        Ty::Class(fqn) => {
             // First try to find a method (global function lookup)
             if let Some(method_ty) = ctx.lookup(field) {
                 return method_ty.clone();
             }
             // Check the context's class_fields for this class name
-            ctx.lookup_class_field(class_name, field).cloned()
+            ctx.lookup_class_field(&fqn.name, field).cloned()
         }
         Ty::Unknown => return Ty::Unknown,
         _ => None,

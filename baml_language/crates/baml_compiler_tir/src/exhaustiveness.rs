@@ -300,9 +300,9 @@ impl<'a> ExhaustivenessChecker<'a> {
                 values
             }
 
-            // Named type: could be enum, class, or type alias
-            Ty::Named(name) => {
-                // Check if it's a type alias
+            // Type alias: expand to underlying type
+            Ty::TypeAlias(fqn) => {
+                // Check if we can resolve the type alias
                 //
                 // TODO(type-alias-architecture): Type alias resolution should be its own
                 // dedicated phase that runs once after name resolution. Resolved aliases
@@ -335,22 +335,12 @@ impl<'a> ExhaustivenessChecker<'a> {
                 // and engine/baml-lib/parser-database/src/types/mod.rs (resolve_type_aliases)
                 //
                 // Porting this to the new compiler requires its own task for feature parity.
+                let name = &fqn.name;
                 if let Some(alias_ty) = self.type_aliases.get(name) {
                     return self.expand_type_to_values(alias_ty);
                 }
 
-                // Check if it's an enum (finite type)
-                if let Some(variants) = self.enum_variants.get(name) {
-                    return variants
-                        .iter()
-                        .map(|variant_name| ValueSet::EnumVariant {
-                            enum_name: name.clone(),
-                            variant_name: variant_name.clone(),
-                        })
-                        .collect();
-                }
-
-                // Unknown named type or class (infinite)
+                // Unknown type alias (infinite)
                 vec![ValueSet::OfType(name.clone())]
             }
 
@@ -379,13 +369,14 @@ impl<'a> ExhaustivenessChecker<'a> {
             Ty::String => vec![ValueSet::OfType(Name::new("string"))],
             Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
-            // User-defined class and enum types (resolved by name).
-            Ty::Class(name) => {
+            // User-defined class and enum types (resolved by FQN).
+            Ty::Class(fqn) => {
                 // Class types are treated like named types for exhaustiveness
-                vec![ValueSet::OfType(name.clone())]
+                vec![ValueSet::OfType(fqn.name.clone())]
             }
-            Ty::Enum(name) => {
+            Ty::Enum(fqn) => {
                 // Enum types: look up variants for exhaustiveness checking
+                let name = &fqn.name;
                 if let Some(variants) = self.enum_variants.get(name) {
                     variants
                         .iter()
@@ -488,11 +479,13 @@ impl<'a> ExhaustivenessChecker<'a> {
                 let inner_set = Self::ty_to_value_set(inner);
                 ValueSet::Union(vec![inner_set, ValueSet::Literal(Literal::Null)])
             }
-            Ty::Named(name) => {
+            Ty::TypeAlias(fqn) => {
                 // For type aliases, keep the alias name (don't expand)
                 // The coverage check will handle expansion
-                ValueSet::OfType(name.clone())
+                ValueSet::OfType(fqn.name.clone())
             }
+            Ty::Class(fqn) => ValueSet::OfType(fqn.name.clone()),
+            Ty::Enum(fqn) => ValueSet::OfType(fqn.name.clone()),
             Ty::Literal(value) => match value {
                 LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
                 LiteralValue::Float(v) => ValueSet::Literal(Literal::Float(v.clone())),
