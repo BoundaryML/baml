@@ -10,8 +10,10 @@ repository = { workspace = true }
 license = { workspace = true }
 description = "BAML runtime for Rust - type-safe LLM function calls"
 readme = "README.md"
-keywords = ["baml", "llm", "ai", "boundary", "runtime", "type-safe"]
+keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["development-tools", "web-programming"]
+# Include the proto types (symlinked from engine/language_client_cffi/types)
+include = ["src/**/*", "build.rs", "Cargo.toml", "README.md", "types/**/*"]
 
 [lib]
 doctest = false

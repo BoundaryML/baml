@@ -17,7 +17,12 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "WebFetch(domain:docs.rs)",
+<<<<<<< HEAD
       "Bash(cargo clippy:*)"
+=======
+      "WebSearch",
+      "Bash(cargo run:*)"
+>>>>>>> origin/canary
     ]
   }
 }

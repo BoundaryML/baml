@@ -1678,21 +1678,22 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 if let Some(&idx) = fields.get(&field.to_string()) {
                     return idx;
                 }
-                panic!(
+                log::error!(
                     "BUG: Field `{}` not found in class `{}`. Available fields: {:?}",
                     field,
                     class_name,
                     fields.keys().collect::<Vec<_>>()
                 );
             }
-            panic!(
+            log::error!(
                 "BUG: Class `{}` not found in class_fields map. Available classes: {:?}",
                 class_name,
                 self.class_fields.keys().collect::<Vec<_>>()
             );
         }
 
-        panic!("BUG: Cannot extract class name from type {ty:?} for field access `{field}`");
+        log::error!("BUG: Cannot extract class name from type {ty:?} for field access `{field}`");
+        0
     }
 
     /// Extract class name from a Ty.

@@ -10,7 +10,7 @@ repository = { workspace = true }
 license = { workspace = true }
 description = "BAML CLI for Rust"
 readme = "README.md"
-keywords = ["baml", "llm", "cli", "ai", "boundary"]
+keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]

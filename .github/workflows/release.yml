@@ -110,8 +110,8 @@ jobs:
 
   publish-to-pypi:
     environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,8 +141,8 @@ jobs:
 
   publish-to-npm:
     environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -208,6 +208,36 @@ jobs:
   #         for i in $(ls pkg/*.gem); do
   #           gem push $i
   #         done
+
+  publish-to-crates-io:
+    environment: release
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install cargo-release
+        run: cargo install cargo-release
+
+      - name: Publish to crates.io
+        working-directory: languages/rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # Use cargo-release to publish all crates in dependency order
+          # Version is explicitly set from the git tag (e.g., 0.216.0)
+          # --no-tag: Don't create git tags (release is triggered by existing tag)
+          # --no-push: Don't push to remote
+          # --no-confirm: Non-interactive mode
+          # --execute: Actually perform the release (not a dry run)
+          # --no-verify: Skip build verification (already verified in CI)
+          cargo release ${{ needs.determine-version.outputs.version_string }} --no-tag --no-push --no-confirm --execute --no-verify
 
   publish-to-open-vsx:
     environment: release
@@ -347,7 +377,8 @@ jobs:
           generate_release_notes: false
 
   publish-to-zed-extensions:
-    needs: [all-builds]
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
     uses: ./.github/workflows/publish-zed-release.reusable.yaml
     secrets:
       SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}

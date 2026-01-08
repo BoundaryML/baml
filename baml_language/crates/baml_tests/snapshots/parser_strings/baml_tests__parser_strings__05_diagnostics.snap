@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -584,13 +584,3 @@ expression: output
   [parse] Error: Expected top-level declaration, found '}'
 
   [hir] Error: Missing `provider` field in client. e.g. `provider openai`
-
-  [type] Error: Expected `"admin" | "user" | "guest"`, found `string`
-   ╭─[ nested_quotes.baml:1:1 ]
-   │
- 1 │ // Test nested quote handling in strings
-   │ │ 
-   │ ╰─ Expected `"admin" | "user" | "guest"`, found `string`
-   │ 
-   │ Note: Error code: E0001
-───╯

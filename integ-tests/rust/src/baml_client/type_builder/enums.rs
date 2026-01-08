@@ -29,7 +29,7 @@ impl AliasedEnumEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum AliasedEnum type lookup failed")
+            .expect("AliasedEnum is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -38,18 +38,16 @@ impl AliasedEnumEnumBuilder {
 
     /// Access the `KEY_ONE` value builder.
     pub fn value_KEY_ONE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("KEY_ONE")
-            .expect("value KEY_ONE lookup failed")
-            .expect("value KEY_ONE is defined in schema")
+        self.inner.get_value("KEY_ONE").expect(
+            "AliasedEnum.KEY_ONE is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `KEY_TWO` value builder.
     pub fn value_KEY_TWO(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("KEY_TWO")
-            .expect("value KEY_TWO lookup failed")
-            .expect("value KEY_TWO is defined in schema")
+        self.inner.get_value("KEY_TWO").expect(
+            "AliasedEnum.KEY_TWO is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -77,7 +75,7 @@ impl CategoryEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum Category type lookup failed")
+            .expect("Category is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -88,40 +86,35 @@ impl CategoryEnumBuilder {
     pub fn value_Refund(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
-            .expect("value Refund lookup failed")
-            .expect("value Refund is defined in schema")
+            .expect("Category.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
     pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("CancelOrder")
-            .expect("value CancelOrder lookup failed")
-            .expect("value CancelOrder is defined in schema")
+        self.inner.get_value("CancelOrder").expect(
+            "Category.CancelOrder is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `TechnicalSupport` value builder.
     pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TechnicalSupport")
-            .expect("value TechnicalSupport lookup failed")
-            .expect("value TechnicalSupport is defined in schema")
+        self.inner.get_value("TechnicalSupport").expect(
+            "Category.TechnicalSupport is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `AccountIssue` value builder.
     pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("AccountIssue")
-            .expect("value AccountIssue lookup failed")
-            .expect("value AccountIssue is defined in schema")
+        self.inner.get_value("AccountIssue").expect(
+            "Category.AccountIssue is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `Question` value builder.
     pub fn value_Question(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Question")
-            .expect("value Question lookup failed")
-            .expect("value Question is defined in schema")
+            .expect("Category.Question is statically defined in .baml and should always be present")
     }
 }
 
@@ -149,7 +142,7 @@ impl Category2EnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum Category2 type lookup failed")
+            .expect("Category2 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -160,40 +153,34 @@ impl Category2EnumBuilder {
     pub fn value_Refund(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
-            .expect("value Refund lookup failed")
-            .expect("value Refund is defined in schema")
+            .expect("Category2.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
     pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("CancelOrder")
-            .expect("value CancelOrder lookup failed")
-            .expect("value CancelOrder is defined in schema")
+        self.inner.get_value("CancelOrder").expect(
+            "Category2.CancelOrder is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `TechnicalSupport` value builder.
     pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TechnicalSupport")
-            .expect("value TechnicalSupport lookup failed")
-            .expect("value TechnicalSupport is defined in schema")
+        self.inner.get_value("TechnicalSupport")
+            .expect("Category2.TechnicalSupport is statically defined in .baml and should always be present")
     }
 
     /// Access the `AccountIssue` value builder.
     pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("AccountIssue")
-            .expect("value AccountIssue lookup failed")
-            .expect("value AccountIssue is defined in schema")
+        self.inner.get_value("AccountIssue").expect(
+            "Category2.AccountIssue is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `Question` value builder.
     pub fn value_Question(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("Question")
-            .expect("value Question lookup failed")
-            .expect("value Question is defined in schema")
+        self.inner.get_value("Question").expect(
+            "Category2.Question is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -221,7 +208,7 @@ impl Category3EnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum Category3 type lookup failed")
+            .expect("Category3 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -232,40 +219,34 @@ impl Category3EnumBuilder {
     pub fn value_Refund(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
-            .expect("value Refund lookup failed")
-            .expect("value Refund is defined in schema")
+            .expect("Category3.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
     pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("CancelOrder")
-            .expect("value CancelOrder lookup failed")
-            .expect("value CancelOrder is defined in schema")
+        self.inner.get_value("CancelOrder").expect(
+            "Category3.CancelOrder is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `TechnicalSupport` value builder.
     pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TechnicalSupport")
-            .expect("value TechnicalSupport lookup failed")
-            .expect("value TechnicalSupport is defined in schema")
+        self.inner.get_value("TechnicalSupport")
+            .expect("Category3.TechnicalSupport is statically defined in .baml and should always be present")
     }
 
     /// Access the `AccountIssue` value builder.
     pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("AccountIssue")
-            .expect("value AccountIssue lookup failed")
-            .expect("value AccountIssue is defined in schema")
+        self.inner.get_value("AccountIssue").expect(
+            "Category3.AccountIssue is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `Question` value builder.
     pub fn value_Question(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("Question")
-            .expect("value Question lookup failed")
-            .expect("value Question is defined in schema")
+        self.inner.get_value("Question").expect(
+            "Category3.Question is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -294,7 +275,9 @@ impl ColorEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect("enum Color type lookup failed")
+        self.inner
+            .as_type()
+            .expect("Color is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -310,48 +293,42 @@ impl ColorEnumBuilder {
     pub fn value_RED(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("RED")
-            .expect("value RED lookup failed")
-            .expect("value RED is defined in schema")
+            .expect("Color.RED is statically defined in .baml and should always be present")
     }
 
     /// Access the `BLUE` value builder.
     pub fn value_BLUE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("BLUE")
-            .expect("value BLUE lookup failed")
-            .expect("value BLUE is defined in schema")
+            .expect("Color.BLUE is statically defined in .baml and should always be present")
     }
 
     /// Access the `GREEN` value builder.
     pub fn value_GREEN(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("GREEN")
-            .expect("value GREEN lookup failed")
-            .expect("value GREEN is defined in schema")
+            .expect("Color.GREEN is statically defined in .baml and should always be present")
     }
 
     /// Access the `YELLOW` value builder.
     pub fn value_YELLOW(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("YELLOW")
-            .expect("value YELLOW lookup failed")
-            .expect("value YELLOW is defined in schema")
+            .expect("Color.YELLOW is statically defined in .baml and should always be present")
     }
 
     /// Access the `BLACK` value builder.
     pub fn value_BLACK(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("BLACK")
-            .expect("value BLACK lookup failed")
-            .expect("value BLACK is defined in schema")
+            .expect("Color.BLACK is statically defined in .baml and should always be present")
     }
 
     /// Access the `WHITE` value builder.
     pub fn value_WHITE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("WHITE")
-            .expect("value WHITE lookup failed")
-            .expect("value WHITE is defined in schema")
+            .expect("Color.WHITE is statically defined in .baml and should always be present")
     }
 }
 
@@ -379,7 +356,7 @@ impl DataTypeEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum DataType type lookup failed")
+            .expect("DataType is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -390,16 +367,14 @@ impl DataTypeEnumBuilder {
     pub fn value_Resume(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Resume")
-            .expect("value Resume lookup failed")
-            .expect("value Resume is defined in schema")
+            .expect("DataType.Resume is statically defined in .baml and should always be present")
     }
 
     /// Access the `Event` value builder.
     pub fn value_Event(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Event")
-            .expect("value Event lookup failed")
-            .expect("value Event is defined in schema")
+            .expect("DataType.Event is statically defined in .baml and should always be present")
     }
 }
 
@@ -430,7 +405,7 @@ impl DynEnumOneEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum DynEnumOne type lookup failed")
+            .expect("DynEnumOne is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -470,7 +445,7 @@ impl DynEnumThreeEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum DynEnumThree type lookup failed")
+            .expect("DynEnumThree is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -484,18 +459,16 @@ impl DynEnumThreeEnumBuilder {
 
     /// Access the `TRICYCLE` value builder.
     pub fn value_TRICYCLE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TRICYCLE")
-            .expect("value TRICYCLE lookup failed")
-            .expect("value TRICYCLE is defined in schema")
+        self.inner.get_value("TRICYCLE").expect(
+            "DynEnumThree.TRICYCLE is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `TRIANGLE` value builder.
     pub fn value_TRIANGLE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TRIANGLE")
-            .expect("value TRIANGLE lookup failed")
-            .expect("value TRIANGLE is defined in schema")
+        self.inner.get_value("TRIANGLE").expect(
+            "DynEnumThree.TRIANGLE is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -526,7 +499,7 @@ impl DynEnumTwoEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum DynEnumTwo type lookup failed")
+            .expect("DynEnumTwo is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -563,7 +536,7 @@ impl EnumInClassEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum EnumInClass type lookup failed")
+            .expect("EnumInClass is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -574,16 +547,14 @@ impl EnumInClassEnumBuilder {
     pub fn value_ONE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("ONE")
-            .expect("value ONE lookup failed")
-            .expect("value ONE is defined in schema")
+            .expect("EnumInClass.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
     pub fn value_TWO(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("TWO")
-            .expect("value TWO lookup failed")
-            .expect("value TWO is defined in schema")
+            .expect("EnumInClass.TWO is statically defined in .baml and should always be present")
     }
 }
 
@@ -611,7 +582,7 @@ impl EnumOutputEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum EnumOutput type lookup failed")
+            .expect("EnumOutput is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -622,24 +593,21 @@ impl EnumOutputEnumBuilder {
     pub fn value_ONE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("ONE")
-            .expect("value ONE lookup failed")
-            .expect("value ONE is defined in schema")
+            .expect("EnumOutput.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
     pub fn value_TWO(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("TWO")
-            .expect("value TWO lookup failed")
-            .expect("value TWO is defined in schema")
+            .expect("EnumOutput.TWO is statically defined in .baml and should always be present")
     }
 
     /// Access the `THREE` value builder.
     pub fn value_THREE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("THREE")
-            .expect("value THREE lookup failed")
-            .expect("value THREE is defined in schema")
+            .expect("EnumOutput.THREE is statically defined in .baml and should always be present")
     }
 }
 
@@ -668,7 +636,9 @@ impl HobbyEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect("enum Hobby type lookup failed")
+        self.inner
+            .as_type()
+            .expect("Hobby is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -684,24 +654,21 @@ impl HobbyEnumBuilder {
     pub fn value_SPORTS(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("SPORTS")
-            .expect("value SPORTS lookup failed")
-            .expect("value SPORTS is defined in schema")
+            .expect("Hobby.SPORTS is statically defined in .baml and should always be present")
     }
 
     /// Access the `MUSIC` value builder.
     pub fn value_MUSIC(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("MUSIC")
-            .expect("value MUSIC lookup failed")
-            .expect("value MUSIC is defined in schema")
+            .expect("Hobby.MUSIC is statically defined in .baml and should always be present")
     }
 
     /// Access the `READING` value builder.
     pub fn value_READING(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("READING")
-            .expect("value READING lookup failed")
-            .expect("value READING is defined in schema")
+            .expect("Hobby.READING is statically defined in .baml and should always be present")
     }
 }
 
@@ -729,7 +696,7 @@ impl MapKeyEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum MapKey type lookup failed")
+            .expect("MapKey is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -740,24 +707,21 @@ impl MapKeyEnumBuilder {
     pub fn value_A(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("A")
-            .expect("value A lookup failed")
-            .expect("value A is defined in schema")
+            .expect("MapKey.A is statically defined in .baml and should always be present")
     }
 
     /// Access the `B` value builder.
     pub fn value_B(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("B")
-            .expect("value B lookup failed")
-            .expect("value B is defined in schema")
+            .expect("MapKey.B is statically defined in .baml and should always be present")
     }
 
     /// Access the `C` value builder.
     pub fn value_C(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("C")
-            .expect("value C lookup failed")
-            .expect("value C is defined in schema")
+            .expect("MapKey.C is statically defined in .baml and should always be present")
     }
 }
 
@@ -783,9 +747,9 @@ impl NamedArgsSingleEnumEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("enum NamedArgsSingleEnum type lookup failed")
+        self.inner.as_type().expect(
+            "NamedArgsSingleEnum is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -794,18 +758,16 @@ impl NamedArgsSingleEnumEnumBuilder {
 
     /// Access the `ONE` value builder.
     pub fn value_ONE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("ONE")
-            .expect("value ONE lookup failed")
-            .expect("value ONE is defined in schema")
+        self.inner.get_value("ONE").expect(
+            "NamedArgsSingleEnum.ONE is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `TWO` value builder.
     pub fn value_TWO(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TWO")
-            .expect("value TWO lookup failed")
-            .expect("value TWO is defined in schema")
+        self.inner.get_value("TWO").expect(
+            "NamedArgsSingleEnum.TWO is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -831,9 +793,9 @@ impl NamedArgsSingleEnumListEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("enum NamedArgsSingleEnumList type lookup failed")
+        self.inner.as_type().expect(
+            "NamedArgsSingleEnumList is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -842,18 +804,14 @@ impl NamedArgsSingleEnumListEnumBuilder {
 
     /// Access the `ONE` value builder.
     pub fn value_ONE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("ONE")
-            .expect("value ONE lookup failed")
-            .expect("value ONE is defined in schema")
+        self.inner.get_value("ONE")
+            .expect("NamedArgsSingleEnumList.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
     pub fn value_TWO(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("TWO")
-            .expect("value TWO lookup failed")
-            .expect("value TWO is defined in schema")
+        self.inner.get_value("TWO")
+            .expect("NamedArgsSingleEnumList.TWO is statically defined in .baml and should always be present")
     }
 }
 
@@ -879,9 +837,8 @@ impl OptionalTest_CategoryTypeEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("enum OptionalTest_CategoryType type lookup failed")
+        self.inner.as_type()
+            .expect("OptionalTest_CategoryType is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -890,26 +847,20 @@ impl OptionalTest_CategoryTypeEnumBuilder {
 
     /// Access the `Aleph` value builder.
     pub fn value_Aleph(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("Aleph")
-            .expect("value Aleph lookup failed")
-            .expect("value Aleph is defined in schema")
+        self.inner.get_value("Aleph")
+            .expect("OptionalTest_CategoryType.Aleph is statically defined in .baml and should always be present")
     }
 
     /// Access the `Beta` value builder.
     pub fn value_Beta(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("Beta")
-            .expect("value Beta lookup failed")
-            .expect("value Beta is defined in schema")
+        self.inner.get_value("Beta")
+            .expect("OptionalTest_CategoryType.Beta is statically defined in .baml and should always be present")
     }
 
     /// Access the `Gamma` value builder.
     pub fn value_Gamma(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("Gamma")
-            .expect("value Gamma lookup failed")
-            .expect("value Gamma is defined in schema")
+        self.inner.get_value("Gamma")
+            .expect("OptionalTest_CategoryType.Gamma is statically defined in .baml and should always be present")
     }
 }
 
@@ -937,7 +888,7 @@ impl OrderStatusEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum OrderStatus type lookup failed")
+            .expect("OrderStatus is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -946,34 +897,30 @@ impl OrderStatusEnumBuilder {
 
     /// Access the `ORDERED` value builder.
     pub fn value_ORDERED(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("ORDERED")
-            .expect("value ORDERED lookup failed")
-            .expect("value ORDERED is defined in schema")
+        self.inner.get_value("ORDERED").expect(
+            "OrderStatus.ORDERED is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `SHIPPED` value builder.
     pub fn value_SHIPPED(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("SHIPPED")
-            .expect("value SHIPPED lookup failed")
-            .expect("value SHIPPED is defined in schema")
+        self.inner.get_value("SHIPPED").expect(
+            "OrderStatus.SHIPPED is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `DELIVERED` value builder.
     pub fn value_DELIVERED(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("DELIVERED")
-            .expect("value DELIVERED lookup failed")
-            .expect("value DELIVERED is defined in schema")
+        self.inner.get_value("DELIVERED").expect(
+            "OrderStatus.DELIVERED is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `CANCELLED` value builder.
     pub fn value_CANCELLED(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("CANCELLED")
-            .expect("value CANCELLED lookup failed")
-            .expect("value CANCELLED is defined in schema")
+        self.inner.get_value("CANCELLED").expect(
+            "OrderStatus.CANCELLED is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1004,7 +951,7 @@ impl RenderStatusEnumEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum RenderStatusEnum type lookup failed")
+            .expect("RenderStatusEnum is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -1018,18 +965,16 @@ impl RenderStatusEnumEnumBuilder {
 
     /// Access the `ACTIVE` value builder.
     pub fn value_ACTIVE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("ACTIVE")
-            .expect("value ACTIVE lookup failed")
-            .expect("value ACTIVE is defined in schema")
+        self.inner.get_value("ACTIVE").expect(
+            "RenderStatusEnum.ACTIVE is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `INACTIVE` value builder.
     pub fn value_INACTIVE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("INACTIVE")
-            .expect("value INACTIVE lookup failed")
-            .expect("value INACTIVE is defined in schema")
+        self.inner.get_value("INACTIVE").expect(
+            "RenderStatusEnum.INACTIVE is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1060,7 +1005,7 @@ impl RenderTestEnumEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum RenderTestEnum type lookup failed")
+            .expect("RenderTestEnum is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
@@ -1074,18 +1019,16 @@ impl RenderTestEnumEnumBuilder {
 
     /// Access the `BIKE` value builder.
     pub fn value_BIKE(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("BIKE")
-            .expect("value BIKE lookup failed")
-            .expect("value BIKE is defined in schema")
+        self.inner.get_value("BIKE").expect(
+            "RenderTestEnum.BIKE is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `SCOOTER` value builder.
     pub fn value_SCOOTER(&self) -> baml::EnumValueBuilder {
-        self.inner
-            .get_value("SCOOTER")
-            .expect("value SCOOTER lookup failed")
-            .expect("value SCOOTER is defined in schema")
+        self.inner.get_value("SCOOTER").expect(
+            "RenderTestEnum.SCOOTER is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1111,7 +1054,9 @@ impl TagEnumBuilder {
 
     /// Get the enum as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect("enum Tag type lookup failed")
+        self.inner
+            .as_type()
+            .expect("Tag is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1122,24 +1067,21 @@ impl TagEnumBuilder {
     pub fn value_Security(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Security")
-            .expect("value Security lookup failed")
-            .expect("value Security is defined in schema")
+            .expect("Tag.Security is statically defined in .baml and should always be present")
     }
 
     /// Access the `AI` value builder.
     pub fn value_AI(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("AI")
-            .expect("value AI lookup failed")
-            .expect("value AI is defined in schema")
+            .expect("Tag.AI is statically defined in .baml and should always be present")
     }
 
     /// Access the `Blockchain` value builder.
     pub fn value_Blockchain(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("Blockchain")
-            .expect("value Blockchain lookup failed")
-            .expect("value Blockchain is defined in schema")
+            .expect("Tag.Blockchain is statically defined in .baml and should always be present")
     }
 }
 
@@ -1167,7 +1109,7 @@ impl TestEnumEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum TestEnum type lookup failed")
+            .expect("TestEnum is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1178,55 +1120,48 @@ impl TestEnumEnumBuilder {
     pub fn value_A(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("A")
-            .expect("value A lookup failed")
-            .expect("value A is defined in schema")
+            .expect("TestEnum.A is statically defined in .baml and should always be present")
     }
 
     /// Access the `B` value builder.
     pub fn value_B(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("B")
-            .expect("value B lookup failed")
-            .expect("value B is defined in schema")
+            .expect("TestEnum.B is statically defined in .baml and should always be present")
     }
 
     /// Access the `C` value builder.
     pub fn value_C(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("C")
-            .expect("value C lookup failed")
-            .expect("value C is defined in schema")
+            .expect("TestEnum.C is statically defined in .baml and should always be present")
     }
 
     /// Access the `D` value builder.
     pub fn value_D(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("D")
-            .expect("value D lookup failed")
-            .expect("value D is defined in schema")
+            .expect("TestEnum.D is statically defined in .baml and should always be present")
     }
 
     /// Access the `E` value builder.
     pub fn value_E(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("E")
-            .expect("value E lookup failed")
-            .expect("value E is defined in schema")
+            .expect("TestEnum.E is statically defined in .baml and should always be present")
     }
 
     /// Access the `F` value builder.
     pub fn value_F(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("F")
-            .expect("value F lookup failed")
-            .expect("value F is defined in schema")
+            .expect("TestEnum.F is statically defined in .baml and should always be present")
     }
 
     /// Access the `G` value builder.
     pub fn value_G(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("G")
-            .expect("value G lookup failed")
-            .expect("value G is defined in schema")
+            .expect("TestEnum.G is statically defined in .baml and should always be present")
     }
 }

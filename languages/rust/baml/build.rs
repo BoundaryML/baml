@@ -1,8 +1,7 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../../../engine/language_client_cffi/types/");
+    println!("cargo:rerun-if-changed=types/");
 
-    let proto_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../engine/language_client_cffi/types");
+    let proto_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("types");
 
     // Generate proto files into OUT_DIR (standard prost pattern)
     prost_build::Config::new()

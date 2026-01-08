@@ -4,8 +4,8 @@ use super::traits::{BamlDecode, BamlEnum};
 use crate::{
     error::BamlError,
     proto::baml_cffi_v1::{
-        CffiMapEntry, CffiValueHolder, HostClassValue, HostEnumValue, HostMapEntry, HostValue,
-        cffi_value_holder, host_map_entry, host_value,
+        cffi_value_holder, host_map_entry, host_value, CffiMapEntry, CffiValueHolder,
+        HostClassValue, HostEnumValue, HostMapEntry, HostValue,
     },
 };
 

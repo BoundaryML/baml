@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+use rowan::TextRange;
+
 use crate::{Name, type_ref::TypeRef};
 
 /// The signature of a function (everything except the body).
@@ -18,6 +20,9 @@ pub struct FunctionSignature {
 
     /// Return type
     pub return_type: TypeRef,
+
+    /// Span of the return type annotation (for diagnostics)
+    pub return_type_span: Option<TextRange>,
 }
 
 /// Function parameter.
@@ -53,16 +58,19 @@ impl FunctionSignature {
             }
         }
 
-        // Extract return type
-        let return_type = func_node
-            .return_type()
-            .map(|t| TypeRef::from_ast(&t))
+        // Extract return type and its span
+        let return_type_node = func_node.return_type();
+        let return_type = return_type_node
+            .as_ref()
+            .map(TypeRef::from_ast)
             .unwrap_or(TypeRef::Unknown);
+        let return_type_span = return_type_node.map(|t| t.text_range());
 
         Arc::new(FunctionSignature {
             name,
             params,
             return_type,
+            return_type_span,
         })
     }
 }

@@ -29,7 +29,7 @@ impl SimpleClassClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class SimpleClass type lookup failed")
+            .expect("SimpleClass is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -38,17 +38,15 @@ impl SimpleClassClassBuilder {
 
     /// Access the `digits` field builder.
     pub fn property_digits(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("digits")
-            .expect("field digits lookup failed")
-            .expect("field digits is defined in schema")
+        self.inner.get_property("digits").expect(
+            "SimpleClass.digits is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `words` field builder.
     pub fn property_words(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("words")
-            .expect("field words lookup failed")
-            .expect("field words is defined in schema")
+            .expect("SimpleClass.words is statically defined in .baml and should always be present")
     }
 }

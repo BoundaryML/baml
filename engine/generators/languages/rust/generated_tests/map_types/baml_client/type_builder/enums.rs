@@ -29,7 +29,7 @@ impl StatusEnumBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("enum Status type lookup failed")
+            .expect("Status is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -40,23 +40,20 @@ impl StatusEnumBuilder {
     pub fn value_ACTIVE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("ACTIVE")
-            .expect("value ACTIVE lookup failed")
-            .expect("value ACTIVE is defined in schema")
+            .expect("Status.ACTIVE is statically defined in .baml and should always be present")
     }
 
     /// Access the `INACTIVE` value builder.
     pub fn value_INACTIVE(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("INACTIVE")
-            .expect("value INACTIVE lookup failed")
-            .expect("value INACTIVE is defined in schema")
+            .expect("Status.INACTIVE is statically defined in .baml and should always be present")
     }
 
     /// Access the `PENDING` value builder.
     pub fn value_PENDING(&self) -> baml::EnumValueBuilder {
         self.inner
             .get_value("PENDING")
-            .expect("value PENDING lookup failed")
-            .expect("value PENDING is defined in schema")
+            .expect("Status.PENDING is statically defined in .baml and should always be present")
     }
 }

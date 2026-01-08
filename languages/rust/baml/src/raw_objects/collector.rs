@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, ffi::c_void};
 
-use super::{RawObject, RawObjectTrait, llm_call::LLMCallKind};
+use super::{llm_call::LLMCallKind, RawObject, RawObjectTrait};
 use crate::{
     baml_unreachable,
     codec::BamlDecode,
@@ -233,7 +233,7 @@ impl Collector {
     /// Get a log by ID (if it exists)
     pub fn get_by_id(&self, id: &str) -> Option<FunctionLog> {
         self.raw
-            .call_method_for_object_optional("id", ("function_id", id))
-            .unwrap_or_else(|e| baml_unreachable!("Failed to get log by ID: {e}"))
+            .call_method_for_object("id", ("function_id", id))
+            .ok()
     }
 }

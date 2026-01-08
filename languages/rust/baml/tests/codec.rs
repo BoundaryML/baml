@@ -4,8 +4,8 @@
 mod common;
 
 use baml::{
-    __internal::{CffiStreamState, host_value},
     BamlDecode, BamlEncode, CheckStatus, Checked, StreamState, StreamingState,
+    __internal::{host_value, CffiStreamState},
 };
 use common::{
     make_bool_holder, make_checked_holder, make_float_holder, make_int_holder, make_list_holder,
@@ -223,8 +223,8 @@ mod checked {
         let holder = make_checked_holder(
             inner,
             vec![
-                ("check1", "value.len() > 0", "passed"),
-                ("check2", "value != null", "PASSED"),
+                ("check1", "value.len() > 0", "succeeded"),
+                ("check2", "value != null", "succeeded"),
             ],
         );
 
@@ -242,7 +242,7 @@ mod checked {
             inner,
             vec![
                 ("min_check", "value >= 10", "failed"),
-                ("type_check", "is_int(value)", "passed"),
+                ("type_check", "is_int(value)", "succeeded"),
             ],
         );
 
@@ -258,7 +258,7 @@ mod checked {
         let holder = make_checked_holder(
             inner,
             vec![
-                ("length_check", "value.len() <= 10", "passed"),
+                ("length_check", "value.len() <= 10", "succeeded"),
                 ("format_check", "is_alpha(value)", "failed"),
             ],
         );

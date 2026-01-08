@@ -1,65 +1,65 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function NestedLiteralUnions:
-    Return: String
+    Return: Union([Literal(String("success")), Literal(String("client error")), Literal(String("other"))])
   Function ExhaustiveEnumWithTypedPattern:
-    Return: String
+    Return: Literal(String("any status"))
   Function ParenthesizedSingleLiteral:
-    Return: String
+    Return: Union([Literal(String("yes")), Literal(String("no"))])
   Function DuplicateEnumVariant:
-    Return: String
+    Return: Union([Literal(String("first")), Literal(String("second")), Literal(String("inactive")), Literal(String("pending"))])
     Errors:
       - Unreachable match arm
   Function WrongLiteralTypeBoolWithInt:
-    Return: String
+    Return: Literal(String("wrong type"))
     Errors:
       - Non-exhaustive match on bool: missing true, false
   Function UnreachableMultiple:
-    Return: String
+    Return: Union([Literal(String("catch all")), Literal(String("unreachable 1")), Literal(String("unreachable 2"))])
     Errors:
       - Unreachable match arm
       - Unreachable match arm
   Function OverlappingWithBindings:
-    Return: String
+    Return: Union([String, Literal(String("remaining"))])
   Function ExhaustiveNullableEnum:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending")), Literal(String("no status"))])
   Function NonExhaustiveBoolMissingTrue:
-    Return: String
+    Return: Literal(String("no"))
     Errors:
       - Non-exhaustive match on bool: missing true
   Function ExhaustiveEnumAllVariants:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending"))])
   Function ExhaustiveTypeAlias:
     Return: String
   Function EnumVariantAfterTypedEnum:
-    Return: String
+    Return: Union([Literal(String("any status")), Literal(String("unreachable"))])
     Errors:
       - Unreachable match arm
   Function BoolLiteralAfterTypedBool:
-    Return: String
+    Return: Union([Literal(String("any bool")), Literal(String("unreachable"))])
     Errors:
       - Unreachable match arm
   Function LiteralUnionWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("success")), Literal(String("client error")), Literal(String("other"))])
   Function ExhaustiveIntLiterals:
-    Return: String
+    Return: Union([Literal(String("OK")), Literal(String("Created")), Literal(String("No Content"))])
   Function ExhaustiveStringLiterals:
-    Return: String
+    Return: Union([Literal(String("User")), Literal(String("Assistant")), Literal(String("System"))])
   Function ExhaustiveTypeAliasWithCatchAll:
-    Return: String
+    Return: Union([String, Literal(String("fallback"))])
   Function DuplicateIntLiteral:
-    Return: String
+    Return: Union([Literal(String("first one")), Literal(String("second one")), Literal(String("other"))])
     Errors:
       - Unreachable match arm
   Function ExhaustiveClassPlusLiteral:
-    Return: String
+    Return: Union([String, Literal(String("http ok"))])
   Function ExhaustiveLiteralWithBaseType:
-    Return: String
+    Return: Union([Literal(String("ok")), Literal(String("other"))])
   Function NonExhaustiveNullableEnumMissingNull:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending"))])
     Errors:
       - Non-exhaustive match on Status?: missing null
   Function NonExhaustiveTypeAliasMissingOne:
@@ -67,185 +67,185 @@ expression: output
     Errors:
       - Non-exhaustive match on Result: missing Failure
   Function BoolUnionPattern:
-    Return: String
+    Return: Literal(String("covered"))
   Function StringLiteralUnionPattern:
-    Return: String
+    Return: Union([Literal(String("chat participant")), Literal(String("system"))])
   Function ExhaustiveBool:
-    Return: String
+    Return: Union([Literal(String("yes")), Literal(String("no"))])
   Function NonExhaustiveDoubleMaybeMissingNull:
     Return: String
     Errors:
       - Non-exhaustive match on DoubleMaybe: missing null
   Function ExhaustiveDoubleMaybe:
-    Return: String
+    Return: Union([String, String, Literal(String("nothing"))])
   Function ExhaustiveOptionalSingleton:
-    Return: String
+    Return: Union([Literal(String("OK")), Literal(String("no code"))])
   Function BoolWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("yes")), Literal(String("no"))])
   Function GuardedOnlyNonExhaustive:
     Return: Int
     Errors:
       - Non-exhaustive match on int: missing int
   Function NonExhaustiveBoolMissingFalse:
-    Return: String
+    Return: Literal(String("yes"))
     Errors:
       - Non-exhaustive match on bool: missing false
   Function IntLiteralUnionPattern:
-    Return: String
+    Return: Union([Literal(String("success with body")), Literal(String("no content"))])
   Function ThreeLevelNestedMatch:
-    Return: String
+    Return: Union([Union([Union([Literal(String("all zero")), Literal(String("z nonzero"))]), Literal(String("y nonzero"))]), Literal(String("x nonzero"))])
   Function MultipleUnreachableSpans:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("duplicate 1")), Literal(String("inactive")), Literal(String("duplicate 2")), Literal(String("pending"))])
     Errors:
       - Unreachable match arm
       - Unreachable match arm
   Function ExhaustiveCustomBool:
-    Return: String
+    Return: Union([Literal(String("yes")), Literal(String("no"))])
   Function NestedEnumMatch:
-    Return: String
+    Return: Union([Union([Literal(String("both active")), Literal(String("first active, second inactive")), Literal(String("first active, second pending"))]), Literal(String("first inactive")), Literal(String("first pending"))])
   Function ExhaustiveMixedLiterals:
-    Return: String
+    Return: Union([Literal(String("http ok")), Literal(String("string success")), Literal(String("boolean true"))])
   Function PartialUnionPlusCatchAll:
-    Return: String
+    Return: Union([Literal(String("success or failure")), Literal(String("pending"))])
   Function ExhaustiveTrueType:
-    Return: String
+    Return: Literal(String("always true"))
   Function NestedMatchSpans:
-    Return: String
+    Return: Union([Union([Literal(String("zero true")), Literal(String("zero false")), Literal(String("unreachable nested"))]), Literal(String("other"))])
     Errors:
       - Unreachable match arm
   Function NonExhaustiveOptionalMissingValue:
-    Return: String
+    Return: Literal(String("no code"))
     Errors:
       - Non-exhaustive match on MaybeOk: missing 200
   Function GetStatus:
     Return: Named("Status")
   Function EnumVariantUnion:
-    Return: String
+    Return: Union([Literal(String("actionable")), Literal(String("inactive"))])
   Function NestedTypeAlias:
-    Return: String
+    Return: Union([String, String, Literal(String("nothing"))])
   Function ExhaustiveFalseType:
-    Return: String
+    Return: Literal(String("always false"))
   Function NonExhaustiveOptionalMissingNull:
-    Return: String
+    Return: Literal(String("OK"))
     Errors:
       - Non-exhaustive match on MaybeOk: missing null
   Function NonExhaustiveTrueTypeWrongLiteral:
-    Return: String
+    Return: Literal(String("wrong!"))
     Errors:
       - Non-exhaustive match on AlwaysTrue: missing true
   Function ExhaustiveWithNamedCatchAll:
-    Return: Int
+    Return: Union([Literal(Int(100)), Int])
   Function NestedTypeBindings:
-    Return: Int
+    Return: Union([Literal(Int(0)), Literal(Int(1))])
   Function NonExhaustiveAliasOfLiterals:
-    Return: String
+    Return: Literal(String("ok"))
     Errors:
       - Non-exhaustive match on OkOrCreated: missing 201
   Function ExhaustiveAliasOfLiterals:
-    Return: String
+    Return: Union([Literal(String("ok")), Literal(String("created"))])
   Function WrongLiteralTypeIntWithString:
-    Return: String
+    Return: Literal(String("wrong type"))
     Errors:
       - Non-exhaustive match on int: missing int
   Function ExhaustiveEnumWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("other"))])
   Function GuardedWithFallback:
-    Return: Int
+    Return: Union([Int, Literal(Int(0))])
   Function MatchArithmeticScrutinee:
-    Return: String
+    Return: Union([Literal(String("zero")), Literal(String("one")), Literal(String("other"))])
   Function HighLineNumberNonExhaustive:
-    Return: String
+    Return: Literal(String("active only"))
     Errors:
       - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
   Function NonExhaustiveNullableEnumMissingVariant:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("no status"))])
     Errors:
       - Non-exhaustive match on Status?: missing Status.Pending
   Function DeeplyNestedLiterals:
-    Return: String
+    Return: Literal(String("all success codes"))
   Function NonExhaustiveFullResultMissingOne:
     Return: String
     Errors:
       - Non-exhaustive match on FullResult: missing Pending
   Function ExhaustiveSingletonInt:
-    Return: String
+    Return: Literal(String("OK"))
   Function NonExhaustiveClassPlusLiteralMissingLiteral:
     Return: String
     Errors:
       - Non-exhaustive match on SuccessOr200: missing 200
   Function ExhaustiveNullableEnumWithTypedPattern:
-    Return: String
+    Return: Union([Literal(String("some status")), Literal(String("no status"))])
   Function DuplicateStringLiteral:
-    Return: String
+    Return: Union([Literal(String("first user")), Literal(String("second user")), Literal(String("assistant")), Literal(String("system"))])
     Errors:
       - Unreachable match arm
   Function NonExhaustiveEnumMissingOne:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive"))])
     Errors:
       - Non-exhaustive match on Status: missing Status.Pending
   Function MatchComplexScrutinee:
-    Return: String
+    Return: Union([Literal(String("x was 0")), Literal(String("x was 1")), Literal(String("other"))])
   Function ExhaustiveOptional:
-    Return: String
+    Return: Union([Literal(String("has value")), Literal(String("no value"))])
   Function NonExhaustiveCustomBoolMissing:
-    Return: String
+    Return: Literal(String("yes"))
     Errors:
       - Non-exhaustive match on CustomBool: missing false
   Function NonExhaustiveMixedLiterals:
-    Return: String
+    Return: Union([Literal(String("http ok")), Literal(String("string success"))])
     Errors:
       - Non-exhaustive match on MixedLiterals: missing true
   Function NonExhaustiveClassPlusLiteralMissingClass:
-    Return: String
+    Return: Literal(String("http ok"))
     Errors:
       - Non-exhaustive match on SuccessOr200: missing Success
   Function UnreachableAfterCatchAll:
-    Return: String
+    Return: Union([Literal(String("catch all")), Literal(String("never reached"))])
     Errors:
       - Unreachable match arm
   Function OptionalWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("no value")), Literal(String("has value"))])
   Function DuplicateBoolLiteral:
-    Return: String
+    Return: Union([Literal(String("first true")), Literal(String("second true")), Literal(String("false"))])
     Errors:
       - Unreachable match arm
   Function OverlappingTypedPatterns:
-    Return: String
+    Return: Union([Literal(String("success")), Literal(String("covers failure only (success already handled)"))])
   Function StringLiteralAfterStringType:
-    Return: String
+    Return: Union([Literal(String("any string")), Literal(String("unreachable"))])
     Errors:
       - Unreachable match arm
   Function NestedEnumVariantUnions:
-    Return: String
+    Return: Literal(String("all statuses"))
   Function UnionPatternCoversAll:
-    Return: String
+    Return: Literal(String("covered"))
   Function ExhaustiveWithUnderscore:
-    Return: Int
+    Return: Union([Literal(Int(100)), Literal(Int(200)), Literal(Int(0))])
   Function PartialUnionPatternCoverage:
-    Return: String
+    Return: Literal(String("not pending"))
     Errors:
       - Non-exhaustive match on FullResult: missing Pending
   Function NonExhaustiveStringLiteral:
-    Return: String
+    Return: Union([Literal(String("User")), Literal(String("Assistant"))])
     Errors:
       - Non-exhaustive match on Role: missing "system"
   Function MatchFunctionCallScrutinee:
-    Return: String
+    Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending"))])
   Function StringLiteralWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("User message")), Literal(String("Assistant message")), Literal(String("Other"))])
   Function NonExhaustiveEnumMissingMultiple:
-    Return: String
+    Return: Literal(String("active"))
     Errors:
       - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
   Function MixedPatterns:
-    Return: String
+    Return: Union([Literal(String("zero")), Literal(String("one")), Literal(String("positive")), Literal(String("negative"))])
   Function NonExhaustiveIntLiteral:
-    Return: String
+    Return: Union([Literal(String("OK")), Literal(String("Created"))])
     Errors:
       - Non-exhaustive match on SuccessCode: missing 204
   Function LiteralAfterTypedPattern:
-    Return: String
+    Return: Union([Literal(String("int")), Literal(String("unreachable"))])
     Errors:
       - Unreachable match arm
   Function EnumVariantUnionWithCatchAll:
-    Return: String
+    Return: Union([Literal(String("actionable")), Literal(String("other"))])

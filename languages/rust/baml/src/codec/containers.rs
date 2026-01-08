@@ -10,8 +10,8 @@ use crate::{
     codec::traits::BamlSerializeMapKey,
     error::BamlError,
     proto::baml_cffi_v1::{
-        CffiValueHolder, HostListValue, HostMapEntry, HostMapValue, HostValue, cffi_value_holder,
-        host_map_entry, host_value,
+        cffi_value_holder, host_map_entry, host_value, CffiValueHolder, HostListValue,
+        HostMapEntry, HostMapValue, HostValue,
     },
 };
 

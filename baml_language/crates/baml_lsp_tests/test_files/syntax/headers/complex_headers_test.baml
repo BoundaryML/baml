@@ -78,15 +78,13 @@ function ForLoopWithHeaders() -> int {
 //     │     Note: Error code: E0028
 // ────╯
 // Error: Expected `string`, found `int`
-//     ╭─[ headers_complex_headers_test.baml:2:39 ]
+//     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │
-//   2 │ ╭─▶ function ComplexHeaderTest() -> string {
-//     ┆ ┆   
-//  44 │ ├─▶ }
-//     │ │       
-//     │ ╰─────── Expected `string`, found `int`
-//     │     
-//     │     Note: Error code: E0001
+//  43 │     final_result
+//     │     ──────┬─────  
+//     │           ╰─────── Expected `string`, found `int`
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯
 // Error: Statement must end with a semicolon.
 //     ╭─[ headers_complex_headers_test.baml:52:5 ]

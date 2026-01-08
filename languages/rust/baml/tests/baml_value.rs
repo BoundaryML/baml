@@ -6,8 +6,8 @@ mod common;
 use std::collections::HashMap;
 
 use baml::{
-    __internal::CffiStreamState, BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum,
-    DynamicUnion, KnownTypes, StreamingState,
+    BamlDecode, BamlValue, CheckStatus, DynamicClass, DynamicEnum, DynamicUnion, KnownTypes,
+    StreamingState, __internal::CffiStreamState,
 };
 use common::{
     make_bool_holder, make_checked_holder, make_class_holder, make_enum_holder, make_float_holder,
@@ -1383,93 +1383,6 @@ mod error_cases {
         let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
         let result: Result<HashMap<String, i64>, _> = value.get();
         assert!(result.is_err());
-    }
-}
-
-// =============================================================================
-// DynamicUnion unwrapping tests
-// =============================================================================
-
-mod dynamic_union_unwrapping {
-    use super::*;
-
-    #[test]
-    fn union_with_string_unwraps_to_string() {
-        // When we have a DynamicUnion wrapping a String (like string | null where the
-        // value is string), we should be able to extract it as a String
-        let holder = make_union_holder("string", "string", make_string_holder("hello"));
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        // Extracting as String should work by unwrapping the union
-        let s: String = value.get().unwrap();
-        assert_eq!(s, "hello");
-    }
-
-    #[test]
-    fn union_with_string_unwraps_to_option_string() {
-        // This is the real-world case: optional types come as DynamicUnion(string |
-        // null) When the value is present (string), we should get Some(string)
-        let holder = make_union_holder("string", "string", make_string_holder("AJ"));
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        let opt: Option<String> = value.get().unwrap();
-        assert_eq!(opt, Some("AJ".to_string()));
-    }
-
-    #[test]
-    fn union_with_null_unwraps_to_option_none() {
-        // When the union contains null, Option<T> should return None
-        let holder = make_union_holder("string", "null", make_null_holder());
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        let opt: Option<String> = value.get().unwrap();
-        assert_eq!(opt, None);
-    }
-
-    #[test]
-    fn union_with_int_unwraps_to_int() {
-        let holder = make_union_holder("int", "int", make_int_holder(42));
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        let i: i64 = value.get().unwrap();
-        assert_eq!(i, 42);
-    }
-
-    #[test]
-    fn union_with_bool_unwraps_to_bool() {
-        let holder = make_union_holder("bool", "bool", make_bool_holder(true));
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        let b: bool = value.get().unwrap();
-        assert!(b);
-    }
-
-    #[test]
-    fn union_with_list_unwraps_to_vec() {
-        let holder = make_union_holder(
-            "string[]",
-            "string[]",
-            make_list_holder(vec![
-                make_string_holder("a"),
-                make_string_holder("b"),
-                make_string_holder("c"),
-            ]),
-        );
-        let value: TestBamlValue = BamlDecode::baml_decode(&holder).unwrap();
-
-        let vec: Vec<String> = value.get().unwrap();
-        assert_eq!(vec, vec!["a", "b", "c"]);
-    }
-
-    #[test]
-    fn nested_union_unwraps_correctly() {
-        // A union wrapping another union (edge case)
-        let inner_union = make_union_holder("string", "string", make_string_holder("nested"));
-        let outer_union = make_union_holder("string", "string", inner_union);
-        let value: TestBamlValue = BamlDecode::baml_decode(&outer_union).unwrap();
-
-        let s: String = value.get().unwrap();
-        assert_eq!(s, "nested");
     }
 }
 

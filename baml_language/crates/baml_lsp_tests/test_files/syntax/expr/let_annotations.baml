@@ -25,20 +25,20 @@ function Ok() -> int {
 //----
 //- diagnostics
 // Error: Expected `int`, found `float`
-//    ╭─[ expr_let_annotations.baml:5:10 ]
+//    ╭─[ expr_let_annotations.baml:5:17 ]
 //    │
 //  5 │   let y : int = 10.0;
-//    │          ──┬─  
-//    │            ╰─── Expected `int`, found `float`
+//    │                 ──┬─  
+//    │                   ╰─── Expected `int`, found `float`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
 // Error: Expected `int`, found `string`
-//    ╭─[ expr_let_annotations.baml:6:9 ]
+//    ╭─[ expr_let_annotations.baml:6:15 ]
 //    │
 //  6 │   let c: int = "hello";
-//    │         ──┬─  
-//    │           ╰─── Expected `int`, found `string`
+//    │               ────┬───  
+//    │                   ╰───── Expected `int`, found `string`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 use std::{
     collections::HashMap,
-    ffi::{CStr, CString, c_void},
+    ffi::{c_void, CStr, CString},
 };
 
 use prost::Message;
@@ -483,11 +483,6 @@ fn json_encode_map(map: &HashMap<String, String>) -> Result<String, BamlError> {
 mod tests {
     use super::*;
 
-    /// Escape a string for JSON encoding
-    fn json_escape_string(s: &str) -> String {
-        serde_json::json!(s).to_string()
-    }
-
     #[test]
     fn test_json_encode_empty_map() {
         let map: HashMap<String, String> = HashMap::new();
@@ -501,29 +496,5 @@ mod tests {
         map.insert("key".to_string(), "value".to_string());
         let result = json_encode_map(&map).unwrap();
         assert_eq!(result, "{\"key\":\"value\"}");
-    }
-
-    #[test]
-    fn test_json_escape_quotes() {
-        let escaped = json_escape_string("hello \"world\"");
-        assert_eq!(escaped, "hello \\\"world\\\"");
-    }
-
-    #[test]
-    fn test_json_escape_backslash() {
-        let escaped = json_escape_string("path\\to\\file");
-        assert_eq!(escaped, "path\\\\to\\\\file");
-    }
-
-    #[test]
-    fn test_json_escape_newlines() {
-        let escaped = json_escape_string("line1\nline2\rline3");
-        assert_eq!(escaped, "line1\\nline2\\rline3");
-    }
-
-    #[test]
-    fn test_json_escape_tabs() {
-        let escaped = json_escape_string("col1\tcol2");
-        assert_eq!(escaped, "col1\\tcol2");
     }
 }

@@ -64,15 +64,13 @@ function UseMapTypecheck() -> int {
 //    │ Note: Error code: E0028
 // ───╯
 // Error: Expected `map<int, string>`, found `string`
-//    ╭─[ maps_key_and_value_typecheck.baml:2:45 ]
+//    ╭─[ maps_key_and_value_typecheck.baml:3:15 ]
 //    │
-//  2 │ ╭─▶ function CreateMapExpr() -> map<int, string> {
-//    ┆ ┆   
-//  4 │ ├─▶ }
-//    │ │       
-//    │ ╰─────── Expected `map<int, string>`, found `string`
-//    │     
-//    │     Note: Error code: E0001
+//  3 │     { (1 + 1): "2" }
+//    │               ──┬─  
+//    │                 ╰─── Expected `map<int, string>`, found `string`
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯
 // Error: Type `map<int, string>` has no field `has`
 //    ╭─[ maps_key_and_value_typecheck.baml:8:9 ]
@@ -83,6 +81,15 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0007
 // ───╯
+// Error: Expected `int`, found `"string"`
+//     ╭─[ maps_key_and_value_typecheck.baml:18:5 ]
+//     │
+//  18 │     map["string"]
+//     │     ──────┬──────  
+//     │           ╰──────── Expected `int`, found `"string"`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
 // Error: Expected `int`, found `string`
 //     ╭─[ maps_key_and_value_typecheck.baml:18:5 ]
 //     │
@@ -91,15 +98,4 @@ function UseMapTypecheck() -> int {
 //     │           ╰──────── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `int`, found `string`
-//     ╭─[ maps_key_and_value_typecheck.baml:16:34 ]
-//     │
-//  16 │ ╭─▶ function UseMapTypecheck() -> int {
-//     ┆ ┆   
-//  19 │ ├─▶ }
-//     │ │       
-//     │ ╰─────── Expected `int`, found `string`
-//     │     
-//     │     Note: Error code: E0001
 // ────╯

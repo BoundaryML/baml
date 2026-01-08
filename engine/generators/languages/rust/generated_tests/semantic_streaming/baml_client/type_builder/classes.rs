@@ -27,9 +27,9 @@ impl ClassWithBlockDoneClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class ClassWithBlockDone type lookup failed")
+        self.inner.as_type().expect(
+            "ClassWithBlockDone is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -38,18 +38,14 @@ impl ClassWithBlockDoneClassBuilder {
 
     /// Access the `i_16_digits` field builder.
     pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("i_16_digits")
-            .expect("field i_16_digits lookup failed")
-            .expect("field i_16_digits is defined in schema")
+        self.inner.get_property("i_16_digits")
+            .expect("ClassWithBlockDone.i_16_digits is statically defined in .baml and should always be present")
     }
 
     /// Access the `s_20_words` field builder.
     pub fn property_s_20_words(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("s_20_words")
-            .expect("field s_20_words lookup failed")
-            .expect("field s_20_words is defined in schema")
+        self.inner.get_property("s_20_words")
+            .expect("ClassWithBlockDone.s_20_words is statically defined in .baml and should always be present")
     }
 }
 
@@ -77,7 +73,7 @@ impl ClassWithoutDoneClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class ClassWithoutDone type lookup failed")
+            .expect("ClassWithoutDone is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -86,18 +82,14 @@ impl ClassWithoutDoneClassBuilder {
 
     /// Access the `i_16_digits` field builder.
     pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("i_16_digits")
-            .expect("field i_16_digits lookup failed")
-            .expect("field i_16_digits is defined in schema")
+        self.inner.get_property("i_16_digits")
+            .expect("ClassWithoutDone.i_16_digits is statically defined in .baml and should always be present")
     }
 
     /// Access the `s_20_words` field builder.
     pub fn property_s_20_words(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("s_20_words")
-            .expect("field s_20_words lookup failed")
-            .expect("field s_20_words is defined in schema")
+        self.inner.get_property("s_20_words")
+            .expect("ClassWithoutDone.s_20_words is statically defined in .baml and should always be present")
     }
 }
 
@@ -123,9 +115,9 @@ impl SemanticContainerClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class SemanticContainer type lookup failed")
+        self.inner.as_type().expect(
+            "SemanticContainer is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -134,66 +126,52 @@ impl SemanticContainerClassBuilder {
 
     /// Access the `sixteen_digit_number` field builder.
     pub fn property_sixteen_digit_number(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("sixteen_digit_number")
-            .expect("field sixteen_digit_number lookup failed")
-            .expect("field sixteen_digit_number is defined in schema")
+        self.inner.get_property("sixteen_digit_number")
+            .expect("SemanticContainer.sixteen_digit_number is statically defined in .baml and should always be present")
     }
 
     /// Access the `string_with_twenty_words` field builder.
     pub fn property_string_with_twenty_words(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("string_with_twenty_words")
-            .expect("field string_with_twenty_words lookup failed")
-            .expect("field string_with_twenty_words is defined in schema")
+        self.inner.get_property("string_with_twenty_words")
+            .expect("SemanticContainer.string_with_twenty_words is statically defined in .baml and should always be present")
     }
 
     /// Access the `class_1` field builder.
     pub fn property_class_1(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("class_1")
-            .expect("field class_1 lookup failed")
-            .expect("field class_1 is defined in schema")
+        self.inner.get_property("class_1").expect(
+            "SemanticContainer.class_1 is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `class_2` field builder.
     pub fn property_class_2(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("class_2")
-            .expect("field class_2 lookup failed")
-            .expect("field class_2 is defined in schema")
+        self.inner.get_property("class_2").expect(
+            "SemanticContainer.class_2 is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `class_done_needed` field builder.
     pub fn property_class_done_needed(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("class_done_needed")
-            .expect("field class_done_needed lookup failed")
-            .expect("field class_done_needed is defined in schema")
+        self.inner.get_property("class_done_needed")
+            .expect("SemanticContainer.class_done_needed is statically defined in .baml and should always be present")
     }
 
     /// Access the `class_needed` field builder.
     pub fn property_class_needed(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("class_needed")
-            .expect("field class_needed lookup failed")
-            .expect("field class_needed is defined in schema")
+        self.inner.get_property("class_needed")
+            .expect("SemanticContainer.class_needed is statically defined in .baml and should always be present")
     }
 
     /// Access the `three_small_things` field builder.
     pub fn property_three_small_things(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("three_small_things")
-            .expect("field three_small_things lookup failed")
-            .expect("field three_small_things is defined in schema")
+        self.inner.get_property("three_small_things")
+            .expect("SemanticContainer.three_small_things is statically defined in .baml and should always be present")
     }
 
     /// Access the `final_string` field builder.
     pub fn property_final_string(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("final_string")
-            .expect("field final_string lookup failed")
-            .expect("field final_string is defined in schema")
+        self.inner.get_property("final_string")
+            .expect("SemanticContainer.final_string is statically defined in .baml and should always be present")
     }
 }
 
@@ -221,7 +199,7 @@ impl SmallThingClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class SmallThing type lookup failed")
+            .expect("SmallThing is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -230,17 +208,15 @@ impl SmallThingClassBuilder {
 
     /// Access the `i_16_digits` field builder.
     pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("i_16_digits")
-            .expect("field i_16_digits lookup failed")
-            .expect("field i_16_digits is defined in schema")
+        self.inner.get_property("i_16_digits").expect(
+            "SmallThing.i_16_digits is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `i_8_digits` field builder.
     pub fn property_i_8_digits(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("i_8_digits")
-            .expect("field i_8_digits lookup failed")
-            .expect("field i_8_digits is defined in schema")
+        self.inner.get_property("i_8_digits").expect(
+            "SmallThing.i_8_digits is statically defined in .baml and should always be present",
+        )
     }
 }

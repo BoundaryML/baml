@@ -8,7 +8,7 @@ use once_cell::sync::OnceCell;
 
 use crate::{
     error::{BamlSysError, Result},
-    loader::{LoadedLibrary, VERSION, get_library},
+    loader::{get_library, LoadedLibrary, VERSION},
 };
 
 /// Callback function type for results.

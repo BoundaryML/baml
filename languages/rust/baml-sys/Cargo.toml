@@ -10,7 +10,7 @@ repository = { workspace = true }
 license = { workspace = true }
 description = "BAML FFI bindings with runtime dynamic library loading"
 readme = "README.md"
-keywords = ["baml", "ffi", "bindings"]
+keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
 categories = ["external-ffi-bindings"]
 
 # This crate provides the -sys bindings

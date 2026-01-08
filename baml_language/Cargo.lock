@@ -488,6 +488,7 @@ dependencies = [
  "baml_vir",
  "baml_workspace",
  "la-arena",
+ "log",
  "rustc-hash 2.1.1",
  "salsa",
  "smol_str",

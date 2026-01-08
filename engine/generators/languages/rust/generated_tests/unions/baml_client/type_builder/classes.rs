@@ -27,9 +27,9 @@ impl ExistingSystemComponentClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class ExistingSystemComponent type lookup failed")
+        self.inner.as_type().expect(
+            "ExistingSystemComponent is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -38,42 +38,32 @@ impl ExistingSystemComponentClassBuilder {
 
     /// Access the `id` field builder.
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+        self.inner.get_property("id")
+            .expect("ExistingSystemComponent.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+        self.inner.get_property("name")
+            .expect("ExistingSystemComponent.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `r#type` field builder.
     pub fn property_type(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("type")
-            .expect("field type lookup failed")
-            .expect("field type is defined in schema")
+        self.inner.get_property("type")
+            .expect("ExistingSystemComponent.type is statically defined in .baml and should always be present")
     }
 
     /// Access the `category` field builder.
     pub fn property_category(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("category")
-            .expect("field category lookup failed")
-            .expect("field category is defined in schema")
+        self.inner.get_property("category")
+            .expect("ExistingSystemComponent.category is statically defined in .baml and should always be present")
     }
 
     /// Access the `explanation` field builder.
     pub fn property_explanation(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("explanation")
-            .expect("field explanation lookup failed")
-            .expect("field explanation is defined in schema")
+        self.inner.get_property("explanation")
+            .expect("ExistingSystemComponent.explanation is statically defined in .baml and should always be present")
     }
 }
 
@@ -101,7 +91,7 @@ impl UseMyUnionClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class UseMyUnion type lookup failed")
+            .expect("UseMyUnion is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -112,7 +102,6 @@ impl UseMyUnionClassBuilder {
     pub fn property_u(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("u")
-            .expect("field u lookup failed")
-            .expect("field u is defined in schema")
+            .expect("UseMyUnion.u is statically defined in .baml and should always be present")
     }
 }

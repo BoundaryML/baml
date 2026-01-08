@@ -1,5 +1,9 @@
 ---
+<<<<<<< HEAD
 source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+=======
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
+>>>>>>> origin/canary
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -13795,6 +13799,7 @@ expression: output
    │ Note: Error code: E0011
 ───╯
 
+<<<<<<< HEAD
   [hir] Error: Condition in `while` statement must be wrapped in parentheses.
     ╭─[ very_invalid.baml:8:11 ]
     │
@@ -13827,3 +13832,14 @@ expression: output
     │     
     │     Note: Error code: E0029
 ────╯
+=======
+  [type] Error: Expected `int`, found `void`
+   ╭─[ complex_strings.baml:1:1 ]
+   │
+ 1 │ class StringTorture {
+   │ │ 
+   │ ╰─ Expected `int`, found `void`
+   │ 
+   │ Note: Error code: E0001
+───╯
+>>>>>>> origin/canary

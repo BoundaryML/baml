@@ -734,11 +734,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::Function(name) => {
                 let name_str = name.to_string();
-                if let Some(&global_idx) = self.globals.get(&name_str) {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
-                } else {
-                    panic!("undefined function: {name_str}");
-                }
+                let global_idx = self
+                    .globals
+                    .get(&name_str)
+                    .unwrap_or_else(|| panic!("undefined function: {name_str}"));
+                self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
             }
             Constant::Ty(_) => {
                 let idx = self.add_constant(Value::Null);
@@ -747,19 +747,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Constant::EnumVariant { enum_name, variant } => {
                 // Look up the enum object index
                 let enum_name_str = enum_name.to_string();
-                let enum_obj_idx = self
+                let enum_obj_idx = *self
                     .enum_object_indices
                     .get(&enum_name_str)
-                    .copied()
                     .unwrap_or_else(|| panic!("undefined enum: {enum_name_str}"));
 
                 // Look up the variant index
                 let variant_str = variant.to_string();
-                let variant_idx = self
+                let variant_idx = *self
                     .enum_variants
                     .get(&enum_name_str)
                     .and_then(|variants| variants.get(&variant_str))
-                    .copied()
                     .unwrap_or_else(|| panic!("undefined variant: {enum_name_str}.{variant_str}"));
 
                 // Load variant index onto stack, then allocate variant

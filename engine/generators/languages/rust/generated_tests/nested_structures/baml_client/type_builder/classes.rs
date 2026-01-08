@@ -29,7 +29,7 @@ impl AddressClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Address type lookup failed")
+            .expect("Address is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -40,48 +40,42 @@ impl AddressClassBuilder {
     pub fn property_street(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("street")
-            .expect("field street lookup failed")
-            .expect("field street is defined in schema")
+            .expect("Address.street is statically defined in .baml and should always be present")
     }
 
     /// Access the `city` field builder.
     pub fn property_city(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("city")
-            .expect("field city lookup failed")
-            .expect("field city is defined in schema")
+            .expect("Address.city is statically defined in .baml and should always be present")
     }
 
     /// Access the `state` field builder.
     pub fn property_state(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("state")
-            .expect("field state lookup failed")
-            .expect("field state is defined in schema")
+            .expect("Address.state is statically defined in .baml and should always be present")
     }
 
     /// Access the `country` field builder.
     pub fn property_country(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("country")
-            .expect("field country lookup failed")
-            .expect("field country is defined in schema")
+            .expect("Address.country is statically defined in .baml and should always be present")
     }
 
     /// Access the `postalCode` field builder.
     pub fn property_postalCode(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("postalCode")
-            .expect("field postalCode lookup failed")
-            .expect("field postalCode is defined in schema")
+        self.inner.get_property("postalCode").expect(
+            "Address.postalCode is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `coordinates` field builder.
     pub fn property_coordinates(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("coordinates")
-            .expect("field coordinates lookup failed")
-            .expect("field coordinates is defined in schema")
+        self.inner.get_property("coordinates").expect(
+            "Address.coordinates is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -109,7 +103,7 @@ impl ApprovalClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Approval type lookup failed")
+            .expect("Approval is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -120,32 +114,28 @@ impl ApprovalClassBuilder {
     pub fn property_approver(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("approver")
-            .expect("field approver lookup failed")
-            .expect("field approver is defined in schema")
+            .expect("Approval.approver is statically defined in .baml and should always be present")
     }
 
     /// Access the `date` field builder.
     pub fn property_date(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("date")
-            .expect("field date lookup failed")
-            .expect("field date is defined in schema")
+            .expect("Approval.date is statically defined in .baml and should always be present")
     }
 
     /// Access the `amount` field builder.
     pub fn property_amount(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("amount")
-            .expect("field amount lookup failed")
-            .expect("field amount is defined in schema")
+            .expect("Approval.amount is statically defined in .baml and should always be present")
     }
 
     /// Access the `notes` field builder.
     pub fn property_notes(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("notes")
-            .expect("field notes lookup failed")
-            .expect("field notes is defined in schema")
+            .expect("Approval.notes is statically defined in .baml and should always be present")
     }
 }
 
@@ -173,7 +163,7 @@ impl BudgetClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Budget type lookup failed")
+            .expect("Budget is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -184,32 +174,28 @@ impl BudgetClassBuilder {
     pub fn property_total(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("total")
-            .expect("field total lookup failed")
-            .expect("field total is defined in schema")
+            .expect("Budget.total is statically defined in .baml and should always be present")
     }
 
     /// Access the `spent` field builder.
     pub fn property_spent(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("spent")
-            .expect("field spent lookup failed")
-            .expect("field spent is defined in schema")
+            .expect("Budget.spent is statically defined in .baml and should always be present")
     }
 
     /// Access the `categories` field builder.
     pub fn property_categories(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("categories")
-            .expect("field categories lookup failed")
-            .expect("field categories is defined in schema")
+            .expect("Budget.categories is statically defined in .baml and should always be present")
     }
 
     /// Access the `approvals` field builder.
     pub fn property_approvals(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("approvals")
-            .expect("field approvals lookup failed")
-            .expect("field approvals is defined in schema")
+            .expect("Budget.approvals is statically defined in .baml and should always be present")
     }
 }
 
@@ -237,7 +223,7 @@ impl CompanyClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Company type lookup failed")
+            .expect("Company is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -248,40 +234,35 @@ impl CompanyClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Company.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Company.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `address` field builder.
     pub fn property_address(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("address")
-            .expect("field address lookup failed")
-            .expect("field address is defined in schema")
+            .expect("Company.address is statically defined in .baml and should always be present")
     }
 
     /// Access the `departments` field builder.
     pub fn property_departments(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("departments")
-            .expect("field departments lookup failed")
-            .expect("field departments is defined in schema")
+        self.inner.get_property("departments").expect(
+            "Company.departments is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `metadata` field builder.
     pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("metadata")
-            .expect("field metadata lookup failed")
-            .expect("field metadata is defined in schema")
+            .expect("Company.metadata is statically defined in .baml and should always be present")
     }
 }
 
@@ -309,7 +290,7 @@ impl CompanyMetadataClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class CompanyMetadata type lookup failed")
+            .expect("CompanyMetadata is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -318,42 +299,35 @@ impl CompanyMetadataClassBuilder {
 
     /// Access the `founded` field builder.
     pub fn property_founded(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("founded")
-            .expect("field founded lookup failed")
-            .expect("field founded is defined in schema")
+        self.inner.get_property("founded").expect(
+            "CompanyMetadata.founded is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `industry` field builder.
     pub fn property_industry(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("industry")
-            .expect("field industry lookup failed")
-            .expect("field industry is defined in schema")
+        self.inner.get_property("industry").expect(
+            "CompanyMetadata.industry is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `size` field builder.
     pub fn property_size(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("size")
-            .expect("field size lookup failed")
-            .expect("field size is defined in schema")
+        self.inner.get_property("size").expect(
+            "CompanyMetadata.size is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `certifications` field builder.
     pub fn property_certifications(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("certifications")
-            .expect("field certifications lookup failed")
-            .expect("field certifications is defined in schema")
+        self.inner.get_property("certifications")
+            .expect("CompanyMetadata.certifications is statically defined in .baml and should always be present")
     }
 
     /// Access the `partnerships` field builder.
     pub fn property_partnerships(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("partnerships")
-            .expect("field partnerships lookup failed")
-            .expect("field partnerships is defined in schema")
+        self.inner.get_property("partnerships")
+            .expect("CompanyMetadata.partnerships is statically defined in .baml and should always be present")
     }
 }
 
@@ -381,7 +355,7 @@ impl ComplexNestedClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class ComplexNested type lookup failed")
+            .expect("ComplexNested is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -390,26 +364,23 @@ impl ComplexNestedClassBuilder {
 
     /// Access the `company` field builder.
     pub fn property_company(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("company")
-            .expect("field company lookup failed")
-            .expect("field company is defined in schema")
+        self.inner.get_property("company").expect(
+            "ComplexNested.company is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `employees` field builder.
     pub fn property_employees(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("employees")
-            .expect("field employees lookup failed")
-            .expect("field employees is defined in schema")
+        self.inner.get_property("employees").expect(
+            "ComplexNested.employees is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `projects` field builder.
     pub fn property_projects(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("projects")
-            .expect("field projects lookup failed")
-            .expect("field projects is defined in schema")
+        self.inner.get_property("projects").expect(
+            "ComplexNested.projects is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -437,7 +408,7 @@ impl ContactClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Contact type lookup failed")
+            .expect("Contact is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -448,32 +419,28 @@ impl ContactClassBuilder {
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Contact.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `relationship` field builder.
     pub fn property_relationship(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("relationship")
-            .expect("field relationship lookup failed")
-            .expect("field relationship is defined in schema")
+        self.inner.get_property("relationship").expect(
+            "Contact.relationship is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `phone` field builder.
     pub fn property_phone(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("phone")
-            .expect("field phone lookup failed")
-            .expect("field phone is defined in schema")
+            .expect("Contact.phone is statically defined in .baml and should always be present")
     }
 
     /// Access the `email` field builder.
     pub fn property_email(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("email")
-            .expect("field email lookup failed")
-            .expect("field email is defined in schema")
+            .expect("Contact.email is statically defined in .baml and should always be present")
     }
 }
 
@@ -501,7 +468,7 @@ impl CoordinatesClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Coordinates type lookup failed")
+            .expect("Coordinates is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -510,18 +477,16 @@ impl CoordinatesClassBuilder {
 
     /// Access the `latitude` field builder.
     pub fn property_latitude(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("latitude")
-            .expect("field latitude lookup failed")
-            .expect("field latitude is defined in schema")
+        self.inner.get_property("latitude").expect(
+            "Coordinates.latitude is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `longitude` field builder.
     pub fn property_longitude(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("longitude")
-            .expect("field longitude lookup failed")
-            .expect("field longitude is defined in schema")
+        self.inner.get_property("longitude").expect(
+            "Coordinates.longitude is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -549,7 +514,7 @@ impl DeeplyNestedClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class DeeplyNested type lookup failed")
+            .expect("DeeplyNested is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -558,10 +523,9 @@ impl DeeplyNestedClassBuilder {
 
     /// Access the `level1` field builder.
     pub fn property_level1(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("level1")
-            .expect("field level1 lookup failed")
-            .expect("field level1 is defined in schema")
+        self.inner.get_property("level1").expect(
+            "DeeplyNested.level1 is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -589,7 +553,7 @@ impl DepartmentClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Department type lookup failed")
+            .expect("Department is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -600,48 +564,42 @@ impl DepartmentClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Department.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Department.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `manager` field builder.
     pub fn property_manager(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("manager")
-            .expect("field manager lookup failed")
-            .expect("field manager is defined in schema")
+        self.inner.get_property("manager").expect(
+            "Department.manager is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `members` field builder.
     pub fn property_members(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("members")
-            .expect("field members lookup failed")
-            .expect("field members is defined in schema")
+        self.inner.get_property("members").expect(
+            "Department.members is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `budget` field builder.
     pub fn property_budget(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("budget")
-            .expect("field budget lookup failed")
-            .expect("field budget is defined in schema")
+            .expect("Department.budget is statically defined in .baml and should always be present")
     }
 
     /// Access the `projects` field builder.
     pub fn property_projects(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("projects")
-            .expect("field projects lookup failed")
-            .expect("field projects is defined in schema")
+        self.inner.get_property("projects").expect(
+            "Department.projects is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -669,7 +627,7 @@ impl DisplaySettingsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class DisplaySettings type lookup failed")
+            .expect("DisplaySettings is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -678,26 +636,22 @@ impl DisplaySettingsClassBuilder {
 
     /// Access the `fontSize` field builder.
     pub fn property_fontSize(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("fontSize")
-            .expect("field fontSize lookup failed")
-            .expect("field fontSize is defined in schema")
+        self.inner.get_property("fontSize").expect(
+            "DisplaySettings.fontSize is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `colorScheme` field builder.
     pub fn property_colorScheme(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("colorScheme")
-            .expect("field colorScheme lookup failed")
-            .expect("field colorScheme is defined in schema")
+        self.inner.get_property("colorScheme")
+            .expect("DisplaySettings.colorScheme is statically defined in .baml and should always be present")
     }
 
     /// Access the `layout` field builder.
     pub fn property_layout(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("layout")
-            .expect("field layout lookup failed")
-            .expect("field layout is defined in schema")
+        self.inner.get_property("layout").expect(
+            "DisplaySettings.layout is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -725,7 +679,7 @@ impl EmployeeClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Employee type lookup failed")
+            .expect("Employee is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -736,64 +690,56 @@ impl EmployeeClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Employee.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Employee.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `email` field builder.
     pub fn property_email(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("email")
-            .expect("field email lookup failed")
-            .expect("field email is defined in schema")
+            .expect("Employee.email is statically defined in .baml and should always be present")
     }
 
     /// Access the `role` field builder.
     pub fn property_role(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("role")
-            .expect("field role lookup failed")
-            .expect("field role is defined in schema")
+            .expect("Employee.role is statically defined in .baml and should always be present")
     }
 
     /// Access the `department` field builder.
     pub fn property_department(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("department")
-            .expect("field department lookup failed")
-            .expect("field department is defined in schema")
+        self.inner.get_property("department").expect(
+            "Employee.department is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `skills` field builder.
     pub fn property_skills(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("skills")
-            .expect("field skills lookup failed")
-            .expect("field skills is defined in schema")
+            .expect("Employee.skills is statically defined in .baml and should always be present")
     }
 
     /// Access the `address` field builder.
     pub fn property_address(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("address")
-            .expect("field address lookup failed")
-            .expect("field address is defined in schema")
+            .expect("Employee.address is statically defined in .baml and should always be present")
     }
 
     /// Access the `emergencyContact` field builder.
     pub fn property_emergencyContact(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("emergencyContact")
-            .expect("field emergencyContact lookup failed")
-            .expect("field emergencyContact is defined in schema")
+        self.inner.get_property("emergencyContact").expect(
+            "Employee.emergencyContact is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -821,7 +767,7 @@ impl Level1ClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Level1 type lookup failed")
+            .expect("Level1 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -832,16 +778,14 @@ impl Level1ClassBuilder {
     pub fn property_data(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
-            .expect("field data lookup failed")
-            .expect("field data is defined in schema")
+            .expect("Level1.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `level2` field builder.
     pub fn property_level2(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("level2")
-            .expect("field level2 lookup failed")
-            .expect("field level2 is defined in schema")
+            .expect("Level1.level2 is statically defined in .baml and should always be present")
     }
 }
 
@@ -869,7 +813,7 @@ impl Level2ClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Level2 type lookup failed")
+            .expect("Level2 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -880,16 +824,14 @@ impl Level2ClassBuilder {
     pub fn property_data(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
-            .expect("field data lookup failed")
-            .expect("field data is defined in schema")
+            .expect("Level2.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `level3` field builder.
     pub fn property_level3(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("level3")
-            .expect("field level3 lookup failed")
-            .expect("field level3 is defined in schema")
+            .expect("Level2.level3 is statically defined in .baml and should always be present")
     }
 }
 
@@ -917,7 +859,7 @@ impl Level3ClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Level3 type lookup failed")
+            .expect("Level3 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -928,16 +870,14 @@ impl Level3ClassBuilder {
     pub fn property_data(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
-            .expect("field data lookup failed")
-            .expect("field data is defined in schema")
+            .expect("Level3.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `level4` field builder.
     pub fn property_level4(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("level4")
-            .expect("field level4 lookup failed")
-            .expect("field level4 is defined in schema")
+            .expect("Level3.level4 is statically defined in .baml and should always be present")
     }
 }
 
@@ -965,7 +905,7 @@ impl Level4ClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Level4 type lookup failed")
+            .expect("Level4 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -976,16 +916,14 @@ impl Level4ClassBuilder {
     pub fn property_data(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
-            .expect("field data lookup failed")
-            .expect("field data is defined in schema")
+            .expect("Level4.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `level5` field builder.
     pub fn property_level5(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("level5")
-            .expect("field level5 lookup failed")
-            .expect("field level5 is defined in schema")
+            .expect("Level4.level5 is statically defined in .baml and should always be present")
     }
 }
 
@@ -1013,7 +951,7 @@ impl Level5ClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Level5 type lookup failed")
+            .expect("Level5 is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1024,24 +962,21 @@ impl Level5ClassBuilder {
     pub fn property_data(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
-            .expect("field data lookup failed")
-            .expect("field data is defined in schema")
+            .expect("Level5.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `items` field builder.
     pub fn property_items(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("items")
-            .expect("field items lookup failed")
-            .expect("field items is defined in schema")
+            .expect("Level5.items is statically defined in .baml and should always be present")
     }
 
     /// Access the `mapping` field builder.
     pub fn property_mapping(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("mapping")
-            .expect("field mapping lookup failed")
-            .expect("field mapping is defined in schema")
+            .expect("Level5.mapping is statically defined in .baml and should always be present")
     }
 }
 
@@ -1069,7 +1004,7 @@ impl MetadataClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Metadata type lookup failed")
+            .expect("Metadata is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1078,42 +1013,37 @@ impl MetadataClassBuilder {
 
     /// Access the `createdAt` field builder.
     pub fn property_createdAt(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("createdAt")
-            .expect("field createdAt lookup failed")
-            .expect("field createdAt is defined in schema")
+        self.inner.get_property("createdAt").expect(
+            "Metadata.createdAt is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `updatedAt` field builder.
     pub fn property_updatedAt(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("updatedAt")
-            .expect("field updatedAt lookup failed")
-            .expect("field updatedAt is defined in schema")
+        self.inner.get_property("updatedAt").expect(
+            "Metadata.updatedAt is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `version` field builder.
     pub fn property_version(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("version")
-            .expect("field version lookup failed")
-            .expect("field version is defined in schema")
+            .expect("Metadata.version is statically defined in .baml and should always be present")
     }
 
     /// Access the `tags` field builder.
     pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("tags")
-            .expect("field tags lookup failed")
-            .expect("field tags is defined in schema")
+            .expect("Metadata.tags is statically defined in .baml and should always be present")
     }
 
     /// Access the `attributes` field builder.
     pub fn property_attributes(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("attributes")
-            .expect("field attributes lookup failed")
-            .expect("field attributes is defined in schema")
+        self.inner.get_property("attributes").expect(
+            "Metadata.attributes is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1141,7 +1071,7 @@ impl MilestoneClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Milestone type lookup failed")
+            .expect("Milestone is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1152,40 +1082,35 @@ impl MilestoneClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Milestone.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Milestone.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `dueDate` field builder.
     pub fn property_dueDate(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("dueDate")
-            .expect("field dueDate lookup failed")
-            .expect("field dueDate is defined in schema")
+            .expect("Milestone.dueDate is statically defined in .baml and should always be present")
     }
 
     /// Access the `completed` field builder.
     pub fn property_completed(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("completed")
-            .expect("field completed lookup failed")
-            .expect("field completed is defined in schema")
+        self.inner.get_property("completed").expect(
+            "Milestone.completed is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `tasks` field builder.
     pub fn property_tasks(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("tasks")
-            .expect("field tasks lookup failed")
-            .expect("field tasks is defined in schema")
+            .expect("Milestone.tasks is statically defined in .baml and should always be present")
     }
 }
 
@@ -1211,9 +1136,9 @@ impl NotificationSettingsClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class NotificationSettings type lookup failed")
+        self.inner.as_type().expect(
+            "NotificationSettings is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -1222,34 +1147,28 @@ impl NotificationSettingsClassBuilder {
 
     /// Access the `email` field builder.
     pub fn property_email(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("email")
-            .expect("field email lookup failed")
-            .expect("field email is defined in schema")
+        self.inner.get_property("email")
+            .expect("NotificationSettings.email is statically defined in .baml and should always be present")
     }
 
     /// Access the `push` field builder.
     pub fn property_push(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("push")
-            .expect("field push lookup failed")
-            .expect("field push is defined in schema")
+        self.inner.get_property("push").expect(
+            "NotificationSettings.push is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `sms` field builder.
     pub fn property_sms(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("sms")
-            .expect("field sms lookup failed")
-            .expect("field sms is defined in schema")
+        self.inner.get_property("sms").expect(
+            "NotificationSettings.sms is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `frequency` field builder.
     pub fn property_frequency(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("frequency")
-            .expect("field frequency lookup failed")
-            .expect("field frequency is defined in schema")
+        self.inner.get_property("frequency")
+            .expect("NotificationSettings.frequency is statically defined in .baml and should always be present")
     }
 }
 
@@ -1277,7 +1196,7 @@ impl PreferencesClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Preferences type lookup failed")
+            .expect("Preferences is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1288,24 +1207,21 @@ impl PreferencesClassBuilder {
     pub fn property_theme(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("theme")
-            .expect("field theme lookup failed")
-            .expect("field theme is defined in schema")
+            .expect("Preferences.theme is statically defined in .baml and should always be present")
     }
 
     /// Access the `language` field builder.
     pub fn property_language(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("language")
-            .expect("field language lookup failed")
-            .expect("field language is defined in schema")
+        self.inner.get_property("language").expect(
+            "Preferences.language is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `notifications` field builder.
     pub fn property_notifications(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("notifications")
-            .expect("field notifications lookup failed")
-            .expect("field notifications is defined in schema")
+        self.inner.get_property("notifications").expect(
+            "Preferences.notifications is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1333,7 +1249,7 @@ impl PrivacySettingsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class PrivacySettings type lookup failed")
+            .expect("PrivacySettings is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1342,26 +1258,22 @@ impl PrivacySettingsClassBuilder {
 
     /// Access the `profileVisibility` field builder.
     pub fn property_profileVisibility(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("profileVisibility")
-            .expect("field profileVisibility lookup failed")
-            .expect("field profileVisibility is defined in schema")
+        self.inner.get_property("profileVisibility")
+            .expect("PrivacySettings.profileVisibility is statically defined in .baml and should always be present")
     }
 
     /// Access the `showEmail` field builder.
     pub fn property_showEmail(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("showEmail")
-            .expect("field showEmail lookup failed")
-            .expect("field showEmail is defined in schema")
+        self.inner.get_property("showEmail").expect(
+            "PrivacySettings.showEmail is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `showPhone` field builder.
     pub fn property_showPhone(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("showPhone")
-            .expect("field showPhone lookup failed")
-            .expect("field showPhone is defined in schema")
+        self.inner.get_property("showPhone").expect(
+            "PrivacySettings.showPhone is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1389,7 +1301,7 @@ impl ProfileClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Profile type lookup failed")
+            .expect("Profile is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1400,32 +1312,28 @@ impl ProfileClassBuilder {
     pub fn property_bio(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("bio")
-            .expect("field bio lookup failed")
-            .expect("field bio is defined in schema")
+            .expect("Profile.bio is statically defined in .baml and should always be present")
     }
 
     /// Access the `avatar` field builder.
     pub fn property_avatar(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("avatar")
-            .expect("field avatar lookup failed")
-            .expect("field avatar is defined in schema")
+            .expect("Profile.avatar is statically defined in .baml and should always be present")
     }
 
     /// Access the `social` field builder.
     pub fn property_social(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("social")
-            .expect("field social lookup failed")
-            .expect("field social is defined in schema")
+            .expect("Profile.social is statically defined in .baml and should always be present")
     }
 
     /// Access the `preferences` field builder.
     pub fn property_preferences(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("preferences")
-            .expect("field preferences lookup failed")
-            .expect("field preferences is defined in schema")
+        self.inner.get_property("preferences").expect(
+            "Profile.preferences is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1453,7 +1361,7 @@ impl ProjectClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class Project type lookup failed")
+            .expect("Project is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1464,56 +1372,49 @@ impl ProjectClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Project.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("Project.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
     pub fn property_description(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("description")
-            .expect("field description lookup failed")
-            .expect("field description is defined in schema")
+        self.inner.get_property("description").expect(
+            "Project.description is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `status` field builder.
     pub fn property_status(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("status")
-            .expect("field status lookup failed")
-            .expect("field status is defined in schema")
+            .expect("Project.status is statically defined in .baml and should always be present")
     }
 
     /// Access the `team` field builder.
     pub fn property_team(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("team")
-            .expect("field team lookup failed")
-            .expect("field team is defined in schema")
+            .expect("Project.team is statically defined in .baml and should always be present")
     }
 
     /// Access the `milestones` field builder.
     pub fn property_milestones(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("milestones")
-            .expect("field milestones lookup failed")
-            .expect("field milestones is defined in schema")
+        self.inner.get_property("milestones").expect(
+            "Project.milestones is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `budget` field builder.
     pub fn property_budget(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("budget")
-            .expect("field budget lookup failed")
-            .expect("field budget is defined in schema")
+            .expect("Project.budget is statically defined in .baml and should always be present")
     }
 }
 
@@ -1539,9 +1440,9 @@ impl RecursiveStructureClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class RecursiveStructure type lookup failed")
+        self.inner.as_type().expect(
+            "RecursiveStructure is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -1550,42 +1451,35 @@ impl RecursiveStructureClassBuilder {
 
     /// Access the `id` field builder.
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+        self.inner.get_property("id").expect(
+            "RecursiveStructure.id is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+        self.inner.get_property("name").expect(
+            "RecursiveStructure.name is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `children` field builder.
     pub fn property_children(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("children")
-            .expect("field children lookup failed")
-            .expect("field children is defined in schema")
+        self.inner.get_property("children")
+            .expect("RecursiveStructure.children is statically defined in .baml and should always be present")
     }
 
     /// Access the `parent` field builder.
     pub fn property_parent(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("parent")
-            .expect("field parent lookup failed")
-            .expect("field parent is defined in schema")
+        self.inner.get_property("parent").expect(
+            "RecursiveStructure.parent is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `metadata` field builder.
     pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("metadata")
-            .expect("field metadata lookup failed")
-            .expect("field metadata is defined in schema")
+        self.inner.get_property("metadata")
+            .expect("RecursiveStructure.metadata is statically defined in .baml and should always be present")
     }
 }
 
@@ -1613,7 +1507,7 @@ impl SimpleNestedClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class SimpleNested type lookup failed")
+            .expect("SimpleNested is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1624,24 +1518,21 @@ impl SimpleNestedClassBuilder {
     pub fn property_user(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("user")
-            .expect("field user lookup failed")
-            .expect("field user is defined in schema")
+            .expect("SimpleNested.user is statically defined in .baml and should always be present")
     }
 
     /// Access the `address` field builder.
     pub fn property_address(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("address")
-            .expect("field address lookup failed")
-            .expect("field address is defined in schema")
+        self.inner.get_property("address").expect(
+            "SimpleNested.address is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `metadata` field builder.
     pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("metadata")
-            .expect("field metadata lookup failed")
-            .expect("field metadata is defined in schema")
+        self.inner.get_property("metadata").expect(
+            "SimpleNested.metadata is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1669,7 +1560,7 @@ impl SocialLinksClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class SocialLinks type lookup failed")
+            .expect("SocialLinks is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1678,34 +1569,30 @@ impl SocialLinksClassBuilder {
 
     /// Access the `twitter` field builder.
     pub fn property_twitter(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("twitter")
-            .expect("field twitter lookup failed")
-            .expect("field twitter is defined in schema")
+        self.inner.get_property("twitter").expect(
+            "SocialLinks.twitter is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `github` field builder.
     pub fn property_github(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("github")
-            .expect("field github lookup failed")
-            .expect("field github is defined in schema")
+        self.inner.get_property("github").expect(
+            "SocialLinks.github is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `linkedin` field builder.
     pub fn property_linkedin(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("linkedin")
-            .expect("field linkedin lookup failed")
-            .expect("field linkedin is defined in schema")
+        self.inner.get_property("linkedin").expect(
+            "SocialLinks.linkedin is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `website` field builder.
     pub fn property_website(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("website")
-            .expect("field website lookup failed")
-            .expect("field website is defined in schema")
+        self.inner.get_property("website").expect(
+            "SocialLinks.website is statically defined in .baml and should always be present",
+        )
     }
 }
 
@@ -1731,7 +1618,9 @@ impl TaskClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect("class Task type lookup failed")
+        self.inner
+            .as_type()
+            .expect("Task is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1742,56 +1631,49 @@ impl TaskClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("Task.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `title` field builder.
     pub fn property_title(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
-            .expect("field title lookup failed")
-            .expect("field title is defined in schema")
+            .expect("Task.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
     pub fn property_description(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("description")
-            .expect("field description lookup failed")
-            .expect("field description is defined in schema")
+            .expect("Task.description is statically defined in .baml and should always be present")
     }
 
     /// Access the `assignee` field builder.
     pub fn property_assignee(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("assignee")
-            .expect("field assignee lookup failed")
-            .expect("field assignee is defined in schema")
+            .expect("Task.assignee is statically defined in .baml and should always be present")
     }
 
     /// Access the `priority` field builder.
     pub fn property_priority(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("priority")
-            .expect("field priority lookup failed")
-            .expect("field priority is defined in schema")
+            .expect("Task.priority is statically defined in .baml and should always be present")
     }
 
     /// Access the `status` field builder.
     pub fn property_status(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("status")
-            .expect("field status lookup failed")
-            .expect("field status is defined in schema")
+            .expect("Task.status is statically defined in .baml and should always be present")
     }
 
     /// Access the `subtasks` field builder.
     pub fn property_subtasks(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("subtasks")
-            .expect("field subtasks lookup failed")
-            .expect("field subtasks is defined in schema")
+            .expect("Task.subtasks is statically defined in .baml and should always be present")
     }
 }
 
@@ -1817,7 +1699,9 @@ impl UserClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect("class User type lookup failed")
+        self.inner
+            .as_type()
+            .expect("User is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1828,32 +1712,28 @@ impl UserClassBuilder {
     pub fn property_id(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
-            .expect("field id lookup failed")
-            .expect("field id is defined in schema")
+            .expect("User.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
     pub fn property_name(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
-            .expect("field name lookup failed")
-            .expect("field name is defined in schema")
+            .expect("User.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `profile` field builder.
     pub fn property_profile(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("profile")
-            .expect("field profile lookup failed")
-            .expect("field profile is defined in schema")
+            .expect("User.profile is statically defined in .baml and should always be present")
     }
 
     /// Access the `settings` field builder.
     pub fn property_settings(&self) -> baml::ClassPropertyBuilder {
         self.inner
             .get_property("settings")
-            .expect("field settings lookup failed")
-            .expect("field settings is defined in schema")
+            .expect("User.settings is statically defined in .baml and should always be present")
     }
 }
 
@@ -1881,7 +1761,7 @@ impl UserSettingsClassBuilder {
     pub fn r#type(&self) -> baml::TypeDef {
         self.inner
             .as_type()
-            .expect("class UserSettings type lookup failed")
+            .expect("UserSettings is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -1890,25 +1770,22 @@ impl UserSettingsClassBuilder {
 
     /// Access the `privacy` field builder.
     pub fn property_privacy(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("privacy")
-            .expect("field privacy lookup failed")
-            .expect("field privacy is defined in schema")
+        self.inner.get_property("privacy").expect(
+            "UserSettings.privacy is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `display` field builder.
     pub fn property_display(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("display")
-            .expect("field display lookup failed")
-            .expect("field display is defined in schema")
+        self.inner.get_property("display").expect(
+            "UserSettings.display is statically defined in .baml and should always be present",
+        )
     }
 
     /// Access the `advanced` field builder.
     pub fn property_advanced(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("advanced")
-            .expect("field advanced lookup failed")
-            .expect("field advanced is defined in schema")
+        self.inner.get_property("advanced").expect(
+            "UserSettings.advanced is statically defined in .baml and should always be present",
+        )
     }
 }

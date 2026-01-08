@@ -73,15 +73,15 @@ pub use type_builder::{
 use crate::{
     baml_unreachable,
     codec::{
-        BamlDecode,
         traits::{DecodeHandle, IntoKwargs},
+        BamlDecode,
     },
     error::BamlError,
     ffi,
     proto::baml_cffi_v1::{
+        baml_object_handle, invocation_response, invocation_response_success,
         BamlObjectConstructorInvocation, BamlObjectHandle, BamlObjectMethodInvocation,
         BamlObjectType, BamlPointerType, CffiValueHolder, HostMapEntry, InvocationResponse,
-        baml_object_handle, invocation_response, invocation_response_success,
     },
 };
 
@@ -175,9 +175,23 @@ impl RawObject {
         // Extract pointer from response
         match response.response {
             Some(invocation_response::Response::Success(success)) => {
-                let Some(invocation_response_success::Result::Object(handle)) = success.result
-                else {
-                    return Err(BamlError::internal("expected object handle in response"));
+                let handle = match success.result {
+                    Some(invocation_response_success::Result::Object(handle)) => handle,
+                    Some(invocation_response_success::Result::Objects(_)) => {
+                        return Err(BamlError::internal(
+                            "expected single object handle in response, but got multiple",
+                        ));
+                    }
+                    Some(invocation_response_success::Result::Value(value)) => {
+                        return Err(BamlError::internal(format!(
+                            "expected object handle in response, but got {value:?}",
+                        )))
+                    }
+                    None => {
+                        return Err(BamlError::internal(
+                            "expected object handle in response, but got none",
+                        ));
+                    }
                 };
                 let ptr = extract_ptr_from_handle(&handle)?;
                 Ok(Self {
@@ -286,7 +300,29 @@ impl RawObject {
                 Some(invocation_response_success::Result::Object(handle)) => {
                     Object::decode_handle(handle, self.runtime()).map(Some)
                 }
-                _ => Err(BamlError::internal("expected object handle in response")),
+                Some(invocation_response_success::Result::Objects(_)) => {
+                    return Err(BamlError::internal(
+                        "expected single object handle in response, but got multiple",
+                    ));
+                }
+                Some(invocation_response_success::Result::Value(value)) => {
+                    // allow for null values
+                    match value.value {
+                        Some(crate::__internal::cffi_value_holder::Value::NullValue(_)) | None => {
+                            return Ok(None);
+                        }
+                        _ => {
+                            return Err(BamlError::internal(format!(
+                                "expected object handle in response, but got {value:?}",
+                            )));
+                        }
+                    }
+                }
+                None => {
+                    return Err(BamlError::internal(
+                        "expected object handle in response, but got none",
+                    ));
+                }
             },
             Some(invocation_response::Response::Error(e)) => Err(BamlError::internal(e)),
             None => Ok(None),

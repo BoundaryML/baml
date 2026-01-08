@@ -5,9 +5,9 @@
 use std::ffi::c_void;
 
 use super::{
-    RawObject, RawObjectTrait,
     collector::{StreamTiming, Timing, Usage},
     http::{HTTPRequest, HTTPResponse, SSEResponse},
+    RawObject, RawObjectTrait,
 };
 use crate::{baml_unreachable, codec::traits::DecodeHandle, proto::baml_cffi_v1::BamlObjectType};
 

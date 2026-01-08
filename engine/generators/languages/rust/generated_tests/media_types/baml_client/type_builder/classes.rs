@@ -27,9 +27,9 @@ impl MediaAnalysisResultClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class MediaAnalysisResult type lookup failed")
+        self.inner.as_type().expect(
+            "MediaAnalysisResult is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -38,18 +38,14 @@ impl MediaAnalysisResultClassBuilder {
 
     /// Access the `topics` field builder.
     pub fn property_topics(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("topics")
-            .expect("field topics lookup failed")
-            .expect("field topics is defined in schema")
+        self.inner.get_property("topics")
+            .expect("MediaAnalysisResult.topics is statically defined in .baml and should always be present")
     }
 
     /// Access the `analysisText` field builder.
     pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("analysisText")
-            .expect("field analysisText lookup failed")
-            .expect("field analysisText is defined in schema")
+        self.inner.get_property("analysisText")
+            .expect("MediaAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 }
 
@@ -75,9 +71,9 @@ impl MediaArrayAnalysisResultClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class MediaArrayAnalysisResult type lookup failed")
+        self.inner.as_type().expect(
+            "MediaArrayAnalysisResult is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -86,18 +82,14 @@ impl MediaArrayAnalysisResultClassBuilder {
 
     /// Access the `analysisText` field builder.
     pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("analysisText")
-            .expect("field analysisText lookup failed")
-            .expect("field analysisText is defined in schema")
+        self.inner.get_property("analysisText")
+            .expect("MediaArrayAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `mediaCount` field builder.
     pub fn property_mediaCount(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("mediaCount")
-            .expect("field mediaCount lookup failed")
-            .expect("field mediaCount is defined in schema")
+        self.inner.get_property("mediaCount")
+            .expect("MediaArrayAnalysisResult.mediaCount is statically defined in .baml and should always be present")
     }
 }
 
@@ -123,9 +115,9 @@ impl MediaMapAnalysisResultClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class MediaMapAnalysisResult type lookup failed")
+        self.inner.as_type().expect(
+            "MediaMapAnalysisResult is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -134,26 +126,20 @@ impl MediaMapAnalysisResultClassBuilder {
 
     /// Access the `analysisText` field builder.
     pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("analysisText")
-            .expect("field analysisText lookup failed")
-            .expect("field analysisText is defined in schema")
+        self.inner.get_property("analysisText")
+            .expect("MediaMapAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `keyCount` field builder.
     pub fn property_keyCount(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("keyCount")
-            .expect("field keyCount lookup failed")
-            .expect("field keyCount is defined in schema")
+        self.inner.get_property("keyCount")
+            .expect("MediaMapAnalysisResult.keyCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `keys` field builder.
     pub fn property_keys(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("keys")
-            .expect("field keys lookup failed")
-            .expect("field keys is defined in schema")
+        self.inner.get_property("keys")
+            .expect("MediaMapAnalysisResult.keys is statically defined in .baml and should always be present")
     }
 }
 
@@ -179,9 +165,9 @@ impl MixedMediaAnalysisResultClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class MixedMediaAnalysisResult type lookup failed")
+        self.inner.as_type().expect(
+            "MixedMediaAnalysisResult is statically defined in .baml and should always have a type",
+        )
     }
 
     // =========================================================================
@@ -190,66 +176,50 @@ impl MixedMediaAnalysisResultClassBuilder {
 
     /// Access the `title` field builder.
     pub fn property_title(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("title")
-            .expect("field title lookup failed")
-            .expect("field title is defined in schema")
+        self.inner.get_property("title")
+            .expect("MixedMediaAnalysisResult.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
     pub fn property_description(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("description")
-            .expect("field description lookup failed")
-            .expect("field description is defined in schema")
+        self.inner.get_property("description")
+            .expect("MixedMediaAnalysisResult.description is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasImage` field builder.
     pub fn property_hasImage(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("hasImage")
-            .expect("field hasImage lookup failed")
-            .expect("field hasImage is defined in schema")
+        self.inner.get_property("hasImage")
+            .expect("MixedMediaAnalysisResult.hasImage is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasVideo` field builder.
     pub fn property_hasVideo(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("hasVideo")
-            .expect("field hasVideo lookup failed")
-            .expect("field hasVideo is defined in schema")
+        self.inner.get_property("hasVideo")
+            .expect("MixedMediaAnalysisResult.hasVideo is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasAudio` field builder.
     pub fn property_hasAudio(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("hasAudio")
-            .expect("field hasAudio lookup failed")
-            .expect("field hasAudio is defined in schema")
+        self.inner.get_property("hasAudio")
+            .expect("MixedMediaAnalysisResult.hasAudio is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasPdf` field builder.
     pub fn property_hasPdf(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("hasPdf")
-            .expect("field hasPdf lookup failed")
-            .expect("field hasPdf is defined in schema")
+        self.inner.get_property("hasPdf")
+            .expect("MixedMediaAnalysisResult.hasPdf is statically defined in .baml and should always be present")
     }
 
     /// Access the `additionalImageCount` field builder.
     pub fn property_additionalImageCount(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("additionalImageCount")
-            .expect("field additionalImageCount lookup failed")
-            .expect("field additionalImageCount is defined in schema")
+        self.inner.get_property("additionalImageCount")
+            .expect("MixedMediaAnalysisResult.additionalImageCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `metadataKeys` field builder.
     pub fn property_metadataKeys(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("metadataKeys")
-            .expect("field metadataKeys lookup failed")
-            .expect("field metadataKeys is defined in schema")
+        self.inner.get_property("metadataKeys")
+            .expect("MixedMediaAnalysisResult.metadataKeys is statically defined in .baml and should always be present")
     }
 }
 
@@ -275,9 +245,8 @@ impl OptionalMediaAnalysisResultClassBuilder {
 
     /// Get the class as a type definition.
     pub fn r#type(&self) -> baml::TypeDef {
-        self.inner
-            .as_type()
-            .expect("class OptionalMediaAnalysisResult type lookup failed")
+        self.inner.as_type()
+            .expect("OptionalMediaAnalysisResult is statically defined in .baml and should always have a type")
     }
 
     // =========================================================================
@@ -286,25 +255,19 @@ impl OptionalMediaAnalysisResultClassBuilder {
 
     /// Access the `analysisText` field builder.
     pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("analysisText")
-            .expect("field analysisText lookup failed")
-            .expect("field analysisText is defined in schema")
+        self.inner.get_property("analysisText")
+            .expect("OptionalMediaAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `providedMediaTypes` field builder.
     pub fn property_providedMediaTypes(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("providedMediaTypes")
-            .expect("field providedMediaTypes lookup failed")
-            .expect("field providedMediaTypes is defined in schema")
+        self.inner.get_property("providedMediaTypes")
+            .expect("OptionalMediaAnalysisResult.providedMediaTypes is statically defined in .baml and should always be present")
     }
 
     /// Access the `missingMediaTypes` field builder.
     pub fn property_missingMediaTypes(&self) -> baml::ClassPropertyBuilder {
-        self.inner
-            .get_property("missingMediaTypes")
-            .expect("field missingMediaTypes lookup failed")
-            .expect("field missingMediaTypes is defined in schema")
+        self.inner.get_property("missingMediaTypes")
+            .expect("OptionalMediaAnalysisResult.missingMediaTypes is statically defined in .baml and should always be present")
     }
 }
