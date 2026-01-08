@@ -11,7 +11,7 @@
 
 // Re-export all public APIs
 pub use baml_base::*;
-pub use baml_codegen;
+pub use baml_compiler_bytecode;
 pub use baml_compiler_diagnostics;
 pub use baml_compiler_hir;
 pub use baml_compiler_lexer;

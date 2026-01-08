@@ -45,7 +45,7 @@ pub use crate::vm::{
 ///
 /// This is a stripped-down version of `baml_db::RootDatabase` that implements
 /// just enough to run `compile_files`. This avoids a dependency cycle between
-/// `baml_codegen` and `baml_db`.
+/// `baml_compiler_bytecode` and `baml_db`.
 #[salsa::db]
 #[derive(Clone)]
 pub struct TestDatabase {
@@ -114,7 +114,7 @@ pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
-    baml_codegen::compile_files(&db, &[file])
+    baml_compiler_bytecode::compile_files(&db, &[file])
         .expect("compile_files should succeed for valid test source")
 }
 

@@ -29,7 +29,7 @@ indexmap = "2"
 divan = { workspace = true }
 tokio = { version = "1", features = ["rt", "macros"] }
 baml_tests = { workspace = true }
-baml_codegen = { workspace = true }
+baml_compiler_bytecode = { workspace = true }
 
 [[bench]]
 name = "fib"

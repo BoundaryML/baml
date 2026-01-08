@@ -225,7 +225,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_compiler_tir;
             use baml_db::baml_compiler_vir;
             use baml_db::baml_compiler_mir;
-            use baml_db::baml_codegen;
+            use baml_db::baml_compiler_bytecode;
             use baml_compiler_hir::{function_body, function_signature};
             use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_compiler_tir::pretty::short_display;
@@ -666,7 +666,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
 
             let mut output = String::new();
 
-            match baml_codegen::compile_files(&db, &source_files) {
+            match baml_compiler_bytecode::compile_files(&db, &source_files) {
                 Ok(program) => {
                     writeln!(output, "=== BYTECODE ===").unwrap();
                     writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
@@ -678,7 +678,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                     func_names.sort();
                     for func_name in func_names {
                         if let Some(&idx) = program.function_indices.get(func_name)
-                            && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+                            && let Some(baml_compiler_bytecode::Object::Function(func)) = program.objects.get(idx)
                         {
                             writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
                             let bytecode_table = baml_vm::debug::display_bytecode(

@@ -189,7 +189,7 @@ fn compile_source(source: &str) -> CompileResult {
     db.set_project(vec![file]);
 
     // Use the production compile_files function
-    let program = baml_codegen::compile_files(&db, &[file])
+    let program = baml_compiler_bytecode::compile_files(&db, &[file])
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program

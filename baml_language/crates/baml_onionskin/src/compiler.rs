@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir,
+    FileId, SourceFile, baml_compiler_bytecode, baml_compiler_hir, baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir,
     baml_workspace,
 };
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
@@ -1277,7 +1277,7 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        let program = match baml_codegen::compile_files(&self.db, &files) {
+        let program = match baml_compiler_bytecode::compile_files(&self.db, &files) {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
@@ -1324,7 +1324,7 @@ impl CompilerRunner {
         func_names.sort();
         for func_name in func_names {
             if let Some(&idx) = program.function_indices.get(func_name)
-                && let Some(baml_codegen::Object::Function(func)) = program.objects.get(idx)
+                && let Some(baml_compiler_bytecode::Object::Function(func)) = program.objects.get(idx)
             {
                 let func_header = format!(
                     "\nFunction {} (arity: {}, kind: {:?}):",
@@ -1381,7 +1381,7 @@ impl CompilerRunner {
 
         // Compile the program
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_codegen::compile_files(&self.db, &files) {
+        let program = match baml_compiler_bytecode::compile_files(&self.db, &files) {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== VM RUNNER ===").ok();
@@ -1528,7 +1528,7 @@ impl CompilerRunner {
         use baml_vm::{Object, Vm, VmExecState};
 
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_codegen::compile_files(&self.db, &files) {
+        let program = match baml_compiler_bytecode::compile_files(&self.db, &files) {
             Ok(p) => p,
             Err(err) => {
                 self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
