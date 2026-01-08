@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use baml_diagnostics::{RenderConfig, render_diagnostic};
+use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
 use baml_ide::{MarkupKind, hover::hover as lsp_ide_hover};
 use baml_project::ProjectDatabase;
 use text_size::TextSize;

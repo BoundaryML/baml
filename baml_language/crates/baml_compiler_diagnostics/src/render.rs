@@ -8,7 +8,7 @@
 //! ## Example
 //!
 //! ```ignore
-//! use baml_diagnostics::{Diagnostic, DiagnosticFormat, RenderConfig, render_diagnostic};
+//! use baml_compiler_diagnostics::{Diagnostic, DiagnosticFormat, RenderConfig, render_diagnostic};
 //!
 //! let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "Expected int, found string")
 //!     .with_primary_span(span);

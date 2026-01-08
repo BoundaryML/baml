@@ -1,7 +1,7 @@
 //! LSP conversion for BAML diagnostics.
 //!
 //! This module provides conversion from the unified `Diagnostic` type
-//! (from `baml_diagnostics`) to `lsp_types::Diagnostic` for editor integration.
+//! (from `baml_compiler_diagnostics`) to `lsp_types::Diagnostic` for editor integration.
 //!
 //! Following ty's architecture, this conversion logic lives in the LSP server crate,
 //! keeping the diagnostics crate free of LSP dependencies.
@@ -9,7 +9,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_db::FileId;
-use baml_diagnostics::{Diagnostic, Severity};
+use baml_compiler_diagnostics::{Diagnostic, Severity};
 use lsp_types::{DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Url};
 
 use crate::edit::PositionEncoding;
@@ -229,7 +229,7 @@ pub fn compute_line_starts(source: &str) -> Vec<u32> {
 #[cfg(test)]
 mod tests {
     use baml_db::Span;
-    use baml_diagnostics::DiagnosticId;
+    use baml_compiler_diagnostics::DiagnosticId;
     use text_size::TextRange;
 
     use super::*;

@@ -6,7 +6,7 @@
 //! - Required property checking
 
 use baml_base::Name;
-use baml_diagnostics::HirDiagnostic;
+use baml_compiler_diagnostics::HirDiagnostic;
 use baml_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 

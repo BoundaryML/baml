@@ -18,7 +18,7 @@
 //! ## Usage
 //!
 //! ```ignore
-//! use baml_diagnostics::{ParseError, ToDiagnostic, RenderConfig, render_diagnostic};
+//! use baml_compiler_diagnostics::{ParseError, ToDiagnostic, RenderConfig, render_diagnostic};
 //!
 //! let error = ParseError::UnexpectedToken { ... };
 //! let diagnostic = error.to_diagnostic();

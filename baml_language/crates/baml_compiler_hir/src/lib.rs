@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use baml_base::{FileId, Name, SourceFile, Span};
-use baml_diagnostics::{HirDiagnostic, NameError};
+use baml_compiler_diagnostics::{HirDiagnostic, NameError};
 use baml_parser::syntax_tree;
 use baml_syntax::SyntaxNode;
 use rowan::{SyntaxToken, TextRange, ast::AstNode};

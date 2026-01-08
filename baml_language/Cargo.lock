@@ -331,11 +331,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_diagnostics"
+version = "0.0.0"
+dependencies = [
+ "ariadne",
+ "baml_base",
+ "baml_workspace",
+ "salsa",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler_hir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
- "baml_diagnostics",
+ "baml_compiler_diagnostics",
  "baml_parser",
  "baml_syntax",
  "baml_workspace",
@@ -377,8 +388,8 @@ name = "baml_compiler_tir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
- "baml_diagnostics",
  "baml_vm",
  "baml_workspace",
  "salsa",
@@ -392,28 +403,17 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_codegen",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_lexer",
  "baml_compiler_mir",
  "baml_compiler_tir",
- "baml_diagnostics",
  "baml_parser",
  "baml_syntax",
  "baml_vir",
  "baml_workspace",
  "rowan",
  "salsa",
-]
-
-[[package]]
-name = "baml_diagnostics"
-version = "0.0.0"
-dependencies = [
- "ariadne",
- "baml_base",
- "baml_workspace",
- "salsa",
- "text-size",
 ]
 
 [[package]]
@@ -432,8 +432,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum 0.8.7",
+ "baml_compiler_diagnostics",
  "baml_db",
- "baml_diagnostics",
  "baml_ide",
  "baml_lsp_types",
  "baml_project",
@@ -484,8 +484,8 @@ dependencies = [
 name = "baml_lsp_tests"
 version = "0.0.0"
 dependencies = [
+ "baml_compiler_diagnostics",
  "baml_db",
- "baml_diagnostics",
  "baml_ide",
  "baml_project",
  "prettyplease",
@@ -518,12 +518,12 @@ dependencies = [
  "ariadne",
  "baml_base",
  "baml_codegen",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_lexer",
  "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
- "baml_diagnostics",
  "baml_parser",
  "baml_project",
  "baml_vir",
@@ -545,8 +545,8 @@ name = "baml_parser"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_diagnostics",
  "baml_compiler_lexer",
- "baml_diagnostics",
  "baml_syntax",
  "rowan",
  "salsa",
@@ -557,11 +557,11 @@ dependencies = [
 name = "baml_project"
 version = "0.0.0"
 dependencies = [
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
- "baml_diagnostics",
  "baml_workspace",
  "lsp-types",
  "salsa",
@@ -583,11 +583,11 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_codegen",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
- "baml_diagnostics",
  "baml_project",
  "baml_vm",
  "baml_workspace",
@@ -607,9 +607,9 @@ name = "baml_vir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_tir",
- "baml_diagnostics",
  "insta",
  "la-arena",
  "pretty_assertions",

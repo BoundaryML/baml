@@ -15,7 +15,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_db::{FileId, SourceFile, baml_parser};
-use baml_diagnostics::{Diagnostic, ToDiagnostic};
+use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
 };

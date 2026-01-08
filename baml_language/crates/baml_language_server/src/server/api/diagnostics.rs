@@ -1,7 +1,7 @@
 //! Diagnostics implementation using the centralized `LspDatabase::check()` method.
 //!
 //! This replaces the previous manual diagnostic collection with the unified
-//! `Diagnostic` type from `baml_diagnostics`, eliminating code duplication
+//! `Diagnostic` type from `baml_compiler_diagnostics`, eliminating code duplication
 //! with the test infrastructure (`baml_lsp_tests`).
 
 use std::{collections::HashMap, sync::Arc};

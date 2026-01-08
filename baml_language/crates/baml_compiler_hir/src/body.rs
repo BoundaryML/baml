@@ -6,7 +6,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_base::{FileId, Span};
-use baml_diagnostics::HirDiagnostic;
+use baml_compiler_diagnostics::HirDiagnostic;
 use baml_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
 use rowan::{TextRange, ast::AstNode};

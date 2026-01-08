@@ -31,6 +31,6 @@ baml_compiler_tir = { workspace = true }
 baml_vir = { workspace = true }
 baml_compiler_mir = { workspace = true }
 baml_codegen = { workspace = true }
-baml_diagnostics = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
 
 # No dev-dependencies needed anymore!

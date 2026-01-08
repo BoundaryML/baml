@@ -229,7 +229,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_compiler_hir::{function_body, function_signature};
             use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_compiler_tir::pretty::short_display;
-            use baml_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
+            use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
@@ -578,7 +578,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_05_diagnostics() {
-            use baml_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
+            use baml_compiler_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
             use baml_project::collect_diagnostics;
             use std::path::PathBuf;
 

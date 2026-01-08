@@ -12,7 +12,7 @@ use baml_db::{
     FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_parser, baml_syntax, baml_compiler_tir,
     baml_workspace,
 };
-use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
+use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
 use baml_compiler_hir::{ItemId, function_body, function_signature};
 use baml_project::{ProjectDatabase, collect_diagnostics};
 use baml_syntax::{

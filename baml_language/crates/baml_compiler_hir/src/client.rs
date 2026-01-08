@@ -5,7 +5,7 @@
 //! - `http` configuration block validation
 
 use baml_base::Name;
-use baml_diagnostics::HirDiagnostic;
+use baml_compiler_diagnostics::HirDiagnostic;
 use baml_syntax::ast::{ClientDef, ConfigBlock};
 use rowan::ast::AstNode;
 
