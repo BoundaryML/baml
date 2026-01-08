@@ -272,8 +272,19 @@ pub fn compile_files(
 
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let vir = baml_compiler_vir::lower_from_hir(db, &body, &inference, &resolution_ctx)?;
-                        let mir = baml_compiler_mir::lower(&signature, &vir, db, &classes, &resolution_ctx);
+                        let vir = baml_compiler_vir::lower_from_hir(
+                            db,
+                            &body,
+                            &inference,
+                            &resolution_ctx,
+                        )?;
+                        let mir = baml_compiler_mir::lower(
+                            &signature,
+                            &vir,
+                            db,
+                            &classes,
+                            &resolution_ctx,
+                        );
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {

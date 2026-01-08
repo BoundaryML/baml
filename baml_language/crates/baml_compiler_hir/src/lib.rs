@@ -268,16 +268,18 @@ pub fn function_signature<'db>(
                 None
             }
         }
-        baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().find_map(|method| {
-            let method_name = method.name()?;
-            let class_name = class_node.name();
-            let class_name_text = class_name.as_ref()?.text();
-            if method_name.text() == func_name {
-                Some(lower_method_signature(&method, &func_name, class_name_text))
-            } else {
-                None
-            }
-        }),
+        baml_compiler_syntax::ast::Item::Class(class_node) => {
+            class_node.methods().find_map(|method| {
+                let method_name = method.name()?;
+                let class_name = class_node.name();
+                let class_name_text = class_name.as_ref()?.text();
+                if method_name.text() == func_name {
+                    Some(lower_method_signature(&method, &func_name, class_name_text))
+                } else {
+                    None
+                }
+            })
+        }
         _ => None,
     });
 
@@ -470,7 +472,9 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
                 .items()
                 .flat_map(|item| match item {
                     baml_compiler_syntax::ast::Item::Function(func_node) => vec![func_node],
-                    baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
+                    baml_compiler_syntax::ast::Item::Class(class_node) => {
+                        class_node.methods().collect()
+                    }
                     _ => vec![],
                 })
                 .find(|function_def| {

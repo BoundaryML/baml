@@ -22,7 +22,9 @@
 //! 4. If block has no tail expression, the final result is `Unit`
 
 use baml_base::Span;
-use baml_compiler_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
+use baml_compiler_hir::{
+    ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId,
+};
 use baml_compiler_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
 use rustc_hash::FxHashMap;
@@ -753,7 +755,9 @@ impl<'a> LoweringContext<'a> {
                 value: Box::new(Self::lower_ty(value)),
             },
 
-            baml_compiler_tir::Ty::Union(types) => Ty::Union(types.iter().map(Self::lower_ty).collect()),
+            baml_compiler_tir::Ty::Union(types) => {
+                Ty::Union(types.iter().map(Self::lower_ty).collect())
+            }
 
             baml_compiler_tir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(Self::lower_ty).collect(),
@@ -799,10 +803,12 @@ impl<'a> LoweringContext<'a> {
                 ty: self.lower_type_ref(ty),
             },
             baml_compiler_hir::Pattern::Literal(lit) => Pattern::Literal(Literal::from(lit)),
-            baml_compiler_hir::Pattern::EnumVariant { enum_name, variant } => Pattern::EnumVariant {
-                enum_name: enum_name.clone(),
-                variant: variant.clone(),
-            },
+            baml_compiler_hir::Pattern::EnumVariant { enum_name, variant } => {
+                Pattern::EnumVariant {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                }
+            }
             baml_compiler_hir::Pattern::Union(pats) => {
                 let mut lowered_pats = Vec::with_capacity(pats.len());
                 for &p in pats {

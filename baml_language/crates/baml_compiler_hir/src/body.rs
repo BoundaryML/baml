@@ -434,7 +434,10 @@ impl FunctionBody {
     /// # Arguments
     /// - `func_node`: The function definition AST node
     /// - `file_id`: The file ID for span tracking
-    pub fn lower(func_node: &baml_compiler_syntax::ast::FunctionDef, file_id: FileId) -> Arc<FunctionBody> {
+    pub fn lower(
+        func_node: &baml_compiler_syntax::ast::FunctionDef,
+        file_id: FileId,
+    ) -> Arc<FunctionBody> {
         // Collect parameter names to add to scope so gensym avoids them
         let param_names: Vec<String> = func_node
             .param_list()
@@ -1295,7 +1298,10 @@ impl LoweringContext {
     /// - Body expression (`BLOCK_EXPR` or other expression, or literal token)
     ///
     /// Returns both the lowered arm and its span information.
-    fn lower_match_arm(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> (MatchArm, MatchArmSpans) {
+    fn lower_match_arm(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> (MatchArm, MatchArmSpans) {
         use baml_compiler_syntax::SyntaxKind;
 
         let arm_span = self.span_from_node(node);
@@ -2231,7 +2237,10 @@ impl LoweringContext {
         self.alloc_expr(Expr::Map { entries }, node.text_range())
     }
 
-    fn try_lower_literal_token(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> Option<ExprId> {
+    fn try_lower_literal_token(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> Option<ExprId> {
         // Check if this node contains a value token (literal or identifier)
         node.children_with_tokens()
             .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
@@ -2290,7 +2299,10 @@ impl LoweringContext {
     ///
     /// This handles the case where `PAREN_EXPR` contains only tokens (no child nodes),
     /// such as `(b)` where `b` is a variable reference, or `(42)` where 42 is a literal.
-    fn try_lower_paren_token_content(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> Option<ExprId> {
+    fn try_lower_paren_token_content(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> Option<ExprId> {
         use baml_compiler_syntax::SyntaxKind;
 
         // Look for value tokens inside the parentheses (skip L_PAREN and R_PAREN)
@@ -2312,7 +2324,11 @@ impl LoweringContext {
         None
     }
 
-    fn lower_let_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode, is_watched: bool) -> StmtId {
+    fn lower_let_stmt(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+        is_watched: bool,
+    ) -> StmtId {
         // Use the LetStmt AST wrapper for cleaner access
         let let_stmt = baml_compiler_syntax::ast::LetStmt::cast(node.clone());
 
@@ -2333,7 +2349,9 @@ impl LoweringContext {
                 )
             });
 
-        let type_node = let_stmt.as_ref().and_then(baml_compiler_syntax::LetStmt::ty);
+        let type_node = let_stmt
+            .as_ref()
+            .and_then(baml_compiler_syntax::LetStmt::ty);
 
         // Extract type annotation if present
         let type_annotation = type_node.as_ref().map(TypeRef::from_ast);

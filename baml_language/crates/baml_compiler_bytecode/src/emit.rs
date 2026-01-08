@@ -235,7 +235,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn convert_viz_node_type(mir_type: baml_compiler_mir::VizNodeType) -> baml_vm::VizNodeType {
         match mir_type {
             baml_compiler_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
-            baml_compiler_mir::VizNodeType::HeaderContextEnter => baml_vm::VizNodeType::HeaderContextEnter,
+            baml_compiler_mir::VizNodeType::HeaderContextEnter => {
+                baml_vm::VizNodeType::HeaderContextEnter
+            }
             baml_compiler_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
             baml_compiler_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
             baml_compiler_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,

@@ -8,18 +8,18 @@ use std::{
 };
 
 use anyhow::Result;
-use baml_db::{
-    FileId, SourceFile, baml_compiler_bytecode, baml_compiler_hir, baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir,
-    baml_workspace,
-};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
 use baml_compiler_hir::{ItemId, function_body, function_signature};
-use baml_project::{ProjectDatabase, collect_diagnostics};
 use baml_compiler_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
 use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
+use baml_db::{
+    FileId, SourceFile, baml_compiler_bytecode, baml_compiler_hir, baml_compiler_lexer,
+    baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir, baml_workspace,
+};
+use baml_project::{ProjectDatabase, collect_diagnostics};
 use regex::Regex;
 use rowan::{GreenNode, NodeCache, ast::AstNode};
 use salsa::{Event, EventKind, Setter};
@@ -810,7 +810,8 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
-        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx =
+            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -917,7 +918,8 @@ impl CompilerRunner {
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
-        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx =
+            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -1031,7 +1033,8 @@ impl CompilerRunner {
             }
         }
 
-        let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        let resolution_ctx =
+            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
 
         // Sort files alphabetically
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
@@ -1324,7 +1327,8 @@ impl CompilerRunner {
         func_names.sort();
         for func_name in func_names {
             if let Some(&idx) = program.function_indices.get(func_name)
-                && let Some(baml_compiler_bytecode::Object::Function(func)) = program.objects.get(idx)
+                && let Some(baml_compiler_bytecode::Object::Function(func)) =
+                    program.objects.get(idx)
             {
                 let func_header = format!(
                     "\nFunction {} (arity: {}, kind: {:?}):",
@@ -1803,7 +1807,11 @@ fn write_indent(output: &mut String, indent: usize) {
     output.push_str(&"  ".repeat(indent));
 }
 
-fn format_function(func: &baml_compiler_syntax::ast::FunctionDef, output: &mut String, indent: usize) {
+fn format_function(
+    func: &baml_compiler_syntax::ast::FunctionDef,
+    output: &mut String,
+    indent: usize,
+) {
     write_indent(output, indent);
     writeln!(output, "FUNCTION").ok();
 
@@ -1843,7 +1851,11 @@ fn format_function(func: &baml_compiler_syntax::ast::FunctionDef, output: &mut S
     }
 }
 
-fn format_parameter(param: &baml_compiler_syntax::ast::Parameter, output: &mut String, indent: usize) {
+fn format_parameter(
+    param: &baml_compiler_syntax::ast::Parameter,
+    output: &mut String,
+    indent: usize,
+) {
     write_indent(output, indent);
     writeln!(output, "PARAM").ok();
 
@@ -1908,7 +1920,11 @@ fn format_llm_function_body(
     }
 }
 
-fn format_config_item(item: &baml_compiler_syntax::ast::ConfigItem, output: &mut String, indent: usize) {
+fn format_config_item(
+    item: &baml_compiler_syntax::ast::ConfigItem,
+    output: &mut String,
+    indent: usize,
+) {
     write_indent(output, indent);
     let text = item.syntax().text().to_string();
     // Truncate long config values
@@ -1919,7 +1935,11 @@ fn format_config_item(item: &baml_compiler_syntax::ast::ConfigItem, output: &mut
     }
 }
 
-fn format_block_expr(block: &baml_compiler_syntax::ast::BlockExpr, output: &mut String, indent: usize) {
+fn format_block_expr(
+    block: &baml_compiler_syntax::ast::BlockExpr,
+    output: &mut String,
+    indent: usize,
+) {
     use baml_compiler_syntax::ast::*;
 
     // Iterate through statements in the block
@@ -2058,7 +2078,11 @@ fn format_enum(enum_def: &baml_compiler_syntax::ast::EnumDef, output: &mut Strin
     }
 }
 
-fn format_client(client: &baml_compiler_syntax::ast::ClientDef, output: &mut String, indent: usize) {
+fn format_client(
+    client: &baml_compiler_syntax::ast::ClientDef,
+    output: &mut String,
+    indent: usize,
+) {
     write_indent(output, indent);
     writeln!(output, "CLIENT").ok();
 
@@ -2134,7 +2158,11 @@ fn format_template_string(
     }
 }
 
-fn format_type_alias(alias: &baml_compiler_syntax::ast::TypeAliasDef, output: &mut String, indent: usize) {
+fn format_type_alias(
+    alias: &baml_compiler_syntax::ast::TypeAliasDef,
+    output: &mut String,
+    indent: usize,
+) {
     write_indent(output, indent);
     writeln!(output, "TYPE_ALIAS").ok();
 

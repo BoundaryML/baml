@@ -14,12 +14,12 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
+use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_workspace::Project;
 
 use crate::ProjectDatabase;

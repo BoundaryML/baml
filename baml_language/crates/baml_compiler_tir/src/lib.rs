@@ -14,7 +14,9 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
-use baml_compiler_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
+use baml_compiler_hir::{
+    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
+};
 use baml_workspace::Project;
 
 pub mod builtins;

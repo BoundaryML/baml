@@ -134,8 +134,8 @@ fn format_hir_file(
 ) -> String {
     use std::fmt::Write;
 
-    use baml_db::baml_compiler_hir::ItemId;
     use baml_compiler_hir::{function_body, function_signature};
+    use baml_db::baml_compiler_hir::ItemId;
 
     // Get the ItemTree once and keep it alive for all lookups
     let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, source_file);

@@ -3,8 +3,8 @@
 //! These tests verify that editing BAML files only recomputes the necessary
 //! queries, demonstrating Salsa's "early cutoff" optimization.
 
-use baml_db::{SourceFile, baml_compiler_hir};
 use baml_compiler_hir::{function_body, function_signature};
+use baml_db::{SourceFile, baml_compiler_hir};
 use salsa::Setter;
 
 use super::IncrementalTestDb;

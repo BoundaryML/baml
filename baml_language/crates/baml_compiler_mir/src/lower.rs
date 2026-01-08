@@ -19,7 +19,9 @@ use std::collections::HashMap;
 use baml_base::{Name, Span};
 use baml_compiler_hir::FunctionSignature;
 use baml_compiler_tir::{Ty, TypeResolutionContext};
-use baml_compiler_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
+use baml_compiler_vir::{
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
+};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
@@ -1557,7 +1559,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             let base_ty = body.ty(*base);
             let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-            if let Some((def, _)) = baml_compiler_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
+            if let Some((def, _)) =
+                baml_compiler_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
             {
                 // Found a builtin method - pass receiver as first argument
                 let mut all_args = vec![self.lower_to_operand(*base, body)];
@@ -1743,9 +1746,15 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::Audio => Ty::Audio,
             baml_compiler_vir::Ty::Video => Ty::Video,
             baml_compiler_vir::Ty::Pdf => Ty::Pdf,
-            baml_compiler_vir::Ty::Class(name) | baml_compiler_vir::Ty::Enum(name) => Ty::Named(name.clone()),
-            baml_compiler_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
-            baml_compiler_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_compiler_vir::Ty::Class(name) | baml_compiler_vir::Ty::Enum(name) => {
+                Ty::Named(name.clone())
+            }
+            baml_compiler_vir::Ty::Optional(inner) => {
+                Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
+            }
+            baml_compiler_vir::Ty::List(inner) => {
+                Ty::List(Box::new(Self::lower_typed_ir_ty(inner)))
+            }
             baml_compiler_vir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(Self::lower_typed_ir_ty(key)),
                 value: Box::new(Self::lower_typed_ir_ty(value)),
