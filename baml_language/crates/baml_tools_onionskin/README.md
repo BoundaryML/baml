@@ -19,10 +19,10 @@ Run the tool by specifying a BAML file or directory to watch:
 
 ```bash
 # Watch a single file
-cargo run --bin baml_onionskin -- --from path/to/your/file.baml
+cargo run --bin baml_tools_onionskin -- --from path/to/your/file.baml
 
 # Watch an entire directory
-cargo run --bin baml_onionskin -- --from path/to/your/directory
+cargo run --bin baml_tools_onionskin -- --from path/to/your/directory
 ```
 
 ### Keyboard Shortcuts
@@ -78,7 +78,7 @@ This is useful for:
 
 1. Start watching a file:
    ```bash
-   cargo run --bin baml_onionskin -- --from test.baml
+   cargo run --bin baml_tools_onionskin -- --from test.baml
    ```
 
 2. The TUI shows the lexer output by default
@@ -98,7 +98,7 @@ This is useful for:
 ## Building
 
 ```bash
-cargo build --bin baml_onionskin
+cargo build --bin baml_tools_onionskin
 ```
 
 ## Implementation Details

@@ -548,37 +548,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_onionskin"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arboard",
- "ariadne",
- "baml_base",
- "baml_compiler_bytecode",
- "baml_compiler_diagnostics",
- "baml_compiler_hir",
- "baml_compiler_lexer",
- "baml_compiler_mir",
- "baml_compiler_parser",
- "baml_compiler_tir",
- "baml_compiler_vir",
- "baml_db",
- "baml_project",
- "baml_vm",
- "baml_workspace",
- "clap",
- "crossterm",
- "notify",
- "ratatui",
- "regex",
- "rowan",
- "salsa",
- "similar",
- "text-size",
-]
-
-[[package]]
 name = "baml_project"
 version = "0.0.0"
 dependencies = [
@@ -617,6 +586,37 @@ dependencies = [
  "salsa",
  "syn",
  "walkdir",
+]
+
+[[package]]
+name = "baml_tools_onionskin"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "ariadne",
+ "baml_base",
+ "baml_compiler_bytecode",
+ "baml_compiler_diagnostics",
+ "baml_compiler_hir",
+ "baml_compiler_lexer",
+ "baml_compiler_mir",
+ "baml_compiler_parser",
+ "baml_compiler_tir",
+ "baml_compiler_vir",
+ "baml_db",
+ "baml_project",
+ "baml_vm",
+ "baml_workspace",
+ "clap",
+ "crossterm",
+ "notify",
+ "ratatui",
+ "regex",
+ "rowan",
+ "salsa",
+ "similar",
+ "text-size",
 ]
 
 [[package]]

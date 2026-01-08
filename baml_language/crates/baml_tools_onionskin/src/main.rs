@@ -9,7 +9,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "baml_onionskin")]
+#[command(name = "baml_tools_onionskin")]
 #[command(about = "A live TUI for exploring BAML compiler phases with snapshot diffing")]
 struct Args {
     #[command(subcommand)]
