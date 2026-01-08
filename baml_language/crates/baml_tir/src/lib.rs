@@ -815,7 +815,7 @@ pub fn infer_function_body<'db>(
                 expected: expected_return.clone(),
                 found: trailing_expr_type.clone(),
                 span: body_span,
-                info_span: None,
+                info_span: return_type_span,
             }
         };
         ctx.push_error(error);
