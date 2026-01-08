@@ -38,6 +38,10 @@ inputs:
     description: "Enable Rust cache"
     required: false
     default: "true"
+  github-token:
+    description: "GitHub token for API access (e.g., protoc installation)"
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: "composite"
@@ -111,4 +115,4 @@ runs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        repo-token: ${{ inputs.github-token }}
