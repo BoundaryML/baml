@@ -1,9 +1,5 @@
 ---
-<<<<<<< HEAD
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
-=======
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
->>>>>>> origin/canary
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===

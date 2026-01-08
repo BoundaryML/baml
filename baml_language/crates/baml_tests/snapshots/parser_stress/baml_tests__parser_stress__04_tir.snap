@@ -1,9 +1,5 @@
 ---
-<<<<<<< HEAD
 source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
-=======
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
->>>>>>> origin/canary
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -214,9 +210,4 @@ expression: output
   Function BodyTorture:
     Return: Void
     Errors:
-<<<<<<< HEAD
-      - Expected bool. Found void
       - Missing return expression. Function expects `int` but body has no final expression.
-=======
-      - Expected int. Found void
->>>>>>> origin/canary

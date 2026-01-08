@@ -1,9 +1,5 @@
 ---
-<<<<<<< HEAD
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
-=======
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
->>>>>>> origin/canary
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -32,17 +28,6 @@ expression: output
 ─────╯
 
   [type] Error: Expected `string`, found `int`
-<<<<<<< HEAD
-     ╭─[ edge_cases.baml:110:17 ]
-     │
- 110 │ ╭─▶     //# Before Let
-     ┆ ┆   
- 135 │ ├─▶ function VeryLongHeaderTitle() -> string {
-     │ │                                                
-     │ ╰──────────────────────────────────────────────── Expected `string`, found `int`
-     │     
-     │     Note: Error code: E0001
-=======
      ╭─[ edge_cases.baml:135:15 ]
      │
  135 │ function VeryLongHeaderTitle() -> string {
@@ -50,5 +35,4 @@ expression: output
      │               ╰── Expected `string`, found `int`
      │ 
      │ Note: Error code: E0001
->>>>>>> origin/canary
 ─────╯
