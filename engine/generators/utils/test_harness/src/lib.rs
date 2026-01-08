@@ -87,7 +87,10 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         let _ = std::fs::remove_dir_all(&test_dir);
 
         // copy language-specific sources + baml_src link
-        utils::copy_dir_flat(&dir.join(L::test_name()), &test_dir)?;
+        let lang_dir = dir.join(L::test_name());
+        if lang_dir.exists() {
+            utils::copy_dir_flat(&lang_dir, &test_dir)?;
+        }
         utils::create_symlink(&dir.join("baml_src"), &test_dir.join("baml_src"))?;
 
         let ir = make_test_ir_from_dir(&dir.join("baml_src"))?;
@@ -143,6 +146,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                     }
                     "python" => vec!["ruff check --fix".to_string()],
                     "typescript" => vec![],
+                    "rust" => {
+                        vec![
+                            format!(
+                                "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} cargo test --no-run",
+                                get_dylib_path()?.display()
+                            )
+                            .to_string(),
+                        ]
+                    }
                     // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                     _ => vec![],
                 },
@@ -216,6 +228,15 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 }
                 "python" => vec!["ruff check --fix".to_string()],
                 "typescript" => vec![],
+                "rust" => {
+                    vec![
+                        format!(
+                            "rustfmt baml_client/*.rs 2>/dev/null || true && BAML_LIBRARY_PATH={} RUSTFLAGS=-Awarnings cargo check",
+                            get_dylib_path()?.display()
+                        )
+                        .to_string(),
+                    ]
+                }
                 // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                 _ => vec![],
             },
@@ -242,20 +263,35 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         }
 
         if also_run_tests {
-            if let baml_types::GeneratorOutputType::Go = args.client_type {
-                // let mut cmd = Command::new(format!("./{}", self.project_name));
-                let mut cmd = Command::new("go");
-                cmd.args(vec!["test", "-v"]);
-                cmd.current_dir(&self.src_dir);
-                let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
-                let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
-                let cargo_target_dir = if dylib_path.exists() {
-                    dylib_path
-                } else {
-                    so_path
-                };
-                cmd.env("BAML_LIBRARY_PATH", cargo_target_dir);
-                run_and_stream(&mut cmd)?;
+            let dylib_path = get_dylib_path()?;
+
+            match args.client_type {
+                baml_types::GeneratorOutputType::Go => {
+                    let mut cmd = Command::new("go");
+                    cmd.args(vec!["test", "-v"]);
+                    cmd.current_dir(&self.src_dir);
+                    cmd.env("BAML_LIBRARY_PATH", &dylib_path);
+                    run_and_stream(&mut cmd)?;
+                }
+                baml_types::GeneratorOutputType::Rust => {
+                    let mut cmd = Command::new("cargo");
+                    cmd.args(vec!["test", "-v"]);
+                    cmd.current_dir(&self.src_dir);
+                    cmd.env(
+                        "OPENAI_API_KEY",
+                        std::env::var("OPENAI_API_KEY")
+                            .unwrap_or_else(|_| "$OPENAI_API_KEY_NOT_SET".to_string()),
+                    );
+                    cmd.env("BAML_LIBRARY_PATH", &dylib_path);
+                    cmd.env("RUSTFLAGS", "-Awarnings");
+                    run_and_stream(&mut cmd)?;
+                }
+                _ => {
+                    eprintln!(
+                        "RUN_GENERATOR_TESTS=1 is set but test runner not implemented for {:?}",
+                        args.client_type
+                    );
+                }
             }
         } else {
             eprintln!("Not running! Set RUN_GENERATOR_TESTS=1 to run tests");

@@ -1,0 +1,27 @@
+[package]
+name = "baml_compiler_parser"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
+
+salsa = { workspace = true }
+rowan = { workspace = true }
+text-size = { workspace = true }

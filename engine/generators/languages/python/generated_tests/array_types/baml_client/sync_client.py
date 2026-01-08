@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -50,6 +51,7 @@ class BamlSyncClient:
     def with_options(self,
         tb: typing.Optional[type_builder.TypeBuilder] = None,
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
+        client: typing.Optional[str] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
         tags: typing.Optional[typing.Dict[str, str]] = None,
@@ -60,6 +62,8 @@ class BamlSyncClient:
             options["tb"] = tb
         if client_registry is not None:
             options["client_registry"] = client_registry
+        if client is not None:
+            options["client"] = client
         if collector is not None:
             options["collector"] = collector
         if env is not None:
@@ -89,245 +93,245 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     def TestEmptyArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestEmptyArrays(input=input,
+            __stream__ = self.stream.TestEmptyArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestEmptyArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestEmptyArrays", args={
                 "input": input,
             })
-            return typing.cast(types.SimpleArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestLargeArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestLargeArrays(input=input,
+            __stream__ = self.stream.TestLargeArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestLargeArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestLargeArrays", args={
                 "input": input,
             })
-            return typing.cast(types.SimpleArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestMixedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.MixedArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestMixedArrays(input=input,
+            __stream__ = self.stream.TestMixedArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestMixedArrays", args={
                 "input": input,
             })
-            return typing.cast(types.MixedArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.MixedArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestNestedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.NestedArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestNestedArrays(input=input,
+            __stream__ = self.stream.TestNestedArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNestedArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestNestedArrays", args={
                 "input": input,
             })
-            return typing.cast(types.NestedArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.NestedArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestObjectArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ObjectArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestObjectArrays(input=input,
+            __stream__ = self.stream.TestObjectArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestObjectArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestObjectArrays", args={
                 "input": input,
             })
-            return typing.cast(types.ObjectArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.ObjectArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestSimpleArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SimpleArrays:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestSimpleArrays(input=input,
+            __stream__ = self.stream.TestSimpleArrays(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSimpleArrays", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSimpleArrays", args={
                 "input": input,
             })
-            return typing.cast(types.SimpleArrays, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.SimpleArrays, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevel3DArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[typing.List[str]]]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevel3DArray(input=input,
+            __stream__ = self.stream.TestTopLevel3DArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevel3DArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevel3DArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[typing.List[typing.List[str]]], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[typing.List[typing.List[str]]], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelArrayOfMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Dict[str, int]]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelArrayOfMaps(input=input,
+            __stream__ = self.stream.TestTopLevelArrayOfMaps(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelArrayOfMaps", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelArrayOfMaps", args={
                 "input": input,
             })
-            return typing.cast(typing.List[typing.Dict[str, int]], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[typing.Dict[str, int]], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelBoolArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[bool]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelBoolArray(input=input,
+            __stream__ = self.stream.TestTopLevelBoolArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelBoolArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelBoolArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[bool], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[bool], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelEmptyArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelEmptyArray(input=input,
+            __stream__ = self.stream.TestTopLevelEmptyArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelEmptyArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelEmptyArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[str], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelFloatArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[float]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelFloatArray(input=input,
+            __stream__ = self.stream.TestTopLevelFloatArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelFloatArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelFloatArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[float], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[float], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelIntArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[int]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelIntArray(input=input,
+            __stream__ = self.stream.TestTopLevelIntArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelIntArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelIntArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[int], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[int], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelMixedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Union[str, int, bool]]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelMixedArray(input=input,
+            __stream__ = self.stream.TestTopLevelMixedArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelMixedArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelMixedArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[typing.Union[str, int, bool]], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[typing.Union[str, int, bool]], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelNestedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.List[int]]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelNestedArray(input=input,
+            __stream__ = self.stream.TestTopLevelNestedArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNestedArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNestedArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[typing.List[int]], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[typing.List[int]], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelNullableArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[typing.Optional[str]]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelNullableArray(input=input,
+            __stream__ = self.stream.TestTopLevelNullableArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNullableArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelNullableArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[typing.Optional[str]], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[typing.Optional[str]], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelObjectArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List["types.User"]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelObjectArray(input=input,
+            __stream__ = self.stream.TestTopLevelObjectArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelObjectArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelObjectArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List["types.User"], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List["types.User"], __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestTopLevelStringArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> typing.List[str]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.TestTopLevelStringArray(input=input,
+            __stream__ = self.stream.TestTopLevelStringArray(input=input,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelStringArray", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestTopLevelStringArray", args={
                 "input": input,
             })
-            return typing.cast(typing.List[str], result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(typing.List[str], __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -340,206 +344,206 @@ class BamlStreamClient:
     def TestEmptyArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestEmptyArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestEmptyArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SimpleArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestLargeArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestLargeArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestLargeArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SimpleArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestMixedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.MixedArrays, types.MixedArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestMixedArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestMixedArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.MixedArrays, types.MixedArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.MixedArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.MixedArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestNestedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.NestedArrays, types.NestedArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestNestedArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestNestedArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.NestedArrays, types.NestedArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.NestedArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.NestedArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestObjectArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.ObjectArrays, types.ObjectArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestObjectArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestObjectArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.ObjectArrays, types.ObjectArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.ObjectArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.ObjectArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestSimpleArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSimpleArrays", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSimpleArrays", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[stream_types.SimpleArrays, types.SimpleArrays](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.SimpleArrays, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.SimpleArrays, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevel3DArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[typing.List[typing.List[str]]], typing.List[typing.List[typing.List[str]]]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevel3DArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevel3DArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[typing.List[typing.List[str]]], typing.List[typing.List[typing.List[str]]]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[typing.List[typing.List[str]]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.List[typing.List[str]]], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelArrayOfMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[typing.Dict[str, int]], typing.List[typing.Dict[str, int]]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelArrayOfMaps", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelArrayOfMaps", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[typing.Dict[str, int]], typing.List[typing.Dict[str, int]]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[typing.Dict[str, int]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.Dict[str, int]], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelBoolArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[bool], typing.List[bool]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelBoolArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelBoolArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[bool], typing.List[bool]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[bool], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelEmptyArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[str], typing.List[str]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelEmptyArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelEmptyArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelFloatArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[float], typing.List[float]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelFloatArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelFloatArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[float], typing.List[float]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[float], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[float], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelIntArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[int], typing.List[int]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelIntArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelIntArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[int], typing.List[int]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[int], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelMixedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[typing.Union[str, int, bool]], typing.List[typing.Union[str, int, bool]]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelMixedArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelMixedArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[typing.Union[str, int, bool]], typing.List[typing.Union[str, int, bool]]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[typing.Union[str, int, bool]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.Union[str, int, bool]], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelNestedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[typing.List[int]], typing.List[typing.List[int]]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNestedArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNestedArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[typing.List[int]], typing.List[typing.List[int]]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[typing.List[int]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.List[int]], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelNullableArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[typing.Optional[str]], typing.List[typing.Optional[str]]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNullableArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelNullableArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[typing.Optional[str]], typing.List[typing.Optional[str]]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[typing.Optional[str]], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[typing.Optional[str]], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelObjectArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List["stream_types.User"], typing.List["types.User"]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelObjectArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelObjectArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List["stream_types.User"], typing.List["types.User"]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List["stream_types.User"], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List["types.User"], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def TestTopLevelStringArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[typing.List[str], typing.List[str]]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelStringArray", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestTopLevelStringArray", args={
             "input": input,
         })
         return baml_py.BamlSyncStream[typing.List[str], typing.List[str]](
-          result,
+          __result__,
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -552,122 +556,122 @@ class BamlHttpRequestClient:
     def TestEmptyArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestLargeArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestMixedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestNestedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNestedArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNestedArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestObjectArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestObjectArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestObjectArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestSimpleArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSimpleArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSimpleArrays", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevel3DArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevel3DArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevel3DArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelArrayOfMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelArrayOfMaps", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelArrayOfMaps", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelBoolArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelEmptyArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelFloatArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelIntArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelMixedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMixedArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMixedArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelNestedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelNullableArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNullableArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNullableArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelObjectArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelObjectArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelObjectArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     def TestTopLevelStringArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringArray", args={
             "input": input,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -679,122 +683,122 @@ class BamlHttpStreamRequestClient:
     def TestEmptyArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestEmptyArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestLargeArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestLargeArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestMixedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestMixedArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestNestedArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNestedArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestNestedArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestObjectArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestObjectArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestObjectArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestSimpleArrays(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSimpleArrays", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSimpleArrays", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevel3DArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevel3DArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevel3DArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelArrayOfMaps(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelArrayOfMaps", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelArrayOfMaps", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelBoolArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelBoolArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelEmptyArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelEmptyArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelFloatArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelFloatArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelIntArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelIntArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelMixedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMixedArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelMixedArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelNestedArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNestedArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelNullableArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNullableArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelNullableArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelObjectArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelObjectArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelObjectArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     def TestTopLevelStringArray(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringArray", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestTopLevelStringArray", args={
             "input": input,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

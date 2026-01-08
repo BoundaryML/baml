@@ -1,0 +1,80 @@
+{% if enums.is_empty() %}
+// No enums defined
+{% else %}
+//! Generated enum types.
+
+use baml::{BamlEncode, BamlDecode};
+{% for enum_ in enums %}
+
+{% if let Some(docstring) = enum_.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+{% if enum_.dynamic %}
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[baml(dynamic)]
+{% else %}
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+{% endif %}
+pub enum {{ enum_.name }} {
+{% for (value, docstring) in enum_.values %}
+{% if let Some(docstring) = docstring -%}
+    {{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+    {{ value }},
+{% endfor %}
+{% if enum_.dynamic %}
+    /// Dynamic variant for runtime-added enum values.
+    #[baml(dynamic_variant)]
+    _Dynamic(String),
+{% endif %}
+}
+
+impl Default for {{ enum_.name }} {
+    fn default() -> Self {
+        {% if enum_.values.is_empty() %}
+        // Eventually, we will remove the default trait for enums with no values
+        // But as a temporary solution, we will panic if the enum has no values
+        panic!("{{ enum_.name }} has no values")
+        {% else %}
+        Self::{{ enum_.first_value() }}
+        {% endif %}
+    }
+}
+
+impl std::fmt::Display for {{ enum_.name }} {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+{% for (value, _) in enum_.values %}
+            Self::{{ value }} => write!(f, "{{ value }}"),
+{% endfor %}
+{% if enum_.dynamic %}
+            Self::_Dynamic(s) => write!(f, "{}", s),
+{% endif %}
+        }
+    }
+}
+
+impl std::str::FromStr for {{ enum_.name }} {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+{% for (value, _) in enum_.values %}
+            "{{ value }}" => Ok(Self::{{ value }}),
+{% endfor %}
+{% if enum_.dynamic %}
+            other => Ok(Self::_Dynamic(other.to_string())),
+{% else %}
+            _ => Err(()),
+{% endif %}
+        }
+    }
+}
+
+impl AsRef<{{ enum_.name }}> for {{ enum_.name }} {
+    fn as_ref(&self) -> &{{ enum_.name }} {
+        self
+    }
+}
+{% endfor %}
+{% endif %}

@@ -11,7 +11,7 @@ use internal_baml_diagnostics::Span;
 
 use crate::{
     thir::{Block, ClassConstructorField, Expr, ExprMetadata, Statement, THir},
-    watch::{SharedWatchHandler, WatchNotification},
+    watch::SharedWatchHandler,
 };
 
 // Type alias for pinned boxed futures - conditionally Send for non-WASM targets

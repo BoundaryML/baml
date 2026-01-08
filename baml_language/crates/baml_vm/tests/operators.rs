@@ -161,6 +161,87 @@ fn unary_not() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn negative_int_in_let() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                let x = -5;
+                x
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(-5)),
+    })
+}
+
+#[test]
+fn negative_int_arithmetic() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                -5 + 3
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(-2)),
+    })
+}
+
+#[test]
+fn negative_int_comparison() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> bool {
+                -5 < 0
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn negative_float_in_let() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> float {
+                let x = -2.5;
+                x
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Float(-2.5)),
+    })
+}
+
+#[test]
+fn double_negation() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                --5
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(5)),
+    })
+}
+
+#[test]
+fn double_negation_variable() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                let x = -10;
+                --x
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(-10)),
+    })
+}
+
 // Comparison operators
 #[test]
 fn basic_eq() -> anyhow::Result<()> {

@@ -88,6 +88,7 @@ def main(
     python: bool = typer.Option(False, "--python", help="Bump patch for python"),
     ruby: bool = typer.Option(False, "--ruby", help="Bump patch for ruby"),
     go: bool = typer.Option(False, "--go", help="Bump patch for go"),
+    rust: bool = typer.Option(False, "--rust", help="Bump patch for rust SDK"),
     vscode: bool = typer.Option(False, "--vscode", help="Bump patch for vscode"),
     zed: bool = typer.Option(False, "--zed", help="Bump patch for zed extension"),
     jetbrains: bool = typer.Option(
@@ -102,7 +103,7 @@ def main(
     ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
-    modes = [ts, python, ruby, go, vscode, zed, jetbrains, bump_all]
+    modes = [ts, python, ruby, go, rust, vscode, zed, jetbrains, bump_all]
     if sum(modes) > 1:
         c.print("Error: Only one mode can be enabled.", style="red")
         sys.exit(1)
@@ -185,6 +186,7 @@ def main(
         python,
         ruby,
         go,
+        rust,
         vscode,
         zed,
         jetbrains,
@@ -322,6 +324,7 @@ def perform_version_bumps(
     python: bool,
     ruby: bool,
     go: bool,
+    rust: bool,
     vscode: bool,
     zed: bool,
     jetbrains: bool,
@@ -346,6 +349,7 @@ def perform_version_bumps(
             "typescript",
             "ruby",
             "go",
+            "rust",
             "vscode",
             "zed",
             "integ-tests",
@@ -404,6 +408,13 @@ def perform_version_bumps(
         bump2version(
             "--config-file",
             "./versions/jetbrains.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
+    elif rust:
+        bump2version(
+            "--config-file",
+            "./versions/rust.cfg",
             "patch",
             f"--new-version={new_version}" if new_version else "",
         )

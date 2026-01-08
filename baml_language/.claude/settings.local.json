@@ -6,7 +6,20 @@
       "Bash(RUST_BACKTRACE=1 cargo build:*)",
       "Bash(cargo test:*)",
       "Bash(UPDATE_EXPECT=1 cargo test:*)",
-      "Bash(cargo insta:*)"
+      "Bash(cargo insta:*)",
+      "Bash(jj diff:*)",
+      "Bash(jj show:*)",
+      "Bash(jj log:*)",
+      "Bash(jj cat:*)",
+      "Bash(jj file show:*)",
+      "Bash(cat:*)",
+      "Bash(nix develop:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(cargo clippy:*)",
+      "WebSearch",
+      "Bash(cargo run:*)"
     ]
   }
 }

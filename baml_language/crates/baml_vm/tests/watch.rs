@@ -98,7 +98,6 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -122,7 +121,6 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"

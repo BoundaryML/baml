@@ -31,6 +31,9 @@ pub enum GeneratorOutputType {
 
     #[strum(serialize = "go")]
     Go,
+
+    #[strum(serialize = "rust")]
+    Rust,
 }
 
 impl std::hash::Hash for GeneratorOutputType {
@@ -53,6 +56,7 @@ impl GeneratorOutputType {
             Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
             Self::Go => GeneratorDefaultClientMode::Sync,
+            Self::Rust => GeneratorDefaultClientMode::Sync,
         }
     }
 
@@ -66,6 +70,7 @@ impl GeneratorOutputType {
             Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
             Self::Go => GeneratorDefaultClientMode::Sync,
+            Self::Rust => GeneratorDefaultClientMode::Async,
         }
     }
 }

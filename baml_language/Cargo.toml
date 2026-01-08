@@ -18,22 +18,25 @@ version = "0.0.0"
 [workspace.dependencies]
 # workspace dependencies
 baml_base = { path = "crates/baml_base" }
-baml_codegen = { path = "crates/baml_codegen" }
+baml_builtins = { path = "crates/baml_builtins" }
+baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_db = { path = "crates/baml_db" }
-baml_diagnostics = { path = "crates/baml_diagnostics" }
-baml_hir = { path = "crates/baml_hir" }
-baml_lexer = { path = "crates/baml_lexer" }
-baml_mir = { path = "crates/baml_mir" }
-baml_parser = { path = "crates/baml_parser" }
-baml_onionskin = { path = "crates/baml_onionskin" }
-baml_syntax = { path = "crates/baml_syntax" }
+baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
+baml_compiler_hir = { path = "crates/baml_compiler_hir" }
+baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
+baml_compiler_mir = { path = "crates/baml_compiler_mir" }
+baml_compiler_parser = { path = "crates/baml_compiler_parser" }
+baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
+baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 baml_tests = { path = "crates/baml_tests" }
-baml_tir = { path = "crates/baml_tir" }
-baml_vir = { path = "crates/baml_vir" }
+baml_compiler_tir = { path = "crates/baml_compiler_tir" }
+baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
-baml_language_server = { path = "crates/baml_language_server" }
+baml_ide = { path = "crates/baml_ide" }
+baml_project = { path = "crates/baml_project" }
+baml_lsp = { path = "crates/baml_lsp" }
 
 # external dependencies
 anyhow = { version = "1" }
@@ -61,7 +64,7 @@ reqwest = { version = "0.12.12", features = [
   "stream",
 ] }
 cfg-if = "1.0.0"
-
+paste = "1.0"
 
 tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "env-filter",
@@ -106,7 +109,6 @@ url = "2.5.2"
 tokio = { version = "1.36", features = ["full", "tracing"] }
 console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
 axum = { version = "0.8.4", features = ["ws"] }
-tokio-stream.workspace = true
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
 webbrowser = "1.0.5"

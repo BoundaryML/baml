@@ -138,6 +138,13 @@ fn convert_instruction(
         baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
         baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
         baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
+        baml_vm::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
+            table_idx: *table_idx,
+            default: *default,
+        },
+        baml_vm::Instruction::Discriminant => Instruction::Discriminant,
+        baml_vm::Instruction::TypeTag => Instruction::TypeTag,
+        baml_vm::Instruction::Unreachable => Instruction::Unreachable,
     })
 }
 
@@ -182,7 +189,7 @@ fn compile_source(source: &str) -> CompileResult {
     db.set_project(vec![file]);
 
     // Use the production compile_files function
-    let program = baml_codegen::compile_files(&db, &[file])
+    let program = baml_compiler_emit::compile_files(&db, &[file])
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program

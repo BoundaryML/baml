@@ -82,7 +82,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_lexer/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
             ':baml_language/crates/baml_base/**' \
             ':baml_language/Cargo.toml' \
             ':baml_language/Cargo.lock' \
@@ -98,9 +98,9 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_parser/**' \
-            ':baml_language/crates/baml_syntax/**' \
-            ':baml_language/crates/baml_lexer/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_compiler_syntax/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -114,9 +114,9 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_workspace/**' \
-            ':baml_language/crates/baml_parser/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -131,7 +131,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_thir/**' \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -145,7 +145,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_codegen/**' \
+            ':baml_language/crates/baml_compiler_emit/**' \
             ':baml_language/crates/baml_thir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
@@ -255,7 +255,7 @@ jobs:
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: codspeed-macro
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: |
       (
@@ -289,7 +289,7 @@ jobs:
           tool: cargo-codspeed
 
       - name: "Build benchmarks"
-        run: cargo codspeed build -p baml_tests
+        run: cargo codspeed build -p baml_tests -m walltime
         working-directory: baml_language
 
       - name: "Run benchmarks"

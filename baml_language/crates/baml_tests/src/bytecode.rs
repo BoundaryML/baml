@@ -45,7 +45,7 @@ pub use crate::vm::{
 ///
 /// This is a stripped-down version of `baml_db::RootDatabase` that implements
 /// just enough to run `compile_files`. This avoids a dependency cycle between
-/// `baml_codegen` and `baml_db`.
+/// `baml_compiler_emit` and `baml_db`.
 #[salsa::db]
 #[derive(Clone)]
 pub struct TestDatabase {
@@ -58,17 +58,20 @@ pub struct TestDatabase {
 impl salsa::Database for TestDatabase {}
 
 #[salsa::db]
-impl baml_hir::Db for TestDatabase {
+impl baml_workspace::Db for TestDatabase {
     fn project(&self) -> baml_workspace::Project {
         self.project.expect("project must be set before querying")
     }
 }
 
 #[salsa::db]
-impl baml_tir::Db for TestDatabase {}
+impl baml_compiler_hir::Db for TestDatabase {}
 
 #[salsa::db]
-impl baml_mir::Db for TestDatabase {}
+impl baml_compiler_tir::Db for TestDatabase {}
+
+#[salsa::db]
+impl baml_compiler_mir::Db for TestDatabase {}
 
 impl Default for TestDatabase {
     fn default() -> Self {
@@ -111,7 +114,7 @@ pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
-    baml_codegen::compile_files(&db, &[file])
+    baml_compiler_emit::compile_files(&db, &[file])
         .expect("compile_files should succeed for valid test source")
 }
 
@@ -296,6 +299,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
+            jump_tables: Vec::new(),
         },
         kind: baml_vm::FunctionKind::Exec,
         locals_in_scope: {

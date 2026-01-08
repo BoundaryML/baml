@@ -20,8 +20,9 @@ workspace = true
 [dependencies]
 colored = "2"
 indexmap = "2"
-tokio = { version = "1", features = ["sync"] }
+paste = { workspace = true }
 baml_base = { workspace = true }
+baml_builtins = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1"
@@ -29,7 +30,7 @@ indexmap = "2"
 divan = { workspace = true }
 tokio = { version = "1", features = ["rt", "macros"] }
 baml_tests = { workspace = true }
-baml_codegen = { workspace = true }
+baml_compiler_emit = { workspace = true }
 
 [[bench]]
 name = "fib"

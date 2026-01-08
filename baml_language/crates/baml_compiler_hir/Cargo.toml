@@ -1,0 +1,29 @@
+[package]
+name = "baml_compiler_hir"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+baml_workspace = { workspace = true }
+
+la-arena = { workspace = true }
+rowan = { workspace = true }
+rustc-hash = { workspace = true }
+salsa = { workspace = true }

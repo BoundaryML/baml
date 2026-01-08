@@ -42,7 +42,7 @@ function assign_in_loop() -> int {
   while (i < 5) {
     sum += i;
     i += 1;
-  }
+  };
   return sum;
 }
 

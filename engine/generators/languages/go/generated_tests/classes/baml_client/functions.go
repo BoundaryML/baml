@@ -29,6 +29,14 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"item": item},
 		Env:    getEnvVars(callOpts.env),
@@ -93,6 +101,14 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 	var callOpts callOption
 	for _, opt := range opts {
 		opt(&callOpts)
+	}
+
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
 	}
 
 	args := baml.BamlFunctionArguments{

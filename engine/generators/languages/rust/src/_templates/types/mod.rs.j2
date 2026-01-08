@@ -1,0 +1,53 @@
+//! Generated BAML types.
+
+mod classes;
+mod enums;
+mod unions;
+mod type_aliases;
+
+pub use classes::*;
+pub use enums::*;
+pub use unions::*;
+pub use type_aliases::*;
+
+// Re-export types from baml runtime
+pub use baml::{Audio, Image, Pdf, Video};
+pub use baml::{Checked, StreamState};
+
+/// All known types in this BAML project.
+/// Serves as the compile-time type registry for BamlValue.
+#[derive(Debug, Clone)]
+pub enum Types {
+{% for class in classes %}
+    {{ class.name }}({{ class.name }}),
+{% endfor %}
+{% for enum_ in enums %}
+    {{ enum_.name }}({{ enum_.name }}),
+{% endfor %}
+{% for union_ in unions %}
+    {{ union_.name }}({{ union_.name }}),
+{% endfor %}
+}
+
+impl baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+{% for class in classes %}
+            Types::{{ class.name }}(_) => "{{ class.name }}",
+{% endfor %}
+{% for enum_ in enums %}
+            Types::{{ enum_.name }}(_) => "{{ enum_.name }}",
+{% endfor %}
+{% for union_ in unions %}
+            Types::{{ union_.name }}(_) => "{{ union_.name }}",
+{% endfor %}
+{% if classes.is_empty() && enums.is_empty() && unions.is_empty() %}
+            _ => unreachable!("Types has no variants"),
+{% endif %}
+        }
+    }
+}

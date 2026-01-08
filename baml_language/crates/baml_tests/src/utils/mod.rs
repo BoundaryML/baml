@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use baml_db::baml_syntax::SyntaxNode;
+use baml_db::baml_compiler_syntax::SyntaxNode;
 
 /// Metrics for measuring node reuse in incremental parsing
 #[derive(Debug)]

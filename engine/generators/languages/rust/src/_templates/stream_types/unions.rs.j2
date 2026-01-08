@@ -1,0 +1,45 @@
+{% if unions.is_empty() %}
+// No unions defined
+{% else %}
+//! Generated streaming union types.
+
+use baml::BamlDecode;
+use crate::baml_client::types;
+use super::*;
+{% for u in unions %}
+
+{% if let Some(docstring) = u.docstring -%}
+{{ crate::utils::prefix_lines(docstring, "/// ") }}
+{%- endif %}
+#[derive(Debug, Clone, BamlDecode{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
+#[baml(union)]
+pub enum {{ u.name }} {
+{% for variant in u.variants %}
+    {% if let Some(literal_repr) = variant.literal_repr -%}
+    #[baml(name = "{{ variant.cffi_name }}", literal_{{ variant.cffi_name.split("_").next().unwrap() }} = {{ literal_repr }})]
+    {{ variant.name }},
+    {% else -%}
+    #[baml(name = "{{ variant.cffi_name }}",)]
+    {{ variant.name }}({{ variant.type_str }}),
+    {% endif -%}
+{% endfor %}
+}
+
+impl AsRef<{{ u.name }}> for {{ u.name }} {
+    fn as_ref(&self) -> &{{ u.name }} {
+        self
+    }
+}
+
+impl Default for {{ u.name }} {
+    fn default() -> Self {
+        {% if u.variants.is_empty() %}
+          panic!("{{ u.name }} has no variants")
+        {% else %}
+           {% let first_variant = u.variants[0] %}
+            Self::{{ first_variant.name }}{% if first_variant.literal_repr.is_none() %}(Default::default()){% endif %}
+        {% endif %}
+    }
+}
+{% endfor %}
+{% endif %}

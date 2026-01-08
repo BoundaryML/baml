@@ -125,6 +125,9 @@ pub fn check_version(
                 GeneratorOutputType::Go => {
                     format!("go install github.com/boundaryml/baml/go@{gen_version}")
                 }
+                GeneratorOutputType::Rust => {
+                    format!("cargo add baml@{gen_version}")
+                }
             };
             (
                 match generator_type {

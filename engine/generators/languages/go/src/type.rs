@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use baml_types::baml_value::TypeLookups;
 
 use crate::package::{CurrentRenderPackage, Package};

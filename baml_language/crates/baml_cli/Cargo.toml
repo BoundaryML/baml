@@ -19,7 +19,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-baml_language_server.workspace = true
+baml_lsp.workspace = true
 cfg-if.workspace = true
 clap = { workspace = true, features = ["color", "env"] }
 clap-cargo.workspace = true

@@ -10,7 +10,7 @@ pub fn coerce_array_to_singular(
     ctx: &ParsingContext,
     target: &TypeIR,
     items: &[&crate::jsonish::Value],
-    coercion: &dyn (Fn(&crate::jsonish::Value) -> Result<BamlValueWithFlags, ParsingError>),
+    coercion: &dyn Fn(&crate::jsonish::Value) -> Result<BamlValueWithFlags, ParsingError>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     let parsed = items.iter().map(|item| coercion(item)).collect::<Vec<_>>();
 

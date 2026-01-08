@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -126,7 +126,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected ')', found identifier
-   ╭─[ 0:7:41 ]
+   ╭─[ simple_strings.baml:7:41 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                         ──┬──  
@@ -136,7 +136,7 @@ Error: Expected ')', found identifier
 ───╯
 
 Error: field 'hello' is missing a type annotation
-   ╭─[ 0:7:41 ]
+   ╭─[ simple_strings.baml:7:41 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                         ──┬──  
@@ -146,7 +146,7 @@ Error: field 'hello' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found error
-   ╭─[ 0:7:46 ]
+   ╭─[ simple_strings.baml:7:46 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                              ┬  
@@ -156,7 +156,7 @@ Error: Expected Unexpected token in class body, found error
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:7:47 ]
+   ╭─[ simple_strings.baml:7:47 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                               ┬  
@@ -166,7 +166,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found '"'
-   ╭─[ 0:7:48 ]
+   ╭─[ simple_strings.baml:7:48 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                ┬  
@@ -176,7 +176,7 @@ Error: Expected Unexpected token in class body, found '"'
 ───╯
 
 Error: Expected Unexpected token in class body, found ')'
-   ╭─[ 0:7:49 ]
+   ╭─[ simple_strings.baml:7:49 ]
    │
  7 │   with_quotes string @alias("She said \"hello\"")
    │                                                 ┬  

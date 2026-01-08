@@ -7,11 +7,10 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-convert_case = "0.6"
 wasm-bindgen = "0.2"
 console_error_panic_hook = { version = "0.1", optional = true }
 wee_alloc = { version = "0.4", optional = true }
-baml_db = { path = "../baml_db" }
+baml_project = { path = "../baml_project" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

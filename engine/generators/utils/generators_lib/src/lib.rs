@@ -46,6 +46,11 @@ pub fn generate_sdk(
             let features = RbLanguageFeatures::default();
             features.generate_sdk(ir, gen)?
         }
+        GeneratorOutputType::Rust => {
+            use generators_rust::RustLanguageFeatures;
+            let features = RustLanguageFeatures;
+            features.generate_sdk(ir, gen)?
+        }
     };
 
     // Run on_generate commands

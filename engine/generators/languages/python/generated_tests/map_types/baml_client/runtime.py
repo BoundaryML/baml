@@ -23,6 +23,7 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIM
 class BamlCallOptions(typing.TypedDict, total=False):
     tb: typing_extensions.NotRequired[type_builder.TypeBuilder]
     client_registry: typing_extensions.NotRequired[baml_py.baml_py.ClientRegistry]
+    client: typing_extensions.NotRequired[str]
     env: typing_extensions.NotRequired[typing.Dict[str, typing.Optional[str]]]
     tags: typing_extensions.NotRequired[typing.Dict[str, str]]
     collector: typing_extensions.NotRequired[
@@ -85,6 +86,14 @@ class DoNotUseDirectlyCallManager:
         else:
             baml_tb = None
         client_registry = self.__baml_options.get("client_registry")
+        client = self.__baml_options.get("client")
+
+        # If client is provided, it takes precedence (creates/overrides client_registry primary)
+        if client is not None:
+            if client_registry is None:
+                client_registry = baml_py.baml_py.ClientRegistry()
+            client_registry.set_primary(client)
+
         collector = self.__baml_options.get("collector")
         collectors_as_list = (
             collector

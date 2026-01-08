@@ -877,3 +877,69 @@ function HighLineNumberNonExhaustive(s: Status) -> string {
         Status.Active => "active only"
     }
 }
+
+// ============================================================================
+// Complex Scrutinee Tests
+// ============================================================================
+
+// Test: Match with function call as scrutinee
+function GetStatus() -> Status {
+    Status.Active
+}
+
+function MatchFunctionCallScrutinee() -> string {
+    match (GetStatus()) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending"
+    }
+}
+
+// Test: Match with arithmetic expression as scrutinee
+function MatchArithmeticScrutinee(a: int, b: int) -> string {
+    match (a + b) {
+        0 => "zero",
+        1 => "one",
+        _ => "other"
+    }
+}
+
+// Test: Match with complex expression as scrutinee
+function MatchComplexScrutinee(x: int) -> string {
+    match (x * 2 + 1) {
+        1 => "x was 0",
+        3 => "x was 1",
+        _ => "other"
+    }
+}
+
+// ============================================================================
+// Deeply Nested Match Tests
+// ============================================================================
+
+// Test: Three levels of nested match expressions
+function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+    match (x) {
+        0 => match (y) {
+            0 => match (z) {
+                0 => "all zero",
+                _ => "z nonzero"
+            },
+            _ => "y nonzero"
+        },
+        _ => "x nonzero"
+    }
+}
+
+// Test: Nested match with enum scrutinee at each level
+function NestedEnumMatch(s1: Status, s2: Status) -> string {
+    match (s1) {
+        Status.Active => match (s2) {
+            Status.Active => "both active",
+            Status.Inactive => "first active, second inactive",
+            Status.Pending => "first active, second pending"
+        },
+        Status.Inactive => "first inactive",
+        Status.Pending => "first pending"
+    }
+}

@@ -3162,6 +3162,7 @@ dependencies = [
  "generators-openapi",
  "generators-python",
  "generators-ruby",
+ "generators-rust",
  "generators-typescript",
  "indexmap 2.9.0",
  "internal-baml-core",
@@ -3214,6 +3215,20 @@ dependencies = [
  "internal-baml-core",
  "prettydiff",
  "test-harness",
+]
+
+[[package]]
+name = "generators-rust"
+version = "0.216.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "baml-types",
+ "dir-writer",
+ "internal-baml-core",
+ "prettydiff",
+ "test-harness",
+ "type_test_spec",
 ]
 
 [[package]]

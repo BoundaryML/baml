@@ -20,18 +20,18 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use builtins::{
-    FunctionDef, TypePattern, builtins, find_builtin_by_path, find_function, find_method, functions,
-};
+// Re-export lookup functions from baml_builtins for convenience.
+pub use baml_builtins::{builtins, find_builtin_by_path, find_function, find_method};
+pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
 pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, UnaryOp, VizExecDelta, VizExecEvent, VizNodeMeta,
-    VizNodeType,
+    BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
+    VizNodeMeta, VizNodeType,
 };
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use native::NativeFunction;
 pub use types::{
     Class, Enum, Function, FunctionKind, Future, FutureKind, Object, ObjectType, Program, Value,
-    Variant,
+    Variant, type_tags,
 };
 pub use vm::{BamlVmProgram, Frame, Vm, VmExecState};

@@ -1,0 +1,53 @@
+//! Generated enum builder wrappers for type-safe value access.
+
+{% for enm in enums %}
+/// Wrapper for the `{{ enm.name }}` enum builder.
+///
+/// Provides type-safe method access to values defined in the schema.
+/// Access values via methods: `builder.ValueName()`
+{% if enm.dynamic %}
+///
+/// This enum is marked `@@dynamic` - you can add new values at runtime.
+{% endif %}
+pub struct {{ enm.name }}EnumBuilder {
+    inner: baml::EnumBuilder,
+}
+
+impl {{ enm.name }}EnumBuilder {
+    /// Create wrapper from runtime EnumBuilder.
+    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying EnumBuilder.
+    pub fn inner(&self) -> &baml::EnumBuilder {
+        &self.inner
+    }
+
+    /// Get the enum as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type()
+            .expect("{{ enm.name }} is statically defined in .baml and should always have a type")
+    }
+
+{% if enm.dynamic %}
+    /// Add a new value to this dynamic enum.
+    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+        self.inner.add_value(value)
+    }
+
+{% endif %}
+    // =========================================================================
+    // Value Accessors (1:1 with schema value names)
+    // =========================================================================
+{% for (val, _) in enm.values %}
+
+    /// Access the `{{ val }}` value builder.
+    pub fn value_{{ val }}(&self) -> baml::EnumValueBuilder {
+        self.inner.get_value("{{ val }}")
+            .expect("{{ enm.name }}.{{ val }} is statically defined in .baml and should always be present")
+    }
+{% endfor %}
+}
+
+{% endfor %}

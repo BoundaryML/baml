@@ -151,6 +151,10 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 	return parsed, nil
 }
 
+type nilObject struct {
+	any
+}
+
 func decodeObjectResponse(rt unsafe.Pointer, response *cffi.InvocationResponse) (any, error) {
 	if response == nil {
 		return nil, fmt.Errorf("nil response")
@@ -178,10 +182,11 @@ func decodeObjectResponse(rt unsafe.Pointer, response *cffi.InvocationResponse) 
 			return parsed, nil
 		case *cffi.InvocationResponseSuccess_Value:
 			value := success.GetValue()
-			decodedValue, _ := serde.Decode(value, serde.TypeMap{
-				"INTERNAL.nil": reflect.TypeOf((*interface{})(nil)).Elem(),
-			})
-			if !decodedValue.IsValid() {
+			nilType := reflect.TypeOf((*nilObject)(nil)).Elem()
+			decodedValue, goType := serde.Decode(value, serde.NewInternalTypeMap(map[string]reflect.Type{
+				"INTERNAL.nil": nilType,
+			}))
+			if goType == nilType {
 				return nil, nil
 			}
 			return decodedValue.Interface(), nil

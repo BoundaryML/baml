@@ -114,6 +114,9 @@ impl GenerateArgs {
                 internal_baml_core::configuration::GeneratorOutputType::Go => {
                     GeneratorDefaultClientMode::Sync
                 }
+                internal_baml_core::configuration::GeneratorOutputType::Rust => {
+                    GeneratorDefaultClientMode::Sync
+                }
             };
             // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
             let output_dir_relative_to_baml_src = PathBuf::from("..");

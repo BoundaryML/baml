@@ -1364,7 +1364,7 @@ func (c *DummyOutput) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -1411,7 +1411,7 @@ func (c *DynInputOutput) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMa
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -1491,7 +1491,7 @@ func (c *DynamicClassTwo) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -3704,7 +3704,7 @@ func (c *OriginalB) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -3753,7 +3753,7 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -4202,7 +4202,7 @@ func (c *RenderEnumInput) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -4251,7 +4251,7 @@ func (c *RenderTestClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}
@@ -4694,7 +4694,7 @@ func (c *SomeClassNestedDynamic) Decode(holder *cffi.CFFIValueClass, typeMap bam
 
 		default:
 
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 
 		}
 	}

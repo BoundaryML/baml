@@ -18,7 +18,6 @@ where
     fn encode(self) -> CffiValueHolder {
         use cffi_value_holder::Value as cValue;
 
-        let type_ir = self.value.to_type_ir();
         let value = match self.value {
             BamlValue::Null => cValue::NullValue(CffiValueNull::default()),
             BamlValue::Bool(b) => cValue::BoolValue(*b),
@@ -26,6 +25,9 @@ where
             BamlValue::Float(f) => cValue::FloatValue(*f),
             BamlValue::String(s) => cValue::StringValue(s.clone()),
             BamlValue::Map(map) => {
+                let TypeIR::Map(key_type, value_type, _) = self.value.to_type_ir() else {
+                    panic!("Expected map type ir");
+                };
                 let entries = map
                     .iter()
                     .map(|(key, value)| CffiMapEntry {
@@ -35,15 +37,12 @@ where
                                 value,
                                 lookup: self.lookup,
                                 mode: self.mode,
-                                curr_type: value.to_type_ir(),
+                                curr_type: value_type.as_ref().clone(),
                             }
                             .encode(),
                         ),
                     })
                     .collect();
-                let TypeIR::Map(key_type, value_type, _) = self.value.to_type_ir() else {
-                    panic!("Expected map type ir");
-                };
                 let key_type = WithIr {
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
@@ -65,6 +64,9 @@ where
                 })
             }
             BamlValue::List(list) => {
+                let TypeIR::List(value_type, _) = self.value.to_type_ir() else {
+                    panic!("Expected list type ir");
+                };
                 let mut values = Vec::new();
                 for value in list {
                     values.push(
@@ -72,14 +74,11 @@ where
                             value,
                             lookup: self.lookup,
                             mode: self.mode,
-                            curr_type: value.to_type_ir(),
+                            curr_type: value_type.as_ref().clone(),
                         }
                         .encode(),
                     );
                 }
-                let TypeIR::List(value_type, _) = self.value.to_type_ir() else {
-                    panic!("Expected list type ir");
-                };
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
@@ -135,7 +134,33 @@ where
             }),
         };
 
-        CffiValueHolder { value: Some(value) }
+        let value = CffiValueHolder { value: Some(value) };
+
+        // if type is optional, wrap in optional
+        if self.curr_type.is_optional() && !self.curr_type.is_null() {
+            CffiValueHolder {
+                value: Some(cValue::UnionVariantValue(Box::new(
+                    crate::baml::cffi::CffiValueUnionVariant {
+                        name: None,
+                        is_optional: true,
+                        is_single_pattern: true,
+                        self_type: Some(
+                            WithIr {
+                                value: &(&self.curr_type, UnionAllowance::Allow),
+                                lookup: self.lookup,
+                                mode: self.mode,
+                                curr_type: self.curr_type.clone(),
+                            }
+                            .encode(),
+                        ),
+                        value_option_name: "null".to_string(),
+                        value: Some(Box::new(value)),
+                    },
+                ))),
+            }
+        } else {
+            value
+        }
     }
 }
 

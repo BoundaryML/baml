@@ -1,252 +1,84 @@
-//! Built-in functions and their type signatures.
+//! Built-in functions for VM execution.
 //!
-//! This is the single source of truth for all built-in functions.
-//! Both type checking and codegen use this.
+//! This module links builtin type signatures (from `baml_builtins`)
+//! to their native function implementations. Type signatures are the
+//! single source of truth in `baml_builtins`.
+//!
+//! # Naming Convention
+//!
+//! Native functions are automatically mapped by converting the constant name to lowercase:
+//! - `ARRAY_LENGTH` → `native::array_length`
+//! - `STRING_TO_UPPER_CASE` → `native::string_to_upper_case`
+//!
+//! If you add a new builtin in `baml_builtins::define_builtins!`, you must add
+//! a corresponding function in `native.rs` with the lowercase name.
 
 use std::sync::LazyLock;
 
+// Re-export type signatures from baml_builtins.
+// Type checker uses these directly without depending on baml_vm.
+pub use baml_builtins::{BuiltinSignature, TypePattern, paths};
+use indexmap::IndexMap;
+use paste::paste;
+
 use crate::native::{self, NativeFunction};
 
-/// Type pattern for matching/constructing types with type variables.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypePattern {
-    Int,
-    Float,
-    String,
-    Bool,
-    Null,
-    Array(Box<TypePattern>),
-    Map {
-        key: Box<TypePattern>,
-        value: Box<TypePattern>,
-    },
-    /// Type variable - binds to actual type during pattern matching.
-    /// E.g., `Var("T")` in `Array<T>.push(item: T)` binds to the element type.
-    Var(&'static str),
-}
-
-/// A built-in function definition.
+/// Maps path constants to native functions by naming convention.
 ///
-/// This contains everything needed for both type checking and VM execution.
-pub struct FunctionDef {
-    /// Full path, e.g., "baml.Array.length" or "env.get".
-    pub path: &'static str,
-
-    /// If Some, this is a method callable as `receiver.method_name()`.
-    /// If None, this is a free function callable as `path()`.
-    pub receiver: Option<TypePattern>,
-
-    /// Parameters (excluding self for methods).
-    pub params: Vec<(&'static str, TypePattern)>,
-
-    /// Return type.
-    pub returns: TypePattern,
-
-    /// Native function implementation.
-    pub native_fn: NativeFunction,
-}
-
-impl FunctionDef {
-    /// Get the method name from the path.
-    /// E.g., "baml.Array.length" -> Some("length")
-    /// E.g., "env.get" -> None (it's a free function)
-    pub fn method_name(&self) -> Option<&str> {
-        self.receiver.as_ref()?;
-        self.path.rsplit('.').next()
-    }
-
-    /// Arity including self for methods.
-    pub fn arity(&self) -> usize {
-        self.params.len() + usize::from(self.receiver.is_some())
-    }
-}
-
-/// All built-in functions.
+/// For each builtin constant like `ARRAY_LENGTH`, this macro:
+/// 1. Looks up `paths::ARRAY_LENGTH` for the path string
+/// 2. Looks up `native::array_length` for the implementation
 ///
-/// Access via `builtins()` function.
-static BUILTINS: LazyLock<Vec<FunctionDef>> = LazyLock::new(|| {
-    vec![
-        // =====================================================================
-        // Array methods
-        // =====================================================================
-        FunctionDef {
-            path: "baml.Array.length",
-            receiver: Some(TypePattern::Array(Box::new(TypePattern::Var("T")))),
-            params: vec![],
-            returns: TypePattern::Int,
-            native_fn: native::array_len,
-        },
-        FunctionDef {
-            path: "baml.Array.push",
-            receiver: Some(TypePattern::Array(Box::new(TypePattern::Var("T")))),
-            params: vec![("item", TypePattern::Var("T"))],
-            returns: TypePattern::Null,
-            native_fn: native::array_push,
-        },
-        // =====================================================================
-        // String methods
-        // =====================================================================
-        FunctionDef {
-            path: "baml.String.length",
-            receiver: Some(TypePattern::String),
-            params: vec![],
-            returns: TypePattern::Int,
-            native_fn: native::string_len,
-        },
-        FunctionDef {
-            path: "baml.String.toLowerCase",
-            receiver: Some(TypePattern::String),
-            params: vec![],
-            returns: TypePattern::String,
-            native_fn: native::string_to_lower_case,
-        },
-        FunctionDef {
-            path: "baml.String.toUpperCase",
-            receiver: Some(TypePattern::String),
-            params: vec![],
-            returns: TypePattern::String,
-            native_fn: native::string_to_upper_case,
-        },
-        FunctionDef {
-            path: "baml.String.trim",
-            receiver: Some(TypePattern::String),
-            params: vec![],
-            returns: TypePattern::String,
-            native_fn: native::string_trim,
-        },
-        FunctionDef {
-            path: "baml.String.includes",
-            receiver: Some(TypePattern::String),
-            params: vec![("search", TypePattern::String)],
-            returns: TypePattern::Bool,
-            native_fn: native::string_includes,
-        },
-        FunctionDef {
-            path: "baml.String.startsWith",
-            receiver: Some(TypePattern::String),
-            params: vec![("prefix", TypePattern::String)],
-            returns: TypePattern::Bool,
-            native_fn: native::string_starts_with,
-        },
-        FunctionDef {
-            path: "baml.String.endsWith",
-            receiver: Some(TypePattern::String),
-            params: vec![("suffix", TypePattern::String)],
-            returns: TypePattern::Bool,
-            native_fn: native::string_ends_with,
-        },
-        FunctionDef {
-            path: "baml.String.split",
-            receiver: Some(TypePattern::String),
-            params: vec![("delimiter", TypePattern::String)],
-            returns: TypePattern::Array(Box::new(TypePattern::String)),
-            native_fn: native::string_split,
-        },
-        FunctionDef {
-            path: "baml.String.substring",
-            receiver: Some(TypePattern::String),
-            params: vec![("start", TypePattern::Int), ("end", TypePattern::Int)],
-            returns: TypePattern::String,
-            native_fn: native::string_substring,
-        },
-        FunctionDef {
-            path: "baml.String.replace",
-            receiver: Some(TypePattern::String),
-            params: vec![
-                ("search", TypePattern::String),
-                ("replacement", TypePattern::String),
-            ],
-            returns: TypePattern::String,
-            native_fn: native::string_replace,
-        },
-        // =====================================================================
-        // Map methods
-        // =====================================================================
-        FunctionDef {
-            path: "baml.Map.length",
-            receiver: Some(TypePattern::Map {
-                key: Box::new(TypePattern::Var("K")),
-                value: Box::new(TypePattern::Var("V")),
-            }),
-            params: vec![],
-            returns: TypePattern::Int,
-            native_fn: native::map_len,
-        },
-        FunctionDef {
-            path: "baml.Map.has",
-            receiver: Some(TypePattern::Map {
-                key: Box::new(TypePattern::String),
-                value: Box::new(TypePattern::Var("V")),
-            }),
-            params: vec![("key", TypePattern::String)],
-            returns: TypePattern::Bool,
-            native_fn: native::map_has,
-        },
-        // =====================================================================
-        // Free functions
-        // =====================================================================
-        FunctionDef {
-            path: "env.get",
-            receiver: None,
-            params: vec![("key", TypePattern::String)],
-            returns: TypePattern::String,
-            native_fn: native::env_get,
-        },
-        FunctionDef {
-            path: "baml.deep_copy",
-            receiver: None,
-            params: vec![("value", TypePattern::Var("T"))],
-            returns: TypePattern::Var("T"),
-            native_fn: native::deep_copy_object,
-        },
-        FunctionDef {
-            path: "baml.deep_equals",
-            receiver: None,
-            params: vec![("a", TypePattern::Var("T")), ("b", TypePattern::Var("T"))],
-            returns: TypePattern::Bool,
-            native_fn: native::deep_equals,
-        },
-        FunctionDef {
-            path: "baml.unstable.string",
-            receiver: None,
-            params: vec![("value", TypePattern::Var("T"))],
-            returns: TypePattern::String,
-            native_fn: native::any_value_to_string,
-        },
-    ]
+/// # Compile Error?
+///
+/// If you see "cannot find function `xyz` in module `native`", you need to
+/// add `pub fn xyz(...)` to `native.rs` matching the lowercase constant name.
+macro_rules! make_native_fn_entries {
+    ($($name:ident),*) => {
+        paste! {
+            &[
+                $({
+                    // If this line fails, add this function to native.rs:
+                    //   pub fn [<$name:lower>](vm: &mut Vm, args: &[Value]) -> Result<Value, VmError>
+                    #[allow(clippy::unnecessary_cast)]
+                    let f: NativeFunction = native::[<$name:lower>];
+                    (paths::$name, f)
+                },)*
+            ]
+        }
+    };
+}
+
+/// Map from builtin path to native function implementation.
+static NATIVE_FUNCTIONS: LazyLock<IndexMap<&'static str, NativeFunction>> = LazyLock::new(|| {
+    // Native function implementations for each builtin.
+    //
+    // Automatically generated from `baml_builtins::for_all_builtins!`.
+    // Maps each path constant to its native function by naming convention.
+    let native_fns: &[(&str, NativeFunction)] =
+        baml_builtins::for_all_builtins!(make_native_fn_entries);
+
+    native_fns
+        .iter()
+        .map(|(path, fn_ptr)| (*path, *fn_ptr))
+        .collect()
 });
 
-/// Get all built-in function definitions.
-pub fn builtins() -> &'static [FunctionDef] {
-    &BUILTINS
-}
-
-/// Find a method by receiver type pattern match and method name.
-pub fn find_method(method_name: &str) -> impl Iterator<Item = &'static FunctionDef> {
-    builtins()
-        .iter()
-        .filter(move |def| def.method_name() == Some(method_name))
-}
-
-/// Find a free function by path (functions without a receiver).
-pub fn find_function(path: &str) -> Option<&'static FunctionDef> {
-    builtins()
-        .iter()
-        .find(|def| def.receiver.is_none() && def.path == path)
-}
-
-/// Find any builtin by path (including methods).
-///
-/// This is useful for direct builtin calls like `baml.Array.length(arr)`.
-pub fn find_builtin_by_path(path: &str) -> Option<&'static FunctionDef> {
-    builtins().iter().find(|def| def.path == path)
+/// Get the native function for a builtin path.
+pub fn get_native_fn(path: &str) -> Option<NativeFunction> {
+    NATIVE_FUNCTIONS.get(path).copied()
 }
 
 /// Generate the functions map for VM registration.
-pub fn functions() -> indexmap::IndexMap<String, (NativeFunction, usize)> {
-    builtins()
+///
+/// Uses signatures from `baml_builtins` and links them to native implementations.
+pub fn functions() -> IndexMap<String, (NativeFunction, usize)> {
+    baml_builtins::builtins()
         .iter()
-        .map(|def| (def.path.to_string(), (def.native_fn, def.arity())))
+        .filter_map(|sig| {
+            let native_fn = get_native_fn(sig.path)?;
+            Some((sig.path.to_string(), (native_fn, sig.arity())))
+        })
         .collect()
 }
 
@@ -255,40 +87,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_method_name() {
-        let array_len = builtins()
-            .iter()
-            .find(|d| d.path == "baml.Array.length")
-            .unwrap();
-        assert_eq!(array_len.method_name(), Some("length"));
-
-        let env_get = builtins().iter().find(|d| d.path == "env.get").unwrap();
-        assert_eq!(env_get.method_name(), None);
+    fn test_all_signatures_have_native_fns() {
+        // Every signature in baml_builtins must have a native implementation
+        for sig in baml_builtins::builtins() {
+            assert!(
+                get_native_fn(sig.path).is_some(),
+                "Missing native function for builtin: {}",
+                sig.path
+            );
+        }
     }
 
     #[test]
-    fn test_arity() {
-        let array_len = builtins()
-            .iter()
-            .find(|d| d.path == "baml.Array.length")
-            .unwrap();
-        assert_eq!(array_len.arity(), 1); // self only
-
-        let array_push = builtins()
-            .iter()
-            .find(|d| d.path == "baml.Array.push")
-            .unwrap();
-        assert_eq!(array_push.arity(), 2); // self + item
-
-        let env_get = builtins().iter().find(|d| d.path == "env.get").unwrap();
-        assert_eq!(env_get.arity(), 1); // key only
+    fn test_all_native_fns_have_signatures() {
+        // Every native function must have a signature in baml_builtins
+        for path in NATIVE_FUNCTIONS.keys() {
+            assert!(
+                baml_builtins::find_builtin_by_path(path).is_some(),
+                "Native function has no signature: {path}"
+            );
+        }
     }
 
     #[test]
     fn test_functions_map() {
         let fns = functions();
-        assert!(fns.contains_key("baml.Array.length"));
-        assert!(fns.contains_key("env.get"));
-        assert_eq!(fns.get("baml.Array.length").unwrap().1, 1);
+        assert!(fns.contains_key(paths::ARRAY_LENGTH));
+        assert!(fns.contains_key(paths::ENV_GET));
+        assert_eq!(fns.get(paths::ARRAY_LENGTH).unwrap().1, 1);
     }
 }

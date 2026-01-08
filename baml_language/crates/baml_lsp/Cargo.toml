@@ -1,0 +1,96 @@
+[package]
+name = "baml_lsp"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = { version = "0.2.169" }
+
+# [lints]
+# workspace = true
+
+[features]
+default = []
+
+[dependencies]
+
+anyhow = { workspace = true }
+axum.workspace = true
+# baml-types = { path = "../baml-lib/baml-types" }
+# baml-runtime = { path = "../baml-runtime", features = [
+#     "internal",
+# ], default-features = false }
+baml_db.workspace = true
+baml_compiler_diagnostics.workspace = true
+baml_ide.workspace = true
+baml_project.workspace = true
+baml_lsp_types.workspace = true
+colored.workspace = true
+
+console-subscriber.workspace = true
+crossbeam.workspace = true
+filetime.workspace = true
+futures.workspace = true
+
+ignore.workspace = true
+indexmap.workspace = true
+is-macro.workspace = true
+# generators-lib = { path = "../generators/utils/generators_lib" }
+itertools.workspace = true
+jod-thread.workspace = true
+log.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+memchr.workspace = true
+mime_guess.workspace = true
+parking_lot.workspace = true
+path-absolutize.workspace = true
+pathdiff.workspace = true
+regex.workspace = true
+reqwest.workspace = true
+rustc-hash.workspace = true
+## other package dependencies that we can move out of this package (baml_*)
+
+schemars.workspace = true
+semver.workspace = true
+serde.workspace = true
+text-size.workspace = true
+
+# baml project dependency
+serde-wasm-bindgen.workspace = true
+serde_json.workspace = true
+shellexpand.workspace = true
+
+# baml_linter
+similar.workspace = true
+simple-logging.workspace = true
+
+thiserror.workspace = true
+
+tokio.workspace = true
+tower.workspace = true
+# tokio-stream.workspace = true
+tower-http.workspace = true
+
+tracing.workspace = true
+tracing-log.workspace = true
+
+tracing-subscriber.workspace = true
+url.workspace = true
+webbrowser.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

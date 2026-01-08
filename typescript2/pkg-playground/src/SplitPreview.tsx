@@ -1,32 +1,7 @@
 import type { ChangeEvent, CSSProperties, FC } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import initWasm, { BamlRuntime, CasingVariants } from 'baml-runtime-wasm';
+import initWasm, { BamlProject, version, hot_reload_test_string } from 'baml-runtime-wasm';
 import { usePlayground } from './PlaygroundProvider';
-
-type VariantKey =
-  | 'original'
-  | 'lower'
-  | 'upper'
-  | 'camel'
-  | 'pascal'
-  | 'snake'
-  | 'upper_snake'
-  | 'kebab'
-  | 'title';
-
-type RenderedVariants = Record<VariantKey, string>;
-
-const VARIANT_DISPLAY: Array<{ key: VariantKey; label: string }> = [
-  { key: 'original', label: 'Original' },
-  { key: 'lower', label: 'lower' },
-  { key: 'upper', label: 'UPPER' },
-  { key: 'camel', label: 'camelCase' },
-  { key: 'pascal', label: 'PascalCase' },
-  { key: 'snake', label: 'snake_case' },
-  { key: 'upper_snake', label: 'UPPER_SNAKE' },
-  { key: 'kebab', label: 'kebab-case' },
-  { key: 'title', label: 'Title Case' }
-];
 
 const containerStyles: CSSProperties = {
   gridColumn: '1 / -1',
@@ -63,74 +38,11 @@ const textareaStyles: CSSProperties = {
   resize: 'none'
 };
 
-const variantsGridStyles: CSSProperties = {
-  flex: 1,
-  display: 'grid',
-  gap: '0.75rem',
-  padding: '1rem',
-  background: '#0f172a',
-  color: '#e2e8f0',
-  overflowY: 'auto'
-};
-
-const variantRowStyles: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.4rem'
-};
-
-const variantLabelStyles: CSSProperties = {
-  fontSize: '0.75rem',
-  textTransform: 'uppercase',
-  letterSpacing: '0.1em',
-  color: '#38bdf8'
-};
-
-const variantValueStyles: CSSProperties = {
-  margin: 0,
-  padding: '0.75rem',
-  borderRadius: '0.5rem',
-  background: 'rgba(15, 23, 42, 0.55)',
-  border: '1px solid rgba(148, 163, 184, 0.25)',
-  fontFamily: '"Fira Code", "SFMono-Regular", Consolas, monospace',
-  fontSize: '0.92rem',
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word'
-};
-
-const placeholderValue = '// Rendered casing variants will appear here';
-
-const extractVariants = (result: CasingVariants): RenderedVariants => {
-  try {
-    return {
-      original: result.original,
-      lower: result.lower,
-      upper: result.upper,
-      camel: result.camel,
-      pascal: result.pascal,
-      snake: result.snake,
-      upper_snake: result.upper_snake,
-      kebab: result.kebab,
-      title: result.title
-    };
-  } finally {
-    result.free();
-  }
-};
-
-const functionNamesHeaderStyles: CSSProperties = {
-  padding: '0.75rem 1rem',
-  fontWeight: 600,
-  borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
-  borderTop: '1px solid rgba(15, 23, 42, 0.08)',
-  background: '#f8fafc'
-};
-
 const functionNamesContainerStyles: CSSProperties = {
+  flex: 1,
   padding: '1rem',
   background: '#1e293b',
-  color: '#e2e8f0',
-  minHeight: '120px'
+  color: '#e2e8f0'
 };
 
 const functionNameItemStyles: CSSProperties = {
@@ -153,26 +65,57 @@ const emptyFunctionsStyles: CSSProperties = {
 
 export const SplitPreview: FC = () => {
   const { code, setCode } = usePlayground();
-  const runtimeRef = useRef<BamlRuntime | null>(null);
+  const projectRef = useRef<BamlProject | null>(null);
   const latestCodeRef = useRef<string>(code);
-  const [rendered, setRendered] = useState<RenderedVariants | null>(null);
   const [functionNames, setFunctionNames] = useState<string[]>([]);
   const [isReady, setReady] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [hotReloadTestStr, setHotReloadTestStr] = useState<string | null>(null);
+
+  // Inject version meta tag into document head
+  useEffect(() => {
+    let metaTag: HTMLMetaElement | null = null;
+
+    initWasm()
+      .then(() => {
+        try {
+          const ver = version();
+          metaTag = document.createElement('meta');
+          metaTag.name = 'baml-version';
+          metaTag.content = ver;
+          document.head.appendChild(metaTag);
+        } catch (e) {
+          console.error('Failed to get WASM version:', e);
+        }
+        try {
+          setHotReloadTestStr(hot_reload_test_string());
+        } catch (e) {
+          console.error('Failed to get hot reload test string:', e);
+        }
+      })
+      .catch((e) => {
+        console.error('Failed to init WASM for version:', e);
+      });
+
+    return () => {
+      if (metaTag) {
+        document.head.removeChild(metaTag);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     latestCodeRef.current = code;
 
-    if (!isReady || !runtimeRef.current) {
+    if (!isReady || !projectRef.current) {
       return;
     }
 
-    runtimeRef.current.set_source(code);
-    setRendered(extractVariants(runtimeRef.current.render()));
+    projectRef.current.set_source(code);
 
     // Get function names from the Salsa-backed query
     try {
-      const names = runtimeRef.current.function_names();
+      const names = projectRef.current.function_names();
       setFunctionNames(names);
     } catch (e) {
       console.error('Failed to get function names:', e);
@@ -188,13 +131,13 @@ export const SplitPreview: FC = () => {
         if (cancelled) {
           return;
         }
-        const runtime = new BamlRuntime(latestCodeRef.current);
-        runtimeRef.current = runtime;
-        setRendered(extractVariants(runtime.render()));
+
+        const project = new BamlProject(latestCodeRef.current);
+        projectRef.current = project;
 
         // Get initial function names
         try {
-          const names = runtime.function_names();
+          const names = project.function_names();
           setFunctionNames(names);
         } catch (e) {
           console.error('Failed to get function names:', e);
@@ -212,8 +155,8 @@ export const SplitPreview: FC = () => {
 
     return () => {
       cancelled = true;
-      runtimeRef.current?.free();
-      runtimeRef.current = null;
+      projectRef.current?.free();
+      projectRef.current = null;
     };
   }, []);
 
@@ -226,6 +169,12 @@ export const SplitPreview: FC = () => {
 
   return (
     <section style={containerStyles}>
+      {/* Hidden element for hot reload testing - see hot-reload.hmr.test.ts */}
+      {hotReloadTestStr && (
+        <span data-testid="hot-reload-test" style={{ display: 'none' }}>
+          {hotReloadTestStr}
+        </span>
+      )}
       <article style={panelStyles}>
         <header style={headerStyles}>Editor</header>
         <textarea
@@ -237,7 +186,6 @@ export const SplitPreview: FC = () => {
         />
       </article>
       <article style={panelStyles}>
-        {/* Function Names Section - Salsa-backed query results */}
         <header style={headerStyles}>Functions (via Salsa)</header>
         <div style={functionNamesContainerStyles}>
           {error ? (
@@ -252,22 +200,6 @@ export const SplitPreview: FC = () => {
             <span style={emptyFunctionsStyles}>
               No functions defined. Try adding: function MyFunc(x: int) -&gt; string
             </span>
-          )}
-        </div>
-
-        <header style={functionNamesHeaderStyles}>Casing Variants</header>
-        <div style={variantsGridStyles}>
-          {error ? (
-            <pre style={variantValueStyles}>{`// Failed to load BAML runtime\n${error}`}</pre>
-          ) : rendered ? (
-            VARIANT_DISPLAY.map(({ key, label }) => (
-              <div style={variantRowStyles} key={key}>
-                <span style={variantLabelStyles}>{label}</span>
-                <pre style={variantValueStyles}>{rendered[key]}</pre>
-              </div>
-            ))
-          ) : (
-            <pre style={variantValueStyles}>{placeholderValue}</pre>
           )}
         </div>
       </article>

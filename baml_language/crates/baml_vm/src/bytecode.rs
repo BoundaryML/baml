@@ -2,6 +2,60 @@
 
 use crate::{GlobalIndex, ObjectIndex, types::Value};
 
+// ============================================================================
+// Jump Table Data Structure
+// ============================================================================
+
+/// Jump table data for O(1) switch dispatch.
+///
+/// Maps a contiguous range of integer values to jump offsets.
+/// Values outside the range or "holes" jump to the default offset.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JumpTableData {
+    /// Minimum discriminant value (maps to index 0).
+    pub min: i64,
+    /// Jump offsets for each value from min to min+len-1.
+    /// None means "hole" - should jump to default.
+    pub offsets: Vec<Option<isize>>,
+}
+
+impl JumpTableData {
+    /// Create a new jump table covering the range [min, max].
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn new(min: i64, max: i64) -> Self {
+        // Safety: We limit jump tables to 256 entries max in codegen,
+        // and max >= min is guaranteed by construction.
+        let size = (max - min + 1) as usize;
+        Self {
+            min,
+            offsets: vec![None; size],
+        }
+    }
+
+    /// Set the offset for a specific value.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn set(&mut self, value: i64, offset: isize) {
+        // Safety: We only call this with value >= min, so index is non-negative
+        // and bounded by the table size.
+        let index = (value - self.min) as usize;
+        if index < self.offsets.len() {
+            self.offsets[index] = Some(offset);
+        }
+    }
+
+    /// Lookup the offset for a value.
+    /// Returns None if value is out of range or is a hole.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn lookup(&self, value: i64) -> Option<isize> {
+        if value < self.min {
+            return None;
+        }
+        // Safety: value >= min, so index is non-negative.
+        let index = (value - self.min) as usize;
+        self.offsets.get(index).copied().flatten()
+    }
+}
+
 /// Individual bytecode instruction.
 ///
 /// For faster iteration we'll start with an in-memory data structure that
@@ -264,6 +318,51 @@ pub enum Instruction {
     /// Format: `VIZ_EXIT i` where `i` is the index into the current
     /// function's `viz_nodes` array.
     VizExit(usize),
+
+    /// Jump through a table based on integer discriminant.
+    ///
+    /// Stack: `[discriminant: Int]` -> `[]` (jumps)
+    ///
+    /// Pops discriminant, looks up in jump table at `table_idx`.
+    /// If value is in range and not a hole, jumps to that offset.
+    /// Otherwise jumps to `default` offset.
+    ///
+    /// Format: `JUMP_TABLE table_idx, default` where:
+    /// - `table_idx` is the index into `Bytecode::jump_tables`
+    /// - `default` is the offset to jump to for out-of-range or hole values
+    JumpTable {
+        /// Index into `Bytecode::jump_tables`.
+        table_idx: usize,
+        /// Offset to jump to for out-of-range or hole values.
+        default: isize,
+    },
+
+    /// Extract the variant index from an enum value.
+    ///
+    /// Stack: `[enum_value: Variant]` -> `[discriminant: Int]`
+    ///
+    /// Used to convert enum values to integers for jump table dispatch.
+    /// Example: `Status.Active -> 0`, `Status.Inactive -> 1`, `Status.Pending -> 2`
+    Discriminant,
+
+    /// Extract the runtime type tag from any value.
+    ///
+    /// Stack: `[any_value]` -> `[type_tag: Int]`
+    ///
+    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Type tags are global constants:
+    /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
+    /// - Classes: assigned unique IDs starting at 100
+    TypeTag,
+
+    /// Halt execution with an unreachable code error.
+    ///
+    /// This instruction should never be executed at runtime. If it is,
+    /// it indicates a bug in the compiler or type system (e.g., a non-exhaustive
+    /// match expression that the compiler incorrectly marked as exhaustive).
+    ///
+    /// Throws [`super::RuntimeError::Unreachable`].
+    Unreachable,
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -456,6 +555,12 @@ impl std::fmt::Display for Instruction {
             Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
             Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
+            Instruction::JumpTable { table_idx, default } => {
+                write!(f, "JUMP_TABLE {table_idx}, {default:+}")
+            }
+            Instruction::Discriminant => f.write_str("DISCRIMINANT"),
+            Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::Unreachable => f.write_str("UNREACHABLE"),
         }
     }
 }
@@ -470,6 +575,9 @@ pub struct Bytecode {
 
     /// Constant pool.
     pub constants: Vec<Value>,
+
+    /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
+    pub jump_tables: Vec<JumpTableData>,
 
     /// Source line mapping.
     ///
@@ -491,6 +599,7 @@ impl Bytecode {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            jump_tables: Vec::new(),
             source_lines: Vec::new(),
             scopes: Vec::new(),
         }
