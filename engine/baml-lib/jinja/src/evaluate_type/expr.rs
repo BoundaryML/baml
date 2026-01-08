@@ -453,7 +453,7 @@ fn tracker_visit_expr(
             ];
             match expr.name {
                 "abs" => {
-                    if Type::Number.is_subtype_of(&inner) {
+                    if !inner.is_subtype_of(&Type::Number) {
                         ensure_type("number");
                     }
                     Type::Number
@@ -462,7 +462,7 @@ fn tracker_visit_expr(
                 "batch" => Type::Unknown,
                 "bool" => Type::Bool,
                 "capitalize" | "escape" => {
-                    if Type::String.is_subtype_of(&inner) {
+                    if !inner.is_subtype_of(&Type::String) {
                         ensure_type("string");
                     }
                     Type::String
@@ -500,7 +500,7 @@ fn tracker_visit_expr(
                 },
                 "list" => Type::List(Box::new(Type::Unknown)),
                 "lower" | "upper" => {
-                    if Type::String.is_subtype_of(&inner) {
+                    if !inner.is_subtype_of(&Type::String) {
                         ensure_type("string");
                     }
                     Type::String
