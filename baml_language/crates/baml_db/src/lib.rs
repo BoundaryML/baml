@@ -19,6 +19,6 @@ pub use baml_compiler_mir;
 pub use baml_parser;
 pub use baml_syntax;
 pub use baml_compiler_tir;
-pub use baml_vir;
+pub use baml_compiler_vir;
 pub use baml_workspace;
 pub use salsa::Setter;

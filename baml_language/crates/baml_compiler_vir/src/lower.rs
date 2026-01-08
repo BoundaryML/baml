@@ -76,7 +76,7 @@ impl std::error::Error for LoweringError {}
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise
 /// not suitable for code generation.
 ///
-/// Note: Takes `baml_compiler_tir::Db` instead of `baml_vir::Db` for broader compatibility.
+/// Note: Takes `baml_compiler_tir::Db` instead of `baml_compiler_vir::Db` for broader compatibility.
 /// This allows callers with `baml_compiler_mir::Db` to use this function directly.
 pub fn lower_from_hir(
     db: &dyn baml_compiler_tir::Db,

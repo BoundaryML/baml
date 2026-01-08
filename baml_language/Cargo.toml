@@ -29,7 +29,7 @@ baml_onionskin = { path = "crates/baml_onionskin" }
 baml_syntax = { path = "crates/baml_syntax" }
 baml_tests = { path = "crates/baml_tests" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
-baml_vir = { path = "crates/baml_vir" }
+baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 baml_vm = { path = "crates/baml_vm" }
 baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }

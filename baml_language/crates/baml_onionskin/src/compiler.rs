@@ -899,7 +899,7 @@ impl CompilerRunner {
     }
 
     fn run_typed_ir(&mut self) {
-        use baml_vir::{lower_from_hir, pretty_print};
+        use baml_compiler_vir::{lower_from_hir, pretty_print};
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1067,7 +1067,7 @@ impl CompilerRunner {
                     );
 
                     // Lower HIR → VIR → MIR
-                    let mir_output = match baml_vir::lower_from_hir(
+                    let mir_output = match baml_compiler_vir::lower_from_hir(
                         &self.db,
                         &body,
                         &inference_result,

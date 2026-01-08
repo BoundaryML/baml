@@ -24,7 +24,7 @@ baml_compiler_mir = { workspace = true }
 baml_vm = { workspace = true }
 baml_workspace = { workspace = true }
 baml_compiler_tir = { workspace = true }
-baml_vir = { workspace = true }
+baml_compiler_vir = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1.0"

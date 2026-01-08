@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use baml_base::{Name, Span};
 use baml_compiler_hir::FunctionSignature;
 use baml_compiler_tir::{Ty, TypeResolutionContext};
-use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
+use baml_compiler_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
@@ -754,7 +754,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
                 // Check if this is a method reference (result type is a function)
                 // vs an actual field access (result type is the field's type)
-                if matches!(result_ty, baml_vir::Ty::Function { .. }) {
+                if matches!(result_ty, baml_compiler_vir::Ty::Function { .. }) {
                     // Method reference - emit as a function constant
                     // The method name is just the field name (methods are desugared to top-level functions)
                     self.builder.assign(
@@ -960,7 +960,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     #[allow(clippy::unused_self, clippy::type_complexity)]
     fn try_extract_switch_arms(
         &self,
-        arms: &[baml_vir::MatchArm],
+        arms: &[baml_compiler_vir::MatchArm],
         body: &ExprBody,
     ) -> Option<(Vec<(i64, usize)>, Option<usize>)> {
         let mut switch_arms = Vec::new();
@@ -1027,7 +1027,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         &mut self,
         scrutinee_local: Local,
         scrutinee_ty: &Ty,
-        arms: &[baml_vir::MatchArm],
+        arms: &[baml_compiler_vir::MatchArm],
         switch_values: Vec<(i64, usize)>,
         wildcard_arm_idx: Option<usize>,
         join_block: BlockId,
@@ -1474,14 +1474,14 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         args: &[ExprId],
         dest: Place,
         body: &ExprBody,
-        _result_ty: &baml_vir::Ty,
+        _result_ty: &baml_compiler_vir::Ty,
     ) {
         let callee_expr = body.expr(callee);
 
         // Check if this is a $watch method call (e.g., value.$watch.options(filter))
         if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
-            if let baml_vir::Ty::WatchAccessor(_) = base_ty {
+            if let baml_compiler_vir::Ty::WatchAccessor(_) = base_ty {
                 // This is a $watch method call
                 // The base expression is var.$watch, so we need to get the var
                 let watch_accessor_expr = body.expr(*base);
@@ -1732,36 +1732,36 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     }
 
     /// Convert a VIR type to a TIR type for MIR locals.
-    fn lower_typed_ir_ty(ty: &baml_vir::Ty) -> Ty {
+    fn lower_typed_ir_ty(ty: &baml_compiler_vir::Ty) -> Ty {
         match ty {
-            baml_vir::Ty::Int => Ty::Int,
-            baml_vir::Ty::Float => Ty::Float,
-            baml_vir::Ty::String => Ty::String,
-            baml_vir::Ty::Bool => Ty::Bool,
-            baml_vir::Ty::Null => Ty::Null,
-            baml_vir::Ty::Image => Ty::Image,
-            baml_vir::Ty::Audio => Ty::Audio,
-            baml_vir::Ty::Video => Ty::Video,
-            baml_vir::Ty::Pdf => Ty::Pdf,
-            baml_vir::Ty::Class(name) | baml_vir::Ty::Enum(name) => Ty::Named(name.clone()),
-            baml_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
-            baml_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
-            baml_vir::Ty::Map { key, value } => Ty::Map {
+            baml_compiler_vir::Ty::Int => Ty::Int,
+            baml_compiler_vir::Ty::Float => Ty::Float,
+            baml_compiler_vir::Ty::String => Ty::String,
+            baml_compiler_vir::Ty::Bool => Ty::Bool,
+            baml_compiler_vir::Ty::Null => Ty::Null,
+            baml_compiler_vir::Ty::Image => Ty::Image,
+            baml_compiler_vir::Ty::Audio => Ty::Audio,
+            baml_compiler_vir::Ty::Video => Ty::Video,
+            baml_compiler_vir::Ty::Pdf => Ty::Pdf,
+            baml_compiler_vir::Ty::Class(name) | baml_compiler_vir::Ty::Enum(name) => Ty::Named(name.clone()),
+            baml_compiler_vir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_compiler_vir::Ty::List(inner) => Ty::List(Box::new(Self::lower_typed_ir_ty(inner))),
+            baml_compiler_vir::Ty::Map { key, value } => Ty::Map {
                 key: Box::new(Self::lower_typed_ir_ty(key)),
                 value: Box::new(Self::lower_typed_ir_ty(value)),
             },
-            baml_vir::Ty::Union(types) => {
+            baml_compiler_vir::Ty::Union(types) => {
                 Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
             }
-            baml_vir::Ty::Function { params, ret } => Ty::Function {
+            baml_compiler_vir::Ty::Function { params, ret } => Ty::Function {
                 params: params.iter().map(Self::lower_typed_ir_ty).collect(),
                 ret: Box::new(Self::lower_typed_ir_ty(ret)),
             },
-            baml_vir::Ty::Unknown => Ty::Unknown,
-            baml_vir::Ty::Error => Ty::Error,
-            baml_vir::Ty::Unit => Ty::Void,
-            baml_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
-            baml_vir::Ty::WatchAccessor(inner) => {
+            baml_compiler_vir::Ty::Unknown => Ty::Unknown,
+            baml_compiler_vir::Ty::Error => Ty::Error,
+            baml_compiler_vir::Ty::Unit => Ty::Void,
+            baml_compiler_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
+            baml_compiler_vir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
             }
         }

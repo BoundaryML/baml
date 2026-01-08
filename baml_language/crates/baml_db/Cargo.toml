@@ -28,7 +28,7 @@ baml_syntax = { workspace = true }
 baml_parser = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_compiler_tir = { workspace = true }
-baml_vir = { workspace = true }
+baml_compiler_vir = { workspace = true }
 baml_compiler_mir = { workspace = true }
 baml_codegen = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }

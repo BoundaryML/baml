@@ -49,7 +49,7 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_compiler_tir::TypeResolutionContext;
-pub use baml_vir::LoweringError;
+pub use baml_compiler_vir::LoweringError;
 pub use baml_vm::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value, type_tags,
@@ -272,7 +272,7 @@ pub fn compile_files(
 
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let vir = baml_vir::lower_from_hir(db, &body, &inference, &resolution_ctx)?;
+                        let vir = baml_compiler_vir::lower_from_hir(db, &body, &inference, &resolution_ctx)?;
                         let mir = baml_compiler_mir::lower(&signature, &vir, db, &classes, &resolution_ctx);
 
                         // Compile MIR to bytecode
