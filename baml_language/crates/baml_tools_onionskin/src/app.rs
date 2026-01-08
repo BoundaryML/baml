@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::Result;
 use arboard::Clipboard;
+use baml_base::DebugMessage;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -80,6 +81,8 @@ pub(crate) struct App {
     rebuild_state_time: Option<Instant>,
     /// Receiver for background build results
     build_result_rx: Option<Receiver<BuildResult>>,
+    /// Debug messages collected from the compiler (via baml_debug! macro)
+    debug_messages: Vec<DebugMessage>,
 }
 
 impl App {
@@ -104,6 +107,9 @@ impl App {
         // Initial compilation (no snapshot)
         compiler.compile_from_filesystem(&current_files, None);
 
+        // Drain any debug messages from initial compilation
+        let debug_messages = baml_base::drain_debug_log();
+
         Ok(Self {
             file_path: path,
             workspace_root,
@@ -124,6 +130,7 @@ impl App {
             rebuild_state: RebuildState::Idle,
             rebuild_state_time: None,
             build_result_rx: None,
+            debug_messages,
         })
     }
 
@@ -483,6 +490,10 @@ impl App {
             (KeyCode::Char('p'), KeyModifiers::NONE) => {
                 self.paste_from_clipboard();
             }
+            // Dismiss debug messages with 'd'
+            (KeyCode::Char('d'), KeyModifiers::NONE) => {
+                self.debug_messages.clear();
+            }
             _ => {}
         }
     }
@@ -703,6 +714,9 @@ impl App {
                 .compile_from_filesystem(&self.current_files, None);
         }
 
+        // Collect any debug messages emitted during compilation
+        self.debug_messages = baml_base::drain_debug_log();
+
         self.last_compiled_files = self.current_files.clone();
     }
 
@@ -793,5 +807,10 @@ impl App {
     /// Check if compiler hot-reload is enabled
     pub(crate) fn is_hot_reload_enabled(&self) -> bool {
         self.watcher.is_watching_compiler()
+    }
+
+    /// Get debug messages collected from the compiler
+    pub(crate) fn debug_messages(&self) -> &[DebugMessage] {
+        &self.debug_messages
     }
 }

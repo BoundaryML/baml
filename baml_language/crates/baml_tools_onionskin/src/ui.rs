@@ -45,62 +45,65 @@ pub(crate) fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>
 }
 
 pub(crate) fn draw(frame: &mut Frame, app: &App) {
-    // Check if we need to show rebuild status banner
+    // Check which banners to show
     let show_rebuild_banner = !matches!(app.rebuild_state(), RebuildState::Idle);
+    let show_debug_banner = !app.debug_messages().is_empty();
 
-    let chunks = if show_rebuild_banner {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Phase tabs
-                Constraint::Length(3), // Rebuild status banner
-                Constraint::Min(0),    // Content
-                Constraint::Length(3), // Status bar with shortcuts
-            ])
-            .split(frame.area())
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Header
-                Constraint::Length(3), // Phase tabs
-                Constraint::Min(0),    // Content
-                Constraint::Length(3), // Status bar with shortcuts
-            ])
-            .split(frame.area())
-    };
-
-    // Draw header
-    draw_header(frame, chunks[0], app);
-
-    // Draw phase tabs
-    draw_phase_tabs(frame, chunks[1], app);
+    // Build constraints dynamically based on which banners are shown
+    let mut constraints = vec![
+        Constraint::Length(3), // Header
+        Constraint::Length(3), // Phase tabs
+    ];
 
     if show_rebuild_banner {
-        // Draw rebuild status
-        draw_rebuild_banner(frame, chunks[2], app);
-
-        // Draw content (either single view or diff view)
-        if app.has_snapshot() {
-            draw_diff_view(frame, chunks[3], app);
-        } else {
-            draw_single_view(frame, chunks[3], app);
-        }
-
-        // Draw status bar
-        draw_status_bar(frame, chunks[4], app);
-    } else {
-        // Draw content (either single view or diff view)
-        if app.has_snapshot() {
-            draw_diff_view(frame, chunks[2], app);
-        } else {
-            draw_single_view(frame, chunks[2], app);
-        }
-
-        // Draw status bar
-        draw_status_bar(frame, chunks[3], app);
+        constraints.push(Constraint::Length(3)); // Rebuild status banner
     }
+    if show_debug_banner {
+        // Dynamic height based on number of messages (min 3, max 8)
+        let debug_height = (app.debug_messages().len() + 2).min(8).max(3) as u16;
+        constraints.push(Constraint::Length(debug_height)); // Debug log banner
+    }
+
+    constraints.push(Constraint::Min(0));    // Content
+    constraints.push(Constraint::Length(3)); // Status bar
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(frame.area());
+
+    let mut chunk_idx = 0;
+
+    // Draw header
+    draw_header(frame, chunks[chunk_idx], app);
+    chunk_idx += 1;
+
+    // Draw phase tabs
+    draw_phase_tabs(frame, chunks[chunk_idx], app);
+    chunk_idx += 1;
+
+    // Draw rebuild banner if needed
+    if show_rebuild_banner {
+        draw_rebuild_banner(frame, chunks[chunk_idx], app);
+        chunk_idx += 1;
+    }
+
+    // Draw debug banner if needed
+    if show_debug_banner {
+        draw_debug_banner(frame, chunks[chunk_idx], app);
+        chunk_idx += 1;
+    }
+
+    // Draw content (either single view or diff view)
+    if app.has_snapshot() {
+        draw_diff_view(frame, chunks[chunk_idx], app);
+    } else {
+        draw_single_view(frame, chunks[chunk_idx], app);
+    }
+    chunk_idx += 1;
+
+    // Draw status bar
+    draw_status_bar(frame, chunks[chunk_idx], app);
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App) {
@@ -224,6 +227,46 @@ fn draw_rebuild_banner(frame: &mut Frame, area: Rect, app: &App) {
                 .title("Compiler Hot-Reload")
                 .border_style(style),
         );
+
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_debug_banner(frame: &mut Frame, area: Rect, app: &App) {
+    let messages = app.debug_messages();
+    let count = messages.len();
+
+    // Build lines for display
+    let mut lines: Vec<Line> = Vec::new();
+
+    for msg in messages.iter().take(6) {
+        // Extract just the crate name from the module path for brevity
+        let crate_name = msg.module.split("::").next().unwrap_or(msg.module);
+        let line = Line::from(vec![
+            Span::styled(
+                format!("[{}] ", crate_name),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::raw(&msg.message),
+        ]);
+        lines.push(line);
+    }
+
+    if count > 6 {
+        lines.push(Line::from(Span::styled(
+            format!("... and {} more", count - 6),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let title = format!("Debug Log ({} messages) - [d] Dismiss", count);
+    let paragraph = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: true });
 
     frame.render_widget(paragraph, area);
 }
