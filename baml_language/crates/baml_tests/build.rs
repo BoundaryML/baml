@@ -221,12 +221,12 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::*;
             use baml_db::baml_lexer;
             use baml_db::baml_parser;
-            use baml_db::baml_hir;
+            use baml_db::baml_compiler_hir;
             use baml_db::baml_tir;
             use baml_db::baml_vir;
             use baml_db::baml_mir;
             use baml_db::baml_codegen;
-            use baml_hir::{function_body, function_signature};
+            use baml_compiler_hir::{function_body, function_signature};
             use baml_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_tir::pretty::short_display;
             use baml_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
@@ -351,7 +351,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
                         #relative_path,
                         &content,
                     );
-                    let items_struct = baml_hir::file_items(&db, source_file);
+                    let items_struct = baml_compiler_hir::file_items(&db, source_file);
                     let items = items_struct.items(&db);
                     if !items.is_empty() {
                         let formatted = crate::format_hir_file(&db, source_file, items);
@@ -429,10 +429,10 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
 
             // Iterate over files and their functions
             for source_file in &source_files {
-                let items_struct = baml_hir::file_items(&db, *source_file);
+                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
                 for item in items.iter() {
-                    if let baml_hir::ItemId::Function(func_id) = item {
+                    if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
                         let result = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
@@ -503,10 +503,10 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             // Build class field indices map (class name -> field name -> field index)
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
             for source_file in &source_files {
-                let item_tree = baml_hir::file_item_tree(&db, *source_file);
-                let items_struct = baml_hir::file_items(&db, *source_file);
+                let item_tree = baml_compiler_hir::file_item_tree(&db, *source_file);
+                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
                 for item in items_struct.items(&db) {
-                    if let baml_hir::ItemId::Class(class_loc) = item {
+                    if let baml_compiler_hir::ItemId::Class(class_loc) = item {
                         let class = &item_tree[class_loc.id(&db)];
                         let class_name = class.name.to_string();
                         let mut field_indices = HashMap::new();
@@ -520,10 +520,10 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             // Iterate over files and their functions
             for source_file in &source_files {
-                let items_struct = baml_hir::file_items(&db, *source_file);
+                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
                 let items = items_struct.items(&db);
                 for item in items.iter() {
-                    if let baml_hir::ItemId::Function(func_id) = item {
+                    if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
                         let inference = baml_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
@@ -987,11 +987,11 @@ fn generate_incremental_benchmark(
 
                 // Initial compilation
                 #initial_loads
-                let _ = baml_hir::project_items(&db, root);  // Full compilation
+                let _ = baml_compiler_hir::project_items(&db, root);  // Full compilation
 
                 // Apply incremental changes (re-add files with new content)
                 #incremental_updates
-                let _ = black_box(baml_hir::project_items(&db, root));  // Incremental compilation
+                let _ = black_box(baml_compiler_hir::project_items(&db, root));  // Incremental compilation
             });
         }
     }
@@ -1013,7 +1013,7 @@ fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
                 let mut db = ProjectDatabase::new();
                 let root = db.set_project_root(std::path::Path::new("."));
                 db.add_file(#file_name, &content);
-                let _ = black_box(baml_hir::project_items(&db, root));
+                let _ = black_box(baml_compiler_hir::project_items(&db, root));
             });
         }
     }

@@ -111,7 +111,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_workspace/**' \
             ':baml_language/crates/baml_parser/**' \
             ':baml_language/crates/baml_base/**' \
@@ -128,7 +128,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_thir/**' \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

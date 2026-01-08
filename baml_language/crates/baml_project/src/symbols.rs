@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use baml_db::{
     Name, Span,
-    baml_hir::{self, Db, ItemId, file_item_tree, project_items},
+    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
     baml_workspace::Project,
 };
 use text_size::TextRange;
@@ -43,7 +43,7 @@ pub struct Symbol {
 
 /// List all functions in the project.
 pub fn list_functions(db: &dyn Db, project: Project) -> Vec<Symbol> {
-    let func_list = baml_hir::list_function_names(db, project);
+    let func_list = baml_compiler_hir::list_function_names(db, project);
 
     func_list
         .into_iter()

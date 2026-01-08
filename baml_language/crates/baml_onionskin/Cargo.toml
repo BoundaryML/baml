@@ -20,7 +20,7 @@ baml_base = { workspace = true }
 baml_db = { workspace = true }
 baml_lexer = { workspace = true }
 baml_parser = { workspace = true }
-baml_hir = { workspace = true }
+baml_compiler_hir = { workspace = true }
 baml_tir = { workspace = true }
 baml_vir = { workspace = true }
 baml_mir = { workspace = true }

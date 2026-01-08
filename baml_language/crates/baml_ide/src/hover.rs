@@ -2,7 +2,7 @@
 
 use baml_db::{
     Name, SourceFile,
-    baml_hir::{self, Db, ItemId, file_item_tree, project_items},
+    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
     baml_workspace::Project,
 };
 use text_size::{TextRange, TextSize};
@@ -141,7 +141,7 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
                 let func = &item_tree[func_loc.id(db)];
 
                 if func.name == name_to_find {
-                    let sig = baml_hir::function_signature(db, *func_loc);
+                    let sig = baml_compiler_hir::function_signature(db, *func_loc);
                     return Some(format_function_signature(&sig));
                 }
             }
@@ -210,7 +210,7 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
 }
 
 /// Format a function signature for hover display.
-fn format_function_signature(sig: &baml_hir::FunctionSignature) -> String {
+fn format_function_signature(sig: &baml_compiler_hir::FunctionSignature) -> String {
     let params: Vec<String> = sig
         .params
         .iter()
@@ -226,8 +226,8 @@ fn format_function_signature(sig: &baml_hir::FunctionSignature) -> String {
 }
 
 /// Format a `TypeRef` for display.
-fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
-    use baml_hir::TypeRef;
+fn format_type_ref(ty: &baml_compiler_hir::TypeRef) -> String {
+    use baml_compiler_hir::TypeRef;
 
     match ty {
         TypeRef::Path(path) => path
@@ -274,7 +274,7 @@ fn format_type_ref(ty: &baml_hir::TypeRef) -> String {
 }
 
 /// Format a class definition for hover display.
-fn format_class_definition(class: &baml_hir::Class) -> String {
+fn format_class_definition(class: &baml_compiler_hir::Class) -> String {
     let mut lines = vec![format!("class {} {{", class.name)];
 
     for field in &class.fields {
@@ -295,7 +295,7 @@ fn format_class_definition(class: &baml_hir::Class) -> String {
 }
 
 /// Format an enum definition for hover display.
-fn format_enum_definition(enum_def: &baml_hir::Enum) -> String {
+fn format_enum_definition(enum_def: &baml_compiler_hir::Enum) -> String {
     let mut lines = vec![format!("enum {} {{", enum_def.name)];
 
     for variant in &enum_def.variants {

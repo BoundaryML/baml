@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_diagnostics = { workspace = true }
-baml_hir = { workspace = true }
+baml_compiler_hir = { workspace = true }
 baml_tir = { workspace = true }
 
 la-arena = { workspace = true }

@@ -9,11 +9,11 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_hir, baml_lexer, baml_parser, baml_syntax, baml_tir,
+    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_lexer, baml_parser, baml_syntax, baml_tir,
     baml_workspace,
 };
 use baml_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
-use baml_hir::{ItemId, function_body, function_signature};
+use baml_compiler_hir::{ItemId, function_body, function_signature};
 use baml_project::{ProjectDatabase, collect_diagnostics};
 use baml_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
@@ -602,9 +602,9 @@ impl CompilerRunner {
         for (path, source_file) in sorted_files {
             let file_path = path.display().to_string();
 
-            // Use real baml_hir for item extraction
-            let item_tree = baml_hir::file_item_tree(&self.db, *source_file);
-            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            // Use real baml_compiler_hir for item extraction
+            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *source_file);
+            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
             // Check if THIS specific file was modified
@@ -639,17 +639,17 @@ impl CompilerRunner {
                                     format!(
                                         "{}: {}",
                                         p.name,
-                                        baml_hir::pretty::type_ref_to_str(&p.type_ref)
+                                        baml_compiler_hir::pretty::type_ref_to_str(&p.type_ref)
                                     )
                                 })
                                 .collect();
                             let return_str =
-                                baml_hir::pretty::type_ref_to_str(&signature.return_type);
+                                baml_compiler_hir::pretty::type_ref_to_str(&signature.return_type);
 
                             // Print body based on type
                             match &*body {
-                                baml_hir::FunctionBody::Expr(expr_body) => {
-                                    let body_code = baml_hir::body_to_code(expr_body);
+                                baml_compiler_hir::FunctionBody::Expr(expr_body) => {
+                                    let body_code = baml_compiler_hir::body_to_code(expr_body);
                                     // Combine header with body, putting { on same line
                                     let header = format!(
                                         "function {}({}) -> {} {{",
@@ -675,7 +675,7 @@ impl CompilerRunner {
                                     writeln!(output, "{closing}").ok();
                                     output_annotated.push((closing, status));
                                 }
-                                baml_hir::FunctionBody::Llm(_) => {
+                                baml_compiler_hir::FunctionBody::Llm(_) => {
                                     let header = format!(
                                         "function {}({}) -> {}",
                                         func.name,
@@ -688,7 +688,7 @@ impl CompilerRunner {
                                     writeln!(output, "{line}").ok();
                                     output_annotated.push((line, status));
                                 }
-                                baml_hir::FunctionBody::Missing => {
+                                baml_compiler_hir::FunctionBody::Missing => {
                                     let header = format!(
                                         "function {}({}) -> {}",
                                         func.name,
@@ -715,7 +715,7 @@ impl CompilerRunner {
                                 let field_str = format!(
                                     "  {}: {}",
                                     field.name,
-                                    baml_hir::pretty::type_ref_to_str(&field.type_ref)
+                                    baml_compiler_hir::pretty::type_ref_to_str(&field.type_ref)
                                 );
                                 writeln!(output, "{field_str}").ok();
                                 output_annotated.push((field_str, status));
@@ -742,7 +742,7 @@ impl CompilerRunner {
                             let line = format!(
                                 "type {} = {}",
                                 alias.name,
-                                baml_hir::pretty::type_ref_to_str(&alias.type_ref)
+                                baml_compiler_hir::pretty::type_ref_to_str(&alias.type_ref)
                             );
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
@@ -832,7 +832,7 @@ impl CompilerRunner {
             });
 
             // Get HIR items for this file
-            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
             for item in items {
@@ -931,7 +931,7 @@ impl CompilerRunner {
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
             // Get HIR items for this file
-            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
             for item in items {
@@ -941,7 +941,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Skip non-expression bodies
-                    let baml_hir::FunctionBody::Expr(_) = &*body else {
+                    let baml_compiler_hir::FunctionBody::Expr(_) = &*body else {
                         continue;
                     };
 
@@ -1015,8 +1015,8 @@ impl CompilerRunner {
         // Build classes map (class name -> field name -> field index) for MIR lowering
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
         for file in &file_list {
-            let item_tree = baml_hir::file_item_tree(&self.db, *file);
-            let items_struct = baml_hir::file_items(&self.db, *file);
+            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *file);
+            let items_struct = baml_compiler_hir::file_items(&self.db, *file);
             for item in items_struct.items(&self.db) {
                 if let ItemId::Class(class_loc) = item {
                     let class = &item_tree[class_loc.id(&self.db)];
@@ -1045,7 +1045,7 @@ impl CompilerRunner {
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
             // Get HIR items for this file
-            let items_struct = baml_hir::file_items(&self.db, *source_file);
+            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
             for item in items {

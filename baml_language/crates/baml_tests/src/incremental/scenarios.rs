@@ -3,8 +3,8 @@
 //! These tests verify that editing BAML files only recomputes the necessary
 //! queries, demonstrating Salsa's "early cutoff" optimization.
 
-use baml_db::{SourceFile, baml_hir};
-use baml_hir::{function_body, function_signature};
+use baml_db::{SourceFile, baml_compiler_hir};
+use baml_compiler_hir::{function_body, function_signature};
 use salsa::Setter;
 
 use super::IncrementalTestDb;
@@ -12,9 +12,9 @@ use super::IncrementalTestDb;
 /// Query all function bodies in a file.
 /// This is a helper to avoid manually extracting function IDs in tests.
 fn query_all_function_bodies(db: &baml_project::ProjectDatabase, file: SourceFile) {
-    let items = baml_hir::file_items(db, file);
+    let items = baml_compiler_hir::file_items(db, file);
     for item in items.items(db) {
-        if let baml_hir::ItemId::Function(func_id) = item {
+        if let baml_compiler_hir::ItemId::Function(func_id) = item {
             let _ = function_body(db, *func_id);
         }
     }
@@ -22,9 +22,9 @@ fn query_all_function_bodies(db: &baml_project::ProjectDatabase, file: SourceFil
 
 /// Query all function signatures in a file.
 fn query_all_function_signatures(db: &baml_project::ProjectDatabase, file: SourceFile) {
-    let items = baml_hir::file_items(db, file);
+    let items = baml_compiler_hir::file_items(db, file);
     for item in items.items(db) {
-        if let baml_hir::ItemId::Function(func_id) = item {
+        if let baml_compiler_hir::ItemId::Function(func_id) = item {
             let _ = function_signature(db, *func_id);
         }
     }
@@ -51,7 +51,7 @@ function Greet(name: string) -> string {
     // First run - all queries execute
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),
@@ -76,7 +76,7 @@ function Greet(name: string) -> string {
     // file_items benefits from early cutoff: ItemTree is equal, so it's cached.
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),      // Must re-run: input text changed
@@ -237,7 +237,7 @@ class Address {
     // Query all items initially
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),
@@ -269,7 +269,7 @@ class NewClass {
     // (new class means different ItemTree content)
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),
@@ -297,7 +297,7 @@ class MyClass {
     // Query items initially
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),
@@ -322,7 +322,7 @@ class MyClass {
     // file_items benefits from early cutoff: ItemTree is equal, so it's cached.
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),      // Must re-run: input text changed
@@ -357,10 +357,10 @@ class ClassB {
     );
 
     // Query both files initially
-    let _ = baml_hir::file_items(test_db.db(), file_a);
+    let _ = baml_compiler_hir::file_items(test_db.db(), file_a);
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file_b);
+            let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
             ("lex_file", 1),
@@ -382,7 +382,7 @@ class ClassA {
     // Query file_b - should be fully cached (file_a's change doesn't affect it)
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file_b);
+            let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
             ("lex_file", 0),
@@ -395,7 +395,7 @@ class ClassA {
     // Query file_a - should re-execute
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file_a);
+            let _ = baml_compiler_hir::file_items(db, file_a);
         },
         &[
             ("lex_file", 1),
@@ -424,7 +424,7 @@ function OldName(x: string) -> string {
     // Query initially
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),
@@ -446,7 +446,7 @@ function NewName(x: string) -> string {
     // After rename: all queries must re-execute (name is part of ItemTree)
     test_db.assert_executed(
         |db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
             ("lex_file", 1),

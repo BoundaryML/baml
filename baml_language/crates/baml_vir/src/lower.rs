@@ -22,7 +22,7 @@
 //! 4. If block has no tail expression, the final result is `Unit`
 
 use baml_base::Span;
-use baml_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
+use baml_compiler_hir::{ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId};
 use baml_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
 use rustc_hash::FxHashMap;
@@ -198,7 +198,7 @@ impl<'a> LoweringContext<'a> {
         hir_id: HirExprId,
         hir_body: &HirExprBody,
     ) -> Result<ExprId, LoweringError> {
-        use baml_hir::Expr as HirExpr;
+        use baml_compiler_hir::Expr as HirExpr;
 
         let hir_expr = &hir_body.exprs[hir_id];
         let span = hir_body.get_expr_span(hir_id);
@@ -578,7 +578,7 @@ impl<'a> LoweringContext<'a> {
         stmt_id: HirStmtId,
         hir_body: &HirExprBody,
     ) -> Result<ExprId, LoweringError> {
-        use baml_hir::Stmt as HirStmt;
+        use baml_compiler_hir::Stmt as HirStmt;
 
         let stmt = &hir_body.stmts[stmt_id];
         let span = hir_body.get_stmt_span(stmt_id);
@@ -778,7 +778,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     /// Lower an HIR `TypeRef` to VIR type.
-    fn lower_type_ref(&self, type_ref: &baml_hir::TypeRef) -> Ty {
+    fn lower_type_ref(&self, type_ref: &baml_compiler_hir::TypeRef) -> Ty {
         let (thir_ty, _) = self
             .resolution_ctx
             .lower_type_ref(type_ref, Span::default());
@@ -788,22 +788,22 @@ impl<'a> LoweringContext<'a> {
     /// Lower an HIR pattern to VIR pattern.
     fn lower_pattern(
         &mut self,
-        pat_id: baml_hir::PatId,
+        pat_id: baml_compiler_hir::PatId,
         hir_body: &HirExprBody,
     ) -> Result<PatId, LoweringError> {
         let hir_pat = &hir_body.patterns[pat_id];
         let pat = match hir_pat {
-            baml_hir::Pattern::Binding(name) => Pattern::Binding(name.clone()),
-            baml_hir::Pattern::TypedBinding { name, ty } => Pattern::TypedBinding {
+            baml_compiler_hir::Pattern::Binding(name) => Pattern::Binding(name.clone()),
+            baml_compiler_hir::Pattern::TypedBinding { name, ty } => Pattern::TypedBinding {
                 name: name.clone(),
                 ty: self.lower_type_ref(ty),
             },
-            baml_hir::Pattern::Literal(lit) => Pattern::Literal(Literal::from(lit)),
-            baml_hir::Pattern::EnumVariant { enum_name, variant } => Pattern::EnumVariant {
+            baml_compiler_hir::Pattern::Literal(lit) => Pattern::Literal(Literal::from(lit)),
+            baml_compiler_hir::Pattern::EnumVariant { enum_name, variant } => Pattern::EnumVariant {
                 enum_name: enum_name.clone(),
                 variant: variant.clone(),
             },
-            baml_hir::Pattern::Union(pats) => {
+            baml_compiler_hir::Pattern::Union(pats) => {
                 let mut lowered_pats = Vec::with_capacity(pats.len());
                 for &p in pats {
                     lowered_pats.push(self.lower_pattern(p, hir_body)?);

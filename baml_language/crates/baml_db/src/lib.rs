@@ -6,14 +6,14 @@
 //! ## Usage
 //!
 //! ```ignore
-//! use baml_db::{FileId, SourceFile, baml_hir, baml_parser};
+//! use baml_db::{FileId, SourceFile, baml_compiler_hir, baml_parser};
 //! ```
 
 // Re-export all public APIs
 pub use baml_base::*;
 pub use baml_codegen;
 pub use baml_diagnostics;
-pub use baml_hir;
+pub use baml_compiler_hir;
 pub use baml_lexer;
 pub use baml_mir;
 pub use baml_parser;

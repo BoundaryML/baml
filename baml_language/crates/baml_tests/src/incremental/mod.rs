@@ -92,7 +92,7 @@ impl IncrementalTestDb {
     ///
     /// ```ignore
     /// test_db.assert_executed(
-    ///     |db| { baml_hir::file_items(db, file); },
+    ///     |db| { baml_compiler_hir::file_items(db, file); },
     ///     &[
     ///         ("lex_file", 1),        // Should execute once
     ///         ("file_lowering", 0),  // Should NOT execute (cached)
@@ -163,7 +163,7 @@ impl Default for IncrementalTestDb {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::baml_hir;
+    use baml_db::baml_compiler_hir;
 
     use super::*;
 
@@ -182,7 +182,7 @@ class Foo {
 
         // First execution should run queries
         let (_, executed) = test_db.log_executed(|db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         });
 
         // Should have executed some queries
@@ -217,7 +217,7 @@ class Bar {
         // First execution
         test_db.assert_executed(
             |db| {
-                let _ = baml_hir::file_items(db, file);
+                let _ = baml_compiler_hir::file_items(db, file);
             },
             &[("lex_file", 1), ("parse_result", 1), ("file_lowering", 1)],
         );
@@ -225,7 +225,7 @@ class Bar {
         // Second execution without any changes - everything should be cached
         test_db.assert_executed(
             |db| {
-                let _ = baml_hir::file_items(db, file);
+                let _ = baml_compiler_hir::file_items(db, file);
             },
             &[("lex_file", 0), ("parse_result", 0), ("file_lowering", 0)],
         );
@@ -246,7 +246,7 @@ class Original {
 
         // First execution
         let _ = test_db.log_executed(|db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         });
 
         // Modify the file
@@ -260,7 +260,7 @@ class Modified {
         // After modification, queries should re-execute
         test_db.assert_executed(
             |db| {
-                let _ = baml_hir::file_items(db, file);
+                let _ = baml_compiler_hir::file_items(db, file);
             },
             &[
                 ("lex_file", 1),      // Must re-lex
@@ -283,7 +283,7 @@ class Modified {
 
         // First execution
         let _ = test_db.log_executed(|db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         });
 
         // Add whitespace only
@@ -297,7 +297,7 @@ class Modified {
         // After whitespace change: lex and parse must re-run,
         // but ideally item_tree would be cached (if implementation is optimal)
         let (_, executed) = test_db.log_executed(|db| {
-            let _ = baml_hir::file_items(db, file);
+            let _ = baml_compiler_hir::file_items(db, file);
         });
 
         // At minimum, lex_file should re-execute

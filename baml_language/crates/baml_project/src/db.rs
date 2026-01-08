@@ -66,7 +66,7 @@ impl baml_workspace::Db for ProjectDatabase {
 }
 
 #[salsa::db]
-impl baml_hir::Db for ProjectDatabase {}
+impl baml_compiler_hir::Db for ProjectDatabase {}
 
 #[salsa::db]
 impl baml_tir::Db for ProjectDatabase {}

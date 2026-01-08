@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use baml_base::{Name, Span};
 use baml_diagnostics::TypeError;
-use baml_hir::TypeRef;
+use baml_compiler_hir::TypeRef;
 
 use crate::{LiteralValue, Ty};
 
@@ -190,7 +190,7 @@ fn lower_type_ref_resolved_with_ctx(
 /// Lower a path-based type with validation and resolution.
 fn lower_path_type_resolved_with_ctx(
     ctx: &mut TypeLoweringContextResolved<'_>,
-    path: &baml_hir::Path,
+    path: &baml_compiler_hir::Path,
 ) -> Ty {
     match path.segments.len() {
         1 => {

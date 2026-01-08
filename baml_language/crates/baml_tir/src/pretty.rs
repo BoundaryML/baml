@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use baml_base::Span;
 use baml_diagnostics::TypeError;
-use baml_hir::{
+use baml_compiler_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
     Stmt, StmtId, UnaryOp,
 };
@@ -29,7 +29,7 @@ use crate::{InferenceResult, TypeResolutionContext};
 ///    └─ Path(y): int
 /// ```
 pub fn render_function_tree(
-    db: &dyn baml_hir::Db,
+    db: &dyn baml_compiler_hir::Db,
     resolution_ctx: &TypeResolutionContext,
     func_name: &str,
     signature: &FunctionSignature,
@@ -44,7 +44,7 @@ pub fn render_function_tree(
 
 /// Renders just a function body's TIR as a tree.
 pub fn render_body_tree(
-    db: &dyn baml_hir::Db,
+    db: &dyn baml_compiler_hir::Db,
     resolution_ctx: &TypeResolutionContext,
     body: &FunctionBody,
     result: &InferenceResult,
@@ -58,7 +58,7 @@ pub fn render_body_tree(
 /// Internal tree renderer.
 struct TreeRenderer<'a> {
     #[allow(dead_code)]
-    db: &'a dyn baml_hir::Db,
+    db: &'a dyn baml_compiler_hir::Db,
     resolution_ctx: &'a TypeResolutionContext,
     output: &'a mut String,
     /// Tracks whether each depth level has more siblings coming.
@@ -68,7 +68,7 @@ struct TreeRenderer<'a> {
 
 impl<'a> TreeRenderer<'a> {
     fn new(
-        db: &'a dyn baml_hir::Db,
+        db: &'a dyn baml_compiler_hir::Db,
         resolution_ctx: &'a TypeResolutionContext,
         output: &'a mut String,
     ) -> Self {
@@ -441,8 +441,8 @@ impl<'a> TreeRenderer<'a> {
                 origin,
             } => {
                 let origin_str = match origin {
-                    baml_hir::LoopOrigin::While => "While",
-                    baml_hir::LoopOrigin::ForLoop => "While (from for-loop)",
+                    baml_compiler_hir::LoopOrigin::While => "While",
+                    baml_compiler_hir::LoopOrigin::ForLoop => "While (from for-loop)",
                 };
                 writeln!(self.output, "{prefix}{origin_str}").ok();
                 self.push_continuation(!is_last);

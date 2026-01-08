@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span};
-use baml_hir::FunctionSignature;
+use baml_compiler_hir::FunctionSignature;
 use baml_tir::{Ty, TypeResolutionContext};
 use baml_vir::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp};
 

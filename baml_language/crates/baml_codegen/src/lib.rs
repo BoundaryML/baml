@@ -47,7 +47,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile, Span};
-use baml_hir::{self, ItemId, function_body, function_signature};
+use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_tir::TypeResolutionContext;
 pub use baml_vir::LoweringError;
 pub use baml_vm::{
@@ -98,7 +98,7 @@ pub fn compile_files(
 
     // Then, add user-defined functions
     for file in files {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
@@ -116,8 +116,8 @@ pub fn compile_files(
     let mut class_type_tag_counter = 0i64;
 
     for file in files {
-        let item_tree = baml_hir::file_item_tree(db, *file);
-        let items_struct = baml_hir::file_items(db, *file);
+        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Class(class_loc) = item {
                 let class = &item_tree[class_loc.id(db)];
@@ -157,8 +157,8 @@ pub fn compile_files(
     let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
-        let item_tree = baml_hir::file_item_tree(db, *file);
-        let items_struct = baml_hir::file_items(db, *file);
+        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Enum(enum_loc) = item {
                 let enum_def = &item_tree[enum_loc.id(db)];
@@ -205,7 +205,7 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
@@ -213,7 +213,7 @@ pub fn compile_files(
 
                 // Handle different function body types
                 let compiled_fn = match &*body {
-                    baml_hir::FunctionBody::Llm(_) => {
+                    baml_compiler_hir::FunctionBody::Llm(_) => {
                         // LLM functions have no bytecode - they are dispatched by the embedder
                         let params: Vec<baml_base::Name> =
                             signature.params.iter().map(|p| p.name.clone()).collect();
@@ -233,7 +233,7 @@ pub fn compile_files(
                             viz_nodes: Vec::new(),
                         }
                     }
-                    baml_hir::FunctionBody::Missing => {
+                    baml_compiler_hir::FunctionBody::Missing => {
                         // Missing body - placeholder function
                         let params: Vec<baml_base::Name> =
                             signature.params.iter().map(|p| p.name.clone()).collect();
@@ -253,7 +253,7 @@ pub fn compile_files(
                             viz_nodes: Vec::new(),
                         }
                     }
-                    baml_hir::FunctionBody::Expr(_) => {
+                    baml_compiler_hir::FunctionBody::Expr(_) => {
                         // Run type inference
                         // Note: type_aliases is not passed here, so exhaustiveness
                         // checking for type aliases won't work. This is acceptable
@@ -316,7 +316,7 @@ fn build_typing_context(
     let mut context = HashMap::new();
 
     for file in files {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);

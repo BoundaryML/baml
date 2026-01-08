@@ -335,66 +335,66 @@ pub enum Pattern {
 // Conversion helpers from HIR types
 // ============================================================================
 
-impl From<baml_hir::BinaryOp> for BinaryOp {
-    fn from(op: baml_hir::BinaryOp) -> Self {
+impl From<baml_compiler_hir::BinaryOp> for BinaryOp {
+    fn from(op: baml_compiler_hir::BinaryOp) -> Self {
         match op {
-            baml_hir::BinaryOp::Add => BinaryOp::Add,
-            baml_hir::BinaryOp::Sub => BinaryOp::Sub,
-            baml_hir::BinaryOp::Mul => BinaryOp::Mul,
-            baml_hir::BinaryOp::Div => BinaryOp::Div,
-            baml_hir::BinaryOp::Mod => BinaryOp::Mod,
-            baml_hir::BinaryOp::Eq => BinaryOp::Eq,
-            baml_hir::BinaryOp::Ne => BinaryOp::Ne,
-            baml_hir::BinaryOp::Lt => BinaryOp::Lt,
-            baml_hir::BinaryOp::Le => BinaryOp::Le,
-            baml_hir::BinaryOp::Gt => BinaryOp::Gt,
-            baml_hir::BinaryOp::Ge => BinaryOp::Ge,
-            baml_hir::BinaryOp::And => BinaryOp::And,
-            baml_hir::BinaryOp::Or => BinaryOp::Or,
-            baml_hir::BinaryOp::BitAnd => BinaryOp::BitAnd,
-            baml_hir::BinaryOp::BitOr => BinaryOp::BitOr,
-            baml_hir::BinaryOp::BitXor => BinaryOp::BitXor,
-            baml_hir::BinaryOp::Shl => BinaryOp::Shl,
-            baml_hir::BinaryOp::Shr => BinaryOp::Shr,
-            baml_hir::BinaryOp::Instanceof => BinaryOp::Instanceof,
+            baml_compiler_hir::BinaryOp::Add => BinaryOp::Add,
+            baml_compiler_hir::BinaryOp::Sub => BinaryOp::Sub,
+            baml_compiler_hir::BinaryOp::Mul => BinaryOp::Mul,
+            baml_compiler_hir::BinaryOp::Div => BinaryOp::Div,
+            baml_compiler_hir::BinaryOp::Mod => BinaryOp::Mod,
+            baml_compiler_hir::BinaryOp::Eq => BinaryOp::Eq,
+            baml_compiler_hir::BinaryOp::Ne => BinaryOp::Ne,
+            baml_compiler_hir::BinaryOp::Lt => BinaryOp::Lt,
+            baml_compiler_hir::BinaryOp::Le => BinaryOp::Le,
+            baml_compiler_hir::BinaryOp::Gt => BinaryOp::Gt,
+            baml_compiler_hir::BinaryOp::Ge => BinaryOp::Ge,
+            baml_compiler_hir::BinaryOp::And => BinaryOp::And,
+            baml_compiler_hir::BinaryOp::Or => BinaryOp::Or,
+            baml_compiler_hir::BinaryOp::BitAnd => BinaryOp::BitAnd,
+            baml_compiler_hir::BinaryOp::BitOr => BinaryOp::BitOr,
+            baml_compiler_hir::BinaryOp::BitXor => BinaryOp::BitXor,
+            baml_compiler_hir::BinaryOp::Shl => BinaryOp::Shl,
+            baml_compiler_hir::BinaryOp::Shr => BinaryOp::Shr,
+            baml_compiler_hir::BinaryOp::Instanceof => BinaryOp::Instanceof,
         }
     }
 }
 
-impl From<baml_hir::UnaryOp> for UnaryOp {
-    fn from(op: baml_hir::UnaryOp) -> Self {
+impl From<baml_compiler_hir::UnaryOp> for UnaryOp {
+    fn from(op: baml_compiler_hir::UnaryOp) -> Self {
         match op {
-            baml_hir::UnaryOp::Not => UnaryOp::Not,
-            baml_hir::UnaryOp::Neg => UnaryOp::Neg,
+            baml_compiler_hir::UnaryOp::Not => UnaryOp::Not,
+            baml_compiler_hir::UnaryOp::Neg => UnaryOp::Neg,
         }
     }
 }
 
-impl From<baml_hir::AssignOp> for AssignOp {
-    fn from(op: baml_hir::AssignOp) -> Self {
+impl From<baml_compiler_hir::AssignOp> for AssignOp {
+    fn from(op: baml_compiler_hir::AssignOp) -> Self {
         match op {
-            baml_hir::AssignOp::Add => AssignOp::Add,
-            baml_hir::AssignOp::Sub => AssignOp::Sub,
-            baml_hir::AssignOp::Mul => AssignOp::Mul,
-            baml_hir::AssignOp::Div => AssignOp::Div,
-            baml_hir::AssignOp::Mod => AssignOp::Mod,
-            baml_hir::AssignOp::BitAnd => AssignOp::BitAnd,
-            baml_hir::AssignOp::BitOr => AssignOp::BitOr,
-            baml_hir::AssignOp::BitXor => AssignOp::BitXor,
-            baml_hir::AssignOp::Shl => AssignOp::Shl,
-            baml_hir::AssignOp::Shr => AssignOp::Shr,
+            baml_compiler_hir::AssignOp::Add => AssignOp::Add,
+            baml_compiler_hir::AssignOp::Sub => AssignOp::Sub,
+            baml_compiler_hir::AssignOp::Mul => AssignOp::Mul,
+            baml_compiler_hir::AssignOp::Div => AssignOp::Div,
+            baml_compiler_hir::AssignOp::Mod => AssignOp::Mod,
+            baml_compiler_hir::AssignOp::BitAnd => AssignOp::BitAnd,
+            baml_compiler_hir::AssignOp::BitOr => AssignOp::BitOr,
+            baml_compiler_hir::AssignOp::BitXor => AssignOp::BitXor,
+            baml_compiler_hir::AssignOp::Shl => AssignOp::Shl,
+            baml_compiler_hir::AssignOp::Shr => AssignOp::Shr,
         }
     }
 }
 
-impl From<&baml_hir::Literal> for Literal {
-    fn from(lit: &baml_hir::Literal) -> Self {
+impl From<&baml_compiler_hir::Literal> for Literal {
+    fn from(lit: &baml_compiler_hir::Literal) -> Self {
         match lit {
-            baml_hir::Literal::Int(n) => Literal::Int(*n),
-            baml_hir::Literal::Float(s) => Literal::Float(s.clone()),
-            baml_hir::Literal::String(s) => Literal::String(s.clone()),
-            baml_hir::Literal::Bool(b) => Literal::Bool(*b),
-            baml_hir::Literal::Null => Literal::Null,
+            baml_compiler_hir::Literal::Int(n) => Literal::Int(*n),
+            baml_compiler_hir::Literal::Float(s) => Literal::Float(s.clone()),
+            baml_compiler_hir::Literal::String(s) => Literal::String(s.clone()),
+            baml_compiler_hir::Literal::Bool(b) => Literal::Bool(*b),
+            baml_compiler_hir::Literal::Null => Literal::Null,
         }
     }
 }

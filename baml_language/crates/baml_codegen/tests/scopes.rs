@@ -30,7 +30,7 @@ impl baml_workspace::Db for TestDatabase {
 }
 
 #[salsa::db]
-impl baml_hir::Db for TestDatabase {}
+impl baml_compiler_hir::Db for TestDatabase {}
 
 #[salsa::db]
 impl baml_tir::Db for TestDatabase {}

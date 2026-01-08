@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 
 use baml_base::{FileId, Name, Span};
 use baml_diagnostics::TypeError;
-use baml_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
+use baml_compiler_hir::{ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId};
 use baml_workspace::Project;
 
 pub mod builtins;
@@ -103,10 +103,10 @@ pub enum ResolvedPath {
 
 /// Database trait for TIR queries.
 ///
-/// Extends `baml_hir::Db`. Use the free functions in this crate
+/// Extends `baml_compiler_hir::Db`. Use the free functions in this crate
 /// (e.g., `typing_context`, `class_field_types`) for TIR queries.
 #[salsa::db]
-pub trait Db: baml_hir::Db {}
+pub trait Db: baml_compiler_hir::Db {}
 
 // ============================================================================
 // Tracked Struct for Enum Variants
@@ -178,13 +178,13 @@ pub struct KnownTypesSet<'db> {
 /// `Status` -> `[Active, Inactive, Pending]`
 #[salsa::tracked]
 pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
-    let items = baml_hir::project_items(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let mut enums = HashMap::new();
 
     for item in items.items(db) {
-        if let baml_hir::ItemId::Enum(enum_loc) = item {
+        if let baml_compiler_hir::ItemId::Enum(enum_loc) = item {
             let file = enum_loc.file(db);
-            let item_tree = baml_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
             let enum_data = &item_tree[enum_loc.id(db)];
 
             let variants: Vec<Name> = enum_data.variants.iter().map(|v| v.name.clone()).collect();
@@ -210,12 +210,12 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
     let mut context = HashMap::new();
 
     for file in project.files(db) {
-        let items_struct = baml_hir::file_items(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
         let items = items_struct.items(db);
 
         for item in items {
-            if let baml_hir::ItemId::Function(func_loc) = item {
-                let signature = baml_hir::function_signature(db, *func_loc);
+            if let baml_compiler_hir::ItemId::Function(func_loc) = item {
+                let signature = baml_compiler_hir::function_signature(db, *func_loc);
                 let span = Span::default(); // TODO: get proper span from signature
 
                 let param_types: Vec<Ty> = signature
@@ -246,7 +246,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
 /// Maps class names to their field types.
 #[salsa::tracked]
 pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_> {
-    let hir_fields = baml_hir::project_class_fields(db, project);
+    let hir_fields = baml_compiler_hir::project_class_fields(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from fields
 
@@ -275,15 +275,15 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
 /// Maps type alias names to their resolved types.
 #[salsa::tracked]
 pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
-    let items = baml_hir::project_items(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from alias
     let mut aliases = HashMap::new();
 
     for item in items.items(db) {
-        if let baml_hir::ItemId::TypeAlias(alias_loc) = item {
+        if let baml_compiler_hir::ItemId::TypeAlias(alias_loc) = item {
             let file = alias_loc.file(db);
-            let item_tree = baml_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
             let alias_data = &item_tree[alias_loc.id(db)];
 
             let lowered_ty = resolution_ctx.lower_type_ref(&alias_data.type_ref, span).0;
@@ -297,13 +297,13 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
 /// Query: Get class names for a project.
 #[salsa::tracked]
 pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
-    let items = baml_hir::project_items(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
     for item in items.items(db) {
-        if let baml_hir::ItemId::Class(class_loc) = item {
+        if let baml_compiler_hir::ItemId::Class(class_loc) = item {
             let file = class_loc.file(db);
-            let item_tree = baml_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
             let class_data = &item_tree[class_loc.id(db)];
             names.insert(class_data.name.clone());
         }
@@ -315,13 +315,13 @@ pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
 /// Query: Get enum names for a project.
 #[salsa::tracked]
 pub fn enum_names(db: &dyn Db, project: Project) -> EnumNamesSet<'_> {
-    let items = baml_hir::project_items(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
     for item in items.items(db) {
-        if let baml_hir::ItemId::Enum(enum_loc) = item {
+        if let baml_compiler_hir::ItemId::Enum(enum_loc) = item {
             let file = enum_loc.file(db);
-            let item_tree = baml_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
             let enum_data = &item_tree[enum_loc.id(db)];
             names.insert(enum_data.name.clone());
         }
@@ -333,26 +333,26 @@ pub fn enum_names(db: &dyn Db, project: Project) -> EnumNamesSet<'_> {
 /// Query: Get all known type names for a project (classes, enums, type aliases).
 #[salsa::tracked]
 pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
-    let items = baml_hir::project_items(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
     for item in items.items(db) {
         match item {
-            baml_hir::ItemId::Class(class_loc) => {
+            baml_compiler_hir::ItemId::Class(class_loc) => {
                 let file = class_loc.file(db);
-                let item_tree = baml_hir::file_item_tree(db, file);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
                 let class_data = &item_tree[class_loc.id(db)];
                 names.insert(class_data.name.clone());
             }
-            baml_hir::ItemId::Enum(enum_loc) => {
+            baml_compiler_hir::ItemId::Enum(enum_loc) => {
                 let file = enum_loc.file(db);
-                let item_tree = baml_hir::file_item_tree(db, file);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
                 let enum_data = &item_tree[enum_loc.id(db)];
                 names.insert(enum_data.name.clone());
             }
-            baml_hir::ItemId::TypeAlias(alias_loc) => {
+            baml_compiler_hir::ItemId::TypeAlias(alias_loc) => {
                 let file = alias_loc.file(db);
-                let item_tree = baml_hir::file_item_tree(db, file);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
                 let alias_data = &item_tree[alias_loc.id(db)];
                 names.insert(alias_data.name.clone());
             }
@@ -386,7 +386,7 @@ impl TypeResolutionContext {
     /// Lower a type reference with full resolution.
     pub fn lower_type_ref(
         &self,
-        type_ref: &baml_hir::TypeRef,
+        type_ref: &baml_compiler_hir::TypeRef,
         span: Span,
     ) -> (Ty, Vec<TypeError<Ty>>) {
         lower_type_ref_validated_resolved(
@@ -646,7 +646,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Lower a `TypeRef` to a Ty with full resolution (classes/enums resolved to names).
-    pub fn lower_type_resolved(&self, type_ref: &baml_hir::TypeRef, span: Span) -> Ty {
+    pub fn lower_type_resolved(&self, type_ref: &baml_compiler_hir::TypeRef, span: Span) -> Ty {
         let (ty, _errors) = lower_type_ref_validated_resolved(
             type_ref,
             &self.known_types,
@@ -868,7 +868,7 @@ pub fn infer_function<'db>(
 ) -> InferenceResult {
     // Query known type names from the project (Salsa-cached)
     let project = db.project();
-    let known_type_names = baml_hir::project_type_names(db, project);
+    let known_type_names = baml_compiler_hir::project_type_names(db, project);
     let known_types: std::collections::HashSet<_> =
         known_type_names.names(db).iter().cloned().collect();
 
@@ -941,7 +941,7 @@ pub fn infer_function<'db>(
 
 /// Infer the type of an expression (synthesize mode).
 fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty {
-    use baml_hir::Expr;
+    use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
 
@@ -1045,7 +1045,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
         Expr::Binary { lhs, op, rhs } => {
             // Special case: instanceof operator - RHS is a type reference, not an expression
-            if *op == baml_hir::BinaryOp::Instanceof {
+            if *op == baml_compiler_hir::BinaryOp::Instanceof {
                 let _lhs_ty = infer_expr(ctx, *lhs, body);
                 // For instanceof, don't try to resolve RHS as a variable.
                 // The RHS is a type name and will be resolved at runtime.
@@ -1540,7 +1540,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 ///
 /// Returns the actual type of the expression (which should be a subtype of expected).
 fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
-    use baml_hir::Expr;
+    use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
     let span = body.get_expr_span(expr_id).unwrap_or_default();
@@ -1867,7 +1867,7 @@ fn extract_pattern_binding(
 fn check_match_exhaustiveness(
     ctx: &mut TypeContext<'_>,
     scrutinee_ty: &Ty,
-    arms: &[baml_hir::MatchArm],
+    arms: &[baml_compiler_hir::MatchArm],
     body: &ExprBody,
     match_expr_id: ExprId,
     match_span: Span,
@@ -1926,14 +1926,14 @@ fn check_match_exhaustiveness(
 /// Returns literal types (singleton types) for better bidirectional type checking.
 /// For example, the literal `42` has type `Ty::Literal(LiteralValue::Int(42))`,
 /// which is a subtype of `Ty::Int`.
-fn infer_literal(lit: &baml_hir::Literal) -> Ty {
+fn infer_literal(lit: &baml_compiler_hir::Literal) -> Ty {
     use crate::types::LiteralValue;
     match lit {
-        baml_hir::Literal::Int(n) => Ty::Literal(LiteralValue::Int(*n)),
-        baml_hir::Literal::Float(f) => Ty::Literal(LiteralValue::Float(f.clone())),
-        baml_hir::Literal::String(s) => Ty::Literal(LiteralValue::String(s.clone())),
-        baml_hir::Literal::Bool(b) => Ty::Literal(LiteralValue::Bool(*b)),
-        baml_hir::Literal::Null => Ty::Null,
+        baml_compiler_hir::Literal::Int(n) => Ty::Literal(LiteralValue::Int(*n)),
+        baml_compiler_hir::Literal::Float(f) => Ty::Literal(LiteralValue::Float(f.clone())),
+        baml_compiler_hir::Literal::String(s) => Ty::Literal(LiteralValue::String(s.clone())),
+        baml_compiler_hir::Literal::Bool(b) => Ty::Literal(LiteralValue::Bool(*b)),
+        baml_compiler_hir::Literal::Null => Ty::Null,
     }
 }
 
@@ -1975,13 +1975,13 @@ fn extract_instanceof_narrowing(
     condition: ExprId,
     body: &ExprBody,
 ) -> Option<(Name, Ty)> {
-    use baml_hir::Expr;
+    use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[condition];
 
     // Check if this is an instanceof expression
     if let Expr::Binary { op, lhs, rhs } = expr {
-        if *op == baml_hir::BinaryOp::Instanceof {
+        if *op == baml_compiler_hir::BinaryOp::Instanceof {
             // LHS should be a simple path (variable name)
             if let Expr::Path(segments) = &body.exprs[*lhs] {
                 if segments.len() == 1 {
@@ -2007,12 +2007,12 @@ fn extract_instanceof_narrowing(
 /// Infer the result type of a binary operation.
 fn infer_binary_op(
     ctx: &mut TypeContext<'_>,
-    op: baml_hir::BinaryOp,
+    op: baml_compiler_hir::BinaryOp,
     lhs: &Ty,
     rhs: &Ty,
     span: Span,
 ) -> Ty {
-    use baml_hir::BinaryOp::{
+    use baml_compiler_hir::BinaryOp::{
         Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Instanceof, Le, Lt, Mod, Mul, Ne, Or,
         Shl, Shr, Sub,
     };
@@ -2131,11 +2131,11 @@ fn infer_binary_op(
 /// Infer the result type of a unary operation.
 fn infer_unary_op(
     ctx: &mut TypeContext<'_>,
-    op: baml_hir::UnaryOp,
+    op: baml_compiler_hir::UnaryOp,
     operand: &Ty,
     span: Span,
 ) -> Ty {
-    use baml_hir::UnaryOp::{Neg, Not};
+    use baml_compiler_hir::UnaryOp::{Neg, Not};
 
     use crate::types::LiteralValue;
 
@@ -2331,7 +2331,7 @@ fn check_stmt_with_return(
     body: &ExprBody,
     expected_return: Option<&Ty>,
 ) {
-    use baml_hir::Stmt;
+    use baml_compiler_hir::Stmt;
 
     let stmt = &body.stmts[stmt_id];
 

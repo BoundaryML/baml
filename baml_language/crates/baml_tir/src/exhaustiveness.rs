@@ -33,7 +33,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
-use baml_hir::{ExprBody, Literal, MatchArm, Pattern};
+use baml_compiler_hir::{ExprBody, Literal, MatchArm, Pattern};
 
 use crate::{LiteralValue, Ty, lower_type_ref_validated_resolved};
 

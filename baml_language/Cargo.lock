@@ -318,7 +318,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_hir",
+ "baml_compiler_hir",
  "baml_mir",
  "baml_tests",
  "baml_tir",
@@ -331,13 +331,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_hir"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_diagnostics",
+ "baml_parser",
+ "baml_syntax",
+ "baml_workspace",
+ "la-arena",
+ "rowan",
+ "rustc-hash 2.1.1",
+ "salsa",
+]
+
+[[package]]
 name = "baml_db"
 version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_codegen",
+ "baml_compiler_hir",
  "baml_diagnostics",
- "baml_hir",
  "baml_lexer",
  "baml_mir",
  "baml_parser",
@@ -358,21 +373,6 @@ dependencies = [
  "baml_workspace",
  "salsa",
  "text-size",
-]
-
-[[package]]
-name = "baml_hir"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "baml_diagnostics",
- "baml_parser",
- "baml_syntax",
- "baml_workspace",
- "la-arena",
- "rowan",
- "rustc-hash 2.1.1",
- "salsa",
 ]
 
 [[package]]
@@ -483,7 +483,7 @@ name = "baml_mir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
- "baml_hir",
+ "baml_compiler_hir",
  "baml_tir",
  "baml_vir",
  "baml_workspace",
@@ -504,9 +504,9 @@ dependencies = [
  "ariadne",
  "baml_base",
  "baml_codegen",
+ "baml_compiler_hir",
  "baml_db",
  "baml_diagnostics",
- "baml_hir",
  "baml_lexer",
  "baml_mir",
  "baml_parser",
@@ -543,9 +543,9 @@ dependencies = [
 name = "baml_project"
 version = "0.0.0"
 dependencies = [
+ "baml_compiler_hir",
  "baml_db",
  "baml_diagnostics",
- "baml_hir",
  "baml_mir",
  "baml_tir",
  "baml_workspace",
@@ -569,9 +569,9 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_codegen",
+ "baml_compiler_hir",
  "baml_db",
  "baml_diagnostics",
- "baml_hir",
  "baml_mir",
  "baml_project",
  "baml_tir",
@@ -593,8 +593,8 @@ name = "baml_tir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_hir",
  "baml_diagnostics",
- "baml_hir",
  "baml_vm",
  "baml_workspace",
  "salsa",
@@ -607,8 +607,8 @@ name = "baml_vir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_hir",
  "baml_diagnostics",
- "baml_hir",
  "baml_tir",
  "insta",
  "la-arena",
