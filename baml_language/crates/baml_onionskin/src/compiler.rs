@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_db::{
-    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_parser, baml_compiler_syntax, baml_compiler_tir,
+    FileId, SourceFile, baml_codegen, baml_compiler_hir, baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir,
     baml_workspace,
 };
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
@@ -501,7 +501,7 @@ impl CompilerRunner {
 
             let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
-                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+                baml_compiler_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_compiler_syntax::SyntaxNode::new_root(green.clone());
 
             // Note: Diagnostic collection moved to run_diagnostics() using collect_diagnostics()
@@ -551,7 +551,7 @@ impl CompilerRunner {
             // Parse and get CST root
             let tokens = baml_compiler_lexer::lex_file(&self.db, *source_file);
             let (green, _errors) =
-                baml_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
+                baml_compiler_parser::parse_file_with_cache(&tokens, &mut self.node_cache);
             let syntax_tree = baml_compiler_syntax::SyntaxNode::new_root(green.clone());
 
             // Cast to AST SourceFile to access typed API

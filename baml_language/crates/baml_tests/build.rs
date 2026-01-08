@@ -220,7 +220,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         mod #module_name {
             use baml_db::*;
             use baml_db::baml_compiler_lexer;
-            use baml_db::baml_parser;
+            use baml_db::baml_compiler_parser;
             use baml_db::baml_compiler_hir;
             use baml_db::baml_compiler_tir;
             use baml_db::baml_compiler_vir;
@@ -303,8 +303,8 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             let root = db.set_project_root(std::path::Path::new("."));
             let source_file = db.add_file(#relative_path, &content);
             root.set_files(&mut db).to(vec![source_file]);
-            let tree = baml_parser::syntax_tree(&db, source_file);
-            let errors = baml_parser::parse_errors(&db, source_file);
+            let tree = baml_compiler_parser::syntax_tree(&db, source_file);
+            let errors = baml_compiler_parser::parse_errors(&db, source_file);
 
             let mut output = String::new();
             writeln!(output, "=== SYNTAX TREE ===").unwrap();
@@ -727,12 +727,12 @@ fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
             // Test single character edits maintain correctness
             let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
-            let original_tree = baml_parser::syntax_tree(&db, source_file);
+            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Test adding a character
             let modified = insert_char(&content, content.len() / 2, 'x');
             let modified_file = db.add_file("modified.baml", &modified);
-            let modified_tree = baml_parser::syntax_tree(&db, modified_file);
+            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Verify the trees are valid
             assert_no_panics(&original_tree);
@@ -756,12 +756,12 @@ fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
             // Measure node reuse for single character edit
             let mut db = ProjectDatabase::new();
             let source_file = db.add_file(#relative_path, &content);
-            let original_tree = baml_parser::syntax_tree(&db, source_file);
+            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
 
             // Make a small edit
             let modified = insert_char(&content, content.len() / 2, 'a');
             let modified_file = db.add_file("modified.baml", &modified);
-            let modified_tree = baml_parser::syntax_tree(&db, modified_file);
+            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
 
             // Measure reuse (this is a simplified check)
             // In a real implementation, you'd check actual node reuse
@@ -786,7 +786,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                     let content = content.replace("\r\n", "\n");
                     let mut db = ProjectDatabase::new();
                     let source_file = db.add_file(#relative_path, &content);
-                    let tree = baml_parser::syntax_tree(&db, source_file);
+                    let tree = baml_compiler_parser::syntax_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
                 }
             }

@@ -14,7 +14,7 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_db::{FileId, SourceFile, baml_parser};
+use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
@@ -57,7 +57,7 @@ pub fn collect_diagnostics(
 
     // 1. Collect parse errors
     for source_file in source_files {
-        let parse_errors = baml_parser::parse_errors(db, *source_file);
+        let parse_errors = baml_compiler_parser::parse_errors(db, *source_file);
         for error in &parse_errors {
             diagnostics.push(error.to_diagnostic());
         }

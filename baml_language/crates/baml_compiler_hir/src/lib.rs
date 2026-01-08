@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{HirDiagnostic, NameError};
-use baml_parser::syntax_tree;
+use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::SyntaxNode;
 use rowan::{SyntaxToken, TextRange, ast::AstNode};
 
@@ -1219,7 +1219,7 @@ fn get_class_field_info(
 ) -> Option<FieldInfo> {
     use baml_compiler_syntax::{SyntaxKind, ast::ClassDef};
 
-    let tree = baml_parser::syntax_tree(db, file);
+    let tree = baml_compiler_parser::syntax_tree(db, file);
 
     // Find the class node
     for node in tree.children() {
@@ -1263,7 +1263,7 @@ fn get_enum_variant_info(
 ) -> Option<FieldInfo> {
     use baml_compiler_syntax::{SyntaxKind, ast::EnumDef};
 
-    let tree = baml_parser::syntax_tree(db, file);
+    let tree = baml_compiler_parser::syntax_tree(db, file);
 
     // Find the enum node
     for node in tree.children() {

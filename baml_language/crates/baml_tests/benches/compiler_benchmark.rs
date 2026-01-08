@@ -276,7 +276,7 @@ client GPT4 {
         let mut db = ProjectDatabase::new();
         let filename = format!("test{}", BAML_EXT);
         let file = db.add_file(&filename, content);
-        let _ = black_box(baml_parser::syntax_tree(&db, file));
+        let _ = black_box(baml_compiler_parser::syntax_tree(&db, file));
     });
 }
 
