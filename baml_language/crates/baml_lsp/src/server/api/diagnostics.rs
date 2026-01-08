@@ -2,7 +2,7 @@
 //!
 //! This replaces the previous manual diagnostic collection with the unified
 //! `Diagnostic` type from `baml_compiler_diagnostics`, eliminating code duplication
-//! with the test infrastructure (`baml_lsp_tests`).
+//! with the test infrastructure (`baml_ide_tests`).
 
 use std::{collections::HashMap, sync::Arc};
 

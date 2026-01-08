@@ -20,7 +20,7 @@ use lsp_types::{TextDocumentItem, Url};
 /// If no `baml_src` directory is found but the path contains a directory named
 /// `baml_language` anywhere in its ancestry, this function returns the file path
 /// itself as the project root. This allows each `.baml` file in the baml_language
-/// repository (e.g., test fixtures in `crates/baml_lsp_tests/`) to be treated as
+/// repository (e.g., test fixtures in `crates/baml_ide_tests/`) to be treated as
 /// its own isolated single-file project for development/testing.
 ///
 /// **Note:** This `baml_language` behavior is for internal BAML development only
@@ -246,13 +246,13 @@ mod tests {
     fn test_find_top_level_parent_baml_language_nested() {
         // Deeply nested in baml_language - returns the file path itself
         let path = PathBuf::from(
-            "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class/valid.baml",
+            "/home/user/baml_language/crates/baml_ide_tests/test_files/syntax/class/valid.baml",
         );
         let result = find_top_level_parent(&path);
         assert_eq!(
             result,
             Some(PathBuf::from(
-                "/home/user/baml_language/crates/baml_lsp_tests/test_files/syntax/class/valid.baml"
+                "/home/user/baml_language/crates/baml_ide_tests/test_files/syntax/class/valid.baml"
             ))
         );
     }

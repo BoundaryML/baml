@@ -25,17 +25,17 @@
 <path fill="none" stroke="#555555" d="M551.8,-1187.5C535.75,-1178.65 516.87,-1168.25 499.77,-1158.81"/>
 <polygon fill="#555555" stroke="#555555" points="502.13,-1155.32 489.59,-1153.2 498.07,-1162.67 502.13,-1155.32"/>
 </g>
-<!-- baml_lsp_tests -->
-<g id="node17" class="node">
-<title>baml_lsp_tests</title>
-<path fill="#a0a0a0" fill-opacity="0.501961" stroke="black" stroke-dasharray="5,2" d="M218.79,-1072.8C218.79,-1072.8 71.32,-1072.8 71.32,-1072.8 65.32,-1072.8 59.32,-1066.8 59.32,-1060.8 59.32,-1060.8 59.32,-1041.6 59.32,-1041.6 59.32,-1035.6 65.32,-1029.6 71.32,-1029.6 71.32,-1029.6 218.79,-1029.6 218.79,-1029.6 224.79,-1029.6 230.79,-1035.6 230.79,-1041.6 230.79,-1041.6 230.79,-1060.8 230.79,-1060.8 230.79,-1066.8 224.79,-1072.8 218.79,-1072.8"/>
-<text text-anchor="middle" x="145.05" y="-1044" font-family="Times,serif" font-size="24.00">baml_lsp_tests</text>
+<!-- baml_ide_tests -->
+<g id="node16" class="node">
+<title>baml_ide_tests</title>
+<path fill="#a0a0a0" fill-opacity="0.501961" stroke="black" stroke-dasharray="5,2" d="M219.44,-1072.8C219.44,-1072.8 70.67,-1072.8 70.67,-1072.8 64.67,-1072.8 58.67,-1066.8 58.67,-1060.8 58.67,-1060.8 58.67,-1041.6 58.67,-1041.6 58.67,-1035.6 64.67,-1029.6 70.67,-1029.6 70.67,-1029.6 219.44,-1029.6 219.44,-1029.6 225.44,-1029.6 231.44,-1035.6 231.44,-1041.6 231.44,-1041.6 231.44,-1060.8 231.44,-1060.8 231.44,-1066.8 225.44,-1072.8 219.44,-1072.8"/>
+<text text-anchor="middle" x="145.05" y="-1044" font-family="Times,serif" font-size="24.00">baml_ide_tests</text>
 </g>
-<!-- __project__&#45;&gt;baml_lsp_tests -->
+<!-- __project__&#45;&gt;baml_ide_tests -->
 <g id="edge2" class="edge">
-<title>__project__&#45;&gt;baml_lsp_tests</title>
-<path fill="none" stroke="#555555" d="M580.83,-1187.54C569.43,-1164.2 547.71,-1127.39 517.05,-1108.8 494.04,-1094.85 346.54,-1075.41 244.33,-1063.32"/>
-<polygon fill="#555555" stroke="#555555" points="245.08,-1059.18 232.67,-1061.95 244.1,-1067.52 245.08,-1059.18"/>
+<title>__project__&#45;&gt;baml_ide_tests</title>
+<path fill="none" stroke="#555555" d="M580.83,-1187.54C569.43,-1164.2 547.71,-1127.39 517.05,-1108.8 494.08,-1094.87 346.96,-1075.46 244.78,-1063.38"/>
+<polygon fill="#555555" stroke="#555555" points="245.52,-1059.23 233.12,-1062.01 244.54,-1067.58 245.52,-1059.23"/>
 </g>
 <!-- baml_tests -->
 <g id="node20" class="node">
@@ -86,7 +86,7 @@
 <polygon fill="#555555" stroke="#555555" points="568.25,-57.18 564.05,-45.18 559.85,-57.18 568.25,-57.18"/>
 </g>
 <!-- baml_lsp -->
-<g id="node16" class="node">
+<g id="node17" class="node">
 <title>baml_lsp</title>
 <path fill="#98d8c8" stroke="black" d="M443.45,-1072.8C443.45,-1072.8 350.66,-1072.8 350.66,-1072.8 344.66,-1072.8 338.66,-1066.8 338.66,-1060.8 338.66,-1060.8 338.66,-1041.6 338.66,-1041.6 338.66,-1035.6 344.66,-1029.6 350.66,-1029.6 350.66,-1029.6 443.45,-1029.6 443.45,-1029.6 449.45,-1029.6 455.45,-1035.6 455.45,-1041.6 455.45,-1041.6 455.45,-1060.8 455.45,-1060.8 455.45,-1066.8 449.45,-1072.8 443.45,-1072.8"/>
 <text text-anchor="middle" x="397.05" y="-1044" font-family="Times,serif" font-size="24.00">baml_lsp</text>
@@ -277,8 +277,14 @@
 <path fill="none" stroke="#555555" d="M118.44,-952.72C122.02,-951.87 125.57,-951.09 129.05,-950.4 280.3,-920.51 320.88,-931.89 474.05,-914.4 498.28,-911.63 524.47,-908.47 548.72,-905.46"/>
 <polygon fill="#555555" stroke="#555555" points="549.09,-909.65 560.48,-903.99 548.05,-901.31 549.09,-909.65"/>
 </g>
-<!-- baml_lsp&#45;&gt;baml_ide -->
+<!-- baml_ide_tests&#45;&gt;baml_ide -->
 <g id="edge22" class="edge">
+<title>baml_ide_tests&#45;&gt;baml_ide</title>
+<path fill="none" stroke="#555555" d="M121.55,-1029.1C112.55,-1021.02 102.09,-1011.64 92.34,-1002.88"/>
+<polygon fill="#555555" stroke="#555555" points="95.39,-999.97 83.65,-995.08 89.78,-1006.22 95.39,-999.97"/>
+</g>
+<!-- baml_lsp&#45;&gt;baml_ide -->
+<g id="edge23" class="edge">
 <title>baml_lsp&#45;&gt;baml_ide</title>
 <path fill="none" stroke="#555555" d="M338.2,-1039.14C286.57,-1029.14 209.22,-1013.4 131.52,-994.11"/>
 <polygon fill="#555555" stroke="#555555" points="132.67,-990.06 120.01,-991.22 130.63,-998.21 132.67,-990.06"/>
@@ -290,7 +296,7 @@
 <text text-anchor="middle" x="230.05" y="-964.8" font-family="Times,serif" font-size="24.00">baml_lsp_types</text>
 </g>
 <!-- baml_lsp&#45;&gt;baml_lsp_types -->
-<g id="edge23" class="edge">
+<g id="edge24" class="edge">
 <title>baml_lsp&#45;&gt;baml_lsp_types</title>
 <path fill="none" stroke="#555555" d="M351.42,-1029.1C331.81,-1020.04 308.68,-1009.34 287.89,-999.73"/>
 <polygon fill="#555555" stroke="#555555" points="289.66,-995.93 277.01,-994.7 286.14,-1003.55 289.66,-995.93"/>
@@ -302,7 +308,7 @@
 <text text-anchor="middle" x="397.05" y="-964.8" font-family="Times,serif" font-size="24.00">thiserror</text>
 </g>
 <!-- baml_lsp&#45;&gt;thiserror -->
-<g id="edge24" class="edge">
+<g id="edge25" class="edge">
 <title>baml_lsp&#45;&gt;thiserror</title>
 <path fill="none" stroke="#555555" d="M397.05,-1029.1C397.05,-1022.38 397.05,-1014.76 397.05,-1007.35"/>
 <polygon fill="#555555" stroke="#555555" points="401.25,-1007.58 397.05,-995.58 392.85,-1007.58 401.25,-1007.58"/>
@@ -314,16 +320,10 @@
 <text text-anchor="middle" x="513.05" y="-964.8" font-family="Times,serif" font-size="24.00">tokio</text>
 </g>
 <!-- baml_lsp&#45;&gt;tokio -->
-<g id="edge25" class="edge">
+<g id="edge26" class="edge">
 <title>baml_lsp&#45;&gt;tokio</title>
 <path fill="none" stroke="#555555" d="M428.75,-1029.1C441.54,-1020.59 456.49,-1010.64 470.22,-1001.51"/>
 <polygon fill="#555555" stroke="#555555" points="472.47,-1005.05 480.14,-994.91 467.82,-998.06 472.47,-1005.05"/>
-</g>
-<!-- baml_lsp_tests&#45;&gt;baml_ide -->
-<g id="edge26" class="edge">
-<title>baml_lsp_tests&#45;&gt;baml_ide</title>
-<path fill="none" stroke="#555555" d="M121.55,-1029.1C112.55,-1021.02 102.09,-1011.64 92.34,-1002.88"/>
-<polygon fill="#555555" stroke="#555555" points="95.39,-999.97 83.65,-995.08 89.78,-1006.22 95.39,-999.97"/>
 </g>
 <!-- baml_lsp_types&#45;&gt;anyhow -->
 <g id="edge27" class="edge">

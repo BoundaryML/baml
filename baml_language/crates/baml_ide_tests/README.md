@@ -6,13 +6,13 @@ This directory contains inline assertion tests for the BAML compiler's LSP featu
 
 ```bash
 # Run all LSP tests
-cargo test -p baml_lsp_tests test_files
+cargo test -p baml_ide_tests test_files
 
 # Run a specific test folder
-cargo test -p baml_lsp_tests test_files::type_errors
+cargo test -p baml_ide_tests test_files::type_errors
 
 # Run a specific test
-cargo test -p baml_lsp_tests test_files::hover::test_class
+cargo test -p baml_ide_tests test_files::hover::test_class
 ```
 
 ## Updating Expectations
@@ -20,7 +20,7 @@ cargo test -p baml_lsp_tests test_files::hover::test_class
 When you add new tests or change compiler behavior, update the expected output:
 
 ```bash
-UPDATE_EXPECT=1 cargo test -p baml_lsp_tests test_files
+UPDATE_EXPECT=1 cargo test -p baml_ide_tests test_files
 ```
 
 This will automatically update the expectations in the test files to match the actual compiler output.
@@ -128,6 +128,6 @@ test_files/
 3. Add the `//----` separator
 4. Run with `UPDATE_EXPECT=1` to generate expectations:
    ```bash
-   UPDATE_EXPECT=1 cargo test -p baml_lsp_tests test_files::your_folder::test_your_file
+   UPDATE_EXPECT=1 cargo test -p baml_ide_tests test_files::your_folder::test_your_file
    ```
 5. Review the generated expectations and commit

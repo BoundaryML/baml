@@ -5,17 +5,17 @@
 | Suite | Location | Purpose |
 |-------|----------|---------|
 | `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed CST/HIR/THIR output |
-| `baml_lsp_tests` | `crates/baml_lsp_tests/` | LSP integration tests with inline expectations |
+| `baml_ide_tests` | `crates/baml_ide_tests/` | LSP integration tests with inline expectations |
 
 ## Workflow: Debugging a Failing Test
 
-### 1. Identify the issue in baml_lsp_tests
+### 1. Identify the issue in baml_ide_tests
 
 ```bash
-cargo test --package baml_lsp_tests
+cargo test --package baml_ide_tests
 ```
 
-Look for errors in `crates/baml_lsp_tests/test_files/syntax/`.
+Look for errors in `crates/baml_ide_tests/test_files/syntax/`.
 
 ### 2. Create a minimal repro in baml_tests
 
@@ -64,15 +64,15 @@ Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_c
 cargo test --package baml_tests my_repro
 cargo insta accept --all
 
-# Update baml_lsp_tests inline expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp_tests
+# Update baml_ide_tests inline expectations
+UPDATE_EXPECT=1 cargo test --package baml_ide_tests
 ```
 
 ### 7. Verify all tests pass
 
 ```bash
 cargo test --package baml_tests
-cargo test --package baml_lsp_tests
+cargo test --package baml_ide_tests
 ```
 
 ## Quick Commands
@@ -85,7 +85,7 @@ cargo test --package baml_tests my_project_name
 cargo test --package baml_tests
 
 # Run LSP tests and auto-update expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp_tests
+UPDATE_EXPECT=1 cargo test --package baml_ide_tests
 
 # Accept all pending snapshots
 cargo insta accept --all
@@ -104,7 +104,7 @@ cargo insta review
 - **Type checking**: `crates/baml_thir/src/lower.rs`
 
 
-DO NOT EDIT the diagnostics manually in baml_lsp_tests. Use update_expect=1
+DO NOT EDIT the diagnostics manually in baml_ide_tests. Use update_expect=1
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
