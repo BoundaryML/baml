@@ -721,18 +721,11 @@ impl LoweringContext {
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
 
-                    // Check for missing semicolon on statements that require them.
-                    // - let/watch_let/assert: always need semicolons
-                    // - while/for: need semicolons unless they're the tail expression
-                    // - break/continue/return: are type ! expressions, semicolons optional
-                    let always_needs_semicolon = matches!(
-                        node.kind(),
-                        SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET | SyntaxKind::ASSERT_STMT
-                    );
-                    let is_control_flow_stmt =
-                        matches!(node.kind(), SyntaxKind::WHILE_STMT | SyntaxKind::FOR_EXPR);
+                    // Check for missing semicolon on let statements only.
+                    // - let/watch_let: always need semicolons
+                    // - All other constructs (if, while, for, assert, etc.): semicolons optional
                     let needs_semicolon =
-                        always_needs_semicolon || (is_control_flow_stmt && !is_last);
+                        matches!(node.kind(), SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET);
 
                     if needs_semicolon && !element.has_trailing_semicolon() {
                         self.push_diagnostic(HirDiagnostic::MissingSemicolon {
@@ -745,12 +738,7 @@ impl LoweringContext {
                 BlockElement::ExprNode(node) => {
                     // First, try to lower as an assignment statement
                     if let Some(stmt_id) = self.try_lower_assignment(node) {
-                        // Assignments always need semicolons
-                        if !element.has_trailing_semicolon() {
-                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
-                                span: self.span_from_node_skip_trivia(node),
-                            });
-                        }
+                        // Semicolons are optional for assignments
                         stmts.push(stmt_id);
                         continue;
                     }
@@ -766,12 +754,7 @@ impl LoweringContext {
                         tail_expr = Some(expr_id);
                     } else {
                         // Expression statement (with semicolon or not last)
-                        // All expressions need semicolons unless they're the tail expression
-                        if !is_last && !has_semicolon {
-                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
-                                span: self.span_from_node_skip_trivia(node),
-                            });
-                        }
+                        // Semicolons are optional for expression statements
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), node.text_range()));
                     }
                 }
@@ -817,12 +800,7 @@ impl LoweringContext {
                     if is_last && !has_semicolon {
                         tail_expr = Some(expr_id);
                     } else {
-                        // If not last and no semicolon, emit diagnostic
-                        if !is_last && !has_semicolon {
-                            self.push_diagnostic(HirDiagnostic::MissingSemicolon {
-                                span: self.span_from_range(span),
-                            });
-                        }
+                        // Semicolons are optional for expression statements
                         stmts.push(self.alloc_stmt(Stmt::Expr(expr_id), span));
                     }
                 }

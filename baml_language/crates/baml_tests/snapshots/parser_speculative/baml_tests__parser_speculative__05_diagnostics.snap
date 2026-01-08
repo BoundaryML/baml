@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -41,18 +41,6 @@ expression: output
     │ ╰── Expected LLM function missing 'client' field, found '}'
     │ 
     │ Note: Error code: E0010
-────╯
-
-  [hir] Error: Statement must end with a semicolon.
-    ╭─[ expr_function.baml:8:3 ]
-    │
-  8 │ ╭─▶   if (result > 100) {
-    ┆ ┆   
- 10 │ ├─▶   }
-    │ │         
-    │ ╰───────── Statement must end with a semicolon.
-    │     
-    │     Note: Error code: E0028
 ────╯
 
   [hir] Error: Statement must end with a semicolon.

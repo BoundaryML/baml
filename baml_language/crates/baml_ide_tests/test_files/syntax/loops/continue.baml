@@ -55,14 +55,3 @@ function ContinueNested() -> int {
 //     │     
 //     │     Note: Error code: E0029
 // ────╯
-// Error: Statement must end with a semicolon.
-//     ╭─[ loops_continue.baml:8:2 ]
-//     │
-//   8 │ ╭─▶     while (should_continue) {
-//     ┆ ┆   
-//  18 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯

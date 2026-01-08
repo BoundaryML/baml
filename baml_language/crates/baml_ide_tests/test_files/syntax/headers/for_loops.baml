@@ -27,14 +27,4 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//     ╭─[ headers_for_loops.baml:7:5 ]
-//     │
-//   7 │ ╭─▶     for (let item in items) {
-//     ┆ ┆   
-//  15 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯
+// <no-diagnostics-expected>

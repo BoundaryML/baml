@@ -3,26 +3,4 @@ source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [hir] Error: Statement must end with a semicolon.
-    ╭─[ break_continue.baml:36:5 ]
-    │
- 36 │ ╭─▶     while (true) {
-    ┆ ┆   
- 38 │ ├─▶     }
-    │ │           
-    │ ╰─────────── Statement must end with a semicolon.
-    │     
-    │     Note: Error code: E0028
-────╯
-
-  [hir] Error: Statement must end with a semicolon.
-    ╭─[ break_continue.baml:35:3 ]
-    │
- 35 │ ╭─▶   while (true) {
-    ┆ ┆   
- 40 │ ├─▶   }
-    │ │         
-    │ ╰───────── Statement must end with a semicolon.
-    │     
-    │     Note: Error code: E0028
-────╯
+No errors found.

@@ -170,37 +170,6 @@ function MissingReturnExpression() -> int {
 //      │     Note: Error code: E0028
 // ─────╯
 // Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:106:5 ]
-//      │
-//  106 │ ╭─▶     if (x > 0) {
-//      ┆ ┆   
-//  108 │ ├─▶     }  // ERROR: needs semicolon - not the tail expression
-//      │ │                                                                
-//      │ ╰──────────────────────────────────────────────────────────────── Statement must end with a semicolon.
-//      │     
-//      │     Note: Error code: E0028
-// ─────╯
-// Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:122:5 ]
-//      │
-//  122 │     y = x + 1  // ERROR: needs semicolon
-//      │     ────┬────  
-//      │         ╰────── Statement must end with a semicolon.
-//      │ 
-//      │ Note: Error code: E0028
-// ─────╯
-// Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:113:5 ]
-//      │
-//  113 │ ╭─▶     while (false) {
-//      ┆ ┆   
-//  115 │ ├─▶     }  // ERROR: needs semicolon - not the tail expression
-//      │ │                                                                
-//      │ ╰──────────────────────────────────────────────────────────────── Statement must end with a semicolon.
-//      │     
-//      │     Note: Error code: E0028
-// ─────╯
-// Error: Statement must end with a semicolon.
 //     ╭─[ expr_missing_semicolons.baml:96:5 ]
 //     │
 //  96 │     let y = "hello"  // ERROR: needs semicolon

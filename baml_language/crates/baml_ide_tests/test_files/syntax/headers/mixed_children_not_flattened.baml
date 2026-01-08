@@ -11,14 +11,4 @@ function MixedChildrenNotFlattened() -> string {
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//    ╭─[ headers_mixed_children_not_flattened.baml:5:5 ]
-//    │
-//  5 │ ╭─▶     for (let item in items) {
-//    ┆ ┆   
-//  8 │ ├─▶     }
-//    │ │           
-//    │ ╰─────────── Statement must end with a semicolon.
-//    │     
-//    │     Note: Error code: E0028
-// ───╯
+// <no-diagnostics-expected>

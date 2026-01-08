@@ -60,17 +60,6 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//     ╭─[ loops_for.baml:14:2 ]
-//     │
-//  14 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆   
-//  17 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯
 // Error: Expected `int`, found `string`
 //     ╭─[ loops_for.baml:16:12 ]
 //     │
@@ -79,28 +68,6 @@ function SumUnknownType(xs: int, b: string) -> int {
 //     │                 ╰── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
-// ────╯
-// Error: Statement must end with a semicolon.
-//    ╭─[ loops_for.baml:4:2 ]
-//    │
-//  4 │ ╭─▶     for (let x in xs) {
-//    ┆ ┆   
-//  6 │ ├─▶     }
-//    │ │           
-//    │ ╰─────────── Statement must end with a semicolon.
-//    │     
-//    │     Note: Error code: E0028
-// ───╯
-// Error: Statement must end with a semicolon.
-//     ╭─[ loops_for.baml:28:2 ]
-//     │
-//  28 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆   
-//  35 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
 // ────╯
 // Error: Type `int` has no field `length`
 //    ╭─[ loops_for.baml:1:1 ]

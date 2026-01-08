@@ -54,15 +54,6 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Statement must end with a semicolon.
-//    ╭─[ maps_key_and_value_typecheck.baml:3:7 ]
-//    │
-//  3 │     { (1 + 1): "2" }
-//    │       ───┬───  
-//    │          ╰───── Statement must end with a semicolon.
-//    │ 
-//    │ Note: Error code: E0028
-// ───╯
 // Error: Expected `map<int, string>`, found `string`
 //    ╭─[ maps_key_and_value_typecheck.baml:3:15 ]
 //    │

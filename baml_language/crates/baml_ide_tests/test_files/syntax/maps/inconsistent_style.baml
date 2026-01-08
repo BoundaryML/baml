@@ -30,33 +30,6 @@ function InconsistentStyleUse() -> int{
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Statement must end with a semicolon.
-//    ╭─[ maps_inconsistent_style.baml:8:9 ]
-//    │
-//  8 │         name "Hello"
-//    │         ──┬─  
-//    │           ╰─── Statement must end with a semicolon.
-//    │ 
-//    │ Note: Error code: E0028
-// ───╯
-// Error: Statement must end with a semicolon.
-//    ╭─[ maps_inconsistent_style.baml:8:14 ]
-//    │
-//  8 │         name "Hello"
-//    │              ───┬───  
-//    │                 ╰───── Statement must end with a semicolon.
-//    │ 
-//    │ Note: Error code: E0028
-// ───╯
-// Error: Statement must end with a semicolon.
-//    ╭─[ maps_inconsistent_style.baml:9:9 ]
-//    │
-//  9 │         some_ident: "yes"
-//    │         ─────┬────  
-//    │              ╰────── Statement must end with a semicolon.
-//    │ 
-//    │ Note: Error code: E0028
-// ───╯
 // Error: Unknown variable `name`
 //    ╭─[ maps_inconsistent_style.baml:8:9 ]
 //    │

@@ -43,25 +43,4 @@ function Nested() -> int {
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//     ╭─[ loops_break.baml:26:5 ]
-//     │
-//  26 │ ╭─▶     while (true) {
-//     ┆ ┆   
-//  33 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯
-// Error: Statement must end with a semicolon.
-//     ╭─[ loops_break.baml:6:2 ]
-//     │
-//   6 │ ╭─▶     while (true) {
-//     ┆ ┆   
-//  12 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯
+// <no-diagnostics-expected>

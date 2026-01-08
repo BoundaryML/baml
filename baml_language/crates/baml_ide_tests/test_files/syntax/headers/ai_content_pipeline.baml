@@ -62,17 +62,6 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//     ╭─[ headers_ai_content_pipeline.baml:38:5 ]
-//     │
-//  38 │ ╭─▶     for (let kind in content_types) {
-//     ┆ ┆   
-//  47 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Statement must end with a semicolon.
-//     │     
-//     │     Note: Error code: E0028
-// ────╯
 // Error: Unknown variable `GetEmails`
 //    ╭─[ headers_ai_content_pipeline.baml:6:18 ]
 //    │

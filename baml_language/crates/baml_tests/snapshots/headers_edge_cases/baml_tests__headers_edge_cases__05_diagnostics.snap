@@ -3,30 +3,6 @@ source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [hir] Error: Statement must end with a semicolon.
-     ╭─[ edge_cases.baml:116:7 ]
-     │
- 116 │ ╭─▶         //#### Inside If
-     ┆ ┆   
- 122 │ ├─▶     //### After If
-     │ │                        
-     │ ╰──────────────────────── Statement must end with a semicolon.
-     │     
-     │     Note: Error code: E0028
-─────╯
-
-  [hir] Error: Statement must end with a semicolon.
-     ╭─[ edge_cases.baml:125:24 ]
-     │
- 125 │ ╭─▶     for (let i in [1, 2, 3]) {
-     ┆ ┆   
- 129 │ ├─▶     //## After For
-     │ │                        
-     │ ╰──────────────────────── Statement must end with a semicolon.
-     │     
-     │     Note: Error code: E0028
-─────╯
-
   [type] Error: Expected `string`, found `int`
      ╭─[ edge_cases.baml:135:15 ]
      │
