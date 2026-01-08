@@ -77,7 +77,7 @@ impl std::error::Error for LoweringError {}
 /// not suitable for code generation.
 ///
 /// Note: Takes `baml_compiler_tir::Db` instead of `baml_vir::Db` for broader compatibility.
-/// This allows callers with `baml_mir::Db` to use this function directly.
+/// This allows callers with `baml_compiler_mir::Db` to use this function directly.
 pub fn lower_from_hir(
     db: &dyn baml_compiler_tir::Db,
     body: &FunctionBody,

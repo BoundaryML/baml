@@ -319,8 +319,8 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_compiler_hir",
+ "baml_compiler_mir",
  "baml_compiler_tir",
- "baml_mir",
  "baml_tests",
  "baml_vir",
  "baml_vm",
@@ -356,6 +356,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_mir"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler_hir",
+ "baml_compiler_tir",
+ "baml_vir",
+ "baml_workspace",
+ "la-arena",
+ "log",
+ "rustc-hash 2.1.1",
+ "salsa",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
 name = "baml_compiler_tir"
 version = "0.0.0"
 dependencies = [
@@ -377,9 +394,9 @@ dependencies = [
  "baml_codegen",
  "baml_compiler_hir",
  "baml_compiler_lexer",
+ "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_diagnostics",
- "baml_mir",
  "baml_parser",
  "baml_syntax",
  "baml_vir",
@@ -493,23 +510,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_mir"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "baml_compiler_hir",
- "baml_compiler_tir",
- "baml_vir",
- "baml_workspace",
- "la-arena",
- "log",
- "rustc-hash 2.1.1",
- "salsa",
- "smol_str",
- "text-size",
-]
-
-[[package]]
 name = "baml_onionskin"
 version = "0.0.0"
 dependencies = [
@@ -520,10 +520,10 @@ dependencies = [
  "baml_codegen",
  "baml_compiler_hir",
  "baml_compiler_lexer",
+ "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
  "baml_diagnostics",
- "baml_mir",
  "baml_parser",
  "baml_project",
  "baml_vir",
@@ -558,10 +558,10 @@ name = "baml_project"
 version = "0.0.0"
 dependencies = [
  "baml_compiler_hir",
+ "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
  "baml_diagnostics",
- "baml_mir",
  "baml_workspace",
  "lsp-types",
  "salsa",
@@ -584,10 +584,10 @@ dependencies = [
  "baml_base",
  "baml_codegen",
  "baml_compiler_hir",
+ "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_db",
  "baml_diagnostics",
- "baml_mir",
  "baml_project",
  "baml_vm",
  "baml_workspace",

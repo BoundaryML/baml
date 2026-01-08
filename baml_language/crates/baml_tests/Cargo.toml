@@ -15,7 +15,7 @@ baml_codegen = { workspace = true }
 baml_db = { workspace = true }
 baml_diagnostics = { workspace = true }
 baml_compiler_hir = { workspace = true }
-baml_mir = { workspace = true }
+baml_compiler_mir = { workspace = true }
 baml_project = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_vm = { workspace = true }

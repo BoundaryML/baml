@@ -23,7 +23,7 @@ baml_db = { path = "crates/baml_db" }
 baml_diagnostics = { path = "crates/baml_diagnostics" }
 baml_compiler_hir = { path = "crates/baml_compiler_hir" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
-baml_mir = { path = "crates/baml_mir" }
+baml_compiler_mir = { path = "crates/baml_compiler_mir" }
 baml_parser = { path = "crates/baml_parser" }
 baml_onionskin = { path = "crates/baml_onionskin" }
 baml_syntax = { path = "crates/baml_syntax" }

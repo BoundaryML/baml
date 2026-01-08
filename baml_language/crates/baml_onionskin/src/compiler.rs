@@ -1074,14 +1074,14 @@ impl CompilerRunner {
                         &resolution_ctx,
                     ) {
                         Ok(vir) => {
-                            let mir = baml_mir::lower(
+                            let mir = baml_compiler_mir::lower(
                                 &signature,
                                 &vir,
                                 &self.db,
                                 &classes,
                                 &resolution_ctx,
                             );
-                            baml_mir::pretty::display_function(&mir)
+                            baml_compiler_mir::pretty::display_function(&mir)
                         }
                         Err(err) => {
                             format!("(no MIR due to errors: {:?})", err)

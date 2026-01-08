@@ -71,7 +71,7 @@ impl baml_compiler_hir::Db for TestDatabase {}
 impl baml_compiler_tir::Db for TestDatabase {}
 
 #[salsa::db]
-impl baml_mir::Db for TestDatabase {}
+impl baml_compiler_mir::Db for TestDatabase {}
 
 impl Default for TestDatabase {
     fn default() -> Self {

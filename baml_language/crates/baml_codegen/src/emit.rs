@@ -6,7 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_mir::{
+use baml_compiler_mir::{
     AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
@@ -232,14 +232,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Convert MIR `VizNodeType` to VM `VizNodeType`.
-    fn convert_viz_node_type(mir_type: baml_mir::VizNodeType) -> baml_vm::VizNodeType {
+    fn convert_viz_node_type(mir_type: baml_compiler_mir::VizNodeType) -> baml_vm::VizNodeType {
         match mir_type {
-            baml_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
-            baml_mir::VizNodeType::HeaderContextEnter => baml_vm::VizNodeType::HeaderContextEnter,
-            baml_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
-            baml_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
-            baml_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,
-            baml_mir::VizNodeType::OtherScope => baml_vm::VizNodeType::OtherScope,
+            baml_compiler_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
+            baml_compiler_mir::VizNodeType::HeaderContextEnter => baml_vm::VizNodeType::HeaderContextEnter,
+            baml_compiler_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
+            baml_compiler_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
+            baml_compiler_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,
+            baml_compiler_mir::VizNodeType::OtherScope => baml_vm::VizNodeType::OtherScope,
         }
     }
 

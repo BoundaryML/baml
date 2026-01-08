@@ -72,7 +72,7 @@ impl baml_compiler_hir::Db for ProjectDatabase {}
 impl baml_compiler_tir::Db for ProjectDatabase {}
 
 #[salsa::db]
-impl baml_mir::Db for ProjectDatabase {}
+impl baml_compiler_mir::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
     /// Create a new empty database.

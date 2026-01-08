@@ -62,7 +62,7 @@ pub use baml_vm::{
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
     compile_files(db, project.files(db))
 }
@@ -73,7 +73,7 @@ pub fn generate_project_bytecode(db: &dyn baml_mir::Db) -> Result<Program, Lower
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
 pub fn compile_files(
-    db: &dyn baml_mir::Db,
+    db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
@@ -273,7 +273,7 @@ pub fn compile_files(
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
                         let vir = baml_vir::lower_from_hir(db, &body, &inference, &resolution_ctx)?;
-                        let mir = baml_mir::lower(&signature, &vir, db, &classes, &resolution_ctx);
+                        let mir = baml_compiler_mir::lower(&signature, &vir, db, &classes, &resolution_ctx);
 
                         // Compile MIR to bytecode
                         let ctx = MirCodegenContext {
@@ -309,7 +309,7 @@ pub fn compile_files(
 ///
 /// Maps function names to their arrow types for use during type inference.
 fn build_typing_context(
-    db: &dyn baml_mir::Db,
+    db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
     resolution_ctx: &TypeResolutionContext,
 ) -> HashMap<Name, baml_compiler_tir::Ty> {

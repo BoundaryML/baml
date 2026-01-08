@@ -14,7 +14,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_mir::{
+use baml_compiler_mir::{
     BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
 };
 
@@ -265,7 +265,7 @@ fn compute_rpo(mir: &MirFunction) -> Vec<BlockId> {
 ///
 /// A block is dead if it has no statements and terminates with `Unreachable`.
 /// Such blocks exist only as targets for impossible control flow paths.
-pub(crate) fn is_dead_unreachable_block(block: &baml_mir::BasicBlock) -> bool {
+pub(crate) fn is_dead_unreachable_block(block: &baml_compiler_mir::BasicBlock) -> bool {
     block.statements.is_empty() && matches!(block.terminator, Some(Terminator::Unreachable))
 }
 
