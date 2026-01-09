@@ -1,5 +1,5 @@
 [package]
-name = "baml-runtime-wasm"
+name = "baml-playground-wasm"
 version = "0.1.0"
 edition = "2021"
 

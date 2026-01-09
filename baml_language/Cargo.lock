@@ -290,7 +290,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml-runtime-wasm"
+name = "baml-playground-wasm"
 version = "0.1.0"
 dependencies = [
  "baml_project",

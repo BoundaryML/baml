@@ -24,7 +24,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
 
   // Handle .wasm file requests (Vite transforms import.meta.url to http URLs)
   if (url.endsWith('.wasm')) {
-    const wasmPath = resolve(wasmDir, 'baml_runtime_wasm_bg.wasm');
+    const wasmPath = resolve(wasmDir, 'baml_playground_wasm_bg.wasm');
     const buffer = readFileSync(wasmPath);
     return new Response(buffer, {
       status: 200,
@@ -38,7 +38,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
 
 // Initialize WASM before tests run
 beforeAll(async () => {
-  const initWasm = (await import('baml-runtime-wasm')).default;
+  const initWasm = (await import('baml-playground-wasm')).default;
   await initWasm();
 });
 

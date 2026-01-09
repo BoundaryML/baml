@@ -24,7 +24,7 @@
     "react-dom": "^18.3.1"
   },
   "dependencies": {
-    "baml-runtime-wasm": "link:wasm",
+    "baml-playground-wasm": "link:wasm",
     "jotai": "^2.15.1"
   }
 }

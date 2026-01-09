@@ -8,13 +8,12 @@
     "dev:webview": "pnpm --filter app-vscode-webview dev",
     "dev:ext": "pnpm --filter app-vscode-ext dev",
     "dev:web": "pnpm --filter app-promptfiddle dev",
-    "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean"
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
   },
   "packageManager": "pnpm@9.12.0",
   "devDependencies": {
-    "turbo": "^2.3.0",
     "typescript": "^5.7.0"
   }
 }
