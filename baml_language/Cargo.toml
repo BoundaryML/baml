@@ -19,6 +19,7 @@ version = "0.0.0"
 # workspace dependencies
 baml_base = { path = "crates/baml_base" }
 baml_builtins = { path = "crates/baml_builtins" }
+baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_db = { path = "crates/baml_db" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }

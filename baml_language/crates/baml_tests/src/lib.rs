@@ -84,10 +84,7 @@ fn format_type_ref(type_ref: &baml_compiler_hir::TypeRef) -> String {
         TypeRef::String => "string".to_string(),
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
-        TypeRef::Image => "image".to_string(),
-        TypeRef::Audio => "audio".to_string(),
-        TypeRef::Video => "video".to_string(),
-        TypeRef::Pdf => "pdf".to_string(),
+        TypeRef::Media(kind) => kind.to_string(),
         TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
         TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
         TypeRef::Map { key, value } => {

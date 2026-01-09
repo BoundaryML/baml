@@ -451,10 +451,7 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
         TypeRef::String => "string".to_string(),
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
-        TypeRef::Image => "image".to_string(),
-        TypeRef::Audio => "audio".to_string(),
-        TypeRef::Video => "video".to_string(),
-        TypeRef::Pdf => "pdf".to_string(),
+        TypeRef::Media(kind) => kind.to_string(),
         TypeRef::Optional(inner) => format!("{}?", type_ref_to_str(inner)),
         TypeRef::List(inner) => format!("{}[]", type_ref_to_str(inner)),
         TypeRef::Map { key, value } => {

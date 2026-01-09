@@ -735,11 +735,7 @@ impl<'a> LoweringContext<'a> {
             baml_compiler_tir::Ty::String => Ty::String,
             baml_compiler_tir::Ty::Bool => Ty::Bool,
             baml_compiler_tir::Ty::Null => Ty::Null,
-            baml_compiler_tir::Ty::Image => Ty::Image,
-            baml_compiler_tir::Ty::Audio => Ty::Audio,
-            baml_compiler_tir::Ty::Video => Ty::Video,
-            baml_compiler_tir::Ty::Pdf => Ty::Pdf,
-
+            baml_compiler_tir::Ty::Media(kind) => Ty::Media(kind.clone()),
             baml_compiler_tir::Ty::Named(name) => Ty::Class(name.clone()),
 
             baml_compiler_tir::Ty::Class(name) => Ty::Class(name.clone()),

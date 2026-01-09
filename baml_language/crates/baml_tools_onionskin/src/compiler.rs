@@ -2415,6 +2415,7 @@ fn format_vm_value(value: &baml_vm::Value, objects: &baml_vm::indexable::ObjectP
                     }
                     Object::Function(f) => format!("<fn {}>", f.name),
                     Object::Class(c) => format!("<class {}>", c.name),
+                    Object::Media(m) => format!("<type {}>", m.kind),
                     Object::Enum(e) => format!("<enum {}>", e.name),
                     Object::Future(_) => "<future>".to_string(),
                 }

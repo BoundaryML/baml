@@ -11,8 +11,6 @@
 //! Add a new entry in the `define_builtins!` macro invocation below.
 //! This generates both the path constant and the signature in one place.
 
-use std::sync::LazyLock;
-
 /// Type pattern for matching/constructing types with type variables.
 ///
 /// Used for generic builtin functions like `Array<T>.push(item: T)`.
@@ -28,9 +26,21 @@ pub enum TypePattern {
         key: Box<TypePattern>,
         value: Box<TypePattern>,
     },
+    Media,
+    Optional(Box<TypePattern>),
     /// Type variable - binds to actual type during pattern matching.
     /// E.g., `Var("T")` in `Array<T>.push(item: T)` binds to the element type.
     Var(&'static str),
+}
+
+impl TypePattern {
+    #[must_use]
+    pub fn optional(self) -> Self {
+        match self {
+            Self::Optional(inner) => inner.optional(),
+            _ => Self::Optional(Box::new(self)),
+        }
+    }
 }
 
 /// A built-in function's type signature (compile-time only).
@@ -67,177 +77,90 @@ impl BuiltinSignature {
     }
 }
 
-/// Macro to define builtins with path constants.
+/// Macro containing all builtin definitions.
 ///
-/// This ensures path strings are defined exactly once and generates:
-/// 1. A `pub mod paths` with constants like `ARRAY_LENGTH`, `STRING_TRIM`, etc.
-/// 2. The `BUILTINS` static with all signatures using those constants.
-/// 3. A `for_all_builtins!` macro that can be used to iterate over all builtin names.
-macro_rules! define_builtins {
-    (
-        $(
-            $const_name:ident = $path:literal {
-                receiver: $receiver:expr,
-                params: [$($param:expr),* $(,)?],
-                returns: $returns:expr $(,)?
+/// This is used by both `baml_builtins` and `baml_vm` to ensure consistency.
+/// The macro takes a callback that will receive the definitions.
+#[macro_export]
+macro_rules! with_builtins {
+    ($callback:path) => {
+        $callback! {
+            mod baml {
+                // =====================================================================
+                // Array methods
+                // =====================================================================
+                struct Array<T> {
+                    fn length(self: Array<T>) -> i64;
+                    fn push(self: mut Array<T>, item: T);
+                }
+
+                // =====================================================================
+                // String methods
+                // =====================================================================
+                struct String {
+                    fn length(self: String) -> i64;
+                    fn toLowerCase(self: String) -> String;
+                    fn toUpperCase(self: String) -> String;
+                    fn trim(self: String) -> String;
+                    fn includes(self: String, search: String) -> bool;
+                    fn startsWith(self: String, prefix: String) -> bool;
+                    fn endsWith(self: String, suffix: String) -> bool;
+                    #[uses(vm)]
+                    fn split(self: String, delimiter: String) -> Array<String>;
+                    fn substring(self: String, start: i64, end: i64) -> String;
+                    fn replace(self: String, search: String, replacement: String) -> String;
+                }
+
+                // =====================================================================
+                // Map methods
+                // =====================================================================
+                struct Map<K, V> {
+                    fn length(self: Map<K, V>) -> i64;
+                }
+                // Map.has only works on string-keyed maps, so we define it separately
+                // with only V as generic (String in the signature is the concrete type)
+                struct Map<V> {
+                    fn has(self: Map<String, V>, key: String) -> bool;
+                }
+
+                // =====================================================================
+                // Free functions
+                // =====================================================================
+                #[uses(vm)]
+                fn deep_copy<T>(value: T) -> Result<T>;
+                #[uses(vm)]
+                fn deep_equals<T>(a: T, b: T) -> bool;
+
+                mod unstable {
+                    #[uses(vm)]
+                    fn string<T>(value: T) -> Result<String>;
+                }
+
+                // =====================================================================
+                // Media methods
+                // =====================================================================
+                struct Media {
+                    fn as_url(self: Media) -> Option<String>;
+                    fn as_base64(self: Media) -> Option<String>;
+                    fn as_file(self: Media) -> Option<String>;
+                    fn mime_type(self: Media) -> Option<String>;
+                }
             }
-        ),* $(,)?
-    ) => {
-        /// Path constants for all builtins.
-        ///
-        /// Use these constants instead of raw strings to avoid typos.
-        pub mod paths {
-            $(
-                pub const $const_name: &str = $path;
-            )*
 
-            /// All builtin paths as a slice.
-            pub const ALL: &[&str] = &[$($path),*];
+            mod env {
+                #[uses(vm)]
+                fn get(key: String) -> Result<String>;
+            }
         }
-
-        /// Invoke a macro with all builtin constant names.
-        ///
-        /// Usage:
-        /// ```ignore
-        /// baml_builtins::for_all_builtins!(my_macro);
-        /// // Expands to: my_macro!(ARRAY_LENGTH, ARRAY_PUSH, STRING_LENGTH, ...);
-        /// ```
-        #[macro_export]
-        macro_rules! for_all_builtins {
-            ($callback:ident) => {
-                $callback!($($const_name),*)
-            };
-        }
-
-        /// All built-in function signatures.
-        static BUILTINS: LazyLock<Vec<BuiltinSignature>> = LazyLock::new(|| {
-            vec![
-                $(
-                    BuiltinSignature {
-                        path: paths::$const_name,
-                        receiver: $receiver,
-                        params: vec![$($param),*],
-                        returns: $returns,
-                    },
-                )*
-            ]
-        });
     };
 }
 
-define_builtins! {
-    // =========================================================================
-    // Array methods
-    // =========================================================================
-    ARRAY_LENGTH = "baml.Array.length" {
-        receiver: Some(TypePattern::Array(Box::new(TypePattern::Var("T")))),
-        params: [],
-        returns: TypePattern::Int,
-    },
-    ARRAY_PUSH = "baml.Array.push" {
-        receiver: Some(TypePattern::Array(Box::new(TypePattern::Var("T")))),
-        params: [("item", TypePattern::Var("T"))],
-        returns: TypePattern::Null,
-    },
-
-    // =========================================================================
-    // String methods
-    // =========================================================================
-    STRING_LENGTH = "baml.String.length" {
-        receiver: Some(TypePattern::String),
-        params: [],
-        returns: TypePattern::Int,
-    },
-    STRING_TO_LOWER_CASE = "baml.String.toLowerCase" {
-        receiver: Some(TypePattern::String),
-        params: [],
-        returns: TypePattern::String,
-    },
-    STRING_TO_UPPER_CASE = "baml.String.toUpperCase" {
-        receiver: Some(TypePattern::String),
-        params: [],
-        returns: TypePattern::String,
-    },
-    STRING_TRIM = "baml.String.trim" {
-        receiver: Some(TypePattern::String),
-        params: [],
-        returns: TypePattern::String,
-    },
-    STRING_INCLUDES = "baml.String.includes" {
-        receiver: Some(TypePattern::String),
-        params: [("search", TypePattern::String)],
-        returns: TypePattern::Bool,
-    },
-    STRING_STARTS_WITH = "baml.String.startsWith" {
-        receiver: Some(TypePattern::String),
-        params: [("prefix", TypePattern::String)],
-        returns: TypePattern::Bool,
-    },
-    STRING_ENDS_WITH = "baml.String.endsWith" {
-        receiver: Some(TypePattern::String),
-        params: [("suffix", TypePattern::String)],
-        returns: TypePattern::Bool,
-    },
-    STRING_SPLIT = "baml.String.split" {
-        receiver: Some(TypePattern::String),
-        params: [("delimiter", TypePattern::String)],
-        returns: TypePattern::Array(Box::new(TypePattern::String)),
-    },
-    STRING_SUBSTRING = "baml.String.substring" {
-        receiver: Some(TypePattern::String),
-        params: [("start", TypePattern::Int), ("end", TypePattern::Int)],
-        returns: TypePattern::String,
-    },
-    STRING_REPLACE = "baml.String.replace" {
-        receiver: Some(TypePattern::String),
-        params: [("search", TypePattern::String), ("replacement", TypePattern::String)],
-        returns: TypePattern::String,
-    },
-
-    // =========================================================================
-    // Map methods
-    // =========================================================================
-    MAP_LENGTH = "baml.Map.length" {
-        receiver: Some(TypePattern::Map {
-            key: Box::new(TypePattern::Var("K")),
-            value: Box::new(TypePattern::Var("V")),
-        }),
-        params: [],
-        returns: TypePattern::Int,
-    },
-    MAP_HAS = "baml.Map.has" {
-        receiver: Some(TypePattern::Map {
-            key: Box::new(TypePattern::String),
-            value: Box::new(TypePattern::Var("V")),
-        }),
-        params: [("key", TypePattern::String)],
-        returns: TypePattern::Bool,
-    },
-
-    // =========================================================================
-    // Free functions
-    // =========================================================================
-    ENV_GET = "env.get" {
-        receiver: None,
-        params: [("key", TypePattern::String)],
-        returns: TypePattern::String,
-    },
-    DEEP_COPY = "baml.deep_copy" {
-        receiver: None,
-        params: [("value", TypePattern::Var("T"))],
-        returns: TypePattern::Var("T"),
-    },
-    DEEP_EQUALS = "baml.deep_equals" {
-        receiver: None,
-        params: [("a", TypePattern::Var("T")), ("b", TypePattern::Var("T"))],
-        returns: TypePattern::Bool,
-    },
-    UNSTABLE_STRING = "baml.unstable.string" {
-        receiver: None,
-        params: [("value", TypePattern::Var("T"))],
-        returns: TypePattern::String,
-    },
-}
+// Define all builtins using ergonomic Rust-like syntax.
+// The macro generates:
+// - `pub mod paths` with constants like `BAML_ARRAY_LENGTH`, `ENV_GET`, etc.
+// - `for_all_builtins!` macro for iterating over all builtin names
+// - `BUILTINS` static with all `BuiltinSignature` instances
+with_builtins!(baml_builtins_macros::define_builtins);
 
 /// Get all built-in function signatures.
 pub fn builtins() -> &'static [BuiltinSignature] {
@@ -319,5 +242,15 @@ mod tests {
         assert!(find_builtin_by_path("baml.Array.length").is_some());
         assert!(find_builtin_by_path("env.get").is_some());
         assert!(find_builtin_by_path("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_path_constants() {
+        // Verify path constants are generated correctly
+        assert_eq!(paths::BAML_ARRAY_LENGTH, "baml.Array.length");
+        assert_eq!(paths::BAML_STRING_TO_LOWER_CASE, "baml.String.toLowerCase");
+        assert_eq!(paths::ENV_GET, "env.get");
+        assert_eq!(paths::BAML_DEEP_COPY, "baml.deep_copy");
+        assert_eq!(paths::BAML_UNSTABLE_STRING, "baml.unstable.string");
     }
 }

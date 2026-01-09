@@ -136,10 +136,7 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Null => Ty::Null,
 
         // Media types
-        TypeRef::Image => Ty::Image,
-        TypeRef::Audio => Ty::Audio,
-        TypeRef::Video => Ty::Video,
-        TypeRef::Pdf => Ty::Pdf,
+        TypeRef::Media(kind) => Ty::Media(kind.clone()),
 
         // Named type via path
         TypeRef::Path(path) => lower_path_type_resolved_with_ctx(ctx, path),
@@ -202,10 +199,10 @@ fn lower_path_type_resolved_with_ctx(
                 "string" => Ty::String,
                 "bool" => Ty::Bool,
                 "null" => Ty::Null,
-                "image" => Ty::Image,
-                "audio" => Ty::Audio,
-                "video" => Ty::Video,
-                "pdf" => Ty::Pdf,
+                "image" => Ty::Media(baml_base::MediaKind::Image),
+                "audio" => Ty::Media(baml_base::MediaKind::Audio),
+                "video" => Ty::Media(baml_base::MediaKind::Video),
+                "pdf" => Ty::Media(baml_base::MediaKind::Pdf),
                 // User-defined type - resolve to Class/Enum or validate
                 _ => {
                     // Skip validation for complex type expressions

@@ -81,39 +81,3 @@ pub fn functions() -> IndexMap<String, (NativeFunction, usize)> {
         })
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_all_signatures_have_native_fns() {
-        // Every signature in baml_builtins must have a native implementation
-        for sig in baml_builtins::builtins() {
-            assert!(
-                get_native_fn(sig.path).is_some(),
-                "Missing native function for builtin: {}",
-                sig.path
-            );
-        }
-    }
-
-    #[test]
-    fn test_all_native_fns_have_signatures() {
-        // Every native function must have a signature in baml_builtins
-        for path in NATIVE_FUNCTIONS.keys() {
-            assert!(
-                baml_builtins::find_builtin_by_path(path).is_some(),
-                "Native function has no signature: {path}"
-            );
-        }
-    }
-
-    #[test]
-    fn test_functions_map() {
-        let fns = functions();
-        assert!(fns.contains_key(paths::ARRAY_LENGTH));
-        assert!(fns.contains_key(paths::ENV_GET));
-        assert_eq!(fns.get(paths::ARRAY_LENGTH).unwrap().1, 1);
-    }
-}

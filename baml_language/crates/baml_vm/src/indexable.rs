@@ -262,18 +262,99 @@ impl ObjectPool {
         self[index].as_string()
     }
 
-    // pub fn as_media(&self, value: &Value) -> Result<&BamlMedia, InternalError> {
-    //     let object_index = self.as_object(value, ObjectType::Media)?;
+    pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, InternalError> {
+        let index = self.as_object(value, ObjectType::String)?;
+        self[index].as_string_mut()
+    }
 
-    //     let Object::Media(media) = &self[object_index] else {
-    //         return Err(InternalError::TypeError {
-    //             expected: ObjectType::Media.into(),
-    //             got: ObjectType::of(&self[object_index]).into(),
-    //         });
-    //     };
+    pub fn as_media(
+        &self,
+        value: &Value,
+        media_kind: crate::types::MediaKind,
+    ) -> Result<&crate::types::MediaValue, InternalError> {
+        let object_index = self.as_object(value, ObjectType::Media(media_kind))?;
 
-    //     Ok(media)
-    // }
+        let Object::Media(media) = &self[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Media(media_kind).into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        };
+
+        Ok(media)
+    }
+
+    /// Get an array reference from a Value.
+    pub fn as_array(&self, value: &Value) -> Result<&[Value], InternalError> {
+        let object_index = self.as_object(value, ObjectType::Array)?;
+
+        let Object::Array(array) = &self[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        };
+
+        Ok(array.as_slice())
+    }
+
+    /// Get a mutable array reference from a Value.
+    pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, InternalError> {
+        let object_index = self.as_object(value, ObjectType::Array)?;
+
+        // Check type first to avoid borrow issues
+        if !matches!(&self[object_index], Object::Array(_)) {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        }
+
+        let Object::Array(array) = &mut self[object_index] else {
+            unreachable!("type was just checked")
+        };
+
+        Ok(array)
+    }
+
+    /// Get a map reference from a Value.
+    pub fn as_map(
+        &self,
+        value: &Value,
+    ) -> Result<&indexmap::IndexMap<String, Value>, InternalError> {
+        let object_index = self.as_object(value, ObjectType::Map)?;
+
+        let Object::Map(map) = &self[object_index] else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        };
+
+        Ok(map)
+    }
+
+    /// Get a mutable map reference from a Value.
+    pub fn as_map_mut(
+        &mut self,
+        value: &Value,
+    ) -> Result<&mut indexmap::IndexMap<String, Value>, InternalError> {
+        let object_index = self.as_object(value, ObjectType::Map)?;
+
+        // Check type first to avoid borrow issues
+        if !matches!(&self[object_index], Object::Map(_)) {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(&self[object_index]).into(),
+            });
+        }
+
+        let Object::Map(map) = &mut self[object_index] else {
+            unreachable!("type was just checked")
+        };
+
+        Ok(map)
+    }
 
     /// Inspects the type of a value, including the [`ObjectType`] if the object
     /// reference is valid.

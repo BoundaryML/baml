@@ -55,6 +55,10 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
             key: Box::new(substitute_with_fallback(key, bindings)),
             value: Box::new(substitute_with_fallback(value, bindings)),
         },
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
+        TypePattern::Optional(inner) => {
+            Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
+        }
     }
 }
 
@@ -471,58 +475,6 @@ pub struct TypeContext<'db> {
 }
 
 impl<'db> TypeContext<'db> {
-    /// Create a new type context with an initial scope of global bindings.
-    ///
-    /// The initial scope typically contains top-level function types, allowing
-    /// function calls to be properly typed. Pass an empty `HashMap` for no globals.
-    pub fn new(db: &'db dyn Db, globals: HashMap<Name, Ty>, file_id: FileId) -> Self {
-        TypeContext {
-            db,
-            scopes: vec![globals],
-            class_fields: HashMap::new(),
-            type_aliases: HashMap::new(),
-            enum_variants: HashMap::new(),
-            class_names: HashSet::new(),
-            enum_names: HashSet::new(),
-            known_types: HashSet::new(),
-            expr_types: HashMap::new(),
-            path_segment_types: HashMap::new(),
-            enum_variant_exprs: HashMap::new(),
-            exhaustive_matches: HashSet::new(),
-            return_types: Vec::new(),
-            errors: Vec::new(),
-            file_id,
-            watched_vars: HashSet::new(),
-        }
-    }
-
-    /// Create a new type context with global bindings and class field information.
-    pub fn with_class_fields(
-        db: &'db dyn Db,
-        globals: HashMap<Name, Ty>,
-        class_fields: HashMap<Name, HashMap<Name, Ty>>,
-        file_id: FileId,
-    ) -> Self {
-        TypeContext {
-            db,
-            scopes: vec![globals],
-            class_fields,
-            type_aliases: HashMap::new(),
-            enum_variants: HashMap::new(),
-            class_names: HashSet::new(),
-            enum_names: HashSet::new(),
-            known_types: HashSet::new(),
-            expr_types: HashMap::new(),
-            path_segment_types: HashMap::new(),
-            enum_variant_exprs: HashMap::new(),
-            exhaustive_matches: HashSet::new(),
-            return_types: Vec::new(),
-            errors: Vec::new(),
-            file_id,
-            watched_vars: HashSet::new(),
-        }
-    }
-
     /// Create a new type context with full type resolution info.
     #[allow(clippy::too_many_arguments)]
     pub fn with_type_info(

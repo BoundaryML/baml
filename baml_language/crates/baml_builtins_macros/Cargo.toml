@@ -1,5 +1,5 @@
 [package]
-name = "baml_builtins"
+name = "baml_builtins_macros"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,14 +9,17 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Type signatures for BAML built-in functions (compile-time only)"
+description = "Proc macros for defining BAML built-in functions with ergonomic syntax"
 
 [lib]
+proc-macro = true
 doctest = false
 
 [lints]
 workspace = true
 
 [dependencies]
-baml_builtins_macros = { workspace = true }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
 

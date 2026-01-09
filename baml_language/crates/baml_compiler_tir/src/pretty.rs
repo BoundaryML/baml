@@ -630,7 +630,7 @@ pub fn short_display(error: &TypeError<Ty>) -> String {
             expected, found, ..
         } => format!("Expected {expected}. Found {found}"),
         TypeError::UnknownType { name, .. } => format!("Unknown type {name}"),
-        TypeError::UnknownVariable { name, .. } => format!("Unknown type {name}"),
+        TypeError::UnknownVariable { name, .. } => format!("Unknown type for variable `{name}`"),
         TypeError::InvalidBinaryOp { op, lhs, rhs, .. } => {
             format!("Invalid op {op} for {lhs} and {rhs}")
         }

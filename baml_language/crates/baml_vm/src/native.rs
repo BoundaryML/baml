@@ -1,17 +1,13 @@
 //! Native function implementations for BAML builtins.
 //!
-//! # Naming Convention
+//! This module uses a trait-based approach for implementing native functions:
+//! - `NativeFunctions` trait with clean Rust types (users implement these)
+//! - `__baml_*` glue methods that handle Value conversion (auto-generated)
 //!
-//! Each function here corresponds to a builtin defined in `baml_builtins`.
-//! The function name must be the lowercase version of the constant name:
+//! # Adding a new builtin
 //!
-//! | Builtin Constant     | Native Function           |
-//! |---------------------|---------------------------|
-//! | `ARRAY_LENGTH`      | `pub fn array_length`     |
-//! | `STRING_TO_UPPER_CASE` | `pub fn string_to_upper_case` |
-//!
-//! If you see a compile error like "cannot find function `xyz` in module `native`",
-//! you need to add `pub fn xyz(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult`.
+//! 1. Add the definition in `baml_builtins/src/lib.rs`
+//! 2. Implement the corresponding method in `impl NativeFunctions for VmNatives`
 
 use std::{collections::HashMap, fmt::Write};
 
@@ -21,353 +17,176 @@ use crate::{
     Vm,
     errors::{InternalError, RuntimeError, VmError},
     indexable::ObjectIndex,
-    types::{Future, FutureKind, Instance, Object, ObjectType, Value},
+    types::{
+        Future, FutureKind, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value,
+    },
 };
 
-type NativeFunctionResult = Result<Value, VmError>;
+/// Result type for native functions.
+pub type NativeFunctionResult = Result<Value, VmError>;
 
-/// Array length.
-#[allow(clippy::cast_possible_wrap)] // array length won't exceed i64::MAX
-pub fn array_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
+/// Native function type alias.
+pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
 
-    let expected = ObjectType::Array;
-    let ob_index = vm.objects.as_object(&args[0], expected)?;
+// Generate the NativeFunctions trait from builtin definitions
+baml_builtins::with_builtins!(baml_builtins_macros::generate_native_trait);
 
-    let Object::Array(array) = &vm.objects[ob_index] else {
-        return Err(InternalError::TypeError {
-            expected: expected.into(),
-            got: ObjectType::of(&vm.objects[ob_index]).into(),
+/// The VM's native function implementations.
+pub struct VmNatives;
+
+impl NativeFunctions for VmNatives {
+    // =========================================================================
+    // Array methods
+    // =========================================================================
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn baml_array_length(array: &[Value]) -> i64 {
+        array.len() as i64
+    }
+
+    fn baml_array_push(array: &mut Vec<Value>, item: &Value) {
+        array.push(*item);
+    }
+
+    // =========================================================================
+    // String methods
+    // =========================================================================
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn baml_string_length(string: &str) -> i64 {
+        string.chars().count() as i64
+    }
+
+    fn baml_string_to_lower_case(string: &str) -> String {
+        string.to_lowercase()
+    }
+
+    fn baml_string_to_upper_case(string: &str) -> String {
+        string.to_uppercase()
+    }
+
+    fn baml_string_trim(string: &str) -> String {
+        string.trim().to_string()
+    }
+
+    fn baml_string_includes(string: &str, search: &str) -> bool {
+        string.contains(search)
+    }
+
+    fn baml_string_starts_with(string: &str, prefix: &str) -> bool {
+        string.starts_with(prefix)
+    }
+
+    fn baml_string_ends_with(string: &str, suffix: &str) -> bool {
+        string.ends_with(suffix)
+    }
+
+    fn baml_string_split(vm: &mut Vm, string: &str, delimiter: &str) -> Vec<Value> {
+        string
+            .split(delimiter)
+            .map(|s| vm.alloc_string(s.to_string()))
+            .collect()
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    fn baml_string_substring(string: &str, start: i64, end: i64) -> String {
+        let len = string.len();
+        let start = (start as usize).min(len);
+        let end = (end as usize).min(len).max(start);
+        string[start..end].to_string()
+    }
+
+    fn baml_string_replace(string: &str, search: &str, replacement: &str) -> String {
+        // Replace first occurrence only (matching JavaScript behavior)
+        string.replacen(search, replacement, 1)
+    }
+
+    // =========================================================================
+    // Map methods
+    // =========================================================================
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn baml_map_length(map: &IndexMap<String, Value>) -> i64 {
+        map.len() as i64
+    }
+
+    fn baml_map_has(map: &IndexMap<String, Value>, key: &str) -> bool {
+        map.contains_key(key)
+    }
+
+    // =========================================================================
+    // Free functions
+    // =========================================================================
+
+    fn baml_deep_copy(vm: &mut Vm, value: &Value) -> Result<Value, VmError> {
+        let mut copied_objects = HashMap::new();
+        deep_copy_value_recursive(vm, *value, &mut copied_objects)
+    }
+
+    fn baml_deep_equals(vm: &mut Vm, a: &Value, b: &Value) -> bool {
+        let mut visited = HashMap::new();
+        deep_equals_recursive(vm, *a, *b, &mut visited)
+    }
+
+    fn baml_unstable_string(vm: &mut Vm, value: &Value) -> Result<String, VmError> {
+        format_value_recursive(vm, value, 0)
+    }
+
+    // =========================================================================
+    // Media methods
+    // =========================================================================
+
+    fn baml_media_as_url(media: &MediaValue) -> Option<String> {
+        match &media.content {
+            MediaContent::Url { url, .. } => Some(url.clone()),
+            _ => None,
         }
-        .into());
-    };
+    }
 
-    Ok(Value::Int(array.len() as i64))
-}
-
-/// Array push
-pub fn array_push(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-
-    let expected = ObjectType::Array;
-    let ob_index = vm.objects.as_object(&args[0], expected)?;
-
-    let Object::Array(array) = &mut vm.objects[ob_index] else {
-        return Err(InternalError::TypeError {
-            expected: expected.into(),
-            got: ObjectType::of(&vm.objects[ob_index]).into(),
+    fn baml_media_as_base64(media: &MediaValue) -> Option<String> {
+        match &media.content {
+            MediaContent::Base64 { base64_data, .. } => Some(base64_data.clone()),
+            MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => Some(base64_data.clone()),
+            MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => Some(base64_data.clone()),
+            _ => None,
         }
-        .into());
-    };
+    }
 
-    let value = args[1];
-
-    array.push(value);
-
-    // TODO: Should have no return type.
-    Ok(Value::Null)
-}
-
-/// Length of map
-#[allow(clippy::cast_possible_wrap)] // map length won't exceed i64::MAX
-pub fn map_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-
-    let expected = ObjectType::Map;
-    let ob_index = vm.objects.as_object(&args[0], expected)?;
-
-    let Object::Map(map) = &vm.objects[ob_index] else {
-        return Err(InternalError::TypeError {
-            expected: expected.into(),
-            got: ObjectType::of(&vm.objects[ob_index]).into(),
+    fn baml_media_as_file(media: &MediaValue) -> Option<String> {
+        match &media.content {
+            MediaContent::File { file, .. } => Some(file.clone()),
+            _ => None,
         }
-        .into());
-    };
+    }
 
-    Ok(Value::Int(map.len() as i64))
-}
-/// Map `contains`
-pub fn map_has(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
+    fn baml_media_mime_type(media: &MediaValue) -> Option<String> {
+        media.mime_type.clone()
+    }
 
-    let expected = ObjectType::Map;
-    let ob_index = vm.objects.as_object(&args[0], expected)?;
+    // =========================================================================
+    // Env functions
+    // =========================================================================
 
-    let Object::Map(map) = &vm.objects[ob_index] else {
-        return Err(InternalError::TypeError {
-            expected: expected.into(),
-            got: ObjectType::of(&vm.objects[ob_index]).into(),
-        }
-        .into());
-    };
-
-    let key = vm.objects.as_string(&args[1])?;
-
-    Ok(Value::Bool(map.contains_key(key)))
-}
-
-pub fn env_get(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let key = vm.objects.as_string(&args[0])?;
-
-    match vm.env_vars.get(key) {
-        Some(value) => Ok(vm.alloc_string(value.clone())),
-        None => Err(VmError::RuntimeError(RuntimeError::Other(format!(
-            "Environment variable '{key}' not found",
-        )))),
+    fn env_get(vm: &mut Vm, key: &str) -> Result<String, VmError> {
+        vm.env_vars.get(key).cloned().ok_or_else(|| {
+            VmError::RuntimeError(RuntimeError::Other(format!(
+                "Environment variable '{key}' not found",
+            )))
+        })
     }
 }
 
-// pub fn image_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let url = vm.objects.as_string(&args[0])?;
-
-//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Image, url.to_owned(), None)))
-// }
-
-// pub fn audio_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let url = vm.objects.as_string(&args[0])?;
-
-//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Audio, url.to_owned(), None)))
-// }
-
-// pub fn video_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let url = vm.objects.as_string(&args[0])?;
-
-//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Video, url.to_owned(), None)))
-// }
-
-// pub fn pdf_from_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let url = vm.objects.as_string(&args[0])?;
-
-//     Ok(vm.alloc_media(BamlMedia::url(BamlMediaType::Pdf, url.to_owned(), None)))
-// }
-
-// pub fn image_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media_type = vm.objects.as_string(&args[0])?;
-//     let base64 = vm.objects.as_string(&args[1])?;
-
-//     Ok(vm.alloc_media(BamlMedia::base64(
-//         BamlMediaType::Image,
-//         base64.to_owned(),
-//         Some(media_type.to_owned()),
-//     )))
-// }
-
-// pub fn audio_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media_type = vm.objects.as_string(&args[0])?;
-//     let base64 = vm.objects.as_string(&args[1])?;
-
-//     Ok(vm.alloc_media(BamlMedia::base64(
-//         BamlMediaType::Audio,
-//         base64.to_owned(),
-//         Some(media_type.to_owned()),
-//     )))
-// }
-
-// pub fn video_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media_type = vm.objects.as_string(&args[0])?;
-//     let base64 = vm.objects.as_string(&args[1])?;
-
-//     Ok(vm.alloc_media(BamlMedia::base64(
-//         BamlMediaType::Video,
-//         base64.to_owned(),
-//         Some(media_type.to_owned()),
-//     )))
-// }
-
-// pub fn pdf_from_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let base64 = vm.objects.as_string(&args[0])?;
-
-//     Ok(vm.alloc_media(BamlMedia::base64(
-//         BamlMediaType::Pdf,
-//         base64.to_owned(),
-//         Some("application/pdf".to_string()),
-//     )))
-// }
-
-// pub fn media_is_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media = vm.objects.as_media(&args[0])?;
-
-//     Ok(Value::Bool(matches!(
-//         media.content,
-//         BamlMediaContent::Url(_)
-//     )))
-// }
-
-// pub fn media_is_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media = vm.objects.as_media(&args[0])?;
-
-//     Ok(Value::Bool(matches!(
-//         media.content,
-//         BamlMediaContent::Base64(_)
-//     )))
-// }
-
-// pub fn media_as_url(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media = vm.objects.as_media(&args[0])?;
-
-//     match &media.content {
-//         BamlMediaContent::Url(url) => Ok(vm.alloc_string(url.url.clone())),
-
-//         _ => Err(VmError::RuntimeError(RuntimeError::Other(
-//             "Media is not a URL".to_string(),
-//         ))),
-//     }
-// }
-
-// pub fn media_as_base64(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media = vm.objects.as_media(&args[0])?;
-
-//     match &media.content {
-//         BamlMediaContent::Base64(base64) => Ok(vm.alloc_string(base64.base64.clone())),
-
-//         _ => Err(VmError::RuntimeError(RuntimeError::Other(
-//             "Media is not base64".to_string(),
-//         ))),
-//     }
-// }
-
-// pub fn media_mime_type(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-//     // Arity is already checked by the VM.
-//     let media = vm.objects.as_media(&args[0])?;
-
-//     Ok(vm.alloc_string(media.mime_type.clone().unwrap_or(String::new())))
-// }
-
-/// String length.
-#[allow(clippy::cast_possible_wrap)] // string length won't exceed i64::MAX
-pub fn string_length(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let s = vm.objects.as_string(&args[0])?;
-    Ok(Value::Int(s.chars().count() as i64))
-}
-
-/// String to lowercase
-pub fn string_to_lower_case(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    Ok(vm.alloc_string(string.to_lowercase()))
-}
-
-/// String to uppercase
-pub fn string_to_upper_case(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    Ok(vm.alloc_string(string.to_uppercase()))
-}
-
-/// String trim
-pub fn string_trim(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    Ok(vm.alloc_string(string.trim().to_string()))
-}
-
-/// String includes
-pub fn string_includes(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    let search = vm.objects.as_string(&args[1])?;
-    Ok(Value::Bool(string.contains(search)))
-}
-
-/// String starts with
-pub fn string_starts_with(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    let prefix = vm.objects.as_string(&args[1])?;
-    Ok(Value::Bool(string.starts_with(prefix)))
-}
-
-/// String ends with
-pub fn string_ends_with(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    let suffix = vm.objects.as_string(&args[1])?;
-    Ok(Value::Bool(string.ends_with(suffix)))
-}
-
-/// String split
-pub fn string_split(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?.to_owned();
-    let delimiter = vm.objects.as_string(&args[1])?.to_owned();
-
-    let parts: Vec<Value> = string
-        .split(&delimiter)
-        .map(|s| vm.alloc_string(s.to_string()))
-        .collect();
-
-    Ok(vm.alloc_array(parts))
-}
-
-/// String substring
-#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // bounds are checked below
-pub fn string_substring(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-
-    let start = match &args[1] {
-        Value::Int(i) => *i as usize,
-        _ => {
-            return Err(VmError::RuntimeError(RuntimeError::Other(
-                "substring() start index must be an integer".to_string(),
-            )));
-        }
-    };
-
-    let end = match &args[2] {
-        Value::Int(i) => *i as usize,
-        _ => {
-            return Err(VmError::RuntimeError(RuntimeError::Other(
-                "substring() end index must be an integer".to_string(),
-            )));
-        }
-    };
-
-    // Handle bounds
-    let len = string.len();
-    let start = start.min(len);
-    let end = end.min(len).max(start);
-
-    // Note: This is byte indexing, not char indexing
-    // For full Unicode support, we'd need to use char_indices()
-    Ok(vm.alloc_string(string[start..end].to_string()))
-}
-
-/// String replace
-pub fn string_replace(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    let string = vm.objects.as_string(&args[0])?;
-    let search = vm.objects.as_string(&args[1])?;
-    let replacement = vm.objects.as_string(&args[2])?;
-
-    // Replace first occurrence only (matching JavaScript behavior)
-    let result = string.replacen(search, replacement, 1);
-    Ok(vm.alloc_string(result))
-}
-
-pub fn deep_copy(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let mut copied_objects = HashMap::new();
-    deep_copy_value_recursive(vm, args[0], &mut copied_objects)
-}
-
-/// Deep equality comparison between two values
-pub fn deep_equals(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM
-    let mut visited = HashMap::new();
-    let result = deep_equals_recursive(vm, args[0], args[1], &mut visited);
-    Ok(Value::Bool(result))
-}
+// =============================================================================
+// Helper functions
+// =============================================================================
 
 /// Recursively deep copy a value, handling nested objects.
-///
-/// TODO: Likely will need to be refactored to iterative for perf / stack
-/// overflow issues with big objects. But since this one is not as straight
-/// forward as `while stack.pop()`, we'll leave it as is for now.
 fn deep_copy_value_recursive(
     vm: &mut Vm,
     value: Value,
@@ -454,9 +273,8 @@ fn deep_copy_value_recursive(
                 Object::Class(c) => vm.objects.insert(Object::Class(c)),
                 Object::Enum(e) => vm.objects.insert(Object::Enum(e)),
                 Object::Variant(v) => vm.objects.insert(Object::Variant(v)),
-                // Object::Media(m) => vm.objects.insert(Object::Media(m)),
+                Object::Media(m) => vm.objects.insert(Object::Media(m)),
                 Object::Future(f) => vm.objects.insert(Object::Future(f)),
-                // Object::BamlType(t) => vm.objects.insert(Object::BamlType(t)),
             };
 
             // Record the mapping if not already done (for non-circular cases)
@@ -468,7 +286,7 @@ fn deep_copy_value_recursive(
 }
 
 /// Recursively compare two values for deep equality
-#[allow(clippy::float_cmp)] // intentional exact comparison for deep equality
+#[allow(clippy::float_cmp)]
 fn deep_equals_recursive(
     vm: &Vm,
     a: Value,
@@ -549,9 +367,7 @@ fn deep_equals_recursive(
                     a_class.name == b_class.name && a_class.field_names == b_class.field_names
                 }
 
-                // (Object::Media(a_media), Object::Media(b_media)) => a_media == b_media,
-
-                // Functions are compared by reference (they're the same if they point to the same function)
+                // Functions are compared by reference
                 (Object::Function(_), Object::Function(_)) => a_idx == b_idx,
 
                 // Future comparison - compare the inner values if both are ready
@@ -560,7 +376,6 @@ fn deep_equals_recursive(
                         deep_equals_recursive(vm, *a_val, *b_val, visited)
                     }
                     (Future::Pending(a_pend), Future::Pending(b_pend)) => {
-                        // Compare pending futures by their function and args
                         a_pend.function == b_pend.function
                             && matches!(
                                 (&a_pend.kind, &b_pend.kind),
@@ -577,8 +392,6 @@ fn deep_equals_recursive(
                     _ => false,
                 },
 
-                // (Object::BamlType(a_type), Object::BamlType(b_type)) => a_type == b_type,
-
                 // Different types are not equal
                 _ => false,
             };
@@ -593,15 +406,8 @@ fn deep_equals_recursive(
     }
 }
 
-pub fn unstable_string(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
-    // Arity is already checked by the VM.
-    let formatted = format_value_recursive(vm, &args[0], 0)?;
-
-    Ok(vm.alloc_string(formatted))
-}
-
 fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<String, VmError> {
-    // Check available stack space (MAX_FRAMES - current_frames)
+    // Check available stack space
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
     if depth >= available_frames {
@@ -694,14 +500,10 @@ fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<St
             }
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
-            // Object::Media(_) => Ok("<media>".to_string()),
+            Object::Media(m) => Ok(format!("<type {}>", m.kind)),
             Object::Future(_) => Ok("<future>".to_string()),
-            // Object::BamlType(_) => Ok("<baml type>".to_string()),
         },
     }
 }
 
-pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
-
-// Note: The `functions()` registry is now in `crate::builtins::functions()`.
-// All built-in function definitions are in `crate::builtins::BUILTINS`.
+// Public wrapper functions are auto-generated by the macro above

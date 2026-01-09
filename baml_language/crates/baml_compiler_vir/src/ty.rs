@@ -21,10 +21,7 @@ pub enum Ty {
     Null,
 
     // Media types
-    Image,
-    Audio,
-    Video,
-    Pdf,
+    Media(baml_base::MediaKind),
 
     /// Class type with resolved name.
     Class(Name),
@@ -148,10 +145,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
-            Ty::Image => write!(f, "image"),
-            Ty::Audio => write!(f, "audio"),
-            Ty::Video => write!(f, "video"),
-            Ty::Pdf => write!(f, "pdf"),
+            Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Class(name) => write!(f, "{name}"),
             Ty::Enum(name) => write!(f, "{name}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),

@@ -9,6 +9,7 @@ use baml_vm::{
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
     },
+    types::MediaKind,
     vm::WatchNotification as VmWatchNotification,
     watch::{self},
 };
@@ -66,7 +67,7 @@ pub enum Object {
     Map(IndexMap<String, Value>),
     Instance(Instance),
     Variant(Variant),
-    // Media(BamlMedia),
+    Media(MediaKind),
     /// Function name (for `LoadGlobal` instructions)
     Function(String),
     /// Class name (for `AllocInstance` instructions)
@@ -124,7 +125,7 @@ impl Object {
                 }))
             }
 
-            // VmObject::Media(media) => Ok(Object::Media(media.clone())),
+            VmObject::Media(media) => Ok(Object::Media(media.kind)),
             VmObject::Function(f) => Ok(Object::Function(f.name.clone())),
 
             VmObject::Class(c) => Ok(Object::Class(c.name.clone())),

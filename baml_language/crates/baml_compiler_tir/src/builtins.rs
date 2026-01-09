@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use baml_base::baml_debug;
 use baml_builtins::{BuiltinSignature, TypePattern};
 
 use crate::Ty;
@@ -79,6 +80,7 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
             match_pattern_inner(key_pat, key_ty, bindings)
                 && match_pattern_inner(value_pat, value_ty, bindings)
         }
+        (TypePattern::Media, Ty::Media(_)) => true,
 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
@@ -127,6 +129,8 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             key: Box::new(substitute(key, bindings)),
             value: Box::new(substitute(value, bindings)),
         },
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
+        TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
     }
 }
 
@@ -147,6 +151,8 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
             key: Box::new(substitute_unknown(key)),
             value: Box::new(substitute_unknown(value)),
         },
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
+        TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
     }
 }
 
@@ -166,13 +172,19 @@ pub fn lookup_method(
     receiver_ty: &Ty,
     method_name: &str,
 ) -> Option<(&'static BuiltinSignature, Bindings)> {
+    baml_debug!("Looking up method: {:?}.{}", receiver_ty, method_name);
+
     for def in baml_builtins::find_method(method_name) {
         if let Some(ref receiver_pattern) = def.receiver {
+            baml_debug!("  Trying receiver pattern: {:?}", receiver_pattern);
             if let Some(bindings) = match_pattern(receiver_pattern, receiver_ty) {
+                baml_debug!("  Found method: {} with bindings {:?}", def.path, bindings);
                 return Some((def, bindings));
             }
         }
     }
+
+    baml_debug!("  No method found for {:?}.{}", receiver_ty, method_name);
     None
 }
 

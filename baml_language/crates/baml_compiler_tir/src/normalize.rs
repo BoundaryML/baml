@@ -36,10 +36,7 @@ enum StructuralTy {
     Bool,
     Null,
     // Media
-    Image,
-    Audio,
-    Video,
-    Pdf,
+    Media(baml_base::MediaKind),
     // Literal
     Literal(LiteralValue),
     // User-defined (resolved by name)
@@ -224,10 +221,7 @@ fn normalize_impl(
         Ty::String => StructuralTy::String,
         Ty::Bool => StructuralTy::Bool,
         Ty::Null => StructuralTy::Null,
-        Ty::Image => StructuralTy::Image,
-        Ty::Audio => StructuralTy::Audio,
-        Ty::Video => StructuralTy::Video,
-        Ty::Pdf => StructuralTy::Pdf,
+        Ty::Media(kind) => StructuralTy::Media(kind.clone()),
         Ty::Unknown => StructuralTy::Unknown,
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,

@@ -302,6 +302,18 @@ dependencies = [
 [[package]]
 name = "baml_builtins"
 version = "0.0.0"
+dependencies = [
+ "baml_builtins_macros",
+]
+
+[[package]]
+name = "baml_builtins_macros"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "baml_cli"
@@ -630,6 +642,7 @@ dependencies = [
  "anyhow",
  "baml_base",
  "baml_builtins",
+ "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
  "codspeed-divan-compat",

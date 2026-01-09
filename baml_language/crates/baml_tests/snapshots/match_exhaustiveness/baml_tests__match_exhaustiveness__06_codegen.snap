@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 86
-Objects: 279
-Globals: 104
+Objects: 284
+Globals: 109
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Exec):
      0   LOAD_VAR 1             (b)
@@ -787,7 +787,7 @@ Function MatchComplexScrutinee (arity: 1, kind: Exec):
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Exec):
      0    LOAD_CONST 0           (null)
-     1    LOAD_GLOBAL 59         (<fn GetStatus>)
+     1    LOAD_GLOBAL 64         (<fn GetStatus>)
      2    CALL 0                 
      3    STORE_VAR 1            (_1)
      4    LOAD_VAR 1             (_1)

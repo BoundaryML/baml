@@ -22,10 +22,8 @@ pub enum TypeRef {
     String,
     Bool,
     Null,
-    Image,
-    Audio,
-    Video,
-    Pdf,
+
+    Media(baml_base::MediaKind),
 
     /// Type constructors.
     Optional(Box<TypeRef>),
@@ -212,10 +210,10 @@ impl TypeRef {
             "string" => TypeRef::String,
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
-            "image" => TypeRef::Image,
-            "audio" => TypeRef::Audio,
-            "video" => TypeRef::Video,
-            "pdf" => TypeRef::Pdf,
+            "image" => TypeRef::Media(baml_base::MediaKind::Image),
+            "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
+            "video" => TypeRef::Media(baml_base::MediaKind::Video),
+            "pdf" => TypeRef::Media(baml_base::MediaKind::Pdf),
             _ => TypeRef::Path(Path::single(Name::new(name))),
         }
     }

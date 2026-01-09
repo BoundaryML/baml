@@ -17,7 +17,7 @@ use crate::{
 /// These are used by the `TypeTag` instruction to extract a type identifier
 /// from any value for jump table dispatch on union types.
 ///
-/// Primitives have fixed tags (0-9 reserved), classes start at 100.
+/// Primitives have fixed tags (0-10 reserved), classes start at 100.
 pub mod type_tags {
     /// Integer type tag.
     pub const INT: i64 = 0;
@@ -39,6 +39,8 @@ pub mod type_tags {
     pub const FUNCTION: i64 = 8;
     /// Future type tag.
     pub const FUTURE: i64 = 9;
+    /// Media type tag.
+    pub const MEDIA: i64 = 10;
     /// Base value for class type tags (classes start at 100).
     pub const CLASS_BASE: i64 = 100;
     /// Unknown/invalid type tag.
@@ -311,8 +313,7 @@ pub enum Object {
     Future(Future),
     // TODO: Figure out media.
     // /// Images, audio, pdf, video.
-    // Media(BamlMedia),
-
+    Media(MediaValue),
     // TODO: Figure out how to handle this here.
     // /// Used for `baml.fetch_as` function.
     // BamlType(TypeIR),
@@ -345,6 +346,17 @@ impl Object {
 
         Ok(str)
     }
+
+    pub fn as_string_mut(&mut self) -> Result<&mut String, InternalError> {
+        let Self::String(str) = self else {
+            return Err(InternalError::TypeError {
+                expected: ObjectType::String.into(),
+                got: ObjectType::of(self).into(),
+            });
+        };
+
+        Ok(str)
+    }
 }
 
 impl std::fmt::Display for Object {
@@ -358,7 +370,7 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
-            // Object::Media(_media) => write!(f, "<media>"),
+            Object::Media(media) => media.fmt(f),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.function)
@@ -392,6 +404,54 @@ pub struct PendingFuture {
     pub function: String,
     pub kind: FutureKind,
     pub args: Vec<Value>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MediaValue {
+    pub kind: MediaKind,
+    pub content: MediaContent,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub enum MediaContent {
+    Url {
+        url: String,
+        base64_data: Option<String>,
+    },
+    Base64 {
+        base64_data: String,
+    },
+    File {
+        file: String,
+        base64_data: Option<String>,
+    },
+}
+
+impl std::fmt::Display for MediaValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::{}", self.kind, self.content)
+    }
+}
+
+impl std::fmt::Display for MediaContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MediaContent::Url { url, .. } => write!(f, "url({url})"),
+            MediaContent::Base64 { base64_data, .. } => {
+                // Show first 5, last 5, and total length for context
+                let len = base64_data.len();
+                if len <= 10 {
+                    write!(f, "base64({base64_data}, len={len})")
+                } else {
+                    let start = &base64_data[..5];
+                    let end = &base64_data[len.saturating_sub(5)..];
+                    write!(f, "base64({start}...{end}, len={len})")
+                }
+            }
+            MediaContent::File { file, .. } => write!(f, "file({file})"),
+        }
+    }
 }
 
 /// Types of values.
@@ -451,7 +511,7 @@ pub enum ObjectType {
     String,
     Enum,
     Variant,
-    Media,
+    Media(MediaKind),
     Future(FutureType),
 }
 
@@ -466,7 +526,7 @@ impl ObjectType {
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
-            // Object::Media(_) => Self::Media,
+            Object::Media(media) => Self::Media(media.kind),
             Object::Future(fut) => Self::Future(fut.into()),
             // Object::BamlType(_) => Self::Any, // TODO
         }
@@ -498,7 +558,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
-            ObjectType::Media => write!(f, "media"),
+            ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
         }
     }
 }
@@ -554,6 +614,27 @@ impl From<&Future> for FutureType {
         match value {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaKind {
+    Image,
+    Audio,
+    Video,
+    Pdf,
+    Generic,
+}
+
+impl std::fmt::Display for MediaKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MediaKind::Image => write!(f, "image"),
+            MediaKind::Audio => write!(f, "audio"),
+            MediaKind::Video => write!(f, "video"),
+            MediaKind::Pdf => write!(f, "pdf"),
+            MediaKind::Generic => write!(f, "media"),
         }
     }
 }

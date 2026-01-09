@@ -377,10 +377,7 @@ impl<'a> ExhaustivenessChecker<'a> {
             Ty::Int => vec![ValueSet::OfType(Name::new("int"))],
             Ty::Float => vec![ValueSet::OfType(Name::new("float"))],
             Ty::String => vec![ValueSet::OfType(Name::new("string"))],
-            Ty::Image => vec![ValueSet::OfType(Name::new("image"))],
-            Ty::Audio => vec![ValueSet::OfType(Name::new("audio"))],
-            Ty::Video => vec![ValueSet::OfType(Name::new("video"))],
-            Ty::Pdf => vec![ValueSet::OfType(Name::new("pdf"))],
+            Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
             // User-defined class and enum types (resolved by name).
             Ty::Class(name) => {

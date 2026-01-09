@@ -46,10 +46,7 @@ pub enum Ty {
     Null,
 
     // Media types
-    Image,
-    Audio,
-    Video,
-    Pdf,
+    Media(baml_base::MediaKind),
 
     /// Literal type: a type inhabited by exactly one value (also called singleton type).
     /// Used for exhaustiveness checking of literal unions like `200 | 201 | 204`.
@@ -145,7 +142,7 @@ impl Ty {
     /// Check if this type is a media type.
     #[allow(dead_code)]
     pub fn is_media(&self) -> bool {
-        matches!(self, Ty::Image | Ty::Audio | Ty::Video | Ty::Pdf)
+        matches!(self, Ty::Media(_))
     }
 
     /// Make this type optional.
@@ -198,10 +195,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
-            Ty::Image => write!(f, "image"),
-            Ty::Audio => write!(f, "audio"),
-            Ty::Video => write!(f, "video"),
-            Ty::Pdf => write!(f, "pdf"),
+            Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Literal(val) => write!(f, "{val}"),
             Ty::Class(name) => write!(f, "{name}"),
             Ty::Enum(name) => write!(f, "{name}"),

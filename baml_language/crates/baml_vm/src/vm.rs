@@ -266,6 +266,7 @@ fn value_type_tag(value: &Value, objects: &ObjectPool) -> i64 {
             Object::Function(_) => type_tags::FUNCTION,
             Object::Future(_) => type_tags::FUTURE,
             Object::Enum(_) => type_tags::ENUM,
+            Object::Media(_) => type_tags::MEDIA,
             Object::Class(_) => type_tags::UNKNOWN,
             Object::Instance(instance) => {
                 // Instance.class must always point to a Class object.
@@ -544,7 +545,7 @@ impl Vm {
                         continue;
                     };
 
-                    match crate::native::deep_equals(self, &[last_assigned, state.value]) {
+                    match crate::native::baml_deep_equals(self, &[last_assigned, state.value]) {
                         Ok(Value::Bool(b)) => {
                             if !b {
                                 filtered_notifications.push(notification);
@@ -607,7 +608,7 @@ impl Vm {
 
         for root in self.watch.copy_roots_reaching(watched_node) {
             if let Some(state) = self.watch.root_state(root) {
-                let deep_copy = crate::native::deep_copy(self, &[state.value])?;
+                let deep_copy = crate::native::baml_deep_copy(self, &[state.value])?;
                 old_roots_copies.push(deep_copy);
             }
         }
@@ -784,7 +785,8 @@ impl Vm {
                             );
                         }
 
-                        let old_value_deep_copy = crate::native::deep_copy(self, &[old_value])?;
+                        let old_value_deep_copy =
+                            crate::native::baml_deep_copy(self, &[old_value])?;
 
                         if let Some(state) = self.watch.root_state_mut(watched_node) {
                             state.last_assigned = Some(old_value_deep_copy);

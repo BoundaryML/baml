@@ -77,6 +77,13 @@
       }
     },
     {
+      "id": "baml_builtins_macros",
+      "meta": {
+        "local": true,
+        "version": "0.0.0"
+      }
+    },
+    {
       "id": "baml_cli",
       "meta": {
         "local": true,
@@ -2068,6 +2075,10 @@
     },
     {
       "from": "__project__",
+      "to": "baml_builtins_macros"
+    },
+    {
+      "from": "__project__",
       "to": "baml_cli"
     },
     {
@@ -2147,8 +2158,12 @@
       "to": "baml_workspace"
     },
     {
-      "from": "baml_db",
+      "from": "baml_compiler_mir",
       "to": "baml_base"
+    },
+    {
+      "from": "baml_base",
+      "to": "smol_str"
     },
     {
       "from": "ariadne",
@@ -2239,23 +2254,11 @@
       "to": "synstructure"
     },
     {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
       "from": "indexmap",
       "to": "equivalent"
     },
     {
       "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "hashlink",
       "to": "hashbrown"
     },
     {
@@ -2269,6 +2272,14 @@
     {
       "from": "synstructure",
       "to": "syn"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
     },
     {
       "from": "intrusive-collections",
@@ -2285,6 +2296,22 @@
     {
       "from": "parking_lot",
       "to": "parking_lot_core"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
     },
     {
       "from": "parking_lot_core",
@@ -2315,20 +2342,8 @@
       "to": "unicode-ident"
     },
     {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
       "from": "redox_syscall",
       "to": "bitflags"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
     },
     {
       "from": "baml_base",
@@ -2339,20 +2354,36 @@
       "to": "text-size"
     },
     {
-      "from": "baml_base",
+      "from": "baml_compiler_mir",
+      "to": "log"
+    },
+    {
+      "from": "baml_compiler_mir",
       "to": "smol_str"
     },
     {
-      "from": "baml_db",
+      "from": "baml_compiler_mir",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_compiler_mir",
+      "to": "baml_compiler_tir"
+    },
+    {
+      "from": "baml_compiler_tir",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_compiler_tir",
+      "to": "baml_base"
+    },
+    {
+      "from": "baml_compiler_tir",
       "to": "baml_compiler_diagnostics"
     },
     {
       "from": "baml_compiler_diagnostics",
       "to": "baml_workspace"
-    },
-    {
-      "from": "baml_workspace",
-      "to": "baml_base"
     },
     {
       "from": "salsa",
@@ -2415,12 +2446,32 @@
       "to": "tracing"
     },
     {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
       "from": "tracing",
       "to": "pin-project-lite"
     },
     {
       "from": "tracing",
       "to": "tracing-core"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
     },
     {
       "from": "salsa-macros",
@@ -2439,50 +2490,6 @@
       "to": "synstructure"
     },
     {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
       "from": "parking_lot",
       "to": "lock_api"
     },
@@ -2491,12 +2498,12 @@
       "to": "parking_lot_core"
     },
     {
-      "from": "lock_api",
-      "to": "scopeguard"
+      "from": "quote",
+      "to": "proc-macro2"
     },
     {
-      "from": "hashlink",
-      "to": "hashbrown"
+      "from": "lock_api",
+      "to": "scopeguard"
     },
     {
       "from": "parking_lot_core",
@@ -2517,6 +2524,30 @@
     {
       "from": "parking_lot_core",
       "to": "windows-link"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
     },
     {
       "from": "redox_syscall",
@@ -2555,6 +2586,10 @@
       "to": "glob"
     },
     {
+      "from": "baml_workspace",
+      "to": "baml_base"
+    },
+    {
       "from": "ariadne",
       "to": "unicode-width"
     },
@@ -2635,32 +2670,8 @@
       "to": "tracing-core"
     },
     {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
+      "from": "intrusive-collections",
+      "to": "memoffset"
     },
     {
       "from": "parking_lot",
@@ -2695,16 +2706,44 @@
       "to": "windows-link"
     },
     {
-      "from": "quote",
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa-macros",
       "to": "proc-macro2"
     },
     {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
+      "from": "salsa-macros",
+      "to": "quote"
     },
     {
-      "from": "intrusive-collections",
-      "to": "memoffset"
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
     },
     {
       "from": "syn",
@@ -2727,12 +2766,8 @@
       "to": "syn"
     },
     {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
+      "from": "proc-macro2",
+      "to": "unicode-ident"
     },
     {
       "from": "baml_compiler_diagnostics",
@@ -2744,6 +2779,226 @@
     },
     {
       "from": "baml_compiler_diagnostics",
+      "to": "baml_base"
+    },
+    {
+      "from": "baml_compiler_tir",
+      "to": "baml_compiler_hir"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "la-arena"
+    },
+    {
+      "from": "salsa",
+      "to": "boxcar"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-queue"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "salsa"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "baml_base"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "baml_workspace"
+    },
+    {
+      "from": "rowan",
+      "to": "countme"
+    },
+    {
+      "from": "rowan",
+      "to": "hashbrown"
+    },
+    {
+      "from": "rowan",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "rowan",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "rowan"
+    },
+    {
+      "from": "baml_compiler_hir",
+      "to": "baml_compiler_syntax"
+    },
+    {
+      "from": "baml_compiler_syntax",
       "to": "baml_base"
     },
     {
@@ -2763,24 +3018,220 @@
       "to": "text-size"
     },
     {
-      "from": "baml_db",
+      "from": "baml_compiler_syntax",
       "to": "rowan"
     },
     {
-      "from": "baml_db",
-      "to": "baml_compiler_hir"
-    },
-    {
       "from": "baml_compiler_hir",
-      "to": "baml_base"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "baml_compiler_diagnostics"
+      "to": "rustc-hash"
     },
     {
       "from": "baml_compiler_hir",
       "to": "baml_compiler_parser"
+    },
+    {
+      "from": "baml_compiler_parser",
+      "to": "baml_compiler_syntax"
+    },
+    {
+      "from": "baml_compiler_parser",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "salsa",
+      "to": "boxcar"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-queue"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_compiler_parser",
+      "to": "salsa"
+    },
+    {
+      "from": "rowan",
+      "to": "countme"
+    },
+    {
+      "from": "rowan",
+      "to": "hashbrown"
+    },
+    {
+      "from": "rowan",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "rowan",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_compiler_parser",
+      "to": "rowan"
+    },
+    {
+      "from": "baml_compiler_parser",
+      "to": "text-size"
     },
     {
       "from": "baml_compiler_parser",
@@ -2875,8 +3326,16 @@
       "to": "crossbeam-utils"
     },
     {
-      "from": "intrusive-collections",
-      "to": "memoffset"
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
     },
     {
       "from": "salsa-macros",
@@ -2895,12 +3354,28 @@
       "to": "synstructure"
     },
     {
-      "from": "indexmap",
-      "to": "equivalent"
+      "from": "parking_lot",
+      "to": "lock_api"
     },
     {
-      "from": "indexmap",
-      "to": "hashbrown"
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
     },
     {
       "from": "synstructure",
@@ -2915,28 +3390,12 @@
       "to": "syn"
     },
     {
-      "from": "hashlink",
-      "to": "hashbrown"
+      "from": "intrusive-collections",
+      "to": "memoffset"
     },
     {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
+      "from": "lock_api",
+      "to": "scopeguard"
     },
     {
       "from": "parking_lot_core",
@@ -2957,14 +3416,6 @@
     {
       "from": "parking_lot_core",
       "to": "windows-link"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
     },
     {
       "from": "redox_syscall",
@@ -2975,454 +3426,50 @@
       "to": "salsa"
     },
     {
-      "from": "baml_compiler_parser",
-      "to": "baml_compiler_syntax"
-    },
-    {
-      "from": "baml_compiler_syntax",
-      "to": "baml_base"
-    },
-    {
-      "from": "rowan",
-      "to": "countme"
-    },
-    {
-      "from": "rowan",
-      "to": "hashbrown"
-    },
-    {
-      "from": "rowan",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "rowan",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_compiler_syntax",
-      "to": "rowan"
-    },
-    {
-      "from": "baml_compiler_parser",
-      "to": "baml_compiler_diagnostics"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "baml_compiler_parser",
-      "to": "salsa"
-    },
-    {
-      "from": "rowan",
-      "to": "countme"
-    },
-    {
-      "from": "rowan",
-      "to": "hashbrown"
-    },
-    {
-      "from": "rowan",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "rowan",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_compiler_parser",
-      "to": "rowan"
-    },
-    {
-      "from": "baml_compiler_parser",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "baml_compiler_syntax"
-    },
-    {
-      "from": "rowan",
-      "to": "countme"
-    },
-    {
-      "from": "rowan",
-      "to": "hashbrown"
-    },
-    {
-      "from": "rowan",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "rowan",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "rowan"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "salsa"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "baml_workspace"
-    },
-    {
-      "from": "baml_compiler_hir",
-      "to": "la-arena"
-    },
-    {
-      "from": "baml_db",
-      "to": "baml_compiler_tir"
-    },
-    {
-      "from": "baml_compiler_tir",
-      "to": "baml_compiler_hir"
-    },
-    {
       "from": "baml_compiler_tir",
       "to": "baml_builtins"
     },
     {
+      "from": "baml_builtins",
+      "to": "baml_builtins_macros"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_builtins_macros",
+      "to": "syn"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_builtins_macros",
+      "to": "quote"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_builtins_macros",
+      "to": "proc-macro2"
+    },
+    {
       "from": "baml_compiler_tir",
       "to": "baml_workspace"
     },
@@ -3495,12 +3542,40 @@
       "to": "tracing-core"
     },
     {
-      "from": "parking_lot",
-      "to": "lock_api"
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
     },
     {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
     },
     {
       "from": "indexmap",
@@ -3509,6 +3584,22 @@
     {
       "from": "indexmap",
       "to": "hashbrown"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
     },
     {
       "from": "parking_lot_core",
@@ -3531,34 +3622,6 @@
       "to": "windows-link"
     },
     {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
       "from": "quote",
       "to": "proc-macro2"
     },
@@ -3571,28 +3634,12 @@
       "to": "unicode-ident"
     },
     {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
+      "from": "redox_syscall",
+      "to": "bitflags"
     },
     {
       "from": "lock_api",
       "to": "scopeguard"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
     },
     {
       "from": "baml_compiler_tir",
@@ -3603,20 +3650,28 @@
       "to": "smol_str"
     },
     {
-      "from": "baml_compiler_tir",
-      "to": "text-size"
+      "from": "baml_compiler_mir",
+      "to": "la-arena"
     },
     {
-      "from": "baml_compiler_tir",
+      "from": "baml_compiler_mir",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "baml_compiler_mir",
+      "to": "baml_compiler_vir"
+    },
+    {
+      "from": "baml_compiler_vir",
+      "to": "la-arena"
+    },
+    {
+      "from": "baml_compiler_vir",
       "to": "baml_base"
     },
     {
-      "from": "baml_compiler_tir",
+      "from": "baml_compiler_vir",
       "to": "baml_compiler_diagnostics"
-    },
-    {
-      "from": "baml_db",
-      "to": "baml_compiler_vir"
     },
     {
       "from": "baml_compiler_vir",
@@ -3628,11 +3683,7 @@
     },
     {
       "from": "baml_compiler_vir",
-      "to": "baml_compiler_hir"
-    },
-    {
-      "from": "baml_compiler_vir",
-      "to": "la-arena"
+      "to": "baml_compiler_tir"
     },
     {
       "from": "salsa",
@@ -3695,8 +3746,8 @@
       "to": "tracing"
     },
     {
-      "from": "hashlink",
-      "to": "hashbrown"
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
     },
     {
       "from": "tracing",
@@ -3707,8 +3758,28 @@
       "to": "tracing-core"
     },
     {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
     },
     {
       "from": "salsa-macros",
@@ -3725,58 +3796,6 @@
     {
       "from": "salsa-macros",
       "to": "synstructure"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
     },
     {
       "from": "parking_lot_core",
@@ -3799,8 +3818,40 @@
       "to": "windows-link"
     },
     {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
       "from": "redox_syscall",
       "to": "bitflags"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
     },
     {
       "from": "baml_compiler_vir",
@@ -3812,23 +3863,203 @@
     },
     {
       "from": "baml_compiler_vir",
-      "to": "baml_base"
+      "to": "baml_compiler_hir"
     },
     {
-      "from": "baml_compiler_vir",
-      "to": "baml_compiler_tir"
+      "from": "baml_compiler_mir",
+      "to": "baml_workspace"
     },
     {
-      "from": "baml_compiler_vir",
-      "to": "baml_compiler_diagnostics"
+      "from": "salsa",
+      "to": "boxcar"
     },
     {
-      "from": "baml_db",
-      "to": "baml_compiler_emit"
+      "from": "salsa",
+      "to": "crossbeam-queue"
     },
     {
-      "from": "baml_compiler_emit",
-      "to": "baml_vm"
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_compiler_mir",
+      "to": "salsa"
+    },
+    {
+      "from": "baml_compiler_mir",
+      "to": "baml_compiler_hir"
+    },
+    {
+      "from": "baml_vm",
+      "to": "baml_builtins_macros"
+    },
+    {
+      "from": "colored",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "baml_vm",
+      "to": "colored"
     },
     {
       "from": "indexmap",
@@ -3855,20 +4086,20 @@
       "to": "baml_builtins"
     },
     {
-      "from": "colored",
-      "to": "windows-sys"
+      "from": "baml_db",
+      "to": "baml_compiler_hir"
     },
     {
-      "from": "windows-sys",
-      "to": "windows-link"
+      "from": "baml_db",
+      "to": "baml_compiler_tir"
     },
     {
-      "from": "baml_vm",
-      "to": "colored"
+      "from": "baml_db",
+      "to": "baml_compiler_vir"
     },
     {
-      "from": "baml_compiler_emit",
-      "to": "baml_workspace"
+      "from": "baml_db",
+      "to": "baml_compiler_emit"
     },
     {
       "from": "baml_compiler_emit",
@@ -3951,6 +4182,10 @@
       "to": "crossbeam-utils"
     },
     {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
       "from": "indexmap",
       "to": "equivalent"
     },
@@ -3959,8 +4194,8 @@
       "to": "hashbrown"
     },
     {
-      "from": "hashlink",
-      "to": "hashbrown"
+      "from": "intrusive-collections",
+      "to": "memoffset"
     },
     {
       "from": "parking_lot",
@@ -3969,10 +4204,6 @@
     {
       "from": "parking_lot",
       "to": "parking_lot_core"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
     },
     {
       "from": "salsa-macros",
@@ -3989,30 +4220,6 @@
     {
       "from": "salsa-macros",
       "to": "synstructure"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
     },
     {
       "from": "parking_lot_core",
@@ -4035,16 +4242,40 @@
       "to": "windows-link"
     },
     {
-      "from": "lock_api",
-      "to": "scopeguard"
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
     },
     {
       "from": "quote",
       "to": "proc-macro2"
     },
     {
-      "from": "redox_syscall",
-      "to": "bitflags"
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
     },
     {
       "from": "baml_compiler_emit",
@@ -4063,400 +4294,12 @@
       "to": "baml_compiler_mir"
     },
     {
-      "from": "baml_compiler_mir",
-      "to": "baml_compiler_hir"
+      "from": "baml_compiler_emit",
+      "to": "baml_vm"
     },
     {
-      "from": "baml_compiler_mir",
-      "to": "baml_base"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "baml_compiler_vir"
-    },
-    {
-      "from": "baml_compiler_mir",
+      "from": "baml_compiler_emit",
       "to": "baml_workspace"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "la-arena"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "salsa"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "baml_compiler_tir"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "log"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "smol_str"
-    },
-    {
-      "from": "baml_compiler_mir",
-      "to": "text-size"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "baml_db",
-      "to": "salsa"
-    },
-    {
-      "from": "baml_db",
-      "to": "baml_workspace"
-    },
-    {
-      "from": "baml_db",
-      "to": "baml_compiler_mir"
-    },
-    {
-      "from": "baml_db",
-      "to": "baml_compiler_lexer"
     },
     {
       "from": "baml_db",
@@ -4464,19 +4307,223 @@
     },
     {
       "from": "baml_db",
-      "to": "baml_compiler_parser"
+      "to": "baml_compiler_mir"
     },
     {
-      "from": "baml_ide_tests",
-      "to": "baml_db"
+      "from": "salsa",
+      "to": "boxcar"
     },
     {
-      "from": "baml_ide_tests",
+      "from": "salsa",
+      "to": "crossbeam-queue"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_db",
+      "to": "salsa"
+    },
+    {
+      "from": "rowan",
+      "to": "countme"
+    },
+    {
+      "from": "rowan",
+      "to": "hashbrown"
+    },
+    {
+      "from": "rowan",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "rowan",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_db",
+      "to": "rowan"
+    },
+    {
+      "from": "baml_db",
+      "to": "baml_workspace"
+    },
+    {
+      "from": "baml_db",
       "to": "baml_compiler_diagnostics"
     },
     {
-      "from": "baml_ide_tests",
-      "to": "baml_ide"
+      "from": "baml_db",
+      "to": "baml_base"
+    },
+    {
+      "from": "baml_db",
+      "to": "baml_compiler_lexer"
+    },
+    {
+      "from": "baml_db",
+      "to": "baml_compiler_parser"
+    },
+    {
+      "from": "baml_ide",
+      "to": "smol_str"
     },
     {
       "from": "baml_ide",
@@ -4487,8 +4534,180 @@
       "to": "baml_project"
     },
     {
+      "from": "salsa",
+      "to": "boxcar"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-queue"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
       "from": "baml_project",
-      "to": "baml_compiler_hir"
+      "to": "salsa"
+    },
+    {
+      "from": "baml_project",
+      "to": "baml_compiler_diagnostics"
     },
     {
       "from": "baml_project",
@@ -4500,7 +4719,11 @@
     },
     {
       "from": "baml_project",
-      "to": "baml_compiler_diagnostics"
+      "to": "baml_db"
+    },
+    {
+      "from": "baml_project",
+      "to": "baml_compiler_tir"
     },
     {
       "from": "lsp-types",
@@ -4535,6 +4758,14 @@
       "to": "syn"
     },
     {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
       "from": "fluent-uri",
       "to": "borrow-or-share"
     },
@@ -4543,14 +4774,6 @@
       "to": "ref-cast"
     },
     {
-      "from": "serde",
-      "to": "serde_core"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
       "from": "serde_json",
       "to": "itoa"
     },
@@ -4571,32 +4794,20 @@
       "to": "zmij"
     },
     {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
       "from": "proc-macro2",
       "to": "unicode-ident"
     },
     {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
       "from": "serde_core",
       "to": "serde_derive"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
     },
     {
       "from": "ref-cast",
@@ -4612,6 +4823,18 @@
     },
     {
       "from": "ref-cast-impl",
+      "to": "syn"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
       "to": "syn"
     },
     {
@@ -4619,816 +4842,16 @@
       "to": "lsp-types"
     },
     {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
       "from": "baml_project",
-      "to": "salsa"
-    },
-    {
-      "from": "baml_project",
-      "to": "baml_db"
+      "to": "baml_compiler_hir"
     },
     {
       "from": "baml_project",
       "to": "baml_compiler_mir"
     },
     {
-      "from": "baml_project",
-      "to": "baml_compiler_tir"
-    },
-    {
       "from": "baml_ide",
       "to": "text-size"
-    },
-    {
-      "from": "baml_ide",
-      "to": "smol_str"
-    },
-    {
-      "from": "baml_ide_tests",
-      "to": "baml_project"
-    },
-    {
-      "from": "baml_ide_tests",
-      "to": "text-size"
-    },
-    {
-      "from": "clap-cargo",
-      "to": "anstyle"
-    },
-    {
-      "from": "baml_cli",
-      "to": "clap-cargo"
-    },
-    {
-      "from": "colored",
-      "to": "windows-sys"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "baml_cli",
-      "to": "colored"
-    },
-    {
-      "from": "ctrlc",
-      "to": "dispatch2"
-    },
-    {
-      "from": "ctrlc",
-      "to": "nix"
-    },
-    {
-      "from": "ctrlc",
-      "to": "windows-sys"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "dispatch2",
-      "to": "bitflags"
-    },
-    {
-      "from": "nix",
-      "to": "bitflags"
-    },
-    {
-      "from": "nix",
-      "to": "cfg-if"
-    },
-    {
-      "from": "nix",
-      "to": "libc"
-    },
-    {
-      "from": "baml_cli",
-      "to": "ctrlc"
-    },
-    {
-      "from": "baml_cli",
-      "to": "anyhow"
-    },
-    {
-      "from": "baml_cli",
-      "to": "baml_lsp"
-    },
-    {
-      "from": "filetime",
-      "to": "cfg-if"
-    },
-    {
-      "from": "filetime",
-      "to": "libc"
-    },
-    {
-      "from": "filetime",
-      "to": "libredox"
-    },
-    {
-      "from": "filetime",
-      "to": "windows-sys"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "libredox",
-      "to": "bitflags"
-    },
-    {
-      "from": "libredox",
-      "to": "libc"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "filetime"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "indexmap"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "tracing"
-    },
-    {
-      "from": "webbrowser",
-      "to": "core-foundation"
-    },
-    {
-      "from": "webbrowser",
-      "to": "jni"
-    },
-    {
-      "from": "webbrowser",
-      "to": "log"
-    },
-    {
-      "from": "webbrowser",
-      "to": "ndk-context"
-    },
-    {
-      "from": "webbrowser",
-      "to": "objc2"
-    },
-    {
-      "from": "webbrowser",
-      "to": "objc2-foundation"
-    },
-    {
-      "from": "webbrowser",
-      "to": "url"
-    },
-    {
-      "from": "webbrowser",
-      "to": "web-sys"
-    },
-    {
-      "from": "objc2",
-      "to": "objc2-encode"
-    },
-    {
-      "from": "url",
-      "to": "form_urlencoded"
-    },
-    {
-      "from": "url",
-      "to": "idna"
-    },
-    {
-      "from": "url",
-      "to": "percent-encoding"
-    },
-    {
-      "from": "core-foundation",
-      "to": "core-foundation-sys"
-    },
-    {
-      "from": "core-foundation",
-      "to": "libc"
-    },
-    {
-      "from": "web-sys",
-      "to": "js-sys"
-    },
-    {
-      "from": "web-sys",
-      "to": "wasm-bindgen"
-    },
-    {
-      "from": "jni",
-      "to": "cesu8"
-    },
-    {
-      "from": "jni",
-      "to": "cfg-if"
-    },
-    {
-      "from": "jni",
-      "to": "combine"
-    },
-    {
-      "from": "jni",
-      "to": "jni-sys"
-    },
-    {
-      "from": "jni",
-      "to": "log"
-    },
-    {
-      "from": "jni",
-      "to": "thiserror"
-    },
-    {
-      "from": "jni",
-      "to": "windows-sys"
-    },
-    {
-      "from": "objc2-foundation",
-      "to": "objc2"
-    },
-    {
-      "from": "idna",
-      "to": "idna_adapter"
-    },
-    {
-      "from": "idna",
-      "to": "smallvec"
-    },
-    {
-      "from": "idna",
-      "to": "utf8_iter"
-    },
-    {
-      "from": "form_urlencoded",
-      "to": "percent-encoding"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "wasm-bindgen",
-      "to": "cfg-if"
-    },
-    {
-      "from": "wasm-bindgen",
-      "to": "once_cell"
-    },
-    {
-      "from": "wasm-bindgen",
-      "to": "wasm-bindgen-macro"
-    },
-    {
-      "from": "wasm-bindgen",
-      "to": "wasm-bindgen-shared"
-    },
-    {
-      "from": "combine",
-      "to": "memchr"
-    },
-    {
-      "from": "js-sys",
-      "to": "once_cell"
-    },
-    {
-      "from": "js-sys",
-      "to": "wasm-bindgen"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_normalizer"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_properties"
-    },
-    {
-      "from": "thiserror",
-      "to": "thiserror-impl"
-    },
-    {
-      "from": "jni-sys",
-      "to": "jni-sys-macros"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "quote"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "syn"
-    },
-    {
-      "from": "jni-sys-macros",
-      "to": "quote"
-    },
-    {
-      "from": "jni-sys-macros",
-      "to": "syn"
-    },
-    {
-      "from": "wasm-bindgen-macro",
-      "to": "quote"
-    },
-    {
-      "from": "wasm-bindgen-macro",
-      "to": "wasm-bindgen-macro-support"
-    },
-    {
-      "from": "wasm-bindgen-shared",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerotrie"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerovec"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "smallvec"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "zerovec"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "wasm-bindgen-macro-support",
-      "to": "bumpalo"
-    },
-    {
-      "from": "wasm-bindgen-macro-support",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "wasm-bindgen-macro-support",
-      "to": "quote"
-    },
-    {
-      "from": "wasm-bindgen-macro-support",
-      "to": "syn"
-    },
-    {
-      "from": "wasm-bindgen-macro-support",
-      "to": "wasm-bindgen-shared"
-    },
-    {
-      "from": "zerovec",
-      "to": "zerofrom"
-    },
-    {
-      "from": "zerotrie",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "litemap"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "tinystr"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "writeable"
-    },
-    {
-      "from": "icu_collections",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_collections",
-      "to": "potential_utf"
-    },
-    {
-      "from": "icu_collections",
-      "to": "yoke"
-    },
-    {
-      "from": "icu_collections",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_collections",
-      "to": "zerovec"
-    },
-    {
-      "from": "icu_provider",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_provider",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_provider",
-      "to": "yoke"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerovec"
-    },
-    {
-      "from": "displaydoc",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "displaydoc",
-      "to": "quote"
-    },
-    {
-      "from": "displaydoc",
-      "to": "syn"
-    },
-    {
-      "from": "tinystr",
-      "to": "displaydoc"
-    },
-    {
-      "from": "yoke",
-      "to": "stable_deref_trait"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "webbrowser"
-    },
-    {
-      "from": "itertools",
-      "to": "either"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "itertools"
-    },
-    {
-      "from": "schemars",
-      "to": "dyn-clone"
-    },
-    {
-      "from": "schemars",
-      "to": "ref-cast"
-    },
-    {
-      "from": "schemars",
-      "to": "serde"
-    },
-    {
-      "from": "schemars",
-      "to": "serde_json"
-    },
-    {
-      "from": "ref-cast",
-      "to": "ref-cast-impl"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "quote"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "syn"
-    },
-    {
-      "from": "serde_json",
-      "to": "itoa"
-    },
-    {
-      "from": "serde_json",
-      "to": "memchr"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_json",
-      "to": "zmij"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "schemars"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "jod-thread"
-    },
-    {
-      "from": "is-macro",
-      "to": "heck"
-    },
-    {
-      "from": "is-macro",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "is-macro",
-      "to": "quote"
-    },
-    {
-      "from": "is-macro",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "is-macro"
     },
     {
       "from": "axum",
@@ -5499,12 +4922,16 @@
       "to": "tower-service"
     },
     {
-      "from": "http",
+      "from": "serde_core",
+      "to": "serde_derive"
+    },
+    {
+      "from": "http-body",
       "to": "bytes"
     },
     {
-      "from": "http",
-      "to": "itoa"
+      "from": "http-body",
+      "to": "http"
     },
     {
       "from": "http-body-util",
@@ -5525,6 +4952,18 @@
     {
       "from": "http-body-util",
       "to": "pin-project-lite"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
     },
     {
       "from": "axum-core",
@@ -5567,8 +5006,36 @@
       "to": "tower-service"
     },
     {
-      "from": "serde_core",
-      "to": "serde_derive"
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "tower",
+      "to": "tower-layer"
+    },
+    {
+      "from": "tower",
+      "to": "tower-service"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "http",
+      "to": "bytes"
+    },
+    {
+      "from": "http",
+      "to": "itoa"
     },
     {
       "from": "futures-util",
@@ -5585,6 +5052,18 @@
     {
       "from": "futures-util",
       "to": "pin-utils"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "axum"
+    },
+    {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
     },
     {
       "from": "serde_derive",
@@ -5607,24 +5086,8 @@
       "to": "unicode-ident"
     },
     {
-      "from": "tower",
-      "to": "tower-layer"
-    },
-    {
-      "from": "tower",
-      "to": "tower-service"
-    },
-    {
       "from": "quote",
       "to": "proc-macro2"
-    },
-    {
-      "from": "http-body",
-      "to": "bytes"
-    },
-    {
-      "from": "http-body",
-      "to": "http"
     },
     {
       "from": "proc-macro2",
@@ -5632,7 +5095,939 @@
     },
     {
       "from": "baml_lsp",
-      "to": "axum"
+      "to": "serde"
+    },
+    {
+      "from": "tokio",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "tokio"
+    },
+    {
+      "from": "schemars",
+      "to": "dyn-clone"
+    },
+    {
+      "from": "schemars",
+      "to": "ref-cast"
+    },
+    {
+      "from": "schemars",
+      "to": "serde"
+    },
+    {
+      "from": "schemars",
+      "to": "serde_json"
+    },
+    {
+      "from": "serde_json",
+      "to": "itoa"
+    },
+    {
+      "from": "serde_json",
+      "to": "memchr"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_json",
+      "to": "zmij"
+    },
+    {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
+      "from": "ref-cast",
+      "to": "ref-cast-impl"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "quote"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "schemars"
+    },
+    {
+      "from": "url",
+      "to": "form_urlencoded"
+    },
+    {
+      "from": "url",
+      "to": "idna"
+    },
+    {
+      "from": "url",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "form_urlencoded",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "idna",
+      "to": "idna_adapter"
+    },
+    {
+      "from": "idna",
+      "to": "smallvec"
+    },
+    {
+      "from": "idna",
+      "to": "utf8_iter"
+    },
+    {
+      "from": "idna_adapter",
+      "to": "icu_normalizer"
+    },
+    {
+      "from": "idna_adapter",
+      "to": "icu_properties"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_collections"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_locale_core"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_provider"
+    },
+    {
+      "from": "icu_properties",
+      "to": "zerotrie"
+    },
+    {
+      "from": "icu_properties",
+      "to": "zerovec"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_collections"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_provider"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "smallvec"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "zerovec"
+    },
+    {
+      "from": "zerovec",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_collections",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_collections",
+      "to": "potential_utf"
+    },
+    {
+      "from": "icu_collections",
+      "to": "yoke"
+    },
+    {
+      "from": "icu_collections",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_collections",
+      "to": "zerovec"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "litemap"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "tinystr"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "writeable"
+    },
+    {
+      "from": "zerotrie",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_provider",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_provider",
+      "to": "icu_locale_core"
+    },
+    {
+      "from": "icu_provider",
+      "to": "yoke"
+    },
+    {
+      "from": "icu_provider",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_provider",
+      "to": "zerovec"
+    },
+    {
+      "from": "yoke",
+      "to": "stable_deref_trait"
+    },
+    {
+      "from": "displaydoc",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "displaydoc",
+      "to": "quote"
+    },
+    {
+      "from": "displaydoc",
+      "to": "syn"
+    },
+    {
+      "from": "tinystr",
+      "to": "displaydoc"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "url"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "baml_db"
+    },
+    {
+      "from": "serde_json",
+      "to": "itoa"
+    },
+    {
+      "from": "serde_json",
+      "to": "memchr"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_json",
+      "to": "zmij"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
+    },
+    {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "serde_json"
+    },
+    {
+      "from": "webbrowser",
+      "to": "core-foundation"
+    },
+    {
+      "from": "webbrowser",
+      "to": "jni"
+    },
+    {
+      "from": "webbrowser",
+      "to": "log"
+    },
+    {
+      "from": "webbrowser",
+      "to": "ndk-context"
+    },
+    {
+      "from": "webbrowser",
+      "to": "objc2"
+    },
+    {
+      "from": "webbrowser",
+      "to": "objc2-foundation"
+    },
+    {
+      "from": "webbrowser",
+      "to": "url"
+    },
+    {
+      "from": "webbrowser",
+      "to": "web-sys"
+    },
+    {
+      "from": "url",
+      "to": "form_urlencoded"
+    },
+    {
+      "from": "url",
+      "to": "idna"
+    },
+    {
+      "from": "url",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "objc2-foundation",
+      "to": "objc2"
+    },
+    {
+      "from": "objc2",
+      "to": "objc2-encode"
+    },
+    {
+      "from": "form_urlencoded",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "idna",
+      "to": "idna_adapter"
+    },
+    {
+      "from": "idna",
+      "to": "smallvec"
+    },
+    {
+      "from": "idna",
+      "to": "utf8_iter"
+    },
+    {
+      "from": "core-foundation",
+      "to": "core-foundation-sys"
+    },
+    {
+      "from": "core-foundation",
+      "to": "libc"
+    },
+    {
+      "from": "web-sys",
+      "to": "js-sys"
+    },
+    {
+      "from": "web-sys",
+      "to": "wasm-bindgen"
+    },
+    {
+      "from": "jni",
+      "to": "cesu8"
+    },
+    {
+      "from": "jni",
+      "to": "cfg-if"
+    },
+    {
+      "from": "jni",
+      "to": "combine"
+    },
+    {
+      "from": "jni",
+      "to": "jni-sys"
+    },
+    {
+      "from": "jni",
+      "to": "log"
+    },
+    {
+      "from": "jni",
+      "to": "thiserror"
+    },
+    {
+      "from": "jni",
+      "to": "windows-sys"
+    },
+    {
+      "from": "idna_adapter",
+      "to": "icu_normalizer"
+    },
+    {
+      "from": "idna_adapter",
+      "to": "icu_properties"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_collections"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_locale_core"
+    },
+    {
+      "from": "icu_properties",
+      "to": "icu_provider"
+    },
+    {
+      "from": "icu_properties",
+      "to": "zerotrie"
+    },
+    {
+      "from": "icu_properties",
+      "to": "zerovec"
+    },
+    {
+      "from": "zerovec",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_collections",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_collections",
+      "to": "potential_utf"
+    },
+    {
+      "from": "icu_collections",
+      "to": "yoke"
+    },
+    {
+      "from": "icu_collections",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_collections",
+      "to": "zerovec"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "litemap"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "tinystr"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "writeable"
+    },
+    {
+      "from": "yoke",
+      "to": "stable_deref_trait"
+    },
+    {
+      "from": "icu_provider",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_provider",
+      "to": "icu_locale_core"
+    },
+    {
+      "from": "icu_provider",
+      "to": "yoke"
+    },
+    {
+      "from": "icu_provider",
+      "to": "zerofrom"
+    },
+    {
+      "from": "icu_provider",
+      "to": "zerovec"
+    },
+    {
+      "from": "thiserror",
+      "to": "thiserror-impl"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "zerotrie",
+      "to": "displaydoc"
+    },
+    {
+      "from": "js-sys",
+      "to": "once_cell"
+    },
+    {
+      "from": "js-sys",
+      "to": "wasm-bindgen"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_collections"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_provider"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "smallvec"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "zerovec"
+    },
+    {
+      "from": "wasm-bindgen",
+      "to": "cfg-if"
+    },
+    {
+      "from": "wasm-bindgen",
+      "to": "once_cell"
+    },
+    {
+      "from": "wasm-bindgen",
+      "to": "wasm-bindgen-macro"
+    },
+    {
+      "from": "wasm-bindgen",
+      "to": "wasm-bindgen-shared"
+    },
+    {
+      "from": "tinystr",
+      "to": "displaydoc"
+    },
+    {
+      "from": "displaydoc",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "displaydoc",
+      "to": "quote"
+    },
+    {
+      "from": "displaydoc",
+      "to": "syn"
+    },
+    {
+      "from": "combine",
+      "to": "memchr"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "jni-sys",
+      "to": "jni-sys-macros"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "quote"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "jni-sys-macros",
+      "to": "quote"
+    },
+    {
+      "from": "jni-sys-macros",
+      "to": "syn"
+    },
+    {
+      "from": "wasm-bindgen-shared",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "wasm-bindgen-macro",
+      "to": "quote"
+    },
+    {
+      "from": "wasm-bindgen-macro",
+      "to": "wasm-bindgen-macro-support"
+    },
+    {
+      "from": "wasm-bindgen-macro-support",
+      "to": "bumpalo"
+    },
+    {
+      "from": "wasm-bindgen-macro-support",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "wasm-bindgen-macro-support",
+      "to": "quote"
+    },
+    {
+      "from": "wasm-bindgen-macro-support",
+      "to": "syn"
+    },
+    {
+      "from": "wasm-bindgen-macro-support",
+      "to": "wasm-bindgen-shared"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "webbrowser"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "indexmap"
+    },
+    {
+      "from": "regex",
+      "to": "regex-automata"
+    },
+    {
+      "from": "regex",
+      "to": "regex-syntax"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "regex"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "tracing"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "lsp-types",
+      "to": "bitflags"
+    },
+    {
+      "from": "lsp-types",
+      "to": "fluent-uri"
+    },
+    {
+      "from": "lsp-types",
+      "to": "serde"
+    },
+    {
+      "from": "lsp-types",
+      "to": "serde_json"
+    },
+    {
+      "from": "lsp-types",
+      "to": "serde_repr"
+    },
+    {
+      "from": "serde_repr",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_repr",
+      "to": "quote"
+    },
+    {
+      "from": "serde_repr",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "serde_json",
+      "to": "itoa"
+    },
+    {
+      "from": "serde_json",
+      "to": "memchr"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_json",
+      "to": "zmij"
+    },
+    {
+      "from": "fluent-uri",
+      "to": "borrow-or-share"
+    },
+    {
+      "from": "fluent-uri",
+      "to": "ref-cast"
+    },
+    {
+      "from": "ref-cast",
+      "to": "ref-cast-impl"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "quote"
+    },
+    {
+      "from": "ref-cast-impl",
+      "to": "syn"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "lsp-types"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "shellexpand"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "parking_lot"
+    },
+    {
+      "from": "tracing-log",
+      "to": "log"
+    },
+    {
+      "from": "tracing-log",
+      "to": "once_cell"
+    },
+    {
+      "from": "tracing-log",
+      "to": "tracing-core"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "tracing-log"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "baml_ide"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "anyhow"
+    },
+    {
+      "from": "colored",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "colored"
     },
     {
       "from": "futures",
@@ -5684,7 +6079,75 @@
     },
     {
       "from": "baml_lsp",
-      "to": "baml_ide"
+      "to": "memchr"
+    },
+    {
+      "from": "thiserror",
+      "to": "thiserror-impl"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "quote"
+    },
+    {
+      "from": "thiserror-impl",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "thiserror"
+    },
+    {
+      "from": "filetime",
+      "to": "cfg-if"
+    },
+    {
+      "from": "filetime",
+      "to": "libc"
+    },
+    {
+      "from": "filetime",
+      "to": "libredox"
+    },
+    {
+      "from": "filetime",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "libredox",
+      "to": "bitflags"
+    },
+    {
+      "from": "libredox",
+      "to": "libc"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "filetime"
     },
     {
       "from": "baml_lsp",
@@ -5692,7 +6155,43 @@
     },
     {
       "from": "baml_lsp",
-      "to": "rustc-hash"
+      "to": "jod-thread"
+    },
+    {
+      "from": "itertools",
+      "to": "either"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "itertools"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "pathdiff"
+    },
+    {
+      "from": "path-absolutize",
+      "to": "path-dedot"
+    },
+    {
+      "from": "path-dedot",
+      "to": "once_cell"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "path-absolutize"
+    },
+    {
+      "from": "crossbeam",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "crossbeam"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "semver"
     },
     {
       "from": "baml_lsp",
@@ -5763,10 +6262,6 @@
       "to": "serde_derive"
     },
     {
-      "from": "crossbeam-channel",
-      "to": "crossbeam-utils"
-    },
-    {
       "from": "serde_derive",
       "to": "proc-macro2"
     },
@@ -5793,6 +6288,10 @@
     {
       "from": "quote",
       "to": "proc-macro2"
+    },
+    {
+      "from": "crossbeam-channel",
+      "to": "crossbeam-utils"
     },
     {
       "from": "baml_lsp_types",
@@ -5855,18 +6354,6 @@
       "to": "zmij"
     },
     {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
       "from": "fluent-uri",
       "to": "borrow-or-share"
     },
@@ -5875,8 +6362,28 @@
       "to": "ref-cast"
     },
     {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
       "from": "proc-macro2",
       "to": "unicode-ident"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
+    },
+    {
+      "from": "ref-cast",
+      "to": "ref-cast-impl"
     },
     {
       "from": "serde_derive",
@@ -5889,14 +6396,6 @@
     {
       "from": "serde_derive",
       "to": "syn"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "ref-cast",
-      "to": "ref-cast-impl"
     },
     {
       "from": "ref-cast-impl",
@@ -6003,12 +6502,12 @@
       "to": "unicode-ident"
     },
     {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
       "from": "quote",
       "to": "proc-macro2"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
     },
     {
       "from": "baml_lsp_types",
@@ -6020,67 +6519,11 @@
     },
     {
       "from": "baml_lsp",
-      "to": "anyhow"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "baml_compiler_diagnostics"
-    },
-    {
-      "from": "regex",
-      "to": "regex-automata"
-    },
-    {
-      "from": "regex",
-      "to": "regex-syntax"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "regex"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "semver"
-    },
-    {
-      "from": "baml_lsp",
       "to": "log"
     },
     {
-      "from": "thiserror",
-      "to": "thiserror-impl"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "quote"
-    },
-    {
-      "from": "thiserror-impl",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
       "from": "baml_lsp",
-      "to": "thiserror"
+      "to": "similar"
     },
     {
       "from": "serde-wasm-bindgen",
@@ -6131,40 +6574,12 @@
       "to": "serde_derive"
     },
     {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
       "from": "wasm-bindgen-macro",
       "to": "quote"
     },
     {
       "from": "wasm-bindgen-macro",
       "to": "wasm-bindgen-macro-support"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
     },
     {
       "from": "wasm-bindgen-macro-support",
@@ -6187,156 +6602,36 @@
       "to": "wasm-bindgen-shared"
     },
     {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
       "from": "baml_lsp",
       "to": "serde-wasm-bindgen"
-    },
-    {
-      "from": "tower-http",
-      "to": "bitflags"
-    },
-    {
-      "from": "tower-http",
-      "to": "bytes"
-    },
-    {
-      "from": "tower-http",
-      "to": "http"
-    },
-    {
-      "from": "tower-http",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tower-http",
-      "to": "tower-layer"
-    },
-    {
-      "from": "tower-http",
-      "to": "tower-service"
-    },
-    {
-      "from": "http",
-      "to": "bytes"
-    },
-    {
-      "from": "http",
-      "to": "itoa"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "tower-http"
-    },
-    {
-      "from": "serde",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "serde"
-    },
-    {
-      "from": "mime_guess",
-      "to": "mime"
-    },
-    {
-      "from": "mime_guess",
-      "to": "unicase"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "mime_guess"
-    },
-    {
-      "from": "serde_json",
-      "to": "itoa"
-    },
-    {
-      "from": "serde_json",
-      "to": "memchr"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_json",
-      "to": "zmij"
-    },
-    {
-      "from": "serde",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "serde_json"
     },
     {
       "from": "tracing-subscriber",
@@ -6345,226 +6640,6 @@
     {
       "from": "baml_lsp",
       "to": "tracing-subscriber"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "shellexpand"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "similar"
-    },
-    {
-      "from": "lsp-types",
-      "to": "bitflags"
-    },
-    {
-      "from": "lsp-types",
-      "to": "fluent-uri"
-    },
-    {
-      "from": "lsp-types",
-      "to": "serde"
-    },
-    {
-      "from": "lsp-types",
-      "to": "serde_json"
-    },
-    {
-      "from": "lsp-types",
-      "to": "serde_repr"
-    },
-    {
-      "from": "serde_repr",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_repr",
-      "to": "quote"
-    },
-    {
-      "from": "serde_repr",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "serde_json",
-      "to": "itoa"
-    },
-    {
-      "from": "serde_json",
-      "to": "memchr"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_json",
-      "to": "zmij"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde",
-      "to": "serde_core"
-    },
-    {
-      "from": "fluent-uri",
-      "to": "borrow-or-share"
-    },
-    {
-      "from": "fluent-uri",
-      "to": "ref-cast"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
-      "from": "ref-cast",
-      "to": "ref-cast-impl"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "quote"
-    },
-    {
-      "from": "ref-cast-impl",
-      "to": "syn"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "lsp-types"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "baml_db"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "pathdiff"
-    },
-    {
-      "from": "colored",
-      "to": "windows-sys"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "colored"
-    },
-    {
-      "from": "simple-logging",
-      "to": "lazy_static"
-    },
-    {
-      "from": "simple-logging",
-      "to": "log"
-    },
-    {
-      "from": "simple-logging",
-      "to": "thread-id"
-    },
-    {
-      "from": "thread-id",
-      "to": "libc"
-    },
-    {
-      "from": "thread-id",
-      "to": "windows-sys"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "simple-logging"
-    },
-    {
-      "from": "crossbeam",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "crossbeam"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "parking_lot"
     },
     {
       "from": "console-subscriber",
@@ -6643,72 +6718,48 @@
       "to": "tracing-core"
     },
     {
+      "from": "crossbeam-channel",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "serde_json",
+      "to": "itoa"
+    },
+    {
+      "from": "serde_json",
+      "to": "memchr"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_json",
+      "to": "zmij"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
       "from": "serde",
       "to": "serde_core"
     },
     {
+      "from": "thread_local",
+      "to": "cfg-if"
+    },
+    {
       "from": "serde_core",
       "to": "serde_derive"
-    },
-    {
-      "from": "console-api",
-      "to": "futures-core"
-    },
-    {
-      "from": "console-api",
-      "to": "prost"
-    },
-    {
-      "from": "console-api",
-      "to": "prost-types"
-    },
-    {
-      "from": "console-api",
-      "to": "tonic"
-    },
-    {
-      "from": "console-api",
-      "to": "tonic-prost"
-    },
-    {
-      "from": "console-api",
-      "to": "tracing-core"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "tokio-stream",
-      "to": "futures-core"
-    },
-    {
-      "from": "tokio-stream",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tokio-stream",
-      "to": "tokio"
-    },
-    {
-      "from": "hdrhistogram",
-      "to": "byteorder"
-    },
-    {
-      "from": "hdrhistogram",
-      "to": "num-traits"
-    },
-    {
-      "from": "prost-types",
-      "to": "prost"
     },
     {
       "from": "hyper-util",
@@ -6735,12 +6786,60 @@
       "to": "pin-project-lite"
     },
     {
-      "from": "tracing",
+      "from": "tokio",
       "to": "pin-project-lite"
     },
     {
-      "from": "tracing",
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "console-api",
+      "to": "futures-core"
+    },
+    {
+      "from": "console-api",
+      "to": "prost"
+    },
+    {
+      "from": "console-api",
+      "to": "prost-types"
+    },
+    {
+      "from": "console-api",
+      "to": "tonic"
+    },
+    {
+      "from": "console-api",
+      "to": "tonic-prost"
+    },
+    {
+      "from": "console-api",
       "to": "tracing-core"
+    },
+    {
+      "from": "http",
+      "to": "bytes"
+    },
+    {
+      "from": "http",
+      "to": "itoa"
+    },
+    {
+      "from": "http-body",
+      "to": "bytes"
+    },
+    {
+      "from": "http-body",
+      "to": "http"
     },
     {
       "from": "syn",
@@ -6751,48 +6850,24 @@
       "to": "unicode-ident"
     },
     {
-      "from": "prost",
-      "to": "bytes"
+      "from": "prost-types",
+      "to": "prost"
     },
     {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
+      "from": "hdrhistogram",
+      "to": "byteorder"
+    },
+    {
+      "from": "hdrhistogram",
+      "to": "num-traits"
     },
     {
       "from": "quote",
       "to": "proc-macro2"
     },
     {
-      "from": "serde_json",
-      "to": "itoa"
-    },
-    {
-      "from": "serde_json",
-      "to": "memchr"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_json",
-      "to": "zmij"
-    },
-    {
-      "from": "tonic-prost",
-      "to": "bytes"
-    },
-    {
-      "from": "tonic-prost",
-      "to": "prost"
-    },
-    {
-      "from": "tonic-prost",
-      "to": "tonic"
+      "from": "proc-macro2",
+      "to": "unicode-ident"
     },
     {
       "from": "tonic",
@@ -6843,34 +6918,6 @@
       "to": "tracing"
     },
     {
-      "from": "tokio",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "thread_local",
-      "to": "cfg-if"
-    },
-    {
-      "from": "crossbeam-channel",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "http",
-      "to": "bytes"
-    },
-    {
-      "from": "http",
-      "to": "itoa"
-    },
-    {
-      "from": "http-body",
-      "to": "bytes"
-    },
-    {
-      "from": "http-body",
-      "to": "http"
-    },
-    {
       "from": "hyper",
       "to": "bytes"
     },
@@ -6887,8 +6934,20 @@
       "to": "tokio"
     },
     {
-      "from": "pin-project",
-      "to": "pin-project-internal"
+      "from": "tokio-stream",
+      "to": "futures-core"
+    },
+    {
+      "from": "tokio-stream",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tokio-stream",
+      "to": "tokio"
+    },
+    {
+      "from": "prost",
+      "to": "bytes"
     },
     {
       "from": "http-body-util",
@@ -6911,6 +6970,22 @@
       "to": "pin-project-lite"
     },
     {
+      "from": "tonic-prost",
+      "to": "bytes"
+    },
+    {
+      "from": "tonic-prost",
+      "to": "prost"
+    },
+    {
+      "from": "tonic-prost",
+      "to": "tonic"
+    },
+    {
+      "from": "pin-project",
+      "to": "pin-project-internal"
+    },
+    {
       "from": "pin-project-internal",
       "to": "proc-macro2"
     },
@@ -6927,26 +7002,6 @@
       "to": "console-subscriber"
     },
     {
-      "from": "path-absolutize",
-      "to": "path-dedot"
-    },
-    {
-      "from": "path-dedot",
-      "to": "once_cell"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "path-absolutize"
-    },
-    {
-      "from": "tokio",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "tokio"
-    },
-    {
       "from": "tower",
       "to": "tower-layer"
     },
@@ -6959,92 +7014,20 @@
       "to": "tower"
     },
     {
-      "from": "lsp-server",
-      "to": "crossbeam-channel"
+      "from": "baml_lsp",
+      "to": "text-size"
     },
     {
-      "from": "lsp-server",
-      "to": "log"
+      "from": "mime_guess",
+      "to": "mime"
     },
     {
-      "from": "lsp-server",
-      "to": "serde"
-    },
-    {
-      "from": "lsp-server",
-      "to": "serde_derive"
-    },
-    {
-      "from": "lsp-server",
-      "to": "serde_json"
-    },
-    {
-      "from": "serde_json",
-      "to": "itoa"
-    },
-    {
-      "from": "serde_json",
-      "to": "memchr"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde"
-    },
-    {
-      "from": "serde_json",
-      "to": "serde_core"
-    },
-    {
-      "from": "serde_json",
-      "to": "zmij"
-    },
-    {
-      "from": "serde_derive",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "serde_derive",
-      "to": "quote"
-    },
-    {
-      "from": "serde_derive",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "serde_core",
-      "to": "serde_derive"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "crossbeam-channel",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "serde",
-      "to": "serde_core"
+      "from": "mime_guess",
+      "to": "unicase"
     },
     {
       "from": "baml_lsp",
-      "to": "lsp-server"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "memchr"
+      "to": "mime_guess"
     },
     {
       "from": "ignore",
@@ -7099,6 +7082,14 @@
       "to": "winapi-util"
     },
     {
+      "from": "crossbeam-deque",
+      "to": "crossbeam-epoch"
+    },
+    {
+      "from": "crossbeam-deque",
+      "to": "crossbeam-utils"
+    },
+    {
       "from": "globset",
       "to": "aho-corasick"
     },
@@ -7115,11 +7106,7 @@
       "to": "regex-syntax"
     },
     {
-      "from": "crossbeam-deque",
-      "to": "crossbeam-epoch"
-    },
-    {
-      "from": "crossbeam-deque",
+      "from": "crossbeam-epoch",
       "to": "crossbeam-utils"
     },
     {
@@ -7127,136 +7114,24 @@
       "to": "memchr"
     },
     {
-      "from": "crossbeam-epoch",
-      "to": "crossbeam-utils"
-    },
-    {
       "from": "baml_lsp",
       "to": "ignore"
     },
     {
-      "from": "url",
-      "to": "form_urlencoded"
+      "from": "is-macro",
+      "to": "heck"
     },
     {
-      "from": "url",
-      "to": "idna"
-    },
-    {
-      "from": "url",
-      "to": "percent-encoding"
-    },
-    {
-      "from": "form_urlencoded",
-      "to": "percent-encoding"
-    },
-    {
-      "from": "idna",
-      "to": "idna_adapter"
-    },
-    {
-      "from": "idna",
-      "to": "smallvec"
-    },
-    {
-      "from": "idna",
-      "to": "utf8_iter"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_normalizer"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_properties"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerotrie"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerovec"
-    },
-    {
-      "from": "zerovec",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "litemap"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "tinystr"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "writeable"
-    },
-    {
-      "from": "icu_provider",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_provider",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_provider",
-      "to": "yoke"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerovec"
-    },
-    {
-      "from": "zerotrie",
-      "to": "displaydoc"
-    },
-    {
-      "from": "displaydoc",
+      "from": "is-macro",
       "to": "proc-macro2"
     },
     {
-      "from": "displaydoc",
+      "from": "is-macro",
       "to": "quote"
     },
     {
-      "from": "displaydoc",
+      "from": "is-macro",
       "to": "syn"
-    },
-    {
-      "from": "yoke",
-      "to": "stable_deref_trait"
-    },
-    {
-      "from": "tinystr",
-      "to": "displaydoc"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
     },
     {
       "from": "syn",
@@ -7265,66 +7140,18 @@
     {
       "from": "syn",
       "to": "unicode-ident"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "smallvec"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "zerovec"
-    },
-    {
-      "from": "icu_collections",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_collections",
-      "to": "potential_utf"
-    },
-    {
-      "from": "icu_collections",
-      "to": "yoke"
-    },
-    {
-      "from": "icu_collections",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_collections",
-      "to": "zerovec"
     },
     {
       "from": "proc-macro2",
       "to": "unicode-ident"
     },
     {
-      "from": "baml_lsp",
-      "to": "url"
-    },
-    {
-      "from": "tracing-log",
-      "to": "log"
-    },
-    {
-      "from": "tracing-log",
-      "to": "once_cell"
-    },
-    {
-      "from": "tracing-log",
-      "to": "tracing-core"
+      "from": "quote",
+      "to": "proc-macro2"
     },
     {
       "from": "baml_lsp",
-      "to": "tracing-log"
+      "to": "is-macro"
     },
     {
       "from": "reqwest",
@@ -7411,6 +7238,14 @@
       "to": "web-sys"
     },
     {
+      "from": "http",
+      "to": "bytes"
+    },
+    {
+      "from": "http",
+      "to": "itoa"
+    },
+    {
       "from": "web-sys",
       "to": "js-sys"
     },
@@ -7433,50 +7268,6 @@
     {
       "from": "hyper",
       "to": "tokio"
-    },
-    {
-      "from": "http",
-      "to": "bytes"
-    },
-    {
-      "from": "http",
-      "to": "itoa"
-    },
-    {
-      "from": "http-body",
-      "to": "bytes"
-    },
-    {
-      "from": "http-body",
-      "to": "http"
-    },
-    {
-      "from": "http-body-util",
-      "to": "bytes"
-    },
-    {
-      "from": "http-body-util",
-      "to": "futures-core"
-    },
-    {
-      "from": "http-body-util",
-      "to": "http"
-    },
-    {
-      "from": "http-body-util",
-      "to": "http-body"
-    },
-    {
-      "from": "http-body-util",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "js-sys",
-      "to": "once_cell"
-    },
-    {
-      "from": "js-sys",
-      "to": "wasm-bindgen"
     },
     {
       "from": "hyper-util",
@@ -7503,6 +7294,102 @@
       "to": "pin-project-lite"
     },
     {
+      "from": "http-body-util",
+      "to": "bytes"
+    },
+    {
+      "from": "http-body-util",
+      "to": "futures-core"
+    },
+    {
+      "from": "http-body-util",
+      "to": "http"
+    },
+    {
+      "from": "http-body-util",
+      "to": "http-body"
+    },
+    {
+      "from": "http-body-util",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "js-sys",
+      "to": "once_cell"
+    },
+    {
+      "from": "js-sys",
+      "to": "wasm-bindgen"
+    },
+    {
+      "from": "http-body",
+      "to": "bytes"
+    },
+    {
+      "from": "http-body",
+      "to": "http"
+    },
+    {
+      "from": "url",
+      "to": "form_urlencoded"
+    },
+    {
+      "from": "url",
+      "to": "idna"
+    },
+    {
+      "from": "url",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "tower",
+      "to": "tower-layer"
+    },
+    {
+      "from": "tower",
+      "to": "tower-service"
+    },
+    {
+      "from": "tokio",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "idna",
+      "to": "idna_adapter"
+    },
+    {
+      "from": "idna",
+      "to": "smallvec"
+    },
+    {
+      "from": "idna",
+      "to": "utf8_iter"
+    },
+    {
+      "from": "form_urlencoded",
+      "to": "percent-encoding"
+    },
+    {
+      "from": "wasm-bindgen-futures",
+      "to": "cfg-if"
+    },
+    {
+      "from": "wasm-bindgen-futures",
+      "to": "js-sys"
+    },
+    {
+      "from": "wasm-bindgen-futures",
+      "to": "once_cell"
+    },
+    {
+      "from": "wasm-bindgen-futures",
+      "to": "wasm-bindgen"
+    },
+    {
+      "from": "wasm-bindgen-futures",
+      "to": "web-sys"
+    },
+    {
       "from": "wasm-bindgen",
       "to": "cfg-if"
     },
@@ -7519,16 +7406,40 @@
       "to": "wasm-bindgen-shared"
     },
     {
-      "from": "tokio",
-      "to": "pin-project-lite"
+      "from": "idna_adapter",
+      "to": "icu_normalizer"
     },
     {
-      "from": "tower",
-      "to": "tower-layer"
+      "from": "idna_adapter",
+      "to": "icu_properties"
     },
     {
-      "from": "tower",
-      "to": "tower-service"
+      "from": "wasm-bindgen-macro",
+      "to": "quote"
+    },
+    {
+      "from": "wasm-bindgen-macro",
+      "to": "wasm-bindgen-macro-support"
+    },
+    {
+      "from": "wasm-bindgen-shared",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_collections"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "icu_provider"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "smallvec"
+    },
+    {
+      "from": "icu_normalizer",
+      "to": "zerovec"
     },
     {
       "from": "tower-http",
@@ -7555,56 +7466,72 @@
       "to": "tower-service"
     },
     {
-      "from": "url",
-      "to": "form_urlencoded"
+      "from": "icu_properties",
+      "to": "icu_collections"
     },
     {
-      "from": "url",
-      "to": "idna"
+      "from": "icu_properties",
+      "to": "icu_locale_core"
     },
     {
-      "from": "url",
-      "to": "percent-encoding"
+      "from": "icu_properties",
+      "to": "icu_provider"
     },
     {
-      "from": "wasm-bindgen-macro",
-      "to": "quote"
+      "from": "icu_properties",
+      "to": "zerotrie"
     },
     {
-      "from": "wasm-bindgen-macro",
-      "to": "wasm-bindgen-macro-support"
+      "from": "icu_properties",
+      "to": "zerovec"
     },
     {
-      "from": "wasm-bindgen-futures",
-      "to": "cfg-if"
+      "from": "icu_provider",
+      "to": "displaydoc"
     },
     {
-      "from": "wasm-bindgen-futures",
-      "to": "js-sys"
+      "from": "icu_provider",
+      "to": "icu_locale_core"
     },
     {
-      "from": "wasm-bindgen-futures",
-      "to": "once_cell"
+      "from": "icu_provider",
+      "to": "yoke"
     },
     {
-      "from": "wasm-bindgen-futures",
-      "to": "wasm-bindgen"
+      "from": "icu_provider",
+      "to": "zerofrom"
     },
     {
-      "from": "wasm-bindgen-futures",
-      "to": "web-sys"
+      "from": "icu_provider",
+      "to": "zerovec"
     },
     {
-      "from": "idna",
-      "to": "idna_adapter"
+      "from": "zerovec",
+      "to": "zerofrom"
     },
     {
-      "from": "idna",
-      "to": "smallvec"
+      "from": "quote",
+      "to": "proc-macro2"
     },
     {
-      "from": "idna",
-      "to": "utf8_iter"
+      "from": "icu_locale_core",
+      "to": "displaydoc"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "litemap"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "tinystr"
+    },
+    {
+      "from": "icu_locale_core",
+      "to": "writeable"
+    },
+    {
+      "from": "zerotrie",
+      "to": "displaydoc"
     },
     {
       "from": "wasm-bindgen-macro-support",
@@ -7627,78 +7554,6 @@
       "to": "wasm-bindgen-shared"
     },
     {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "wasm-bindgen-shared",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_normalizer"
-    },
-    {
-      "from": "idna_adapter",
-      "to": "icu_properties"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "form_urlencoded",
-      "to": "percent-encoding"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "smallvec"
-    },
-    {
-      "from": "icu_normalizer",
-      "to": "zerovec"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_collections"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_properties",
-      "to": "icu_provider"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerotrie"
-    },
-    {
-      "from": "icu_properties",
-      "to": "zerovec"
-    },
-    {
-      "from": "zerovec",
-      "to": "zerofrom"
-    },
-    {
       "from": "icu_collections",
       "to": "displaydoc"
     },
@@ -7719,54 +7574,6 @@
       "to": "zerovec"
     },
     {
-      "from": "zerotrie",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "litemap"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "tinystr"
-    },
-    {
-      "from": "icu_locale_core",
-      "to": "writeable"
-    },
-    {
-      "from": "yoke",
-      "to": "stable_deref_trait"
-    },
-    {
-      "from": "icu_provider",
-      "to": "displaydoc"
-    },
-    {
-      "from": "icu_provider",
-      "to": "icu_locale_core"
-    },
-    {
-      "from": "icu_provider",
-      "to": "yoke"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerofrom"
-    },
-    {
-      "from": "icu_provider",
-      "to": "zerovec"
-    },
-    {
-      "from": "tinystr",
-      "to": "displaydoc"
-    },
-    {
       "from": "displaydoc",
       "to": "proc-macro2"
     },
@@ -7777,289 +7584,133 @@
     {
       "from": "displaydoc",
       "to": "syn"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "reqwest"
-    },
-    {
-      "from": "baml_lsp",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_cli",
-      "to": "cfg-if"
-    },
-    {
-      "from": "clap",
-      "to": "clap_builder"
-    },
-    {
-      "from": "clap_builder",
-      "to": "anstyle"
-    },
-    {
-      "from": "clap_builder",
-      "to": "clap_lex"
-    },
-    {
-      "from": "baml_cli",
-      "to": "clap"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_base"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_compiler_emit"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_compiler_diagnostics"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_project"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_vm"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_compiler_mir"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_workspace"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "baml_tests",
-      "to": "indexmap"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_compiler_tir"
-    },
-    {
-      "from": "baml_tests",
-      "to": "anyhow"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_db"
-    },
-    {
-      "from": "baml_tests",
-      "to": "baml_compiler_hir"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
     },
     {
       "from": "proc-macro2",
       "to": "unicode-ident"
     },
     {
-      "from": "crossbeam-queue",
+      "from": "yoke",
+      "to": "stable_deref_trait"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "tinystr",
+      "to": "displaydoc"
+    },
+    {
+      "from": "baml_lsp",
+      "to": "reqwest"
+    },
+    {
+      "from": "lsp-server",
+      "to": "crossbeam-channel"
+    },
+    {
+      "from": "lsp-server",
+      "to": "log"
+    },
+    {
+      "from": "lsp-server",
+      "to": "serde"
+    },
+    {
+      "from": "lsp-server",
+      "to": "serde_derive"
+    },
+    {
+      "from": "lsp-server",
+      "to": "serde_json"
+    },
+    {
+      "from": "crossbeam-channel",
       "to": "crossbeam-utils"
+    },
+    {
+      "from": "serde_json",
+      "to": "itoa"
+    },
+    {
+      "from": "serde_json",
+      "to": "memchr"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde"
+    },
+    {
+      "from": "serde_json",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_json",
+      "to": "zmij"
+    },
+    {
+      "from": "serde",
+      "to": "serde_core"
+    },
+    {
+      "from": "serde_derive",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "serde_derive",
+      "to": "quote"
+    },
+    {
+      "from": "serde_derive",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "serde_core",
+      "to": "serde_derive"
     },
     {
       "from": "quote",
       "to": "proc-macro2"
     },
     {
-      "from": "redox_syscall",
-      "to": "bitflags"
+      "from": "proc-macro2",
+      "to": "unicode-ident"
     },
     {
-      "from": "baml_tests",
-      "to": "salsa"
+      "from": "baml_lsp",
+      "to": "lsp-server"
     },
     {
-      "from": "insta",
-      "to": "once_cell"
+      "from": "simple-logging",
+      "to": "lazy_static"
     },
     {
-      "from": "insta",
-      "to": "similar"
+      "from": "simple-logging",
+      "to": "log"
     },
     {
-      "from": "insta",
-      "to": "tempfile"
+      "from": "simple-logging",
+      "to": "thread-id"
     },
     {
-      "from": "tempfile",
-      "to": "fastrand"
+      "from": "thread-id",
+      "to": "libc"
     },
     {
-      "from": "tempfile",
-      "to": "once_cell"
-    },
-    {
-      "from": "tempfile",
-      "to": "rustix"
-    },
-    {
-      "from": "tempfile",
+      "from": "thread-id",
       "to": "windows-sys"
     },
     {
@@ -8067,52 +7718,64 @@
       "to": "windows-link"
     },
     {
-      "from": "rustix",
+      "from": "baml_lsp",
+      "to": "simple-logging"
+    },
+    {
+      "from": "tower-http",
       "to": "bitflags"
     },
     {
-      "from": "rustix",
-      "to": "errno"
+      "from": "tower-http",
+      "to": "bytes"
     },
     {
-      "from": "rustix",
-      "to": "errno"
+      "from": "tower-http",
+      "to": "http"
     },
     {
-      "from": "rustix",
-      "to": "libc"
+      "from": "tower-http",
+      "to": "pin-project-lite"
     },
     {
-      "from": "rustix",
-      "to": "linux-raw-sys"
+      "from": "tower-http",
+      "to": "tower-layer"
     },
     {
-      "from": "rustix",
-      "to": "linux-raw-sys"
+      "from": "tower-http",
+      "to": "tower-service"
     },
     {
-      "from": "rustix",
-      "to": "windows-sys"
+      "from": "http",
+      "to": "bytes"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "http",
+      "to": "itoa"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "baml_lsp",
+      "to": "tower-http"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "baml_ide_tests",
+      "to": "text-size"
     },
     {
-      "from": "errno",
-      "to": "windows-sys"
+      "from": "baml_ide_tests",
+      "to": "baml_db"
     },
     {
-      "from": "baml_tests",
-      "to": "insta"
+      "from": "baml_ide_tests",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "baml_ide_tests",
+      "to": "baml_ide"
+    },
+    {
+      "from": "baml_ide_tests",
+      "to": "baml_project"
     },
     {
       "from": "ariadne",
@@ -8125,214 +7788,6 @@
     {
       "from": "baml_tools_onionskin",
       "to": "ariadne"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "similar"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "baml_compiler_mir"
-    },
-    {
-      "from": "salsa",
-      "to": "boxcar"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-queue"
-    },
-    {
-      "from": "salsa",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "salsa",
-      "to": "hashbrown"
-    },
-    {
-      "from": "salsa",
-      "to": "hashlink"
-    },
-    {
-      "from": "salsa",
-      "to": "indexmap"
-    },
-    {
-      "from": "salsa",
-      "to": "intrusive-collections"
-    },
-    {
-      "from": "salsa",
-      "to": "parking_lot"
-    },
-    {
-      "from": "salsa",
-      "to": "portable-atomic"
-    },
-    {
-      "from": "salsa",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macro-rules"
-    },
-    {
-      "from": "salsa",
-      "to": "salsa-macros"
-    },
-    {
-      "from": "salsa",
-      "to": "smallvec"
-    },
-    {
-      "from": "salsa",
-      "to": "thin-vec"
-    },
-    {
-      "from": "salsa",
-      "to": "tracing"
-    },
-    {
-      "from": "tracing",
-      "to": "pin-project-lite"
-    },
-    {
-      "from": "tracing",
-      "to": "tracing-core"
-    },
-    {
-      "from": "hashlink",
-      "to": "hashbrown"
-    },
-    {
-      "from": "intrusive-collections",
-      "to": "memoffset"
-    },
-    {
-      "from": "crossbeam-queue",
-      "to": "crossbeam-utils"
-    },
-    {
-      "from": "parking_lot",
-      "to": "lock_api"
-    },
-    {
-      "from": "parking_lot",
-      "to": "parking_lot_core"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "quote"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "syn"
-    },
-    {
-      "from": "salsa-macros",
-      "to": "synstructure"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "cfg-if"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "libc"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "redox_syscall"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "smallvec"
-    },
-    {
-      "from": "parking_lot_core",
-      "to": "windows-link"
-    },
-    {
-      "from": "lock_api",
-      "to": "scopeguard"
-    },
-    {
-      "from": "indexmap",
-      "to": "equivalent"
-    },
-    {
-      "from": "indexmap",
-      "to": "hashbrown"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "synstructure",
-      "to": "quote"
-    },
-    {
-      "from": "synstructure",
-      "to": "syn"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "salsa"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "baml_project"
-    },
-    {
-      "from": "rowan",
-      "to": "countme"
-    },
-    {
-      "from": "rowan",
-      "to": "hashbrown"
-    },
-    {
-      "from": "rowan",
-      "to": "rustc-hash"
-    },
-    {
-      "from": "rowan",
-      "to": "text-size"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "rowan"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "baml_compiler_lexer"
     },
     {
       "from": "ratatui",
@@ -8391,6 +7846,42 @@
       "to": "either"
     },
     {
+      "from": "instability",
+      "to": "darling"
+    },
+    {
+      "from": "instability",
+      "to": "indoc"
+    },
+    {
+      "from": "instability",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "instability",
+      "to": "quote"
+    },
+    {
+      "from": "instability",
+      "to": "syn"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
       "from": "ratatui-core",
       "to": "bitflags"
     },
@@ -8439,42 +7930,6 @@
       "to": "unicode-width"
     },
     {
-      "from": "instability",
-      "to": "darling"
-    },
-    {
-      "from": "instability",
-      "to": "indoc"
-    },
-    {
-      "from": "instability",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "instability",
-      "to": "quote"
-    },
-    {
-      "from": "instability",
-      "to": "syn"
-    },
-    {
-      "from": "syn",
-      "to": "proc-macro2"
-    },
-    {
-      "from": "syn",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "proc-macro2",
-      "to": "unicode-ident"
-    },
-    {
-      "from": "quote",
-      "to": "proc-macro2"
-    },
-    {
       "from": "thiserror",
       "to": "thiserror-impl"
     },
@@ -8503,12 +7958,16 @@
       "to": "darling_macro"
     },
     {
-      "from": "kasuari",
-      "to": "hashbrown"
+      "from": "unicode-truncate",
+      "to": "itertools"
     },
     {
-      "from": "kasuari",
-      "to": "thiserror"
+      "from": "unicode-truncate",
+      "to": "unicode-segmentation"
+    },
+    {
+      "from": "unicode-truncate",
+      "to": "unicode-width"
     },
     {
       "from": "compact_str",
@@ -8535,16 +7994,28 @@
       "to": "static_assertions"
     },
     {
-      "from": "unicode-truncate",
-      "to": "itertools"
+      "from": "castaway",
+      "to": "rustversion"
     },
     {
-      "from": "unicode-truncate",
-      "to": "unicode-segmentation"
+      "from": "darling_macro",
+      "to": "darling_core"
     },
     {
-      "from": "unicode-truncate",
-      "to": "unicode-width"
+      "from": "darling_macro",
+      "to": "quote"
+    },
+    {
+      "from": "darling_macro",
+      "to": "syn"
+    },
+    {
+      "from": "kasuari",
+      "to": "hashbrown"
+    },
+    {
+      "from": "kasuari",
+      "to": "thiserror"
     },
     {
       "from": "darling_core",
@@ -8563,22 +8034,6 @@
       "to": "syn"
     },
     {
-      "from": "darling_macro",
-      "to": "darling_core"
-    },
-    {
-      "from": "darling_macro",
-      "to": "quote"
-    },
-    {
-      "from": "darling_macro",
-      "to": "syn"
-    },
-    {
-      "from": "castaway",
-      "to": "rustversion"
-    },
-    {
       "from": "baml_tools_onionskin",
       "to": "ratatui"
     },
@@ -8588,75 +8043,75 @@
     },
     {
       "from": "baml_tools_onionskin",
-      "to": "baml_compiler_tir"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "baml_vm"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "baml_compiler_vir"
-    },
-    {
-      "from": "regex",
-      "to": "regex-automata"
-    },
-    {
-      "from": "regex",
-      "to": "regex-syntax"
-    },
-    {
-      "from": "baml_tools_onionskin",
-      "to": "regex"
-    },
-    {
-      "from": "baml_tools_onionskin",
       "to": "baml_compiler_parser"
     },
     {
-      "from": "crossterm",
-      "to": "bitflags"
+      "from": "salsa",
+      "to": "boxcar"
     },
     {
-      "from": "crossterm",
-      "to": "document-features"
+      "from": "salsa",
+      "to": "crossbeam-queue"
     },
     {
-      "from": "crossterm",
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
       "to": "parking_lot"
     },
     {
-      "from": "crossterm",
-      "to": "rustix"
+      "from": "salsa",
+      "to": "portable-atomic"
     },
     {
-      "from": "rustix",
-      "to": "bitflags"
+      "from": "salsa",
+      "to": "rustc-hash"
     },
     {
-      "from": "rustix",
-      "to": "errno"
+      "from": "salsa",
+      "to": "salsa-macro-rules"
     },
     {
-      "from": "rustix",
-      "to": "errno"
+      "from": "salsa",
+      "to": "salsa-macros"
     },
     {
-      "from": "rustix",
-      "to": "libc"
+      "from": "salsa",
+      "to": "smallvec"
     },
     {
-      "from": "rustix",
-      "to": "linux-raw-sys"
+      "from": "salsa",
+      "to": "thin-vec"
     },
     {
-      "from": "rustix",
-      "to": "linux-raw-sys"
+      "from": "salsa",
+      "to": "tracing"
     },
     {
-      "from": "rustix",
-      "to": "windows-sys"
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
     },
     {
       "from": "parking_lot",
@@ -8667,8 +8122,12 @@
       "to": "parking_lot_core"
     },
     {
-      "from": "windows-sys",
-      "to": "windows-link"
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
     },
     {
       "from": "parking_lot_core",
@@ -8691,36 +8150,72 @@
       "to": "windows-link"
     },
     {
-      "from": "document-features",
-      "to": "litrs"
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
     },
     {
-      "from": "lock_api",
-      "to": "scopeguard"
+      "from": "salsa-macros",
+      "to": "proc-macro2"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "salsa-macros",
+      "to": "quote"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "salsa-macros",
+      "to": "syn"
     },
     {
-      "from": "errno",
-      "to": "libc"
+      "from": "salsa-macros",
+      "to": "synstructure"
     },
     {
-      "from": "errno",
-      "to": "windows-sys"
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
     },
     {
       "from": "redox_syscall",
       "to": "bitflags"
     },
     {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
       "from": "baml_tools_onionskin",
-      "to": "crossterm"
+      "to": "salsa"
     },
     {
       "from": "baml_tools_onionskin",
@@ -8728,7 +8223,7 @@
     },
     {
       "from": "baml_tools_onionskin",
-      "to": "baml_compiler_diagnostics"
+      "to": "baml_workspace"
     },
     {
       "from": "arboard",
@@ -8779,6 +8274,30 @@
       "to": "parking_lot_core"
     },
     {
+      "from": "objc2-app-kit",
+      "to": "objc2"
+    },
+    {
+      "from": "objc2-app-kit",
+      "to": "objc2-foundation"
+    },
+    {
+      "from": "x11rb",
+      "to": "gethostname"
+    },
+    {
+      "from": "x11rb",
+      "to": "rustix"
+    },
+    {
+      "from": "x11rb",
+      "to": "x11rb-protocol"
+    },
+    {
+      "from": "objc2",
+      "to": "objc2-encode"
+    },
+    {
       "from": "parking_lot_core",
       "to": "cfg-if"
     },
@@ -8799,40 +8318,24 @@
       "to": "windows-link"
     },
     {
-      "from": "x11rb",
-      "to": "gethostname"
-    },
-    {
-      "from": "x11rb",
-      "to": "rustix"
-    },
-    {
-      "from": "x11rb",
-      "to": "x11rb-protocol"
-    },
-    {
-      "from": "windows-sys",
-      "to": "windows-link"
-    },
-    {
-      "from": "objc2",
-      "to": "objc2-encode"
-    },
-    {
-      "from": "objc2-app-kit",
-      "to": "objc2"
-    },
-    {
-      "from": "objc2-app-kit",
-      "to": "objc2-foundation"
-    },
-    {
       "from": "objc2-foundation",
       "to": "objc2"
     },
     {
       "from": "lock_api",
       "to": "scopeguard"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "clipboard-win",
+      "to": "error-code"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
     },
     {
       "from": "gethostname",
@@ -8869,14 +8372,6 @@
     {
       "from": "rustix",
       "to": "windows-sys"
-    },
-    {
-      "from": "redox_syscall",
-      "to": "bitflags"
-    },
-    {
-      "from": "clipboard-win",
-      "to": "error-code"
     },
     {
       "from": "errno",
@@ -8900,7 +8395,27 @@
     },
     {
       "from": "baml_tools_onionskin",
-      "to": "text-size"
+      "to": "baml_db"
+    },
+    {
+      "from": "clap",
+      "to": "clap_builder"
+    },
+    {
+      "from": "clap_builder",
+      "to": "anstyle"
+    },
+    {
+      "from": "clap_builder",
+      "to": "clap_lex"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "clap"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "similar"
     },
     {
       "from": "baml_tools_onionskin",
@@ -8908,7 +8423,127 @@
     },
     {
       "from": "baml_tools_onionskin",
-      "to": "baml_workspace"
+      "to": "baml_compiler_mir"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_compiler_emit"
+    },
+    {
+      "from": "crossterm",
+      "to": "bitflags"
+    },
+    {
+      "from": "crossterm",
+      "to": "document-features"
+    },
+    {
+      "from": "crossterm",
+      "to": "parking_lot"
+    },
+    {
+      "from": "crossterm",
+      "to": "rustix"
+    },
+    {
+      "from": "rustix",
+      "to": "bitflags"
+    },
+    {
+      "from": "rustix",
+      "to": "errno"
+    },
+    {
+      "from": "rustix",
+      "to": "errno"
+    },
+    {
+      "from": "rustix",
+      "to": "libc"
+    },
+    {
+      "from": "rustix",
+      "to": "linux-raw-sys"
+    },
+    {
+      "from": "rustix",
+      "to": "linux-raw-sys"
+    },
+    {
+      "from": "rustix",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "document-features",
+      "to": "litrs"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "windows-sys"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "crossterm"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_compiler_lexer"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_compiler_vir"
     },
     {
       "from": "notify",
@@ -9015,15 +8650,15 @@
       "to": "wasip2"
     },
     {
-      "from": "inotify-sys",
-      "to": "libc"
-    },
-    {
       "from": "kqueue-sys",
       "to": "bitflags"
     },
     {
       "from": "kqueue-sys",
+      "to": "libc"
+    },
+    {
+      "from": "inotify-sys",
       "to": "libc"
     },
     {
@@ -9036,7 +8671,103 @@
     },
     {
       "from": "baml_tools_onionskin",
-      "to": "baml_db"
+      "to": "baml_vm"
+    },
+    {
+      "from": "rowan",
+      "to": "countme"
+    },
+    {
+      "from": "rowan",
+      "to": "hashbrown"
+    },
+    {
+      "from": "rowan",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "rowan",
+      "to": "text-size"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "rowan"
+    },
+    {
+      "from": "regex",
+      "to": "regex-automata"
+    },
+    {
+      "from": "regex",
+      "to": "regex-syntax"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "regex"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_project"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "baml_compiler_tir"
+    },
+    {
+      "from": "baml_tools_onionskin",
+      "to": "text-size"
+    },
+    {
+      "from": "ctrlc",
+      "to": "dispatch2"
+    },
+    {
+      "from": "ctrlc",
+      "to": "nix"
+    },
+    {
+      "from": "ctrlc",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "dispatch2",
+      "to": "bitflags"
+    },
+    {
+      "from": "nix",
+      "to": "bitflags"
+    },
+    {
+      "from": "nix",
+      "to": "cfg-if"
+    },
+    {
+      "from": "nix",
+      "to": "libc"
+    },
+    {
+      "from": "baml_cli",
+      "to": "ctrlc"
+    },
+    {
+      "from": "baml_cli",
+      "to": "anyhow"
+    },
+    {
+      "from": "baml_cli",
+      "to": "baml_lsp"
+    },
+    {
+      "from": "baml_cli",
+      "to": "cfg-if"
     },
     {
       "from": "clap",
@@ -9051,12 +8782,336 @@
       "to": "clap_lex"
     },
     {
-      "from": "baml_tools_onionskin",
+      "from": "baml_cli",
       "to": "clap"
     },
     {
-      "from": "baml_tools_onionskin",
+      "from": "clap-cargo",
+      "to": "anstyle"
+    },
+    {
+      "from": "baml_cli",
+      "to": "clap-cargo"
+    },
+    {
+      "from": "colored",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "baml_cli",
+      "to": "colored"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_base"
+    },
+    {
+      "from": "baml_tests",
       "to": "baml_compiler_emit"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_compiler_diagnostics"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_compiler_hir"
+    },
+    {
+      "from": "insta",
+      "to": "once_cell"
+    },
+    {
+      "from": "insta",
+      "to": "similar"
+    },
+    {
+      "from": "insta",
+      "to": "tempfile"
+    },
+    {
+      "from": "tempfile",
+      "to": "fastrand"
+    },
+    {
+      "from": "tempfile",
+      "to": "once_cell"
+    },
+    {
+      "from": "tempfile",
+      "to": "rustix"
+    },
+    {
+      "from": "tempfile",
+      "to": "windows-sys"
+    },
+    {
+      "from": "windows-sys",
+      "to": "windows-link"
+    },
+    {
+      "from": "rustix",
+      "to": "bitflags"
+    },
+    {
+      "from": "rustix",
+      "to": "errno"
+    },
+    {
+      "from": "rustix",
+      "to": "errno"
+    },
+    {
+      "from": "rustix",
+      "to": "libc"
+    },
+    {
+      "from": "rustix",
+      "to": "linux-raw-sys"
+    },
+    {
+      "from": "rustix",
+      "to": "linux-raw-sys"
+    },
+    {
+      "from": "rustix",
+      "to": "windows-sys"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "libc"
+    },
+    {
+      "from": "errno",
+      "to": "windows-sys"
+    },
+    {
+      "from": "baml_tests",
+      "to": "insta"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_project"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_vm"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_workspace"
+    },
+    {
+      "from": "salsa",
+      "to": "boxcar"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-queue"
+    },
+    {
+      "from": "salsa",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "salsa",
+      "to": "hashbrown"
+    },
+    {
+      "from": "salsa",
+      "to": "hashlink"
+    },
+    {
+      "from": "salsa",
+      "to": "indexmap"
+    },
+    {
+      "from": "salsa",
+      "to": "intrusive-collections"
+    },
+    {
+      "from": "salsa",
+      "to": "parking_lot"
+    },
+    {
+      "from": "salsa",
+      "to": "portable-atomic"
+    },
+    {
+      "from": "salsa",
+      "to": "rustc-hash"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macro-rules"
+    },
+    {
+      "from": "salsa",
+      "to": "salsa-macros"
+    },
+    {
+      "from": "salsa",
+      "to": "smallvec"
+    },
+    {
+      "from": "salsa",
+      "to": "thin-vec"
+    },
+    {
+      "from": "salsa",
+      "to": "tracing"
+    },
+    {
+      "from": "tracing",
+      "to": "pin-project-lite"
+    },
+    {
+      "from": "tracing",
+      "to": "tracing-core"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "quote"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "syn"
+    },
+    {
+      "from": "salsa-macros",
+      "to": "synstructure"
+    },
+    {
+      "from": "intrusive-collections",
+      "to": "memoffset"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "parking_lot",
+      "to": "lock_api"
+    },
+    {
+      "from": "parking_lot",
+      "to": "parking_lot_core"
+    },
+    {
+      "from": "proc-macro2",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "synstructure",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "synstructure",
+      "to": "quote"
+    },
+    {
+      "from": "synstructure",
+      "to": "syn"
+    },
+    {
+      "from": "hashlink",
+      "to": "hashbrown"
+    },
+    {
+      "from": "crossbeam-queue",
+      "to": "crossbeam-utils"
+    },
+    {
+      "from": "lock_api",
+      "to": "scopeguard"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "cfg-if"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "libc"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "redox_syscall"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "smallvec"
+    },
+    {
+      "from": "parking_lot_core",
+      "to": "windows-link"
+    },
+    {
+      "from": "syn",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "syn",
+      "to": "unicode-ident"
+    },
+    {
+      "from": "quote",
+      "to": "proc-macro2"
+    },
+    {
+      "from": "redox_syscall",
+      "to": "bitflags"
+    },
+    {
+      "from": "baml_tests",
+      "to": "salsa"
+    },
+    {
+      "from": "baml_tests",
+      "to": "anyhow"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_compiler_tir"
+    },
+    {
+      "from": "indexmap",
+      "to": "equivalent"
+    },
+    {
+      "from": "indexmap",
+      "to": "hashbrown"
+    },
+    {
+      "from": "baml_tests",
+      "to": "indexmap"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_db"
+    },
+    {
+      "from": "baml_tests",
+      "to": "baml_compiler_mir"
     }
   ]
 }
