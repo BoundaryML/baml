@@ -393,9 +393,9 @@ mod type_aliases {
 /// from enum import Enum
 ///
 /// {% if pkg.is_pydantic_2 %}
-/// from pydantic import BaseModel, ConfigDict
+/// from pydantic import BaseModel, ConfigDict, Field
 /// {% else %}
-/// from pydantic import BaseModel, Extra
+/// from pydantic import BaseModel, Extra, Field
 /// from pydantic.generics import GenericModel
 /// {% endif %}
 ///
