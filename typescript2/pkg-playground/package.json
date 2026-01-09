@@ -1,5 +1,5 @@
 {
-  "name": "pkg-playground",
+  "name": "@b/pkg-playground",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -24,7 +24,7 @@
     "react-dom": "^18.3.1"
   },
   "dependencies": {
-    "baml-playground-wasm": "link:wasm",
+    "@b/baml-playground-wasm": "link:wasm",
     "jotai": "^2.15.1"
   }
 }

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "pkg-playground": "workspace:*",
+    "@b/pkg-playground": "workspace:*",
     "next": "^14.2.33",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

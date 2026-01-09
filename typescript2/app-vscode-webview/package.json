@@ -19,7 +19,7 @@
     "test:hmr:run": "vitest run --project hmr"
   },
   "dependencies": {
-    "pkg-playground": "workspace:*",
+    "@b/pkg-playground": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

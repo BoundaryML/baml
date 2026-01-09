@@ -1,6 +1,6 @@
 import type { ChangeEvent, CSSProperties, FC } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import initWasm, { BamlProject, version, hot_reload_test_string } from 'baml-playground-wasm';
+import initWasm, { BamlProject, version, hot_reload_test_string } from '@b/baml-playground-wasm';
 import { usePlayground } from './PlaygroundProvider';
 
 const containerStyles: CSSProperties = {

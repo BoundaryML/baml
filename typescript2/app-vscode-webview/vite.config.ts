@@ -25,7 +25,7 @@ export default defineConfig({
   plugins: [react(), wasmNoCachePlugin()],
   resolve: {
     alias: {
-      'pkg-playground': resolve(projectRoot, '../pkg-playground/src')
+      '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src')
     }
   },
   server: {
@@ -42,7 +42,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Don't pre-bundle the WASM package so changes are picked up immediately
-    exclude: ['baml-playground-wasm'],
+    exclude: ['@b/baml-playground-wasm'],
   },
   build: {
     rollupOptions: {

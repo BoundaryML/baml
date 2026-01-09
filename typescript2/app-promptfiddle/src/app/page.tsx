@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { SplitPreview } from 'pkg-playground';
+import { SplitPreview } from '@b/pkg-playground';
 
 const DevTools = dynamic(async () => {
   const mod = await import('jotai-devtools');

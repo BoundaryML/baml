@@ -8,8 +8,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "pkg-playground": ["../pkg-playground/src"],
-      "pkg-playground/*": ["../pkg-playground/src/*"]
+      "@b/pkg-playground": ["../pkg-playground/src"],
+      "@b/pkg-playground/*": ["../pkg-playground/src/*"]
     }
   },
   "include": ["src", "src/**/*", "vite-env.d.ts"],

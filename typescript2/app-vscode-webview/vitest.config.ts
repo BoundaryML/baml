@@ -10,8 +10,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      'pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
-      'baml-playground-wasm': resolve(projectRoot, '../pkg-playground/wasm/baml_playground_wasm.js'),
+      '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
+      '@b/baml-playground-wasm': resolve(projectRoot, '../pkg-playground/wasm/baml_playground_wasm.js'),
     },
   },
   define: {

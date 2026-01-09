@@ -11,10 +11,10 @@
       "@/*": [
         "src/*"
       ],
-      "pkg-playground": [
+      "@b/pkg-playground": [
         "../pkg-playground/src"
       ],
-      "pkg-playground/*": [
+      "@b/pkg-playground/*": [
         "../pkg-playground/src/*"
       ]
     },

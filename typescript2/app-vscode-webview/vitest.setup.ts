@@ -38,7 +38,7 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
 
 // Initialize WASM before tests run
 beforeAll(async () => {
-  const initWasm = (await import('baml-playground-wasm')).default;
+  const initWasm = (await import('@b/baml-playground-wasm')).default;
   await initWasm();
 });
 

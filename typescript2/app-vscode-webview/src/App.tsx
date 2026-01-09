@@ -1,4 +1,4 @@
-import { SplitPreview } from 'pkg-playground';
+import { SplitPreview } from '@b/pkg-playground';
 import { DevTools } from 'jotai-devtools';
 
 if (import.meta.env.DEV) {
