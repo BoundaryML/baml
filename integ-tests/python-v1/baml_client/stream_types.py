@@ -12,7 +12,7 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, Field
 from pydantic.generics import GenericModel
 
 import baml_py

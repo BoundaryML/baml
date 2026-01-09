@@ -480,9 +480,9 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// import typing_extensions
 ///
 /// {%- if pkg.is_pydantic_2 %}
-/// from pydantic import BaseModel, ConfigDict
+/// from pydantic import BaseModel, ConfigDict, Field
 /// {%- else %}
-/// from pydantic import BaseModel, Extra
+/// from pydantic import BaseModel, Extra, Field
 /// from pydantic.generics import GenericModel
 /// {%- endif %}
 ///
