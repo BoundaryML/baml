@@ -203,6 +203,18 @@ impl FunctionResult {
                 status_code: ErrorCode::ServiceUnavailable,
             };
         }
+
+        // Check if the underlying LLM response was a timeout - if so, preserve the TimeoutError
+        // instead of converting it to a ValidationError
+        if let LLMResponse::LLMFailure(llm_err) = self.llm_response() {
+            if matches!(llm_err.code, ErrorCode::Timeout) {
+                return ExposedError::TimeoutError {
+                    client_name: llm_err.client.clone(),
+                    message: llm_err.message.clone(),
+                };
+            }
+        }
+
         let message = match self.llm_response() {
             LLMResponse::Success(_) => {
                 format!("Failed to parse LLM response: {actual_error}")

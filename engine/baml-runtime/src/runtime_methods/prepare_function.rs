@@ -70,14 +70,14 @@ impl PrepareFunctionError {
             PrepareFunctionError::FunctionNotFound {
                 function_name,
                 error,
-            } => anyhow::anyhow!(format!(
-                "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {error}"
+            } => error.context(format!(
+                "BAML function {function_name} does not exist in baml_src/ (did you typo it?)"
             )),
             PrepareFunctionError::InvalidParams {
                 function_name,
                 error,
-            } => anyhow::anyhow!(format!(
-                "Invalid parameters for BAML function {function_name}: {error}"
+            } => error.context(format!(
+                "Invalid parameters for BAML function {function_name}"
             )),
         }
     }

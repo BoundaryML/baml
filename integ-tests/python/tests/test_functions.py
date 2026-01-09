@@ -450,9 +450,7 @@ async def test_should_work_for_all_outputs():
 @pytest.mark.asyncio
 async def test_should_work_with_image_url():
     res = await b.TestImageInput(
-        img=baml_py.Image.from_url(
-            "https://i.imgur.com/93fWs5R.png"
-        )
+        img=baml_py.Image.from_url("https://i.imgur.com/93fWs5R.png")
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
@@ -461,9 +459,7 @@ async def test_should_work_with_image_url():
 async def test_should_work_with_image_list():
     res = await b.TestImageListInput(
         imgs=[
-            baml_py.Image.from_url(
-                "https://i.imgur.com/93fWs5R.png"
-            ),
+            baml_py.Image.from_url("https://i.imgur.com/93fWs5R.png"),
             baml_py.Image.from_url(
                 "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
             ),
@@ -478,7 +474,9 @@ async def test_should_work_with_vertex():
     assert_that("donkey kong" in res.lower())
 
 
-@pytest.mark.skip("Skipping test_should_work_with_vertex_claude until vertex resourcing is fixed")
+@pytest.mark.skip(
+    "Skipping test_should_work_with_vertex_claude until vertex resourcing is fixed"
+)
 @pytest.mark.asyncio
 async def test_should_work_with_vertex_claude():
     res = await b.TestVertexClaude("donkey kong")
@@ -668,7 +666,9 @@ async def test_anthropic_shorthand_streaming():
     assert len(final) > 0, "Expected non-empty result but got empty."
 
 
-@pytest.mark.skip("Skipping test_vertex_anthropic_streaming until vertex resourcing is fixed")
+@pytest.mark.skip(
+    "Skipping test_vertex_anthropic_streaming until vertex resourcing is fixed"
+)
 @pytest.mark.asyncio
 async def test_vertex_anthropic_streaming():
     res = b.stream.TestVertexClaude(input="Mt Rainier is tall")
@@ -913,7 +913,6 @@ async def test_tracing_async_only():
         # )
         return 1
 
-
     # Set up trace file for verification
     trace_file = os.environ["BAML_TRACE_FILE"]
     if os.path.exists(trace_file):
@@ -996,7 +995,9 @@ async def test_tracing_async_only():
                 assert_that(call_stack[1]).is_in(*dummy_fn_ids)
                 assert_that(call_stack[2]).is_equal_to(call_id)
                 parent_dummy_fn_id = call_stack[1]
-                print(f"✓ nested_dummy_fn: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]")
+                print(
+                    f"✓ nested_dummy_fn: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]"
+                )
                 nested_dummy_fn_count += 1
 
         # Should have 3 nested_dummy_fn calls (one per dummy_fn)
@@ -1012,7 +1013,9 @@ async def test_tracing_async_only():
                 assert_that(call_stack[1]).is_in(*dummy_fn_ids)
                 assert_that(call_stack[2]).is_equal_to(call_id)
                 parent_dummy_fn_id = call_stack[1]
-                print(f"✓ FnOutputClass: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]")
+                print(
+                    f"✓ FnOutputClass: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]"
+                )
                 fn_output_class_count += 1
 
         # Should have 3 FnOutputClass calls (one per dummy_fn, called in failsafe_baml_fn)
@@ -1491,9 +1494,10 @@ async def test_return_failing_assert():
 
 @pytest.mark.asyncio
 async def test_parameter_failing_assert():
-    with pytest.raises(errors.BamlInvalidArgumentError):
+    with pytest.raises(errors.BamlInvalidArgumentError) as exc_info:
         msg = await b.ReturnFailingAssert(100)
         assert msg == 103
+    print(exc_info.value)
 
 
 @pytest.mark.asyncio
