@@ -60,11 +60,7 @@ export default defineConfig({
           hookTimeout: 60_000, // 1 minute for setup/teardown
           // Run sequentially - these tests modify shared state (Rust source files)
           pool: 'forks',
-          poolOptions: {
-            forks: {
-              singleFork: true,
-            },
-          },
+          singleFork: true,
           // Retry once in case of flaky timing
           retry: 1,
         },
