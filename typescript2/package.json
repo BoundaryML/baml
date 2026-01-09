@@ -5,9 +5,10 @@
   "description": "BAML Playground v2 - VSCode extension and web app",
   "scripts": {
     "build:wasm": "wasm-pack build ../baml_language/crates/baml_playground_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
+    "dev:wasm": "npx nodemon --watch ../baml_language --ext rs,toml --exec \"pnpm build:wasm\"",
     "dev:webview": "pnpm --filter app-vscode-webview dev",
-    "dev:ext": "pnpm --filter app-vscode-ext dev",
-    "dev:web": "pnpm --filter app-promptfiddle dev",
+    "dev:vscode": "pnpm --filter app-vscode-ext dev",
+    "dev:promptfiddle": "pnpm --filter app-promptfiddle dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "clean": "pnpm -r clean"

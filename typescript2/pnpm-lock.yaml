@@ -8,21 +8,18 @@ importers:
 
   .:
     devDependencies:
-      turbo:
-        specifier: ^2.3.0
-        version: 2.7.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
 
   app-promptfiddle:
     dependencies:
+      '@b/pkg-playground':
+        specifier: workspace:*
+        version: link:../pkg-playground
       next:
         specifier: ^14.2.33
         version: 14.2.35(@babel/core@7.28.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      pkg-playground:
-        specifier: workspace:*
-        version: link:../pkg-playground
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -76,7 +73,7 @@ importers:
 
   app-vscode-webview:
     dependencies:
-      pkg-playground:
+      '@b/pkg-playground':
         specifier: workspace:*
         version: link:../pkg-playground
       react:
@@ -131,7 +128,7 @@ importers:
 
   pkg-playground:
     dependencies:
-      baml-runtime-wasm:
+      '@b/baml-playground-wasm':
         specifier: link:wasm
         version: link:wasm
       jotai:
@@ -2198,6 +2195,7 @@ packages:
     resolution: {integrity: sha512-Quz3MvAwHxVYNXsOByL7xI5EB2WYOeFswqaHIA3qOK3isRWTxiplBEocmmru6XmxDB2L7jDNYtYA4FyimoAFEw==}
     engines: {node: '>=8.17.0'}
     hasBin: true
+    bundledDependencies: []
 
   jsx-ast-utils@3.3.5:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
@@ -2963,40 +2961,6 @@ packages:
         optional: true
       typescript:
         optional: true
-
-  turbo-darwin-64@2.7.1:
-    resolution: {integrity: sha512-EaA7UfYujbY9/Ku0WqPpvfctxm91h9LF7zo8vjielz+omfAPB54Si+ADmUoBczBDC6RoLgbURC3GmUW2alnjJg==}
-    cpu: [x64]
-    os: [darwin]
-
-  turbo-darwin-arm64@2.7.1:
-    resolution: {integrity: sha512-/pWGSygtBugd7sKQOeMm+jKY3qN1vyB0RiHBM6bN/6qUOo2VHo8IQwBTIaSgINN4Ue6fzEU+WfePNvonSU9yXw==}
-    cpu: [arm64]
-    os: [darwin]
-
-  turbo-linux-64@2.7.1:
-    resolution: {integrity: sha512-Y5H11mdhASw/dJuRFyGtTCDFX5/MPT73EKsVEiHbw5MkFc77lx3nMc5L/Q7bKEhef/vYJAsAb61QuHsB6qdP8Q==}
-    cpu: [x64]
-    os: [linux]
-
-  turbo-linux-arm64@2.7.1:
-    resolution: {integrity: sha512-L/r77jD7cqIEXoyu2LGBUrTY5GJSi/XcGLsQ2nZ/fefk6x3MpljTvwsXUVG1BUkiBPc4zaKRj6yGyWMo5MbLxQ==}
-    cpu: [arm64]
-    os: [linux]
-
-  turbo-windows-64@2.7.1:
-    resolution: {integrity: sha512-rkeuviXZ/1F7lCare7TNKvYtT/SH9dZR55FAMrxrFRh88b+ZKwlXEBfq5/1OctEzRUo/VLIm+s5LJMOEy+QshA==}
-    cpu: [x64]
-    os: [win32]
-
-  turbo-windows-arm64@2.7.1:
-    resolution: {integrity: sha512-1rZk9htm3+iP/rWCf/h4/DFQey9sMs2TJPC4T5QQfwqAdMWsphgrxBuFqHdxczlbBCgbWNhVw0CH2bTxe1/GFg==}
-    cpu: [arm64]
-    os: [win32]
-
-  turbo@2.7.1:
-    resolution: {integrity: sha512-zAj9jGc7VDvuAo/5Jbos4QTtWz9uUpkMhMKGyTjDJkx//hdL2bM31qQoJSAbU+7JyK5vb0LPzpwf6DUt3zayqg==}
-    hasBin: true
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
@@ -4241,6 +4205,20 @@ snapshots:
       - utf-8-validate
       - vite
 
+  '@vitest/browser-playwright@4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@7.3.0(@types/node@22.19.3))(vitest@4.0.16)':
+    dependencies:
+      '@vitest/browser': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.0(@types/node@22.19.3))(vitest@4.0.16)
+      '@vitest/mocker': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.0(@types/node@22.19.3))
+      playwright: 1.57.0
+      tinyrainbow: 3.0.3
+      vitest: 4.0.16(@types/node@22.19.3)(@vitest/browser-playwright@4.0.16)(jsdom@25.0.1)(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))
+    transitivePeerDependencies:
+      - bufferutil
+      - msw
+      - utf-8-validate
+      - vite
+    optional: true
+
   '@vitest/browser@4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3))(vitest@4.0.16)':
     dependencies:
       '@vitest/mocker': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.3))
@@ -4257,6 +4235,24 @@ snapshots:
       - msw
       - utf-8-validate
       - vite
+
+  '@vitest/browser@4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.0(@types/node@22.19.3))(vitest@4.0.16)':
+    dependencies:
+      '@vitest/mocker': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(vite@7.3.0(@types/node@22.19.3))
+      '@vitest/utils': 4.0.16
+      magic-string: 0.30.21
+      pixelmatch: 7.1.0
+      pngjs: 7.0.0
+      sirv: 3.0.2
+      tinyrainbow: 3.0.3
+      vitest: 4.0.16(@types/node@22.19.3)(@vitest/browser-playwright@4.0.16)(jsdom@25.0.1)(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - bufferutil
+      - msw
+      - utf-8-validate
+      - vite
+    optional: true
 
   '@vitest/expect@4.0.16':
     dependencies:
@@ -6302,33 +6298,6 @@ snapshots:
       - tsx
       - yaml
 
-  turbo-darwin-64@2.7.1:
-    optional: true
-
-  turbo-darwin-arm64@2.7.1:
-    optional: true
-
-  turbo-linux-64@2.7.1:
-    optional: true
-
-  turbo-linux-arm64@2.7.1:
-    optional: true
-
-  turbo-windows-64@2.7.1:
-    optional: true
-
-  turbo-windows-arm64@2.7.1:
-    optional: true
-
-  turbo@2.7.1:
-    optionalDependencies:
-      turbo-darwin-64: 2.7.1
-      turbo-darwin-arm64: 2.7.1
-      turbo-linux-64: 2.7.1
-      turbo-linux-arm64: 2.7.1
-      turbo-windows-64: 2.7.1
-      turbo-windows-arm64: 2.7.1
-
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
@@ -6507,7 +6476,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.19.3
-      '@vitest/browser-playwright': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@6.4.1(@types/node@22.19.3))(vitest@4.0.16)
+      '@vitest/browser-playwright': 4.0.16(msw@2.12.7(@types/node@22.19.3)(typescript@5.9.3))(playwright@1.57.0)(vite@7.3.0(@types/node@22.19.3))(vitest@4.0.16)
       jsdom: 25.0.1
     transitivePeerDependencies:
       - jiti

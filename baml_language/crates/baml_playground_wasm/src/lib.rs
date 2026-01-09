@@ -3,9 +3,8 @@ mod hot_reload_testdata;
 use std::path::{Path, PathBuf};
 
 use baml_project::{ProjectDatabase, list_functions};
-use wasm_bindgen::prelude::*;
-
 pub use hot_reload_testdata::hot_reload_test_string;
+use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "console_error_panic")]
 extern crate console_error_panic_hook;

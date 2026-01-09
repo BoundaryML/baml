@@ -19,7 +19,7 @@ typescript2/
 pnpm install
 
 # Build all packages
-pnpm build
+pnpm build && pnpm build:wasm
 
 # Type check all packages
 pnpm typecheck
@@ -31,10 +31,14 @@ Run these in separate terminals:
 
 ```bash
 # Terminal 1: Watch-build the extension
-pnpm dev:ext
+pnpm dev:vscode
 
-# Terminal 2: Run Vite dev server for webview (serves on port 4000)
+# Terminal 2: Run Vite dev server for webview
+# Depends on 'pnpm build:wasm' or 'pnpm dev:wasm'
 pnpm dev:webview
+
+# Terminal 3 (optional): Watch and rebuild WASM on Rust changes
+pnpm dev:wasm
 ```
 
 Then in VSCode, press `F5` and select **"Launch VS Code extension (v2)"**.
@@ -42,7 +46,7 @@ Then in VSCode, press `F5` and select **"Launch VS Code extension (v2)"**.
 ### Standalone Web App
 
 ```bash
-pnpm dev:web
+pnpm dev:promptfiddle
 ```
 
 ## Testing Instructions
@@ -52,11 +56,8 @@ pnpm dev:web
 The VSCode extension uses [Vitest](https://vitest.dev/) for unit testing.
 
 ```bash
-# Run tests once
-pnpm --filter app-vscode-ext test
-
-# Run tests in watch mode
-pnpm --filter app-vscode-ext test:watch
+pnpm --filter app-vscode-ext test      # watch mode
+pnpm --filter app-vscode-ext test:run  # single run
 ```
 
 Tests are located in `app-vscode-ext/src/**/__tests__/`.
@@ -66,83 +67,34 @@ Tests are located in `app-vscode-ext/src/**/__tests__/`.
 The webview app (`app-vscode-webview`) uses Vitest with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) for component testing.
 
 ```bash
-# Run all tests once (jsdom + browser)
-pnpm --filter app-vscode-webview test:run
-
-# Run all tests in watch mode
-pnpm --filter app-vscode-webview test
-
-# Run tests with UI
-pnpm --filter app-vscode-webview test:ui
+pnpm --filter app-vscode-webview test:browser      # watch mode
+pnpm --filter app-vscode-webview test:browser:run  # single run
+pnpm --filter app-vscode-webview test:unit
+pnpm --filter app-vscode-webview test:unit:run
 ```
 
-#### Unit Tests (jsdom)
+- Use browser tests (`*.browser.test.ts,tsx`) by default: these allow testing components that depend on WASM.
+  - the `wasm-bindgen` shim that we need to `initWasm()` requires a browser-based implementation of `fetch`, so testing anything that depends on WASM must go in a browser test
+  - Browser tests run against Chromium via Playwright.
+- Use unit tests (`*.test.ts,tsx` excluding the above) if you don't need to depend on WASM or other browser APIs. These use `@testing-library/react` which is backed by `jsdom`, a fake browser implementation.
 
-Unit tests run in jsdom and don't require Playwright:
+#### HMR Tests
+
+HMR tests verify that WASM hot reload works:
 
 ```bash
-pnpm --filter app-vscode-webview test:unit:run  # Single run
-pnpm --filter app-vscode-webview test:unit      # Watch mode
+pnpm --filter app-vscode-webview test:hmr      # Watch mode
+pnpm --filter app-vscode-webview test:hmr:run  # Single run
 ```
 
-Tests are located in `app-vscode-webview/src/**/*.test.tsx`.
+Tests are located in `app-vscode-webview/src/**/*.hmr.test.ts`.
 
-The setup file (`vitest.setup.ts`) patches `fetch` to handle WASM file loading in the Node.js/jsdom environment.
-
-#### Browser Tests (Playwright)
-
-Browser tests run in a real Chromium browser via Playwright:
-
-```bash
-pnpm --filter app-vscode-webview test:browser:run  # Single run
-pnpm --filter app-vscode-webview test:browser      # Watch mode
-```
-
-Tests are located in `app-vscode-webview/src/**/*.browser.test.tsx`.
-
-These tests use Vitest's browser mode with native `fetch` and full WASM support.
+These tests spawn a Vite dev server and verify that changes to Rust source files trigger WASM rebuilds and HMR updates.
 
 ### Running All Tests
 
 ```bash
 # From the typescript2 directory
-pnpm --filter app-vscode-ext test
-pnpm --filter app-vscode-webview test:run
-```
-
-### Adding New Tests
-
-#### Extension Tests
-
-1. Create a `__tests__` directory next to the code you want to test
-2. Create a file named `*.test.ts`
-3. Use Vitest's `describe`, `it`, and `expect`:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { myFunction } from '../myFunction';
-
-describe('myFunction', () => {
-  it('does something', () => {
-    expect(myFunction()).toBe(expected);
-  });
-});
-```
-
-#### Webview Component Tests
-
-1. Create a file named `*.test.tsx` next to the component
-2. Use React Testing Library with Vitest:
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MyComponent } from './MyComponent';
-
-describe('MyComponent', () => {
-  it('renders correctly', () => {
-    render(<MyComponent />);
-    expect(screen.getByText('Hello')).toBeInTheDocument();
-  });
-});
+pnpm --filter app-vscode-ext test:run
+pnpm --filter app-vscode-webview test:run  # Runs unit, browser, and hmr tests
 ```

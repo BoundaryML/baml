@@ -29,8 +29,8 @@
     "dev": "tsup --watch --sourcemap",
     "build": "pnpm run typecheck && tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "app-vscode-webview": "workspace:*"

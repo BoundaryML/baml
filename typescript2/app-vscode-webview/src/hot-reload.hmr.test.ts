@@ -1,13 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { chromium, Browser, Page } from 'playwright'
 import { spawn, ChildProcess } from 'child_process'
-import { readFileSync, writeFileSync, rmSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'node:url'
 
 // Path constants
 const projectRoot = dirname(fileURLToPath(import.meta.url)).replace('/src', '')
-const viteCacheDir = resolve(projectRoot, 'node_modules/.vite')
 const playgroundDir = resolve(projectRoot, '../pkg-playground')
 const wasmSourceDir = resolve(projectRoot, '../../baml_language')
 const hotReloadSourcePath = resolve(wasmSourceDir, 'crates/baml_playground_wasm/src/hot_reload_testdata.rs')
@@ -65,43 +64,67 @@ function waitForOutput(
 
 /**
  * Start the Vite dev server and wait for it to be ready.
- * Clears Vite's cache before starting to ensure fresh modules.
+ * Uses a random available port.
  */
 async function startDevServer(): Promise<DevServer> {
-  // Clear Vite's dependency cache to ensure fresh WASM is loaded
-  if (existsSync(viteCacheDir)) {
-    rmSync(viteCacheDir, { recursive: true, force: true })
-  }
-
-  const proc = spawn('pnpm', ['dev'], {
+  // Use --force to re-optimize deps and avoid 504 "Outdated Optimize Dep" errors
+  // Use --port 0 to let Vite pick a random available port
+  console.log(`[vite] Starting dev server in ${projectRoot}`)
+  const proc = spawn('pnpm', ['dev', '--force', '--port', '0'], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
   })
 
-  // Collect output for debugging
+  // Collect output and parse port
   let output = ''
-  proc.stdout?.on('data', (data) => {
-    output += data.toString()
-    if (process.env.DEBUG_HMR) {
-      process.stdout.write(`[vite] ${data}`)
+  let port: number | null = null
+
+  const portPromise = new Promise<number>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Timeout waiting for Vite to start.\nOutput: ${output}`))
+    }, 30_000)
+
+    const handler = (data: Buffer) => {
+      const text = data.toString()
+      output += text
+      if (process.env.DEBUG_HMR) {
+        process.stdout.write(`[vite] ${text}`)
+      }
+
+      // Parse port from Vite output: "Local: http://localhost:XXXX/"
+      const match = text.match(/Local:\s*http:\/\/localhost:(\d+)/)
+      if (match) {
+        port = parseInt(match[1], 10)
+        console.log(`[vite] Dev server running on port ${port}`)
+        clearTimeout(timeout)
+        resolve(port)
+      }
     }
-  })
-  proc.stderr?.on('data', (data) => {
-    output += data.toString()
-    if (process.env.DEBUG_HMR) {
-      process.stderr.write(`[vite:err] ${data}`)
-    }
+
+    proc.stdout?.on('data', handler)
+    proc.stderr?.on('data', handler)
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    proc.on('exit', (code) => {
+      clearTimeout(timeout)
+      if (code !== 0 && !port) {
+        reject(new Error(`Vite exited with code ${code}\nOutput: ${output}`))
+      }
+    })
   })
 
   try {
-    await waitForOutput(proc, /ready in|Local:.*http/, 30_000)
+    const resolvedPort = await portPromise
+    return { proc, port: resolvedPort }
   } catch (err) {
     proc.kill()
-    throw new Error(`Failed to start Vite dev server.\nOutput: ${output}\n${err}`)
+    throw err
   }
-
-  return { proc, port: 4000 }
 }
 
 /**
@@ -211,6 +234,18 @@ describe('WASM Build Pipeline', () => {
   let originalFileContent: string | null = null
   const processes: ChildProcess[] = []
 
+  // Cleanup handler for unexpected termination
+  const cleanup = () => {
+    processes.forEach((p) => {
+      if (!p.killed) {
+        p.kill('SIGKILL')
+      }
+    })
+  }
+  process.on('SIGINT', cleanup)
+  process.on('SIGTERM', cleanup)
+  process.on('exit', cleanup)
+
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true })
 
@@ -242,10 +277,30 @@ describe('WASM Build Pipeline', () => {
     processes.push(devServer.proc)
 
     page = await browser.newPage()
+
+    // Capture browser console output
+    page.on('console', (msg) => {
+      console.log(`[browser ${msg.type()}] ${msg.text()}`)
+    })
+    page.on('pageerror', (err) => {
+      console.log(`[browser error] ${err.message}`)
+    })
+
     await page.goto(`http://localhost:${devServer.port}`)
 
     const pageContent = await page.content()
     console.log('[initial load] Page content:\n', pageContent)
+
+    // Wait for React to render (root div should have children)
+    console.log('[waiting] Waiting for React to mount...')
+    await page.waitForFunction(
+      () => {
+        const root = document.getElementById('root')
+        return root && root.children.length > 0
+      },
+      { timeout: 30_000 }
+    )
+    console.log('[ready] React has mounted')
 
     await waitForHotReloadText(page, KNOWN_GOOD_STRING)
     const initialText = await getHotReloadText(page)
