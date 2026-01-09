@@ -1300,9 +1300,11 @@ impl<T> BamlValueWithMeta<T> {
                 // to the final response type.
                 let map_result = fields1
                     .into_iter()
-                    .filter_map(|(k1, v1)| match fields2.get(&k1) {
-                        Some(v2) => Some(v1.zip_meta(v2).map(|r| (k1, r))),
-                        None => None, // Skip fields only in fields1
+                    .filter_map(|(k1, v1)| {
+                        // Skip fields only in fields1 (e.g., @skip fields)
+                        fields2
+                            .get(&k1)
+                            .map(|v2| v1.zip_meta(v2).map(|r| (k1, r)))
                     })
                     .collect::<Result<IndexMap<_, _>>>()?;
                 Ok(BamlValueWithMeta::Class(
