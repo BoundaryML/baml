@@ -28,6 +28,12 @@ impl EscapedPythonString {
     }
 }
 
+impl std::fmt::Display for EscapedPythonString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum LiteralValue {
     String(EscapedPythonString),

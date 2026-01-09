@@ -41,12 +41,19 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 class TestEnum(str, Enum):
+    # User is angry
     Angry = "Angry"
+    # User is happy
     Happy = "Happy"
+    # User is sad
     Sad = "Sad"
+    # User is confused
     Confused = "Confused"
+    # User is excited
     Excited = "Excited"
     Exclamation = "Exclamation"
+    # User is bored
+With a long description
     Bored = "Bored"
 
 # #########################################################################

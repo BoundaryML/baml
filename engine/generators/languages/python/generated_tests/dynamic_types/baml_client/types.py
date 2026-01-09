@@ -46,8 +46,11 @@ class Category(str, Enum):
     Arts = "Arts"
 
 class Priority(str, Enum):
+    # Urgent items
     High = "High"
+    # Normal priority
     Medium = "Medium"
+    # Can wait
     Low = "Low"
 
 class Status(str, Enum):

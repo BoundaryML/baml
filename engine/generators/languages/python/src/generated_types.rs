@@ -10,6 +10,9 @@ mod class {
     ///
     /// ```askama
     /// class {{name}}(BaseModel):
+    ///     {%- if let Some(desc) = description %}
+    ///     """{{desc}}"""
+    ///     {%- endif %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
     ///     {%- endif %}
@@ -24,7 +27,7 @@ mod class {
     ///         {%- endif %}
     ///         arbitrary_types_allowed = True
     ///     {%- endif %}
-    ///     {%- if fields.is_empty() && !dynamic %}pass{% endif %}
+    ///     {%- if fields.is_empty() && !dynamic && description.is_none() %}pass{% endif %}
     ///     {%- for field in fields %}
     ///     {{- field.render()?|indent(4, true) }}
     ///     {%- endfor %}
@@ -34,6 +37,7 @@ mod class {
     pub struct ClassPy<'a> {
         pub name: String,
         pub docstring: Option<String>,
+        pub description: Option<String>,
         pub fields: Vec<FieldPy<'a>>,
         pub dynamic: bool,
         pub pkg: &'a CurrentRenderPackage,
@@ -45,7 +49,14 @@ mod class {
     /// {% if let Some(docstring) = docstring %}
     /// {{ crate::utils::prefix_lines(docstring, "# ") }}
     /// {% endif %}
-    /// {{ name }}: {{ type.serialize_type(&pkg.in_type_definition()) }}{% if let Some(default_value) = type.default_value() %} = {{default_value}}{% endif %}
+    /// {{ name }}: {{ type.serialize_type(&pkg.in_type_definition()) }}
+    /// {%- if let Some(desc) = description %}
+    /// {%- if let Some(default_value) = type.default_value() %} = Field(default={{default_value}}, description={{desc}})
+    /// {%- else %} = Field(description={{desc}})
+    /// {%- endif %}
+    /// {%- else %}
+    /// {%- if let Some(default_value) = type.default_value() %} = {{default_value}}{% endif %}
+    /// {%- endif %}
     /// ```
     #[derive(askama::Template, Clone)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
@@ -53,14 +64,15 @@ mod class {
         pub docstring: Option<String>,
         pub name: String,
         pub r#type: TypePy,
+        pub description: Option<crate::r#type::EscapedPythonString>,
         pub pkg: &'a CurrentRenderPackage,
     }
     impl std::fmt::Debug for FieldPy<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
-                "FieldPy {{docstring: {:?}, name: {}, type: {:?}, pkg: <<Mutex>> }}",
-                self.docstring, self.name, self.r#type
+                "FieldPy {{docstring: {:?}, name: {}, type: {:?}, description: {:?}, pkg: <<Mutex>> }}",
+                self.docstring, self.name, self.r#type, self.description
             )
         }
     }
@@ -71,15 +83,21 @@ mod enums {
     ///
     /// ```askama
     /// class {{name}}(str, Enum):
+    ///     {%- if let Some(desc) = description %}
+    ///     """{{desc}}"""
+    ///     {%- endif %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
     ///     {% endif %}
-    ///     {%- if values.is_empty() %}
+    ///     {%- if values.is_empty() && description.is_none() %}
     ///     pass
     ///     {%- endif %}
-    ///     {%- for (value, docstring) in values %}
+    ///     {%- for (value, docstring, desc) in values %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{ crate::utils::prefix_lines(docstring, "# ") }}
+    ///     {%- endif %}
+    ///     {%- if let Some(desc) = desc %}
+    ///     # {{desc}}
     ///     {%- endif %}
     ///     {{ value }} = "{{ value }}"
     ///     {%- endfor %}
@@ -89,7 +107,8 @@ mod enums {
     pub struct EnumPy {
         pub name: String,
         pub docstring: Option<String>,
-        pub values: Vec<(String, Option<String>)>,
+        pub description: Option<String>,
+        pub values: Vec<(String, Option<String>, Option<String>)>,
         pub dynamic: bool,
     }
 }
@@ -262,7 +281,7 @@ mod type_builder {
     ///     def __init__(self, tb: type_builder.TypeBuilder):
     ///         _tb = tb._tb # type: ignore (we know how to use this private attribute)
     ///         self._bldr = _tb.enum("{{ enum_.name }}")
-    ///         self._values: typing.Set[str] = set([ {% for (value, _) in enum_.values %} "{{ value }}", {% endfor %} ])
+    ///         self._values: typing.Set[str] = set([ {% for (value, _, _) in enum_.values %} "{{ value }}", {% endfor %} ])
     ///         self._vals = {{ enum_.name }}Values(self._bldr, self._values)
     ///
     ///     def type(self) -> baml_py.FieldType:
@@ -301,13 +320,13 @@ mod type_builder {
     ///             raise AttributeError(f"Value {name} not found.")
     ///         return self.__bldr.value(name)
     ///
-    ///     {% for (value, _) in enum_.values %}
+    ///     {% for (value, _, _) in enum_.values %}
     ///     @property
     ///     def {{ value }}(self) -> {{ enum_.enum_value_type() }}:
     ///         return self.__bldr.value("{{ value }}")
     ///     {% endfor %}
     ///     {% else %}
-    ///     {% for (value, _) in enum_.values %}
+    ///     {% for (value, _, _) in enum_.values %}
     ///     @property
     ///     def {{ value }}(self) -> {{ enum_.enum_value_type() }}:
     ///         return {{ enum_.enum_value_type() }}(self.__bldr.value("{{ value }}"))

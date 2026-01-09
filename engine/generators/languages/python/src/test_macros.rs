@@ -176,7 +176,7 @@ macro_rules! test_py_type {
         assert_eq!(enum_py.name, $enum_name);
 
         let expected_values: Vec<&str> = vec![$( $value ),*];
-        let actual_values: Vec<&str> = enum_py.values.iter().map(|(v, _)| v.as_str()).collect();
+        let actual_values: Vec<&str> = enum_py.values.iter().map(|(v, _, _)| v.as_str()).collect();
         assert_eq!(
             actual_values,
             expected_values,

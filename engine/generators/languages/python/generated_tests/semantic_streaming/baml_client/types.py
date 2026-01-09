@@ -50,7 +50,7 @@ class ClassWithBlockDone(BaseModel):
 
 class ClassWithoutDone(BaseModel):
     i_16_digits: int
-    s_20_words: str
+    s_20_words: str = Field(description='A string with 20 words in it')
 
 class SemanticContainer(BaseModel):
     sixteen_digit_number: int
@@ -59,7 +59,7 @@ class SemanticContainer(BaseModel):
     class_2: "ClassWithBlockDone"
     class_done_needed: "ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.List["SmallThing"]
+    three_small_things: typing.List["SmallThing"] = Field(description='Should have three items.')
     final_string: str
 
 class SmallThing(BaseModel):
