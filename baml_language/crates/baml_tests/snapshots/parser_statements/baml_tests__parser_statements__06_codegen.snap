@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 21
-Objects: 48
-Globals: 44
+Objects: 49
+Globals: 45
 
 Function ConditionalLogic (arity: 1, kind: Exec):
      0    LOAD_VAR 1             (age)

@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 103
-Objects: 1233
-Globals: 126
+Objects: 1234
+Globals: 127
 
 Function BodyTorture (arity: 0, kind: Exec):
      0    LOAD_CONST 0           (null)

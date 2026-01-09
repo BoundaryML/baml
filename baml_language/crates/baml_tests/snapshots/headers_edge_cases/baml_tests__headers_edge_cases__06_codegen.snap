@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 10
-Objects: 43
-Globals: 33
+Objects: 44
+Globals: 34
 
 Function ConsecutiveHeaders (arity: 0, kind: Exec):
      0   NOTIFY_BLOCK 0   (FirstHeader)
