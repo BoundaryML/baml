@@ -7,6 +7,7 @@ require (
 	github.com/boundaryml/baml v0.202.1
 	github.com/ghetzel/testify v1.4.1
 	github.com/stretchr/testify v1.10.0
+	github.com/tidwall/gjson v1.16.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.7
 )
 
@@ -233,6 +234,8 @@ require (
 	github.com/sosodev/duration v1.3.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
