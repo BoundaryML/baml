@@ -484,8 +484,8 @@ where
                 format!(
                     "Invalid @{attr_name} syntax. Expected a Jinja expression block.\n\
                      Examples:\n  \
-                     @check(valid_name, {{{{ this|length > 0 }}}})\n  \
-                     @assert({{{{ this > 0 }}}})"
+                     @check(name, {{{{ this > 0 }}}})\n  \
+                     @assert({{{{ this|length > 0 }}}})"
                 ),
                 span,
                 INVALID_CONSTRAINT_SYNTAX,

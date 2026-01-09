@@ -1,0 +1,17 @@
+---
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+assertion_line: 13157
+expression: output
+---
+Class "class"
+Word "TestLiterals"
+LBrace "{"
+Word "a"
+Quote "\""
+Word "SingleLiteral"
+Quote "\""
+Word "b"
+IntegerLiteral "2"
+Pipe "|"
+FloatLiteral "3.25"
+RBrace "}"

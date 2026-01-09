@@ -1190,13 +1190,14 @@ fn validate_constraint_attribute(
     use baml_compiler_syntax::SyntaxKind;
 
     // Find the ATTRIBUTE_ARGS node
-    let args_node = attr.syntax().children().find(|n| n.kind() == SyntaxKind::ATTRIBUTE_ARGS);
+    let args_node = attr
+        .syntax()
+        .children()
+        .find(|n| n.kind() == SyntaxKind::ATTRIBUTE_ARGS);
 
     if let Some(args) = args_node {
         // Check if any argument is an EXPR node (Jinja expression {{ }})
-        let has_expr = args
-            .children()
-            .any(|n| n.kind() == SyntaxKind::EXPR);
+        let has_expr = args.children().any(|n| n.kind() == SyntaxKind::EXPR);
 
         if !has_expr {
             ctx.push_diagnostic(HirDiagnostic::InvalidConstraintSyntax {

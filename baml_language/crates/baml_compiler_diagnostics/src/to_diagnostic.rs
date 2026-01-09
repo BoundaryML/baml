@@ -510,11 +510,11 @@ impl ToDiagnostic for HirDiagnostic {
                 format!(
                     "Invalid @{attr_name} syntax. Expected a Jinja expression block.\n\
                      Examples:\n  \
-                     @check(valid_name, {{{{ this|length > 0 }}}})\n  \
-                     @assert({{{{ this > 0 }}}})"
+                     @check(name, {{{{ this > 0 }}}})\n  \
+                     @assert({{{{ this|length > 0 }}}})"
                 ),
             )
-            .with_primary_span(*span),
+            .with_primary(*span, "missing Jinja expression {{ }}"),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

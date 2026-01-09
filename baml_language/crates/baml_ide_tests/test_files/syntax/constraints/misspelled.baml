@@ -19,16 +19,13 @@ class Foo {
 //- diagnostics
 // Error: Invalid @check syntax. Expected a Jinja expression block.
 // Examples:
-//   @check(valid_name, {{ this|length > 0 }})
-//   @assert({{ this > 0 }})
+//   @check(name, {{ this > 0 }})
+//   @assert({{ this|length > 0 }})
 //    ╭─[ constraints_misspelled.baml:3:12 ]
 //    │
 //  3 │   age int @check("this < 10", still_baby)
 //    │            ──┬──  
-//    │              ╰──── Invalid @check syntax. Expected a Jinja expression block.
-// Examples:
-//   @check(valid_name, {{ this|length > 0 }})
-//   @assert({{ this > 0 }})
+//    │              ╰──── missing Jinja expression {{ }}
 //    │ 
 //    │ Note: Error code: E0032
 // ───╯

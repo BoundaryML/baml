@@ -170,8 +170,5 @@ pub enum HirDiagnostic {
     // ============ Constraint Attribute Diagnostics ============
     /// Invalid syntax for @check or @assert attribute.
     /// These require a Jinja expression block {{ }}.
-    InvalidConstraintSyntax {
-        attr_name: String,
-        span: Span,
-    },
+    InvalidConstraintSyntax { attr_name: String, span: Span },
 }
