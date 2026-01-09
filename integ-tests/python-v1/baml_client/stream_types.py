@@ -518,7 +518,7 @@ class Person(BaseModel):
 class PersonWithMeta(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    name: typing.Optional[str] = Field(default=None, description="Person's full legal name")
+    name: typing.Optional[str] = Field(default=None, description='Person\'s full legal name')
     age: typing.Optional[int] = Field(default=None, description='Age in years')
     address: typing.Optional["AddressWithMeta"] = Field(default=None, description='Home address')
     tags: typing.List[str] = Field(description='User tags')
@@ -647,8 +647,7 @@ class StringToClassEntry(BaseModel):
 class TestClassAlias(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    key: typing.Optional[str] = Field(default=None, description="""This is a description for key
-    af asdf""")
+    key: typing.Optional[str] = Field(default=None, description='This is a description for key\naf asdf')
     key2: typing.Optional[str] = None
     key3: typing.Optional[str] = None
     key4: typing.Optional[str] = None

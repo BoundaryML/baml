@@ -11,7 +11,7 @@ mod class {
     /// ```askama
     /// class {{name}}(BaseModel):
     ///     {%- if let Some(desc) = description %}
-    ///     """{{desc}}"""
+    ///     {{ crate::utils::format_docstring(desc, "    ") }}
     ///     {%- endif %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
@@ -83,21 +83,15 @@ mod enums {
     ///
     /// ```askama
     /// class {{name}}(str, Enum):
-    ///     {%- if let Some(desc) = description %}
-    ///     """{{desc}}"""
-    ///     {%- endif %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
     ///     {% endif %}
-    ///     {%- if values.is_empty() && description.is_none() %}
+    ///     {%- if values.is_empty() %}
     ///     pass
     ///     {%- endif %}
-    ///     {%- for (value, docstring, desc) in values %}
+    ///     {%- for (value, docstring) in values %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{ crate::utils::prefix_lines(docstring, "# ") }}
-    ///     {%- endif %}
-    ///     {%- if let Some(desc) = desc %}
-    ///     # {{desc}}
     ///     {%- endif %}
     ///     {{ value }} = "{{ value }}"
     ///     {%- endfor %}
@@ -107,8 +101,7 @@ mod enums {
     pub struct EnumPy {
         pub name: String,
         pub docstring: Option<String>,
-        pub description: Option<String>,
-        pub values: Vec<(String, Option<String>, Option<String>)>,
+        pub values: Vec<(String, Option<String>)>,
         pub dynamic: bool,
     }
 }
@@ -281,7 +274,7 @@ mod type_builder {
     ///     def __init__(self, tb: type_builder.TypeBuilder):
     ///         _tb = tb._tb # type: ignore (we know how to use this private attribute)
     ///         self._bldr = _tb.enum("{{ enum_.name }}")
-    ///         self._values: typing.Set[str] = set([ {% for (value, _, _) in enum_.values %} "{{ value }}", {% endfor %} ])
+    ///         self._values: typing.Set[str] = set([ {% for (value, _) in enum_.values %} "{{ value }}", {% endfor %} ])
     ///         self._vals = {{ enum_.name }}Values(self._bldr, self._values)
     ///
     ///     def type(self) -> baml_py.FieldType:
@@ -320,13 +313,13 @@ mod type_builder {
     ///             raise AttributeError(f"Value {name} not found.")
     ///         return self.__bldr.value(name)
     ///
-    ///     {% for (value, _, _) in enum_.values %}
+    ///     {% for (value, _) in enum_.values %}
     ///     @property
     ///     def {{ value }}(self) -> {{ enum_.enum_value_type() }}:
     ///         return self.__bldr.value("{{ value }}")
     ///     {% endfor %}
     ///     {% else %}
-    ///     {% for (value, _, _) in enum_.values %}
+    ///     {% for (value, _) in enum_.values %}
     ///     @property
     ///     def {{ value }}(self) -> {{ enum_.enum_value_type() }}:
     ///         return {{ enum_.enum_value_type() }}(self.__bldr.value("{{ value }}"))

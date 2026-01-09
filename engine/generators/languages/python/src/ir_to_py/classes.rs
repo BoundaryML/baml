@@ -282,4 +282,83 @@ mod tests {
         // No description should be captured (only docstring from comments)
         assert_eq!(class_py.description, None);
     }
+
+    #[test]
+    fn test_multiline_class_description() {
+        use askama::Template;
+
+        let ir = make_test_ir(
+            r##"
+        class Foo {
+            bar string
+            @@description(#"
+                This is a multiline description.
+                It has multiple lines.
+                And should be dedented properly.
+            "#)
+        }
+        "##,
+        )
+        .expect("Valid IR");
+        let ir = std::sync::Arc::new(ir);
+        let class = ir.find_class("Foo").unwrap().item;
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let class_py = ir_class_to_py(class, &pkg);
+
+        // The description should be dedented
+        let desc = class_py.description.as_ref().expect("should have description");
+        assert!(
+            !desc.starts_with(" ") && !desc.starts_with("\t"),
+            "Description should be dedented, got: {:?}",
+            desc
+        );
+        assert!(
+            desc.contains("This is a multiline description."),
+            "Expected description content, got: {:?}",
+            desc
+        );
+
+        // Check the rendered output has properly indented docstring
+        let rendered = class_py.render().expect("render class");
+        assert!(
+            rendered.contains("    It has multiple lines."),
+            "Subsequent lines of docstring should be indented, got:\n{}",
+            rendered
+        );
+    }
+
+    #[test]
+    fn test_multiline_field_description() {
+        use askama::Template;
+
+        let ir = make_test_ir(
+            r##"
+        class Foo {
+            bar string @description(#"
+                This field has a
+                multiline description.
+            "#)
+        }
+        "##,
+        )
+        .expect("Valid IR");
+        let ir = std::sync::Arc::new(ir);
+        let class = ir.find_class("Foo").unwrap().item;
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let class_py = ir_class_to_py(class, &pkg);
+
+        // The description should use escaped newlines, not triple quotes
+        let rendered = class_py.render().expect("render class");
+        assert!(
+            rendered.contains(r"description='This field has a\nmultiline description.'"),
+            "Field description should use escaped newlines, got:\n{}",
+            rendered
+        );
+        // Should NOT contain triple quotes in Field()
+        assert!(
+            !rendered.contains(r#"description=""""#),
+            "Field description should not use triple quotes, got:\n{}",
+            rendered
+        );
+    }
 }

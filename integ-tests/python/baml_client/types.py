@@ -59,15 +59,10 @@ class Category2(str, Enum):
     Question = "Question"
 
 class Category3(str, Enum):
-    # Customer wants to refund a product
     Refund = "Refund"
-    # Customer wants to cancel an order
     CancelOrder = "CancelOrder"
-    # Customer needs help with a technical issue unrelated to account creation or login
     TechnicalSupport = "TechnicalSupport"
-    # Specifically relates to account-login or account-creation
     AccountIssue = "AccountIssue"
-    # Customer has a question
     Question = "Question"
 
 class Color(str, Enum):
@@ -103,9 +98,7 @@ class EnumOutput(str, Enum):
     # The first enum.
     ONE = "ONE"
     # The second enum.
-    # two
     TWO = "TWO"
-    # three
     THREE = "THREE"
 
 class Hobby(str, Enum):
@@ -151,19 +144,12 @@ class Tag(str, Enum):
     Blockchain = "Blockchain"
 
 class TestEnum(str, Enum):
-    # User is angry
     A = "A"
-    # User is happy
     B = "B"
-    # User is sad
     C = "C"
-    # User is confused
     D = "D"
-    # User is excited
     E = "E"
     F = "F"
-    # User is bored
-With a long description
     G = "G"
 
 # #########################################################################
@@ -507,7 +493,7 @@ class Person(BaseModel):
     hair_color: typing.Optional[typing.Union[Color, str]] = None
 
 class PersonWithMeta(BaseModel):
-    name: str = Field(description="Person's full legal name")
+    name: str = Field(description='Person\'s full legal name')
     age: int = Field(description='Age in years')
     address: "AddressWithMeta" = Field(description='Home address')
     tags: typing.List[str] = Field(description='User tags')
@@ -600,8 +586,7 @@ class StringToClassEntry(BaseModel):
     word: str
 
 class TestClassAlias(BaseModel):
-    key: str = Field(description="""This is a description for key
-    af asdf""")
+    key: str = Field(description='This is a description for key\naf asdf')
     key2: str
     key3: str
     key4: str

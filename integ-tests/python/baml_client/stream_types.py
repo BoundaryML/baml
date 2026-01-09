@@ -363,7 +363,7 @@ class Person(BaseModel):
     hair_color: typing.Optional[typing.Union[types.Color, str]] = None
 
 class PersonWithMeta(BaseModel):
-    name: typing.Optional[str] = Field(default=None, description="Person's full legal name")
+    name: typing.Optional[str] = Field(default=None, description='Person\'s full legal name')
     age: typing.Optional[int] = Field(default=None, description='Age in years')
     address: typing.Optional["AddressWithMeta"] = Field(default=None, description='Home address')
     tags: typing.List[str] = Field(description='User tags')
@@ -456,8 +456,7 @@ class StringToClassEntry(BaseModel):
     word: typing.Optional[str] = None
 
 class TestClassAlias(BaseModel):
-    key: typing.Optional[str] = Field(default=None, description="""This is a description for key
-    af asdf""")
+    key: typing.Optional[str] = Field(default=None, description='This is a description for key\naf asdf')
     key2: typing.Optional[str] = None
     key3: typing.Optional[str] = None
     key4: typing.Optional[str] = None
