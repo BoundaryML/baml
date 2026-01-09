@@ -48,6 +48,19 @@ impl NativeFunctions for VmNatives {
         array.push(*item);
     }
 
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    fn baml_array_at(array: &[Value], index: i64) -> Result<Value, VmError> {
+        array.get(index as usize).copied().ok_or_else(|| {
+            VmError::RuntimeError(RuntimeError::Other(
+                format!("Index out of bounds: {index}",),
+            ))
+        })
+    }
+
+    fn baml_array_concat(array: &[Value], other: &[Value]) -> Vec<Value> {
+        array.iter().chain(other.iter()).copied().collect()
+    }
+
     // =========================================================================
     // String methods
     // =========================================================================

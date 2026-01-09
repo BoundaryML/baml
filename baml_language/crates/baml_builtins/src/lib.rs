@@ -92,6 +92,8 @@ macro_rules! with_builtins {
                 struct Array<T> {
                     fn length(self: Array<T>) -> i64;
                     fn push(self: mut Array<T>, item: T);
+                    fn at(self: Array<T>, index: i64) -> Result<T>;
+                    fn concat(self: Array<T>, other: Array<T>) -> Array<T>;
                 }
 
                 // =====================================================================
