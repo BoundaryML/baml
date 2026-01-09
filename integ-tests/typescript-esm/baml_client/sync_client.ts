@@ -22,7 +22,7 @@ import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, Pdf, Vi
 import { toBamlError, BamlAbortError, ClientRegistry, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types.js"
 import type * as types from "./types.js"
-import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyJsonTodoUpdate, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types.js"
+import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyJsonTodoUpdate, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SkipDynamicClass, SkipNonDynamicClass, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types.js"
 import type TypeBuilder from "./type_builder.js"
 import { HttpRequest, HttpStreamRequest } from "./sync_request.js"
 import { LlmResponseParser, LlmStreamParser } from "./parser.js"
@@ -10992,6 +10992,106 @@ export class BamlSyncClient {
         __options__.watchers,
       )
       return __raw__.parsed(false) as string
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestSkipDynamic(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+  ): types.SkipDynamicClass {
+    try {
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
+
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
+      }
+
+      // Check if onTick is provided and reject for sync operations
+      if (__options__.onTick) {
+        throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
+      }
+
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __options__.clientRegistry;
+      if (__options__.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__options__.client);
+      }
+
+      const __raw__ = this.runtime.callFunctionSync(
+        "TestSkipDynamic",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __options__.tb?.__tb(),
+        __clientRegistry__,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
+      )
+      return __raw__.parsed(false) as types.SkipDynamicClass
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestSkipNonDynamic(
+      input: string,
+      __baml_options__?: BamlCallOptions<never>
+  ): types.SkipNonDynamicClass {
+    try {
+      const __options__ = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const __signal__ = __options__.signal;
+
+      if (__signal__?.aborted) {
+        throw new BamlAbortError('Operation was aborted', __signal__.reason);
+      }
+
+      // Check if onTick is provided and reject for sync operations
+      if (__options__.onTick) {
+        throw new Error("onTick is not supported for synchronous functions. Please use the async client instead.");
+      }
+
+      const __collector__ = __options__.collector ? (Array.isArray(__options__.collector) ? __options__.collector : [__options__.collector]) : [];
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __options__.clientRegistry;
+      if (__options__.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__options__.client);
+      }
+
+      const __raw__ = this.runtime.callFunctionSync(
+        "TestSkipNonDynamic",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __options__.tb?.__tb(),
+        __clientRegistry__,
+        __collector__,
+        __options__.tags || {},
+        __env__,
+        __signal__,
+        __options__.watchers,
+      )
+      return __raw__.parsed(false) as types.SkipNonDynamicClass
     } catch (error: any) {
       throw toBamlError(error);
     }

@@ -154,7 +154,7 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (107)
+# Generated classes (109)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -756,6 +756,20 @@ class SimpleTag(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     field: str
+
+class SkipDynamicClass(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
+    value: str
+    internal_id: typing.Optional[str] = None
+
+class SkipNonDynamicClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: str
+    description: typing.Optional[str] = None
+    metadata: typing.Optional[str] = None
 
 class SmallThing(BaseModel):
     class Config:

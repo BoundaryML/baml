@@ -11268,6 +11268,106 @@ export function useTestSingleFallbackClient(
   }
 }
 /**
+ * A specialized hook for the TestSkipDynamic BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.SkipDynamicClass
+ * - **Streaming Partial:** SkipDynamicClass
+ * - **Streaming Final:** types.SkipDynamicClass
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestSkipDynamic({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestSkipDynamic({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestSkipDynamic(props: HookInput<'TestSkipDynamic', { stream: false }>): HookOutput<'TestSkipDynamic', { stream: false }>
+export function useTestSkipDynamic(props?: HookInput<'TestSkipDynamic', { stream?: true }>): HookOutput<'TestSkipDynamic', { stream: true }>
+export function useTestSkipDynamic(
+  props: HookInput<'TestSkipDynamic', { stream?: boolean }> = {},
+): HookOutput<'TestSkipDynamic', { stream: true }> | HookOutput<'TestSkipDynamic', { stream: false }> {
+  let action: ServerAction = Actions.TestSkipDynamic;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestSkipDynamic;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestSkipDynamic', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestSkipNonDynamic BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** types.SkipNonDynamicClass
+ * - **Streaming Partial:** SkipNonDynamicClass
+ * - **Streaming Final:** types.SkipNonDynamicClass
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestSkipNonDynamic({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestSkipNonDynamic({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestSkipNonDynamic(props: HookInput<'TestSkipNonDynamic', { stream: false }>): HookOutput<'TestSkipNonDynamic', { stream: false }>
+export function useTestSkipNonDynamic(props?: HookInput<'TestSkipNonDynamic', { stream?: true }>): HookOutput<'TestSkipNonDynamic', { stream: true }>
+export function useTestSkipNonDynamic(
+  props: HookInput<'TestSkipNonDynamic', { stream?: boolean }> = {},
+): HookOutput<'TestSkipNonDynamic', { stream: true }> | HookOutput<'TestSkipNonDynamic', { stream: false }> {
+  let action: ServerAction = Actions.TestSkipNonDynamic;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestSkipNonDynamic;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestSkipNonDynamic', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestStreamingTimeout BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

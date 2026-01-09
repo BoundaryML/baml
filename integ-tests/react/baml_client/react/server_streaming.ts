@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -4200,6 +4200,44 @@ export const TestRoundRobinStrategy = async (
 export const TestSingleFallbackClient = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const __stream__ = b.stream.TestSingleFallbackClient(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestSkipDynamic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestSkipDynamic = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestSkipDynamic(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestSkipNonDynamic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestSkipNonDynamic = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestSkipNonDynamic(
+    input,
   );
   return Promise.resolve(__stream__.toStreamable());
 };

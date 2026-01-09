@@ -1332,6 +1332,18 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
+    def TestSkipDynamic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.SkipDynamicClass:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSkipDynamic", llm_response=llm_response, mode="request")
+        return typing.cast(types.SkipDynamicClass, __result__)
+
+    def TestSkipNonDynamic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.SkipNonDynamicClass:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSkipNonDynamic", llm_response=llm_response, mode="request")
+        return typing.cast(types.SkipNonDynamicClass, __result__)
+
     def TestStreamingTimeout(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> str:
@@ -2941,6 +2953,18 @@ class LlmStreamParser:
     ) -> str:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="stream")
         return typing.cast(str, __result__)
+
+    def TestSkipDynamic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.SkipDynamicClass:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSkipDynamic", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SkipDynamicClass, __result__)
+
+    def TestSkipNonDynamic(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.SkipNonDynamicClass:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSkipNonDynamic", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SkipNonDynamicClass, __result__)
 
     def TestStreamingTimeout(
         self, llm_response: str, baml_options: BamlCallOptions = {},

@@ -4532,6 +4532,114 @@ impl SimpleTagClassBuilder {
     }
 }
 
+/// Wrapper for the `SkipDynamicClass` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+///
+/// This class is marked `@@dynamic` - you can add new properties at runtime.
+
+pub struct SkipDynamicClassClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SkipDynamicClassClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("SkipDynamicClass is statically defined in .baml and should always have a type")
+    }
+
+    /// Add a new property to this dynamic class.
+    pub fn add_property(
+        &self,
+        name: &str,
+        field_type: &baml::TypeDef,
+    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        self.inner.add_property(name, field_type)
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `value` field builder.
+    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("value").expect(
+            "SkipDynamicClass.value is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `internal_id` field builder.
+    pub fn property_internal_id(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("internal_id")
+            .expect("SkipDynamicClass.internal_id is statically defined in .baml and should always be present")
+    }
+}
+
+/// Wrapper for the `SkipNonDynamicClass` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+pub struct SkipNonDynamicClassClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl SkipNonDynamicClassClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner.as_type().expect(
+            "SkipNonDynamicClass is statically defined in .baml and should always have a type",
+        )
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+
+    /// Access the `name` field builder.
+    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("name").expect(
+            "SkipNonDynamicClass.name is statically defined in .baml and should always be present",
+        )
+    }
+
+    /// Access the `description` field builder.
+    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("description")
+            .expect("SkipNonDynamicClass.description is statically defined in .baml and should always be present")
+    }
+
+    /// Access the `metadata` field builder.
+    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("metadata")
+            .expect("SkipNonDynamicClass.metadata is statically defined in .baml and should always be present")
+    }
+}
+
 /// Wrapper for the `SmallThing` class builder.
 ///
 /// Provides type-safe method access to fields defined in the schema.

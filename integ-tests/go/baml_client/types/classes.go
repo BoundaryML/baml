@@ -4620,6 +4620,111 @@ func (c SimpleTag) BamlTypeName() string {
 	return "SimpleTag"
 }
 
+type SkipDynamicClass struct {
+	Value             string  `json:"value"`
+	Internal_id       *string `json:"internal_id"`
+	DynamicProperties map[string]any
+}
+
+func (c *SkipDynamicClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "SkipDynamicClass" {
+		panic(fmt.Sprintf("expected SkipDynamicClass, got %s", typeName.Name))
+	}
+
+	c.DynamicProperties = make(map[string]any)
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "value":
+			c.Value = baml.Decode(valueHolder).Interface().(string)
+
+		case "internal_id":
+			c.Internal_id = baml.Decode(valueHolder).Interface().(*string)
+
+		default:
+
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
+
+		}
+	}
+
+}
+
+func (c SkipDynamicClass) Encode() (*cffi.HostValue, error) {
+	fields := map[string]any{}
+
+	fields["value"] = c.Value
+
+	fields["internal_id"] = c.Internal_id
+
+	return baml.EncodeClass("SkipDynamicClass", fields, &c.DynamicProperties)
+}
+
+func (c SkipDynamicClass) BamlTypeName() string {
+	return "SkipDynamicClass"
+}
+
+type SkipNonDynamicClass struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
+	Metadata    *string `json:"metadata"`
+}
+
+func (c *SkipNonDynamicClass) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "SkipNonDynamicClass" {
+		panic(fmt.Sprintf("expected SkipNonDynamicClass, got %s", typeName.Name))
+	}
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		case "name":
+			c.Name = baml.Decode(valueHolder).Interface().(string)
+
+		case "description":
+			c.Description = baml.Decode(valueHolder).Interface().(*string)
+
+		case "metadata":
+			c.Metadata = baml.Decode(valueHolder).Interface().(*string)
+
+		default:
+
+			panic(fmt.Sprintf("unexpected field: %s in class SkipNonDynamicClass", key))
+
+		}
+	}
+
+}
+
+func (c SkipNonDynamicClass) Encode() (*cffi.HostValue, error) {
+	fields := map[string]any{}
+
+	fields["name"] = c.Name
+
+	fields["description"] = c.Description
+
+	fields["metadata"] = c.Metadata
+
+	return baml.EncodeClass("SkipNonDynamicClass", fields, nil)
+}
+
+func (c SkipNonDynamicClass) BamlTypeName() string {
+	return "SkipNonDynamicClass"
+}
+
 type SmallThing struct {
 	I_16_digits int64 `json:"i_16_digits"`
 	I_8_digits  int64 `json:"i_8_digits"`

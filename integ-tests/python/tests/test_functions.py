@@ -1750,6 +1750,52 @@ async def test_openai_responses_all_roles():
     )
 
 
+# Testing @skip attribute bug fixes
+# GitHub issue #2915: @skip + @@dynamic causes panic
+# Discord bug report: @skip on non-dynamic class causes panic
+class TestSkipAttribute:
+    """Test that @skip fields work correctly and don't cause panics.
+
+    Tests fix for:
+    - GitHub #2915: @skip + @@dynamic panic in semantic_streaming.rs:130
+    - Discord report: @skip on non-dynamic class with optional fields
+    """
+
+    @pytest.mark.asyncio
+    async def test_skip_with_dynamic_class(self):
+        """Test @skip + @@dynamic combination (GitHub #2915)"""
+        res = await b.TestSkipDynamic("value: hello world")
+        assert res is not None
+        assert res.internal_id is None  # @skip field should be None
+
+    @pytest.mark.asyncio
+    async def test_skip_with_dynamic_class_streaming(self):
+        """Test @skip + @@dynamic with streaming (GitHub #2915)"""
+        stream = b.stream.TestSkipDynamic("value: streaming test")
+        async for msg in stream:
+            pass
+        res = await stream.get_final_response()
+        assert res is not None
+        assert res.internal_id is None
+
+    @pytest.mark.asyncio
+    async def test_skip_non_dynamic_class(self):
+        """Test @skip on non-dynamic class (Discord bug report)"""
+        res = await b.TestSkipNonDynamic("name: test")
+        assert res is not None
+        assert res.metadata is None  # @skip field should be None
+
+    @pytest.mark.asyncio
+    async def test_skip_non_dynamic_class_streaming(self):
+        """Test @skip on non-dynamic class with streaming (Discord bug report)"""
+        stream = b.stream.TestSkipNonDynamic("name: streaming")
+        async for msg in stream:
+            pass
+        res = await stream.get_final_response()
+        assert res is not None
+        assert res.metadata is None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def flush_traces():
     """Ensure traces are flushed when pytest exits."""

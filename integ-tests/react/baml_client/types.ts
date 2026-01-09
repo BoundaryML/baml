@@ -786,6 +786,20 @@ export interface SimpleTag {
   
 }
 
+export interface SkipDynamicClass {
+  value: string
+  internal_id?: string | null
+  
+  [key: string]: any;
+}
+
+export interface SkipNonDynamicClass {
+  name: string
+  description?: string | null
+  metadata?: string | null
+  
+}
+
 export interface SmallThing {
   i_16_digits: number
   i_8_digits: number

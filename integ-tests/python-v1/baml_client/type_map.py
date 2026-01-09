@@ -289,6 +289,12 @@ type_map = {
     "types.SimpleTag": types.SimpleTag,
     "stream_types.SimpleTag": stream_types.SimpleTag,
 
+    "types.SkipDynamicClass": types.SkipDynamicClass,
+    "stream_types.SkipDynamicClass": stream_types.SkipDynamicClass,
+
+    "types.SkipNonDynamicClass": types.SkipNonDynamicClass,
+    "stream_types.SkipNonDynamicClass": stream_types.SkipNonDynamicClass,
+
     "types.SmallThing": types.SmallThing,
     "stream_types.SmallThing": stream_types.SmallThing,
 

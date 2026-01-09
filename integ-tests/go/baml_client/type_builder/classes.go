@@ -3487,6 +3487,86 @@ func (t *SimpleTagClassView) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
 
+type SkipDynamicClassClassBuilder struct {
+	inner baml.ClassBuilder
+}
+
+func (t *SkipDynamicClassClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *SkipDynamicClassClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+
+func (t *SkipDynamicClassClassBuilder) PropertyValue() (ClassPropertyBuilder, error) {
+	return t.inner.Property("value")
+}
+
+func (t *SkipDynamicClassClassBuilder) PropertyInternal_id() (ClassPropertyBuilder, error) {
+	return t.inner.Property("internal_id")
+}
+
+func (t *TypeBuilder) SkipDynamicClass() (*SkipDynamicClassClassBuilder, error) {
+	bld, err := t.inner.Class("SkipDynamicClass")
+	if err != nil {
+		return nil, err
+	}
+	return &SkipDynamicClassClassBuilder{inner: bld}, nil
+}
+
+func (t *SkipDynamicClassClassBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
+type SkipNonDynamicClassClassView struct {
+	inner baml.ClassBuilder
+}
+
+func (t *SkipNonDynamicClassClassView) ListProperties() ([]ClassPropertyView, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyView, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *SkipNonDynamicClassClassView) PropertyName() (ClassPropertyView, error) {
+	return t.inner.Property("name")
+}
+
+func (t *SkipNonDynamicClassClassView) PropertyDescription() (ClassPropertyView, error) {
+	return t.inner.Property("description")
+}
+
+func (t *SkipNonDynamicClassClassView) PropertyMetadata() (ClassPropertyView, error) {
+	return t.inner.Property("metadata")
+}
+
+func (t *TypeBuilder) SkipNonDynamicClass() (*SkipNonDynamicClassClassView, error) {
+	bld, err := t.inner.Class("SkipNonDynamicClass")
+	if err != nil {
+		return nil, err
+	}
+	return &SkipNonDynamicClassClassView{inner: bld}, nil
+}
+
+func (t *SkipNonDynamicClassClassView) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
+
 type SmallThingClassView struct {
 	inner baml.ClassBuilder
 }

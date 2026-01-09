@@ -205,6 +205,10 @@ pub enum Types {
 
     SimpleTag(SimpleTag),
 
+    SkipDynamicClass(SkipDynamicClass),
+
+    SkipNonDynamicClass(SkipNonDynamicClass),
+
     SmallThing(SmallThing),
 
     SomeClassNestedDynamic(SomeClassNestedDynamic),
@@ -532,6 +536,10 @@ impl baml::KnownTypes for Types {
             Types::SemanticContainer(_) => "SemanticContainer",
 
             Types::SimpleTag(_) => "SimpleTag",
+
+            Types::SkipDynamicClass(_) => "SkipDynamicClass",
+
+            Types::SkipNonDynamicClass(_) => "SkipNonDynamicClass",
 
             Types::SmallThing(_) => "SmallThing",
 

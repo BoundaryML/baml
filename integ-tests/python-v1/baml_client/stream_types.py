@@ -24,7 +24,7 @@ class StreamState(GenericModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (107)
+# Generated classes (109)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
@@ -626,6 +626,20 @@ class SimpleTag(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     field: typing.Optional[str] = None
+
+class SkipDynamicClass(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
+    value: typing.Optional[str] = None
+    internal_id: typing.Optional[str] = None
+
+class SkipNonDynamicClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: typing.Optional[str] = None
+    description: typing.Optional[str] = None
+    metadata: typing.Optional[str] = None
 
 class SmallThing(BaseModel):
     class Config:

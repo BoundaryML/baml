@@ -869,6 +869,24 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `SkipDynamicClass` class builder.
+    pub fn SkipDynamicClass(&self) -> SkipDynamicClassClassBuilder {
+        SkipDynamicClassClassBuilder::new(
+            self.inner
+                .get_class("SkipDynamicClass")
+                .expect("class SkipDynamicClass is defined in schema"),
+        )
+    }
+
+    /// Access the `SkipNonDynamicClass` class builder.
+    pub fn SkipNonDynamicClass(&self) -> SkipNonDynamicClassClassBuilder {
+        SkipNonDynamicClassClassBuilder::new(
+            self.inner
+                .get_class("SkipNonDynamicClass")
+                .expect("class SkipNonDynamicClass is defined in schema"),
+        )
+    }
+
     /// Access the `SmallThing` class builder.
     pub fn SmallThing(&self) -> SmallThingClassBuilder {
         SmallThingClassBuilder::new(

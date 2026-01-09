@@ -200,6 +200,10 @@ pub enum StreamTypes {
 
     SimpleTag(SimpleTag),
 
+    SkipDynamicClass(SkipDynamicClass),
+
+    SkipNonDynamicClass(SkipNonDynamicClass),
+
     SmallThing(SmallThing),
 
     SomeClassNestedDynamic(SomeClassNestedDynamic),
@@ -453,6 +457,10 @@ impl baml::KnownTypes for StreamTypes {
             StreamTypes::SemanticContainer(_) => "SemanticContainer",
 
             StreamTypes::SimpleTag(_) => "SimpleTag",
+
+            StreamTypes::SkipDynamicClass(_) => "SkipDynamicClass",
+
+            StreamTypes::SkipNonDynamicClass(_) => "SkipNonDynamicClass",
 
             StreamTypes::SmallThing(_) => "SmallThing",
 

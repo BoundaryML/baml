@@ -190,6 +190,10 @@ module BamlClient
           ClassBuilder.new(@registry, "RenderTestClass", Set[ "name",  "status", ])
       end
 
+      def SkipDynamicClass
+          ClassBuilder.new(@registry, "SkipDynamicClass", Set[ "value",  "internal_id", ])
+      end
+
       def SomeClassNestedDynamic
           ClassBuilder.new(@registry, "SomeClassNestedDynamic", Set[ "hi", ])
       end

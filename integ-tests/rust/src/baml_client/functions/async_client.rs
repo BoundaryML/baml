@@ -544,6 +544,10 @@ baml_function_async!(TestRoundRobinStrategy(input: impl AsRef<str> + BamlEncode,
 
 baml_function_async!(TestSingleFallbackClient() -> (String, String));
 
+baml_function_async!(TestSkipDynamic(input: impl AsRef<str> + BamlEncode, ) -> (stream_types::SkipDynamicClass, types::SkipDynamicClass));
+
+baml_function_async!(TestSkipNonDynamic(input: impl AsRef<str> + BamlEncode, ) -> (stream_types::SkipNonDynamicClass, types::SkipNonDynamicClass));
+
 baml_function_async!(TestStreamingTimeout(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_async!(TestThinking(input: impl AsRef<str> + BamlEncode, ) -> (stream_types::CustomStory, types::CustomStory));
@@ -1024,6 +1028,10 @@ pub struct BamlAsyncClient {
 
     pub TestSingleFallbackClient: TestSingleFallbackClient,
 
+    pub TestSkipDynamic: TestSkipDynamic,
+
+    pub TestSkipNonDynamic: TestSkipNonDynamic,
+
     pub TestStreamingTimeout: TestStreamingTimeout,
 
     pub TestThinking: TestThinking,
@@ -1503,6 +1511,10 @@ impl BamlAsyncClient {
             TestRoundRobinStrategy: TestRoundRobinStrategy::new(),
 
             TestSingleFallbackClient: TestSingleFallbackClient::new(),
+
+            TestSkipDynamic: TestSkipDynamic::new(),
+
+            TestSkipNonDynamic: TestSkipNonDynamic::new(),
 
             TestStreamingTimeout: TestStreamingTimeout::new(),
 
@@ -2417,6 +2429,14 @@ impl BamlAsyncClient {
             },
 
             TestSingleFallbackClient: TestSingleFallbackClient {
+                options: options.clone(),
+            },
+
+            TestSkipDynamic: TestSkipDynamic {
+                options: options.clone(),
+            },
+
+            TestSkipNonDynamic: TestSkipNonDynamic {
                 options: options.clone(),
             },
 
