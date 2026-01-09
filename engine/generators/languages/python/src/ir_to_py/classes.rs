@@ -166,6 +166,7 @@ mod tests {
     #[test]
     fn test_field_description_annotation() {
         use askama::Template;
+
         use crate::r#type::EscapedPythonString;
 
         let ir = make_test_ir(
@@ -306,7 +307,10 @@ mod tests {
         let class_py = ir_class_to_py(class, &pkg);
 
         // The description should be dedented
-        let desc = class_py.description.as_ref().expect("should have description");
+        let desc = class_py
+            .description
+            .as_ref()
+            .expect("should have description");
         assert!(
             !desc.starts_with(" ") && !desc.starts_with("\t"),
             "Description should be dedented, got: {:?}",
