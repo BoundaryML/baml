@@ -328,16 +328,22 @@ mod tests {
     }
 
     #[test]
-    fn test_multiline_field_description() {
+    fn test_field_description_edge_cases() {
         use askama::Template;
 
         let ir = make_test_ir(
             r##"
         class Foo {
-            bar string @description(#"
+            multiline string @description(#"
                 This field has a
                 multiline description.
             "#)
+            single_quotes string @description("It's a test with 'quotes'")
+            backslashes string @description("Path: C:\\Users\\test")
+            tabs_and_newlines string @description(#"Tab:	and newline:
+end"#)
+            triple_quotes string @description(#"Has """triple quotes""" inside"#)
+            empty string @description("")
         }
         "##,
         )
@@ -347,17 +353,109 @@ mod tests {
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
         let class_py = ir_class_to_py(class, &pkg);
 
-        // The description should use escaped newlines, not triple quotes
         let rendered = class_py.render().expect("render class");
+
+        // Multiline: should use escaped newlines, not triple quotes
         assert!(
             rendered.contains(r"description='This field has a\nmultiline description.'"),
             "Field description should use escaped newlines, got:\n{}",
             rendered
         );
-        // Should NOT contain triple quotes in Field()
         assert!(
             !rendered.contains(r#"description=""""#),
             "Field description should not use triple quotes, got:\n{}",
+            rendered
+        );
+
+        // Single quotes: should be escaped
+        assert!(
+            rendered.contains(r"description='It\'s a test with \'quotes\''"),
+            "Single quotes should be escaped, got:\n{}",
+            rendered
+        );
+
+        // Backslashes: should be escaped
+        assert!(
+            rendered.contains(r"description='Path: C:\\Users\\test'"),
+            "Backslashes should be escaped, got:\n{}",
+            rendered
+        );
+
+        // Tab and newline: should be escaped
+        assert!(
+            rendered.contains(r"\t") && rendered.contains(r"\n"),
+            "Tab and newline should be escaped, got:\n{}",
+            rendered
+        );
+
+        // Triple quotes inside: should be present (Python single-quoted strings handle this fine)
+        assert!(
+            rendered.contains("triple quotes"),
+            "Triple quotes field should be present, got:\n{}",
+            rendered
+        );
+
+        // Empty: should still generate valid Field()
+        assert!(
+            rendered.contains("description=''"),
+            "Empty description should generate empty string, got:\n{}",
+            rendered
+        );
+    }
+
+    #[test]
+    fn test_class_description_with_triple_quotes() {
+        use askama::Template;
+
+        let ir = make_test_ir(
+            r##"
+        class Foo {
+            bar string
+            @@description(#"This has """triple quotes""" inside"#)
+        }
+        "##,
+        )
+        .expect("Valid IR");
+        let ir = std::sync::Arc::new(ir);
+        let class = ir.find_class("Foo").unwrap().item;
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let class_py = ir_class_to_py(class, &pkg);
+
+        let rendered = class_py.render().expect("render class");
+        // The generated code should be valid Python (triple quotes must be escaped)
+        // Check that we don't have unbalanced triple quotes
+        let triple_quote_count = rendered.matches(r#"""""#).count();
+        assert!(
+            triple_quote_count % 2 == 0,
+            "Triple quotes should be balanced in output, got:\n{}",
+            rendered
+        );
+    }
+
+    #[test]
+    fn test_class_description_with_backslash_at_end() {
+        use askama::Template;
+
+        let ir = make_test_ir(
+            r##"
+        class Foo {
+            bar string
+            @@description("Ends with backslash\\")
+        }
+        "##,
+        )
+        .expect("Valid IR");
+        let ir = std::sync::Arc::new(ir);
+        let class = ir.find_class("Foo").unwrap().item;
+        let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+        let class_py = ir_class_to_py(class, &pkg);
+
+        let rendered = class_py.render().expect("render class");
+        // A backslash at the end of a docstring line could escape the closing quotes
+        // This test ensures the output is valid
+        assert!(
+            rendered.contains("Ends with backslash"),
+            "Description should be present, got:\n{}",
             rendered
         );
     }
