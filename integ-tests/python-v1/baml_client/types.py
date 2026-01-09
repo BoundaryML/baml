@@ -15,7 +15,7 @@ import typing_extensions
 from enum import Enum
 
 
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, Field
 from pydantic.generics import GenericModel
 
 
