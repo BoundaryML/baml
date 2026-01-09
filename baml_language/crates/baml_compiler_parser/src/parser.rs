@@ -982,14 +982,25 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a block attribute: @@dynamic
+    /// Parse a block attribute: @@dynamic or @@stream.done
     pub(crate) fn parse_block_attribute(&mut self) {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
-            // Attribute name (can be a Word or reserved keyword like Dynamic or Assert)
+            // Attribute name (can be dotted like @@stream.done)
             if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert) {
                 p.bump();
+                // Handle dotted attribute names like @@stream.done
+                while p.at(TokenKind::Dot) {
+                    p.bump(); // consume dot
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert)
+                    {
+                        p.bump(); // consume next segment
+                    } else {
+                        p.error_unexpected_token("attribute name segment after dot".to_string());
+                        break;
+                    }
+                }
             } else {
                 p.error_unexpected_token("attribute name".to_string());
                 return;
@@ -1028,7 +1039,7 @@ impl<'a> Parser<'a> {
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
         // - Expression: @assert({{ this > 0 }})
-        // - Identifier: @alias(field_name)
+        // - Unquoted string: @description(User is happy) - consumes until ) or ,
 
         if self.parse_any_string() {
             // String argument parsed
@@ -1041,8 +1052,12 @@ impl<'a> Parser<'a> {
             // Expression block: {{ }}
             self.parse_expression_block();
         } else if self.at(TokenKind::Word) {
-            // Identifier or keyword
-            self.bump();
+            // Unquoted string: consume all tokens until ) or ,
+            self.with_node(SyntaxKind::UNQUOTED_STRING, |p| {
+                while !p.at(TokenKind::RParen) && !p.at(TokenKind::Comma) && !p.at_end() {
+                    p.bump();
+                }
+            });
         } else {
             self.error_unexpected_token("attribute argument".to_string());
         }
@@ -1184,6 +1199,8 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::Word) {
                     // Enum variant
                     p.parse_enum_variant();
+                    // Optional comma after variant (allows both comma and no-comma styles)
+                    p.eat(TokenKind::Comma);
                 } else {
                     // Skip unexpected token
                     p.error_unexpected_token("Unexpected token in enum body".to_string());
@@ -1315,6 +1332,10 @@ impl<'a> Parser<'a> {
             // Return type
             if p.eat(TokenKind::Arrow) {
                 p.parse_type();
+                // Optional attributes on return type (e.g., @check)
+                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                    p.parse_field_attribute();
+                }
             } else {
                 p.error_unexpected_token("return type (->)".to_string());
             }
@@ -1371,6 +1392,11 @@ impl<'a> Parser<'a> {
                 p.parse_type();
             } else {
                 p.error_unexpected_token("type annotation".to_string());
+            }
+
+            // Optional attributes on parameter (e.g., @assert, @check)
+            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                p.parse_field_attribute();
             }
         });
     }
@@ -2781,7 +2807,12 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                p.parse_config_item();
+                // Block attributes like @@check(...) inside config blocks
+                if p.at(TokenKind::AtAt) {
+                    p.parse_block_attribute();
+                } else {
+                    p.parse_config_item();
+                }
                 // Allow optional comma between config items
                 p.eat(TokenKind::Comma);
             }
@@ -3028,8 +3059,10 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("template string name".to_string());
             }
 
-            // Parameters
-            p.parse_parameter_list();
+            // Optional parameters - only parse if we see '('
+            if p.at(TokenKind::LParen) {
+                p.parse_parameter_list();
+            }
 
             // Template body (raw string)
             if !p.parse_any_string() {

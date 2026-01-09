@@ -166,4 +166,12 @@ pub enum HirDiagnostic {
         token: &'static str,
         span: Span,
     },
+
+    // ============ Constraint Attribute Diagnostics ============
+    /// Invalid syntax for @check or @assert attribute.
+    /// These require a Jinja expression block {{ }}.
+    InvalidConstraintSyntax {
+        attr_name: String,
+        span: Span,
+    },
 }

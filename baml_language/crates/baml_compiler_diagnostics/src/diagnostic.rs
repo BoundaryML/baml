@@ -92,6 +92,9 @@ pub enum DiagnosticId {
 
     // Return expression errors (E0029)
     MissingReturnExpression,
+
+    // Constraint attribute errors (E0032)
+    InvalidConstraintSyntax,
 }
 
 impl DiagnosticId {
@@ -148,6 +151,9 @@ impl DiagnosticId {
 
             // Return expression errors
             DiagnosticId::MissingReturnExpression => "E0029",
+
+            // Constraint attribute errors
+            DiagnosticId::InvalidConstraintSyntax => "E0032",
         }
     }
 }

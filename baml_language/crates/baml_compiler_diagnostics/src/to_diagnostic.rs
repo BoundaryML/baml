@@ -504,6 +504,17 @@ impl ToDiagnostic for HirDiagnostic {
                 format!("Unmatched `{token}`."),
             )
             .with_primary_span(*span),
+
+            HirDiagnostic::InvalidConstraintSyntax { attr_name, span } => Diagnostic::error(
+                DiagnosticId::InvalidConstraintSyntax,
+                format!(
+                    "Invalid @{attr_name} syntax. Expected a Jinja expression block.\n\
+                     Examples:\n  \
+                     @check(valid_name, {{{{ this|length > 0 }}}})\n  \
+                     @assert({{{{ this > 0 }}}})"
+                ),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

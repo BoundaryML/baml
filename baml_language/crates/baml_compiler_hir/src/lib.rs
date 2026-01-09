@@ -724,7 +724,7 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
                 seen_fields.insert(field_name.clone(), field_span);
             }
 
-            // Validate field attributes for duplicates
+            // Validate field attributes for duplicates and constraint syntax
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in field_node.attributes() {
                 // Use full_name() to get the complete attribute path (e.g., "stream.done" not just "stream")
@@ -748,7 +748,12 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
                             second_span: attr_span,
                         });
                     } else {
-                        seen_field_attrs.insert(attr_name, attr_span);
+                        seen_field_attrs.insert(attr_name.clone(), attr_span);
+                    }
+
+                    // Validate constraint attribute syntax (@check, @assert)
+                    if attr_name == "check" || attr_name == "assert" {
+                        validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
                     }
                 }
             }
@@ -1172,6 +1177,40 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
     }
 
     errors
+}
+
+/// Validate that a @check or @assert attribute has proper Jinja expression syntax.
+/// These attributes require at least one argument that is a Jinja expression block {{ }}.
+fn validate_constraint_attribute(
+    attr: &baml_compiler_syntax::Attribute,
+    attr_name: &str,
+    span: Span,
+    ctx: &mut LoweringContext,
+) {
+    use baml_compiler_syntax::SyntaxKind;
+
+    // Find the ATTRIBUTE_ARGS node
+    let args_node = attr.syntax().children().find(|n| n.kind() == SyntaxKind::ATTRIBUTE_ARGS);
+
+    if let Some(args) = args_node {
+        // Check if any argument is an EXPR node (Jinja expression {{ }})
+        let has_expr = args
+            .children()
+            .any(|n| n.kind() == SyntaxKind::EXPR);
+
+        if !has_expr {
+            ctx.push_diagnostic(HirDiagnostic::InvalidConstraintSyntax {
+                attr_name: attr_name.to_string(),
+                span,
+            });
+        }
+    } else {
+        // No arguments at all - also invalid
+        ctx.push_diagnostic(HirDiagnostic::InvalidConstraintSyntax {
+            attr_name: attr_name.to_string(),
+            span,
+        });
+    }
 }
 
 /// Helper to check for duplicate names and record errors.

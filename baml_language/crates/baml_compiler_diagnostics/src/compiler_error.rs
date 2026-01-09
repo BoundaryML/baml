@@ -166,6 +166,15 @@ const NEGATIVE_TIMEOUT: ErrorCode = ErrorCode(25);
 const MISSING_PROVIDER: ErrorCode = ErrorCode(26);
 const UNKNOWN_CLIENT_PROPERTY: ErrorCode = ErrorCode(27);
 
+// Constraint attribute diagnostics
+const INVALID_CONSTRAINT_SYNTAX: ErrorCode = ErrorCode(32);
+
+// Syntax diagnostics
+const MISSING_SEMICOLON: ErrorCode = ErrorCode(28);
+const MISSING_RETURN_EXPRESSION: ErrorCode = ErrorCode(29);
+const MISSING_CONDITION_PARENS: ErrorCode = ErrorCode(30);
+const UNMATCHED_DELIMITER: ErrorCode = ErrorCode(31);
+
 const NON_EXHAUSTIVE_MATCH: ErrorCode = ErrorCode(62);
 const UNREACHABLE_ARM: ErrorCode = ErrorCode(63);
 const UNKNOWN_ENUM_VARIANT: ErrorCode = ErrorCode(64);

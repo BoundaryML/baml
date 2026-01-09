@@ -12,21 +12,4 @@ class Foo2 {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in class body, found '.'
-//     ╭─[ streaming_streaming_ok.baml:10:13 ]
-//     │
-//  10 │     @@stream.done
-//     │             ┬  
-//     │             ╰── Expected Unexpected token in class body, found '.'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: field 'done' is missing a type annotation
-//     ╭─[ streaming_streaming_ok.baml:10:14 ]
-//     │
-//  10 │     @@stream.done
-//     │              ──┬─  
-//     │                ╰─── field 'done' is missing a type annotation
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
+// <no-diagnostics-expected>
