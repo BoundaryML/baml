@@ -1,9 +1,9 @@
 [package]
 name = "zed_baml"
 edition = "2024"
-# This version does NOT get published into the Zed extension ecosystem
-# extension.toml version is used for that
-version.workspace = true
+# Both Cargo.toml and extension.toml's version strings
+# are consumed by the Zed extension publishing logic
+version = "0.216.0"
 description = "BAML language support for Zed"
 
 [lib]
