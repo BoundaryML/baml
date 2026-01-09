@@ -173,14 +173,25 @@ function killProcess(proc: ChildProcess): Promise<void> {
  * Wait for the hot reload test element to contain specific text
  */
 async function waitForHotReloadText(page: Page, text: string, timeoutMs = 30_000): Promise<void> {
-  await page.waitForFunction(
-    (expectedText) => {
-      const el = document.querySelector('[data-testid="hot-reload-test"]')
-      return el?.textContent?.includes(expectedText)
-    },
-    text,
-    { timeout: timeoutMs }
-  )
+  const startTime = Date.now()
+  const logInterval = setInterval(async () => {
+    const elapsed = Math.round((Date.now() - startTime) / 1000)
+    const currentText = await getHotReloadText(page).catch(() => null)
+    console.log(`[${elapsed}s] Waiting for "${text}", current: "${currentText}"`)
+  }, 10_000)
+
+  try {
+    await page.waitForFunction(
+      (expectedText) => {
+        const el = document.querySelector('[data-testid="hot-reload-test"]')
+        return el?.textContent?.includes(expectedText)
+      },
+      text,
+      { timeout: timeoutMs }
+    )
+  } finally {
+    clearInterval(logInterval)
+  }
 }
 
 /**
@@ -226,19 +237,19 @@ describe('WASM Build Pipeline', () => {
   })
 
   test('initial page shows known good WASM content, then detects hot reload changes', async () => {
-    // Step 1: Verify the known good content is present
-    const devServer1 = await startDevServer()
-    processes.push(devServer1.proc)
+    // Step 1: Start dev server and verify the known good content is present
+    const devServer = await startDevServer()
+    processes.push(devServer.proc)
 
     page = await browser.newPage()
-    await page.goto(`http://localhost:${devServer1.port}`)
+    await page.goto(`http://localhost:${devServer.port}`)
+
+    const pageContent = await page.content()
+    console.log('[initial load] Page content:\n', pageContent)
 
     await waitForHotReloadText(page, KNOWN_GOOD_STRING)
     const initialText = await getHotReloadText(page)
     expect(initialText).toBe(KNOWN_GOOD_STRING)
-
-    await page.close()
-    await killProcess(devServer1.proc)
 
     // Step 2: Edit the file to change the hot-reload marker
     originalFileContent = readFileSync(hotReloadSourcePath, 'utf8')
@@ -248,18 +259,11 @@ describe('WASM Build Pipeline', () => {
     // Wait for nodemon to detect the change and rebuild WASM
     await waitForWasmRebuild(wasmWatcher, 60_000)
 
-    // Start a fresh dev server to pick up the new WASM
-    const devServer2 = await startDevServer()
-    processes.push(devServer2.proc)
-
-    page = await browser.newPage()
-    await page.goto(`http://localhost:${devServer2.port}`)
-
-    // Verify the modified text appears
+    // Verify the modified text appears via HMR (no page reload)
     await waitForHotReloadText(page, MODIFIED_STRING)
     const modifiedText = await getHotReloadText(page)
     expect(modifiedText).toBe(MODIFIED_STRING)
 
-    await killProcess(devServer2.proc)
+    await killProcess(devServer.proc)
   }, 180_000)
 })

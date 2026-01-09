@@ -2,9 +2,9 @@ name: Webview Tests (Reusable)
 
 on:
   workflow_call: {}
-  push:
-    branches:
-      - sam/wasm-runtime
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-webview-tests
@@ -92,8 +92,8 @@ jobs:
   hmr-tests:
     name: "HMR Tests (Hot Reload)"
     runs-on: ubuntu-latest
-    # Only run on main/canary or when explicitly requested
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' || github.ref == 'refs/heads/sam/wasm-runtime' }}
+    # Only run on main/canary
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

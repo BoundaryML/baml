@@ -1,14 +1,10 @@
 name: WASM Pack Tests (Reusable)
 
 on:
-  workflow_call:
-    inputs:
-      code_changed:
-        required: true
-        type: string
-      run_all:
-        required: true
-        type: boolean
+  workflow_call: {}
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-wasm-pack-tests
@@ -28,7 +24,6 @@ jobs:
   wasm-pack-test:
     name: "wasm-pack test"
     runs-on: ubuntu-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
