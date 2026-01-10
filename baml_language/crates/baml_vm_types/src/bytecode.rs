@@ -82,7 +82,7 @@ impl JumpTableData {
 /// }
 /// ```
 ///
-/// Instead store the state or complex structure in the [`crate::Vm`] struct and
+/// Instead store the state or complex structure in the `Vm` struct (in `baml_vm` crate) and
 /// find a way to reference it with very simple instructions.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -96,19 +96,19 @@ pub enum Instruction {
     /// Loads a variable from the frame's local variable slots.
     ///
     /// Format: `LOAD_VAR i` where `i` is the relative index of the variable in
-    /// [`crate::Vm::stack`] array.
+    /// `Vm::stack` array.
     LoadVar(usize),
 
     /// Stores a value in the frame's local variable slots.
     ///
     /// Format: `STORE_VAR i` where `i` is the relative index of the variable in
-    /// [`crate::Vm::stack`] array.
+    /// `Vm::stack` array.
     StoreVar(usize),
 
-    /// Load a global variable from the [`crate::Vm::globals`] array.
+    /// Load a global variable from the `Vm::globals` array.
     ///
     /// Format: `LOAD_GLOBAL i` where `i` is the index of the global variable
-    /// in the [`crate::Vm::globals`] array.
+    /// in the `Vm::globals` array.
     ///
     /// Note that functions are also globals and can be passed around and stored
     /// in local variables, so we need to load their name in the stack before we
@@ -118,7 +118,7 @@ pub enum Instruction {
     /// Store a value in a global variable.
     ///
     /// Format: `STORE_GLOBAL i` where `i` is the index of the global variable
-    /// in the [`crate::Vm::globals`] array.
+    /// in the `Vm::globals` array.
     StoreGlobal(GlobalIndex),
 
     /// Load a field of an object.
@@ -133,7 +133,7 @@ pub enum Instruction {
     /// object's fields array.
     StoreField(usize),
 
-    /// Pop N values from the top of [`crate::Vm::stack`] (the evaluation stack).
+    /// Pop N values from the top of `Vm::stack` (the evaluation stack).
     ///
     /// Format: `POP n` where `n` is the number of values to pop.
     Pop(usize),
@@ -235,13 +235,13 @@ pub enum Instruction {
     /// Builds an instance of a class and allocates it on the heap.
     ///
     /// Format: `ALLOC_INSTANCE i` where `i` is the index of the class in the
-    /// [`crate::Vm::objects`] array.
+    /// `Vm::objects` array.
     AllocInstance(ObjectIndex),
 
     /// Builds a variant of an enum and allocates it on the heap.
     ///
     /// Format: `ALLOC_VARIANT i` where `i` is the index of the enum in the
-    /// [`crate::Vm::objects`] array.
+    /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
     /// Creates a pending future, pushes it on the stack and notifies embedder.
@@ -268,13 +268,13 @@ pub enum Instruction {
     /// Creates a watched var and tracks its state.
     ///
     /// Format: `WATCH i` where `i` is the relative index of the variable in the
-    /// [`crate::Vm::stack`] array.
+    /// `Vm::stack` array.
     Watch(usize),
 
     /// Unregisters a watched variable when it goes out of scope.
     ///
     /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
-    /// [`crate::Vm::stack`] array.
+    /// `Vm::stack` array.
     Unwatch(usize),
 
     /// Manually triggers notifications for a watched variable.
@@ -361,7 +361,7 @@ pub enum Instruction {
     /// it indicates a bug in the compiler or type system (e.g., a non-exhaustive
     /// match expression that the compiler incorrectly marked as exhaustive).
     ///
-    /// Throws [`super::RuntimeError::Unreachable`].
+    /// Throws `RuntimeError::Unreachable` (in `baml_vm` crate).
     Unreachable,
 }
 

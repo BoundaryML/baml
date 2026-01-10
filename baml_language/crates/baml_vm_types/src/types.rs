@@ -186,7 +186,7 @@ impl std::fmt::Display for Class {
 /// Runtime instance representation.
 #[derive(Clone, Debug)]
 pub struct Instance {
-    /// Class index in the [`crate::Vm::objects`] pool.
+    /// Class index in the `Vm::objects` pool.
     pub class: ObjectIndex,
 
     /// Fields are accessed by index. No string lookups.
@@ -234,7 +234,7 @@ impl std::fmt::Display for Variant {
 /// Runtime values.
 ///
 /// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of [`crate::vm::Vm::objects`] to understand how allocated
+/// Read the documentation of `Vm::objects` (in `baml_vm` crate) to understand how allocated
 /// objects work in the virtual machine.
 ///
 /// # On `Hash`
@@ -249,7 +249,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
 
-    /// Index into the [`crate::vm::Vm::objects`] vec.
+    /// Index into the `Vm::objects` vec.
     ///
     /// Strings are also objects, don't add `Value::String`.
     Object(ObjectIndex),
@@ -269,12 +269,12 @@ impl std::fmt::Display for Value {
 
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
-/// [`crate::vm::Vm`] should own objects and give references to them to the running Baml
-/// program. Internally, in the [`crate::vm::Vm`] code, note that by reference I don't mean
+/// `Vm` (in `baml_vm` crate) should own objects and give references to them to the running Baml
+/// program. Internally, in the `Vm` code, note that by reference I don't mean
 /// a Rust reference (& or &mut), but rather a [`usize`] that is used to index
-/// into the [`crate::vm::Vm::objects`] pool.
+/// into the `Vm::objects` pool.
 ///
-/// Read [`crate::vm::Vm::objects`] for more information.
+/// Read `Vm::objects` for more information.
 #[derive(Clone, Debug)]
 pub enum Object<NativeFunction> {
     /// Function object.
@@ -295,7 +295,7 @@ pub enum Object<NativeFunction> {
     /// Heap allocated string.
     ///
     /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
-    /// In Rust it's not easy to implement because [`crate::vm::Vm::objects`]
+    /// In Rust it's not easy to implement because `Vm::objects`
     /// owns the strings allocated on heap, but the interner would be something
     /// like `HashSet`<&str> and it would store pointers to the strings. That
     /// reference will cause some lifetime issues because the VM would have

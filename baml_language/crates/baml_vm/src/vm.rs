@@ -36,7 +36,7 @@ pub struct Frame {
     /// Points to the next instruction that the VM will execute. It is of type
     /// [`isize`] because some jumps can create negative offsets (for loops)
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`Bytecode::instructions`]). However,
+    /// only once (when we index into [`baml_vm_types::Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
     /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,
@@ -302,7 +302,7 @@ impl Vm {
         }
     }
 
-    /// Creates a VM from a compiled [`crate::Program`].
+    /// Creates a VM from a compiled [`baml_vm_types::Program`].
     pub fn from_program(program: baml_vm_types::Program<()>) -> Result<Self, VmError> {
         Ok(Self {
             frames: Vec::new(),
