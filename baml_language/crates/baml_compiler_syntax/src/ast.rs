@@ -776,12 +776,18 @@ impl Attribute {
 
     /// Get the text range covering the full attribute name (including modifiers).
     /// For @stream.done returns the range from "stream" to "done".
+    /// Also handles keyword attribute names like @assert and @check.
     pub fn full_name_range(&self) -> Option<rowan::TextRange> {
         let tokens: Vec<_> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT | SyntaxKind::DOT
+                )
+            })
             .collect();
 
         if tokens.is_empty() {

@@ -2897,7 +2897,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a type_builder block inside a test definition.
+    /// Parse a `type_builder` block inside a test definition.
     /// Contains class, enum, dynamic class, dynamic enum, and type alias definitions.
     fn parse_type_builder_block(&mut self) {
         self.with_node(SyntaxKind::TYPE_BUILDER_BLOCK, |p| {

@@ -113,7 +113,7 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
     })
 }
 
-/// Lower a type_builder block to HIR.
+/// Lower a `type_builder` block to HIR.
 fn lower_type_builder_block(
     block: &baml_compiler_syntax::ast::TypeBuilderBlock,
     ctx: &mut LoweringContext,

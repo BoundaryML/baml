@@ -199,13 +199,13 @@ pub struct Test {
     pub type_builder: Option<TypeBuilderBlock>,
 }
 
-/// A type_builder block inside a test definition.
+/// A `type_builder` block inside a test definition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeBuilderBlock {
     pub entries: Vec<TypeBuilderEntry>,
 }
 
-/// An entry in a type_builder block.
+/// An entry in a `type_builder` block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeBuilderEntry {
     /// A class definition (non-dynamic).
