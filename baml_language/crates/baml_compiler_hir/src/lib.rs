@@ -759,11 +759,14 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
                 }
             }
 
-            let type_ref = field_node.ty().map(|t| {
-                // Validate for unsupported float literals before converting
-                validate_type_expr_for_float_literals(&t, ctx);
-                TypeRef::from_ast(&t)
-            }).unwrap_or(TypeRef::Unknown);
+            let type_ref = field_node
+                .ty()
+                .map(|t| {
+                    // Validate for unsupported float literals before converting
+                    validate_type_expr_for_float_literals(&t, ctx);
+                    TypeRef::from_ast(&t)
+                })
+                .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
                 name: field_name,

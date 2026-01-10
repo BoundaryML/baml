@@ -193,8 +193,5 @@ pub enum HirDiagnostic {
     },
 
     /// Attribute used on test config item field (not allowed).
-    TestFieldAttribute {
-        attr_name: String,
-        span: Span,
-    },
+    TestFieldAttribute { attr_name: String, span: Span },
 }

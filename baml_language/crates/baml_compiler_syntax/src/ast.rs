@@ -695,12 +695,7 @@ impl Attribute {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT
-                )
-            })
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_ASSERT))
     }
 
     /// Get the full attribute name including dot-separated modifiers.
@@ -711,12 +706,7 @@ impl Attribute {
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT
-                )
-            })
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_ASSERT))
             .map(|token| token.text().to_string())
             .collect();
 

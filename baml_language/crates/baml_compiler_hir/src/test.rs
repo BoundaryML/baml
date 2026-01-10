@@ -9,7 +9,7 @@ use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 
-use crate::{item_tree::Test, LoweringContext};
+use crate::{LoweringContext, item_tree::Test};
 
 /// Valid test properties.
 pub(crate) const VALID_TEST_PROPERTIES: &[&str] = &["functions", "args", "type_builder"];
