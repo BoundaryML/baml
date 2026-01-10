@@ -18,6 +18,7 @@ on:
       - "*.*"
     branches:
       - tool-update
+      - aaron/fixbuild
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
