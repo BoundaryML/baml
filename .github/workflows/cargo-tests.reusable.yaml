@@ -70,7 +70,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --target wasm32-unknown-unknown --all-features --locked -- -D warnings
+        run: cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --target wasm32-unknown-unknown --all-features --locked -- -D warnings
         working-directory: baml_language
 
   cargo-test-linux:
