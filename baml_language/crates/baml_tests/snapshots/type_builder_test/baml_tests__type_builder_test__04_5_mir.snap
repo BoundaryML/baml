@@ -1,0 +1,7 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Fn:
+  (no MIR due to errors: MissingBody)

@@ -3,13 +3,18 @@
 //! This module contains validation for test definitions, including:
 //! - Property name validation
 //! - Required property checking
+//! - Type builder block lowering
 
 use baml_base::Name;
 use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 
-use crate::{LoweringContext, item_tree::Test};
+use crate::{
+    LoweringContext,
+    item_tree::{Test, TypeBuilderBlock, TypeBuilderEntry},
+    lower_class, lower_enum, lower_type_alias,
+};
 
 /// Valid test properties.
 pub(crate) const VALID_TEST_PROPERTIES: &[&str] = &["functions", "args", "type_builder"];
@@ -95,8 +100,63 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
         // But we don't emit this if there are no properties at all (covered by missing args)
     }
 
+    // Lower type_builder block if present
+    let type_builder = test
+        .config_block()
+        .and_then(|config| config.type_builder_blocks().next())
+        .map(|tb_block| lower_type_builder_block(&tb_block, ctx));
+
     Some(Test {
         name,
         function_refs,
+        type_builder,
     })
+}
+
+/// Lower a type_builder block to HIR.
+fn lower_type_builder_block(
+    block: &baml_compiler_syntax::ast::TypeBuilderBlock,
+    ctx: &mut LoweringContext,
+) -> TypeBuilderBlock {
+    use rowan::ast::AstNode;
+
+    let mut entries = Vec::new();
+
+    // Lower non-dynamic classes
+    for class_def in block.classes() {
+        if let Some(class) = lower_class(class_def.syntax(), ctx) {
+            entries.push(TypeBuilderEntry::Class(class));
+        }
+    }
+
+    // Lower non-dynamic enums
+    for enum_def in block.enums() {
+        if let Some(e) = lower_enum(enum_def.syntax(), ctx) {
+            entries.push(TypeBuilderEntry::Enum(e));
+        }
+    }
+
+    // Lower dynamic types (dynamic class / dynamic enum)
+    for dynamic_def in block.dynamic_types() {
+        if let Some(class_def) = dynamic_def.class() {
+            if let Some(mut class) = lower_class(class_def.syntax(), ctx) {
+                // Mark as dynamic (override the is_dynamic from parsing)
+                class.is_dynamic = true;
+                entries.push(TypeBuilderEntry::DynamicClass(class));
+            }
+        } else if let Some(enum_def) = dynamic_def.enum_def() {
+            if let Some(e) = lower_enum(enum_def.syntax(), ctx) {
+                entries.push(TypeBuilderEntry::DynamicEnum(e));
+            }
+        }
+    }
+
+    // Lower type aliases
+    for alias_def in block.type_aliases() {
+        if let Some(alias) = lower_type_alias(alias_def.syntax()) {
+            entries.push(TypeBuilderEntry::TypeAlias(alias));
+        }
+    }
+
+    TypeBuilderBlock { entries }
 }

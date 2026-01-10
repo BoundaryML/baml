@@ -696,7 +696,7 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
 }
 
 /// Extract class definition from CST with validation.
-fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
+pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
     use baml_compiler_syntax::ast::ClassDef;
 
     let class = ClassDef::cast(node.clone())?;
@@ -761,11 +761,7 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
 
             let type_ref = field_node
                 .ty()
-                .map(|t| {
-                    // Validate for unsupported float literals before converting
-                    validate_type_expr_for_float_literals(&t, ctx);
-                    TypeRef::from_ast(&t)
-                })
+                .map(|t| TypeRef::from_ast(&t))
                 .unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
@@ -844,7 +840,7 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
 }
 
 /// Extract enum definition from CST with validation.
-fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
+pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Enum> {
     use baml_compiler_syntax::ast::EnumDef;
 
     let enum_def = EnumDef::cast(node.clone())?;
@@ -963,7 +959,7 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
 }
 
 /// Extract type alias from CST.
-fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
+pub(crate) fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     use baml_compiler_syntax::ast::TypeAliasDef;
 
     let alias = TypeAliasDef::cast(node.clone())?;
@@ -1191,28 +1187,6 @@ fn validate_constraint_attribute(
             attr_name: attr_name.to_string(),
             span,
         });
-    }
-}
-
-/// Validate a type expression for unsupported float literals.
-/// Float literal types (e.g., `3.25`) are not supported in BAML.
-fn validate_type_expr_for_float_literals(
-    type_expr: &baml_compiler_syntax::ast::TypeExpr,
-    ctx: &mut LoweringContext,
-) {
-    use baml_compiler_syntax::SyntaxKind;
-
-    // Iterate through all tokens in the type expression looking for float literals
-    for child in type_expr.syntax().descendants_with_tokens() {
-        if let rowan::NodeOrToken::Token(token) = child {
-            if token.kind() == SyntaxKind::FLOAT_LITERAL {
-                let span = ctx.span(token.text_range());
-                ctx.push_diagnostic(HirDiagnostic::UnsupportedFloatLiteral {
-                    value: token.text().to_string(),
-                    span,
-                });
-            }
-        }
     }
 }
 

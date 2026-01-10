@@ -19,5 +19,5 @@ class TestLiterals {
 //    │         ──┬─  
 //    │           ╰─── Float literal values are not supported: 3.25
 //    │ 
-//    │ Note: Error code: E0033
+//    │ Note: Error code: E0010
 // ───╯

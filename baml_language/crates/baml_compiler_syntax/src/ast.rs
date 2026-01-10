@@ -71,6 +71,8 @@ ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
+ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
+ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 
 impl TypeExpr {
     /// Check if this is a union type (contains PIPE separators).
@@ -438,6 +440,61 @@ impl ConfigBlock {
     /// Get all config items.
     pub fn items(&self) -> impl Iterator<Item = ConfigItem> {
         self.syntax.children().filter_map(ConfigItem::cast)
+    }
+
+    /// Get all type_builder blocks inside this config block.
+    pub fn type_builder_blocks(&self) -> impl Iterator<Item = TypeBuilderBlock> {
+        self.syntax.children().filter_map(TypeBuilderBlock::cast)
+    }
+}
+
+impl TypeBuilderBlock {
+    /// Get all class definitions (non-dynamic).
+    pub fn classes(&self) -> impl Iterator<Item = ClassDef> {
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .filter_map(ClassDef::cast)
+    }
+
+    /// Get all enum definitions (non-dynamic).
+    pub fn enums(&self) -> impl Iterator<Item = EnumDef> {
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::ENUM_DEF)
+            .filter_map(EnumDef::cast)
+    }
+
+    /// Get all dynamic type definitions (dynamic class or dynamic enum).
+    pub fn dynamic_types(&self) -> impl Iterator<Item = DynamicTypeDef> {
+        self.syntax.children().filter_map(DynamicTypeDef::cast)
+    }
+
+    /// Get all type alias definitions.
+    pub fn type_aliases(&self) -> impl Iterator<Item = TypeAliasDef> {
+        self.syntax.children().filter_map(TypeAliasDef::cast)
+    }
+}
+
+impl DynamicTypeDef {
+    /// Get the class definition inside this dynamic type def (if it's a dynamic class).
+    pub fn class(&self) -> Option<ClassDef> {
+        self.syntax.children().find_map(ClassDef::cast)
+    }
+
+    /// Get the enum definition inside this dynamic type def (if it's a dynamic enum).
+    pub fn enum_def(&self) -> Option<EnumDef> {
+        self.syntax.children().find_map(EnumDef::cast)
+    }
+
+    /// Check if this is a dynamic class.
+    pub fn is_class(&self) -> bool {
+        self.class().is_some()
+    }
+
+    /// Check if this is a dynamic enum.
+    pub fn is_enum(&self) -> bool {
+        self.enum_def().is_some()
     }
 }
 

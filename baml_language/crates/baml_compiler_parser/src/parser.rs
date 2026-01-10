@@ -1128,9 +1128,15 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Check for number literal types
-        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
-            self.bump();
+        // Float literal types are not supported - emit error at parse time
+        if self.at(TokenKind::FloatLiteral) {
+            if let Some(token) = self.current() {
+                self.error(
+                    format!("Float literal values are not supported: {}", token.text),
+                    token.span,
+                );
+            }
+            self.bump(); // consume to recover
             return;
         }
 
@@ -2801,9 +2807,15 @@ impl<'a> Parser<'a> {
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
-                // Exception: RetryPolicy can appear as a config key (e.g., `retry_policy MyPolicy`
-                // inside client blocks), so we don't break on it - let parse_config_item handle it.
-                if p.at_top_level_keyword() && !p.at(TokenKind::RetryPolicy) {
+                // Exceptions:
+                // - RetryPolicy can appear as a config key (e.g., `retry_policy MyPolicy` inside client blocks)
+                // - TypeBuilder can appear as a config key (e.g., `type_builder { ... }` inside test blocks)
+                // - Dynamic can appear inside type_builder blocks (e.g., `dynamic class Foo { ... }`)
+                if p.at_top_level_keyword()
+                    && !p.at(TokenKind::RetryPolicy)
+                    && !p.at(TokenKind::TypeBuilder)
+                    && !p.at(TokenKind::Dynamic)
+                {
                     break;
                 }
 
@@ -2822,6 +2834,28 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_config_item(&mut self) {
+        // Special handling for type_builder blocks inside test definitions
+        if self.at(TokenKind::TypeBuilder) {
+            self.parse_type_builder_block();
+            return;
+        }
+
+        // Special handling for dynamic type definitions inside type_builder blocks
+        if self.at(TokenKind::Dynamic) {
+            self.parse_dynamic_type_def();
+            return;
+        }
+
+        // Special handling for class/enum definitions inside type_builder blocks
+        if self.at(TokenKind::Class) {
+            self.parse_class();
+            return;
+        }
+        if self.at(TokenKind::Enum) {
+            self.parse_enum();
+            return;
+        }
+
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key: identifier, keyword-as-identifier, or quoted/raw string
             // Note: RetryPolicy is a top-level keyword (for `retry_policy MyPolicy { ... }` declarations)
@@ -2859,6 +2893,64 @@ impl<'a> Parser<'a> {
             // Optional field attributes after config value (e.g., args { ... } @check(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_field_attribute();
+            }
+        });
+    }
+
+    /// Parse a type_builder block inside a test definition.
+    /// Contains class, enum, dynamic class, dynamic enum, and type alias definitions.
+    fn parse_type_builder_block(&mut self) {
+        self.with_node(SyntaxKind::TYPE_BUILDER_BLOCK, |p| {
+            p.expect(TokenKind::TypeBuilder);
+
+            if !p.expect(TokenKind::LBrace) {
+                return;
+            }
+
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Error recovery: if we see a top-level keyword that's not valid in type_builder
+                if p.at_top_level_keyword()
+                    && !p.at(TokenKind::Class)
+                    && !p.at(TokenKind::Enum)
+                    && !p.at(TokenKind::Dynamic)
+                    && !p.at(TokenKind::TypeBuilder)
+                {
+                    break;
+                }
+
+                if p.at(TokenKind::Dynamic) {
+                    p.parse_dynamic_type_def();
+                } else if p.at(TokenKind::Class) {
+                    p.parse_class();
+                } else if p.at(TokenKind::Enum) {
+                    p.parse_enum();
+                } else if p.at(TokenKind::Word)
+                    && p.current().map(|t| t.text == "type").unwrap_or(false)
+                {
+                    p.parse_type_alias();
+                } else {
+                    p.error_unexpected_token(
+                        "class, enum, dynamic class, dynamic enum, or type alias".to_string(),
+                    );
+                    p.bump();
+                }
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a dynamic type definition (dynamic class or dynamic enum).
+    fn parse_dynamic_type_def(&mut self) {
+        self.with_node(SyntaxKind::DYNAMIC_TYPE_DEF, |p| {
+            p.expect(TokenKind::Dynamic);
+
+            if p.at(TokenKind::Class) {
+                p.parse_class();
+            } else if p.at(TokenKind::Enum) {
+                p.parse_enum();
+            } else {
+                p.error_unexpected_token("class or enum after 'dynamic'".to_string());
             }
         });
     }

@@ -258,6 +258,64 @@ fn format_hir_file(
                 if !test.function_refs.is_empty() {
                     writeln!(result, "  functions: {:?}", test.function_refs).unwrap();
                 }
+                // Format type_builder block if present
+                if let Some(ref type_builder) = test.type_builder {
+                    writeln!(result, "  type_builder {{").unwrap();
+                    for entry in &type_builder.entries {
+                        match entry {
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::Class(class) => {
+                                writeln!(result, "    class {} {{", class.name).unwrap();
+                                for field in &class.fields {
+                                    writeln!(
+                                        result,
+                                        "      {}: {}",
+                                        field.name,
+                                        format_type_ref(&field.type_ref)
+                                    )
+                                    .unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::Enum(enum_def) => {
+                                writeln!(result, "    enum {} {{", enum_def.name).unwrap();
+                                for variant in &enum_def.variants {
+                                    writeln!(result, "      {}", variant.name).unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::DynamicClass(class) => {
+                                writeln!(result, "    dynamic class {} {{", class.name).unwrap();
+                                for field in &class.fields {
+                                    writeln!(
+                                        result,
+                                        "      {}: {}",
+                                        field.name,
+                                        format_type_ref(&field.type_ref)
+                                    )
+                                    .unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::DynamicEnum(enum_def) => {
+                                writeln!(result, "    dynamic enum {} {{", enum_def.name).unwrap();
+                                for variant in &enum_def.variants {
+                                    writeln!(result, "      {}", variant.name).unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::TypeAlias(alias) => {
+                                writeln!(
+                                    result,
+                                    "    type {} = {}",
+                                    alias.name,
+                                    format_type_ref(&alias.type_ref)
+                                )
+                                .unwrap();
+                            }
+                        }
+                    }
+                    writeln!(result, "  }}").unwrap();
+                }
                 writeln!(result, "}}").unwrap();
                 writeln!(result).unwrap(); // blank line after test
             }

@@ -19,7 +19,8 @@
       "WebFetch(domain:docs.rs)",
       "Bash(cargo clippy:*)",
       "WebSearch",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(cargo check:*)"
     ]
   }
 }

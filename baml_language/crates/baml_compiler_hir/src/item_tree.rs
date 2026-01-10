@@ -194,6 +194,30 @@ pub struct Test {
 
     /// Unresolved function references.
     pub function_refs: Vec<Name>,
+
+    /// Type builder block containing dynamic type definitions.
+    pub type_builder: Option<TypeBuilderBlock>,
+}
+
+/// A type_builder block inside a test definition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeBuilderBlock {
+    pub entries: Vec<TypeBuilderEntry>,
+}
+
+/// An entry in a type_builder block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeBuilderEntry {
+    /// A class definition (non-dynamic).
+    Class(Class),
+    /// An enum definition (non-dynamic).
+    Enum(Enum),
+    /// A dynamic class definition.
+    DynamicClass(Class),
+    /// A dynamic enum definition.
+    DynamicEnum(Enum),
+    /// A type alias.
+    TypeAlias(TypeAlias),
 }
 
 /// Generator configuration.

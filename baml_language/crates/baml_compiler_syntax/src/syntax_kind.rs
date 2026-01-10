@@ -137,6 +137,8 @@ pub enum SyntaxKind {
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
+    TYPE_BUILDER_BLOCK, // type_builder { ... } inside test definitions
+    DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
     PARAMETER_LIST,
