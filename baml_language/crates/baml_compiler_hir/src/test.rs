@@ -75,7 +75,7 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
     // Check required property: args
     if !has_args {
         ctx.push_diagnostic(HirDiagnostic::MissingTestProperty {
-            test_name: test_name.clone(),
+            test_name,
             property_name: "args",
             span: ctx.span(name_token.text_range()),
         });
