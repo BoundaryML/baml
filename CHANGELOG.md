@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.217.0](https://github.com/boundaryml/baml/compare/0.216.0..0.217.0) - 2026-01-10
+
+### Bug Fixes
+
+- **(zed)** Fix version (#2953) - ([a9c4d7b](https://github.com/boundaryml/baml/commit/a9c4d7b14fd8024a373c58768f4eb943ec662838)) - Sam Lijin
+- fix TimeoutError and InvalidArgumentError getting raised as BamlError (#2954)
+  
+### Features
+
+- Add native Rust SDK (#2832) - ([0b4d81a](https://github.com/boundaryml/baml/commit/0b4d81a3861efe49fc41d58c7464c6ae7388ce8c)) - hellovai
+- wire @description to pydantic models Field attribute (#2955) - ([ff4970a](https://github.com/boundaryml/baml/commit/ff4970ac911243ef0f8e314d1c5103391c39d278)) - Sam Lijin
+
+### Bugs
+- Fix media type matching in unions to use file extension heuristics (#2894) - ([cad717c](https://github.com/boundaryml/baml/commit/cad717cf310678fdad8dea38b708262211c764f6)) - Antonio Sarosi
+- [Studio] Dont resend the prompt and raw output via BamlValidationError published events (#2914) - ([85a3b35](https://github.com/boundaryml/baml/commit/85a3b35a0ea99980ac0fc2d29b2a1b616bfb9a41)) - aaronvg
+- add abort error details (#2921) - ([9172fbc](https://github.com/boundaryml/baml/commit/9172fbcea6405917fd751f519366ffd180d673c1)) - aaronvg
+- Fix backwards type checking in Jinja filter validation (#2942) - ([e903222](https://github.com/boundaryml/baml/commit/e903222a92d5993af33e02fa41b518a50b94b4ab)) - Kelvin
+- Add on_tick callback tests and fix CFFI streaming callback handling (#2949) - ([db206db](https://github.com/boundaryml/baml/commit/db206dbb192bd1061438835173f2795a39c67de7)) - hellovai
+- Fix @skip attribute panic with @@dynamic and non-dynamic classes (#2952) - ([ae13652](https://github.com/boundaryml/baml/commit/ae136524eff94bb364c0086e89569e3c47bc2e5d)) - Antonio Sarosi
+
+
 ## [0.216.0](https://github.com/boundaryml/baml/compare/0.215.2..0.216.0) - 2025-12-31
 
 ### Bug Fixes
