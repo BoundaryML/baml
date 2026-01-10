@@ -530,6 +530,15 @@ test ReturnDynamicClassTest {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types.baml:26:6 ]
+//     │
+//  26 │ test ReturnDynamicClassTest {
+//     │      ───────────┬──────────  
+//     │                 ╰──────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
 // Error: Duplicate class `Resume`
 //    ╭─[ misc_dynamic_types.baml:1:1 ]
 //    │

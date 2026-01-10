@@ -171,4 +171,30 @@ pub enum HirDiagnostic {
     /// Invalid syntax for @check or @assert attribute.
     /// These require a Jinja expression block {{ }}.
     InvalidConstraintSyntax { attr_name: String, span: Span },
+
+    // ============ Type Diagnostics ============
+    /// Float literal used as a type, which is not supported.
+    UnsupportedFloatLiteral { value: String, span: Span },
+
+    // ============ Test Diagnostics ============
+    /// Unknown property in test block.
+    UnknownTestProperty {
+        test_name: String,
+        property_name: String,
+        span: Span,
+        valid_properties: Vec<&'static str>,
+    },
+
+    /// Required property missing in test.
+    MissingTestProperty {
+        test_name: String,
+        property_name: &'static str,
+        span: Span,
+    },
+
+    /// Attribute used on test config item field (not allowed).
+    TestFieldAttribute {
+        attr_name: String,
+        span: Span,
+    },
 }

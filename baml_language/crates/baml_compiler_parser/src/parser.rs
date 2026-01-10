@@ -2855,7 +2855,11 @@ impl<'a> Parser<'a> {
                 // Simple value - unquoted string or other expression
                 p.parse_config_value();
             }
-            // eprintln!("[PARSE_CONFIG_ITEM] Finished, now at pos {}", p.current);
+
+            // Optional field attributes after config value (e.g., args { ... } @check(...))
+            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
+                p.parse_field_attribute();
+            }
         });
     }
 

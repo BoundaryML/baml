@@ -515,6 +515,55 @@ impl ToDiagnostic for HirDiagnostic {
                 ),
             )
             .with_primary(*span, "missing Jinja expression {{ }}"),
+
+            HirDiagnostic::UnsupportedFloatLiteral { value, span } => Diagnostic::error(
+                DiagnosticId::UnsupportedFloatLiteral,
+                format!("Float literal values are not supported: {value}"),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::UnknownTestProperty {
+                test_name: _,
+                property_name,
+                span,
+                valid_properties,
+            } => {
+                // Check if this looks like a misplaced attribute
+                let message = if property_name == "check" || property_name == "assert" {
+                    format!(
+                        "@{property_name} is not allowed on test fields. Use @@{property_name} at the test block level instead."
+                    )
+                } else {
+                    format!(
+                        "Property not known: \"{property_name}\". Did you mean one of these: {}?",
+                        valid_properties
+                            .iter()
+                            .map(|p| format!("\"{p}\""))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                Diagnostic::error(DiagnosticId::UnknownTestProperty, message)
+                    .with_primary_span(*span)
+            }
+
+            HirDiagnostic::MissingTestProperty {
+                test_name: _,
+                property_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::MissingTestProperty,
+                format!("Missing `{property_name}` property"),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::TestFieldAttribute { attr_name, span } => Diagnostic::error(
+                DiagnosticId::TestFieldAttribute,
+                format!(
+                    "@{attr_name} is not allowed on test fields. Use @@{attr_name} at the test block level instead."
+                ),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

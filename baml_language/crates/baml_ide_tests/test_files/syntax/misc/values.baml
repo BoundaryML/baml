@@ -41,4 +41,21 @@ test Foo {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
+//     ╭─[ misc_values.baml:18:3 ]
+//     │
+//  18 │   input {
+//     │   ──┬──  
+//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
+//     │ 
+//     │ Note: Error code: E0034
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_values.baml:16:6 ]
+//     │
+//  16 │ test Foo {
+//     │      ─┬─  
+//     │       ╰─── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯

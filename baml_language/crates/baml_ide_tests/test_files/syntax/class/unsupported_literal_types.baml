@@ -12,4 +12,12 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Float literal values are not supported: 3.25
+//    ╭─[ class_unsupported_literal_types.baml:3:9 ]
+//    │
+//  3 │   b 2 | 3.25
+//    │         ──┬─  
+//    │           ╰─── Float literal values are not supported: 3.25
+//    │ 
+//    │ Note: Error code: E0033
+// ───╯

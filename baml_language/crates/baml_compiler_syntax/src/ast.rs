@@ -561,6 +561,11 @@ impl ConfigItem {
     pub fn matches_key(&self, name: &str) -> bool {
         self.key().is_some_and(|k| k.text() == name)
     }
+
+    /// Get attributes attached to this config item (e.g., `args { ... } @check(...)`).
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        self.syntax.children().filter_map(Attribute::cast)
+    }
 }
 
 impl TestDef {
@@ -685,21 +690,33 @@ impl BlockAttribute {
 
 impl Attribute {
     /// Get the first segment of the attribute name (e.g., "stream" from @stream.done).
+    /// Also handles keyword attribute names like @assert and @check.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT
+                )
+            })
     }
 
     /// Get the full attribute name including dot-separated modifiers.
     /// For @stream.done returns "stream.done", for @alias returns "alias".
+    /// Also handles keyword attribute names like @assert and @check.
     pub fn full_name(&self) -> Option<String> {
         let segments: Vec<String> = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| token.kind() == SyntaxKind::WORD)
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD | SyntaxKind::KW_ASSERT
+                )
+            })
             .map(|token| token.text().to_string())
             .collect();
 

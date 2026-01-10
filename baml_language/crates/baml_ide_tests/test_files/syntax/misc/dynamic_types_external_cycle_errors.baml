@@ -288,6 +288,24 @@ test AttemptToMakeClassInfinitelyRecursive {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:12:6 ]
+//     │
+//  12 │ test AttemptToIntroduceInfiniteCycle {
+//     │      ───────────────┬───────────────  
+//     │                     ╰───────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_external_cycle_errors.baml:34:6 ]
+//     │
+//  34 │ test AttemptToMakeClassInfinitelyRecursive {
+//     │      ──────────────────┬──────────────────  
+//     │                        ╰──────────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
 // Error: Duplicate class `DynamicClass`
 //    ╭─[ misc_dynamic_types_external_cycle_errors.baml:1:1 ]
 //    │

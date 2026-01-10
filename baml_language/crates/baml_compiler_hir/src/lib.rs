@@ -35,6 +35,7 @@ mod path;
 pub mod pretty;
 pub mod reserved_names;
 mod signature;
+mod test;
 mod type_ref;
 
 // Re-exports
@@ -665,8 +666,8 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
             }
         }
         SyntaxKind::TEST_DEF => {
-            if let Some(test) = lower_test(node) {
-                tree.alloc_test(test);
+            if let Some(t) = test::lower_test(node, ctx) {
+                tree.alloc_test(t);
             }
         }
         SyntaxKind::GENERATOR_DEF => {
@@ -758,10 +759,11 @@ fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
                 }
             }
 
-            let type_ref = field_node
-                .ty()
-                .map(|t| TypeRef::from_ast(&t))
-                .unwrap_or(TypeRef::Unknown);
+            let type_ref = field_node.ty().map(|t| {
+                // Validate for unsupported float literals before converting
+                validate_type_expr_for_float_literals(&t, ctx);
+                TypeRef::from_ast(&t)
+            }).unwrap_or(TypeRef::Unknown);
 
             fields.push(crate::Field {
                 name: field_name,
@@ -978,31 +980,6 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     Some(TypeAlias { name, type_ref })
 }
 
-/// Extract test definition from CST.
-fn lower_test(node: &SyntaxNode) -> Option<Test> {
-    use baml_compiler_syntax::ast::TestDef;
-
-    let test = TestDef::cast(node.clone())?;
-
-    // Extract name using AST accessor
-    let name = test
-        .name()
-        .map(|t| Name::new(t.text()))
-        .unwrap_or_else(|| Name::new("UnnamedTest"));
-
-    // Extract all function references using AST accessor
-    let function_refs = test
-        .function_names()
-        .into_iter()
-        .map(|t| Name::new(t.text()))
-        .collect();
-
-    Some(Test {
-        name,
-        function_refs,
-    })
-}
-
 //
 // ────────────────────────────────────────────────────── NAME VALIDATION ─────
 //
@@ -1211,6 +1188,28 @@ fn validate_constraint_attribute(
             attr_name: attr_name.to_string(),
             span,
         });
+    }
+}
+
+/// Validate a type expression for unsupported float literals.
+/// Float literal types (e.g., `3.25`) are not supported in BAML.
+fn validate_type_expr_for_float_literals(
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    use baml_compiler_syntax::SyntaxKind;
+
+    // Iterate through all tokens in the type expression looking for float literals
+    for child in type_expr.syntax().descendants_with_tokens() {
+        if let rowan::NodeOrToken::Token(token) = child {
+            if token.kind() == SyntaxKind::FLOAT_LITERAL {
+                let span = ctx.span(token.text_range());
+                ctx.push_diagnostic(HirDiagnostic::UnsupportedFloatLiteral {
+                    value: token.text().to_string(),
+                    span,
+                });
+            }
+        }
     }
 }
 

@@ -956,6 +956,60 @@ args {
 //      │ 
 //      │ Note: Error code: E0010
 // ─────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_validation_errors.baml:11:6 ]
+//     │
+//  11 │ test AttemptToModifyNonDynamicClass {
+//     │      ───────────────┬──────────────  
+//     │                     ╰──────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_validation_errors.baml:25:6 ]
+//     │
+//  25 │ test AttemptToModifyTypeAlias {
+//     │      ────────────┬───────────  
+//     │                  ╰───────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_validation_errors.baml:43:6 ]
+//     │
+//  43 │ test AttemptToAddDynamicAttrInDyanmicDef {
+//     │      ─────────────────┬─────────────────  
+//     │                       ╰─────────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_validation_errors.baml:64:6 ]
+//     │
+//  64 │ test AttemptToModifySameDynamicMultipleTimes {
+//     │      ───────────────────┬───────────────────  
+//     │                         ╰───────────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_validation_errors.baml:79:6 ]
+//     │
+//  79 │ test NameAlreadyExists {
+//     │      ────────┬────────  
+//     │              ╰────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//      ╭─[ misc_dynamic_types_validation_errors.baml:101:6 ]
+//      │
+//  101 │ test TypeMismatch {
+//      │      ──────┬─────  
+//      │            ╰─────── Missing `args` property
+//      │ 
+//      │ Note: Error code: E0035
+// ─────╯
 // Error: Duplicate class `NonDynamic`
 //    ╭─[ misc_dynamic_types_validation_errors.baml:1:1 ]
 //    │

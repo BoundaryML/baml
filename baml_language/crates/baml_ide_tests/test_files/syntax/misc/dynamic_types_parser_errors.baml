@@ -615,6 +615,33 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_parser_errors.baml:14:6 ]
+//     │
+//  14 │ test MultipleTypeBuilderBlocks {
+//     │      ────────────┬────────────  
+//     │                  ╰────────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_parser_errors.baml:37:6 ]
+//     │
+//  37 │ test IncompleteDynamicDef {
+//     │      ──────────┬─────────  
+//     │                ╰─────────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
+// Error: Missing `args` property
+//     ╭─[ misc_dynamic_types_parser_errors.baml:49:6 ]
+//     │
+//  49 │ test IncompleteSyntax {
+//     │      ────────┬───────  
+//     │              ╰───────── Missing `args` property
+//     │ 
+//     │ Note: Error code: E0035
+// ────╯
 // Error: Duplicate class `Bar`
 //    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
