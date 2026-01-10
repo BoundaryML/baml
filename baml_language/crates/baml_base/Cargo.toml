@@ -19,5 +19,6 @@ workspace = true
 [dependencies]
 ariadne = { workspace = true }
 salsa = { workspace = true }
-text-size = { workspace = true }
 smol_str = { workspace = true }
+text-size = { workspace = true }
+

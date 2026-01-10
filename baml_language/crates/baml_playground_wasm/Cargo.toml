@@ -1,21 +1,21 @@
 [package]
-name = "baml-playground-wasm"
+name = "baml_playground_wasm"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
-wasm-bindgen = "0.2"
-console_error_panic_hook = { version = "0.1", optional = true }
-wee_alloc = { version = "0.4", optional = true }
-baml_project = { path = "../baml_project" }
+baml_project = { workspace = true }
+console_error_panic_hook = { workspace = true, optional = true }
+wasm-bindgen = { workspace = true }
+wee_alloc = { workspace = true, optional = true }
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = { workspace = true }
 
 [features]
-default = []
-console_error_panic = ["console_error_panic_hook"]
-small_allocator = ["wee_alloc"]
+default = [  ]
+console_error_panic = [ "console_error_panic_hook" ]
+small_allocator = [ "wee_alloc" ]

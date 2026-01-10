@@ -16,23 +16,19 @@ doctest = false
 [lints]
 workspace = true
 
-
 [dependencies]
-anyhow.workspace = true
-baml_lsp.workspace = true
-cfg-if.workspace = true
-clap = { workspace = true, features = ["color", "env"] }
-clap-cargo.workspace = true
-colored.workspace = true
-
-ctrlc.workspace = true
-
-# openssl = { version = "0.10", optional = true }
+baml_lsp = { workspace = true }
+anyhow = { workspace = true }
+cfg-if = { workspace = true }
+clap = { workspace = true, features = [ "color", "env" ] }
+clap-cargo = { workspace = true }
+colored = { workspace = true }
+ctrlc = { workspace = true }
 
 [features]
-defaults = []
-internal = []
-skip-integ-tests = []
+defaults = [  ]
+internal = [  ]
+skip-integ-tests = [  ]
 # TODO: reqwest is not currently a dependency
 # static-ssl = ["reqwest/native-tls-vendored"]
 
@@ -46,7 +42,6 @@ skip-integ-tests = []
 # rstest = "0.22.0"
 # walkdir = "2.5.0"
 # wasm-logger = "0.2.0"
-
 
 [[bin]]
 name = "baml-cli"

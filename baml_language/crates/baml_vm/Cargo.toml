@@ -18,21 +18,21 @@ doctest = false
 workspace = true
 
 [dependencies]
-colored = "2"
-indexmap = "2"
-paste = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
 baml_vm_types = { workspace = true }
+colored = { workspace = true }
+indexmap = { workspace = true }
+paste = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1"
-indexmap = "2"
-divan = { workspace = true }
-tokio = { version = "1", features = ["rt", "macros"] }
-baml_tests = { workspace = true }
 baml_compiler_emit = { workspace = true }
+baml_tests = { workspace = true }
+anyhow = { workspace = true }
+divan = { workspace = true }
+indexmap = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [[bench]]
 name = "fib"

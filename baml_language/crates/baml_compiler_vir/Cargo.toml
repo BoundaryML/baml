@@ -21,13 +21,13 @@ baml_base = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_compiler_tir = { workspace = true }
-
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
-text-size = { workspace = true }
 smol_str = { workspace = true }
+text-size = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
+

@@ -1,0 +1,23 @@
+[package]
+name = "baml_tools_stow"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+publish = false
+
+[[bin]]
+name = "cargo-stow"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { workspace = true, features = [ "derive" ] }
+glob = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+taplo = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }

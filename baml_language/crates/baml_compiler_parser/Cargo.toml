@@ -18,10 +18,10 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
 baml_compiler_lexer = { workspace = true }
 baml_compiler_syntax = { workspace = true }
-baml_compiler_diagnostics = { workspace = true }
-
-salsa = { workspace = true }
 rowan = { workspace = true }
+salsa = { workspace = true }
 text-size = { workspace = true }
+

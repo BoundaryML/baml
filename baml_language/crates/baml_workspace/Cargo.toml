@@ -18,7 +18,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-
+glob = { workspace = true }
 salsa = { workspace = true }
 walkdir = { workspace = true }
-glob = { workspace = true }
+

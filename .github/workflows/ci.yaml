@@ -200,6 +200,31 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+  # Lint checks
+  cargo-stow:
+    name: "Cargo Stow"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 10
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Run cargo stow --check"
+        run: cargo run -p baml_tools_stow --release -- stow --check
+        working-directory: baml_language
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -300,6 +325,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - cargo-stow
       - cargo-tests
       - wasm-pack-tests
       - beps
@@ -309,6 +335,11 @@ jobs:
     steps:
       - name: "Check test results"
         run: |
+          if [[ "${{ needs.cargo-stow.result }}" != "success" && "${{ needs.cargo-stow.result }}" != "skipped" ]]; then
+            echo "::error::Cargo stow check failed"
+            exit 1
+          fi
+
           if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
             echo "::error::Cargo tests failed"
             exit 1

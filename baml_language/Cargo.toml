@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = [ "crates/*" ]
 resolver = "2"
 
 [workspace.package]
@@ -7,7 +7,7 @@ resolver = "2"
 edition = "2024"
 # This is the MSRV (Minimum Supported Rust Version) for the workspace
 rust-version = "1.89"
-authors = ["Vaibhav Gupta <vbv@boundaryml.com>"]
+authors = [ "Vaibhav Gupta <vbv@boundaryml.com>" ]
 homepage = "https://github.com/BoundaryML/baml"
 documentation = "https://docs.boundaryml.com"
 repository = "https://github.com/BoundaryML/baml"
@@ -16,123 +16,127 @@ license = "Apache-2.0"
 version = "0.0.0"
 
 [workspace.dependencies]
-# workspace dependencies
+#  Internal dependencies (baml_*)
 baml_base = { path = "crates/baml_base" }
 baml_builtins = { path = "crates/baml_builtins" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
-baml_compiler_emit = { path = "crates/baml_compiler_emit" }
-baml_db = { path = "crates/baml_db" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
+baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_compiler_hir = { path = "crates/baml_compiler_hir" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_mir = { path = "crates/baml_compiler_mir" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
-baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-baml_tests = { path = "crates/baml_tests" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
+baml_db = { path = "crates/baml_db" }
+baml_ide = { path = "crates/baml_ide" }
+baml_lsp = { path = "crates/baml_lsp" }
+baml_lsp_types = { path = "crates/baml_lsp_types" }
+baml_project = { path = "crates/baml_project" }
+baml_tests = { path = "crates/baml_tests" }
+baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
 baml_vm = { path = "crates/baml_vm" }
 baml_vm_types = { path = "crates/baml_vm_types" }
 baml_workspace = { path = "crates/baml_workspace" }
-baml_lsp_types = { path = "crates/baml_lsp_types" }
-baml_ide = { path = "crates/baml_ide" }
-baml_project = { path = "crates/baml_project" }
-baml_lsp = { path = "crates/baml_lsp" }
 
-# external dependencies
+#  External dependencies
 anyhow = { version = "1" }
+arboard = "3.4"
 ariadne = { version = "0.6" }
-crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+axum = { version = "0.8.4", features = [ "ws" ] }
+cfg-if = "1.0.0"
+clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
+clap-cargo = "0.14.1"
+colored = { version = "2.1.0" }
+console-subscriber = { version = "0.4.1", features = [ "grpc-web" ] }
+console_error_panic_hook = "0.1"
+crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
+crossterm = "0.28"
+ctrlc = "3.4"
+divan = { package = "codspeed-divan-compat", version = "*" }
+filetime = "0.2.25"
+futures = { version = "0.3.30", features = [ "executor" ] }
+glob = { version = "0.3" }
 ignore = { version = "0.4.22" }
+indexmap = { version = "2.1.0", features = [ "serde" ] }
+insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+insta-cmd = { version = "0.6.0" }
+is-macro = { version = "0.3.5" }
+itertools = "0.14.0"
 jod-thread = { version = "0.1.2" }
+la-arena = { version = "0.3" }
+libc = "0.2.169"
+log = "0.4.20"
+logos = { version = "0.15" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
+memchr = { version = "2.7.1" }
+mime_guess = "2.0.5"
+notify = "7.0"
+parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
+paste = "1.0"
+path-absolutize = { version = "3.1.1", features = [
+  "once_cell_cache",
+  "use_unix_paths_on_wasm",
+] }
+pathdiff = { version = "0.2.1" }
+pretty_assertions = { version = "1.4" }
+prettyplease = { version = "0.2" }
+proc-macro2 = { version = "1" }
+quote = { version = "1" }
+ratatui = "0.29"
 regex = { version = "1.10.2" }
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = { version = "1.0.113" }
-tracing-log = "0.2.0"
-shellexpand = { version = "3.0.0" }
-semver = "1.0.20"
-thiserror = { version = "2.0.0" }
-tracing = { version = "0.1.40" }
-futures = { version = "0.3.30", features = ["executor"] }
-indexmap = { version = "2.1.0", features = ["serde"] }
-itertools = "0.14.0"
 reqwest = { version = "0.12.12", features = [
   "json",
   "native-tls-alpn",
   "native-tls-vendored",
   "stream",
 ] }
-cfg-if = "1.0.0"
-paste = "1.0"
-
-tracing-subscriber = { version = "0.3.18", default-features = false, features = [
-    "env-filter",
-    "fmt",
-] }
-schemars = { version = "0.8.16" }
-memchr = { version = "2.7.1" }
-is-macro = { version = "0.3.5" }
-
-divan = { package = "codspeed-divan-compat", version = "*" }
-glob = { version = "0.3" }
-insta = { version = "1.34", features = ["yaml", "redactions"] }
-insta-cmd = { version = "0.6.0" }
-la-arena = { version = "0.3" }
-logos = { version = "0.15" }
-pretty_assertions = { version = "1.4" }
 rowan = { version = "0.16" }
 rustc-hash = { version = "2.1" }
-# When updating salsa, make sure to also update the revision in `fuzz/Cargo.toml`
 salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
-    "compact_str",
-    "macros",
-    "salsa_unstable",
-    "inventory",
+  "compact_str",
+  "macros",
+  "salsa_unstable",
+  "inventory",
 ] }
-smol_str = { version = "0.3" }
-text-size = { version = "1.1" }
-walkdir = { version = "2.4" }
-parking_lot = { version = "0.12", features = ["deadlock_detection"] }
-log = "0.4.20"
-similar = { version = "2.4.0", features = ["inline"] }
-colored = { version = "2.1.0" }
-path-absolutize = { version = "3.1.1", features = [
-    "once_cell_cache",
-    "use_unix_paths_on_wasm",
-] }
-pathdiff = { version = "0.2.1" }
+schemars = { version = "0.8.16" }
+semver = "1.0.20"
+serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.4"
-filetime = "0.2.25"
+serde_json = { version = "1.0.113" }
+shellexpand = { version = "3.0.0" }
+similar = { version = "2.4.0", features = [ "inline" ] }
 simple-logging = "2.0.2"
-url = "2.5.2"
-tokio = { version = "1.36", features = ["full", "tracing"] }
-console-subscriber = { version = "0.4.1", features = ["grpc-web"] }
-axum = { version = "0.8.4", features = ["ws"] }
-tower-http = { version = "0.6.6", features = ["fs", "cors"] }
+smol_str = { version = "0.3" }
+syn = { version = "2", features = [ "full" ] }
+taplo = { version = "0.13" }
+text-size = { version = "1.1" }
+thiserror = { version = "2.0.0" }
+toml = { version = "0.8" }
+toml_edit = { version = "0.22" }
+tokio = { version = "1.36", features = [ "full", "tracing" ] }
 tower = "0.5"
+tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
+tracing = { version = "0.1.40" }
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+  "env-filter",
+  "fmt",
+] }
+url = "2.5.2"
+walkdir = { version = "2.4" }
+wasm-bindgen = "0.2"
+wasm-bindgen-test = "0.3"
 webbrowser = "1.0.5"
-mime_guess = "2.0.5"
-clap = { version = "4.4.6", features = ["cargo", "derive"] }
-clap-cargo = "0.14.1"
-ctrlc = "3.4"
-
-
-
-# Code generation for build.rs
-quote = { version = "1" }
-proc-macro2 = { version = "1" }
-prettyplease = { version = "0.2" }
-syn = { version = "2", features = ["full"] }
-
+wee_alloc = "0.4"
 [workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
-    "cfg(fuzzing)",
-    "cfg(codspeed)",
+  "cfg(fuzzing)",
+  "cfg(codspeed)",
 ] }
 
 [workspace.lints.clippy]
@@ -153,15 +157,15 @@ must_use_candidate = "allow"
 similar_names = "allow"
 single_match_else = "allow"
 too_many_lines = "allow"
-needless_continue = "allow" # An explicit continue can be more readable, especially if the alternative is an empty block.
+needless_continue = "allow"            # An explicit continue can be more readable, especially if the alternative is an empty block.
 unnecessary_debug_formatting = "allow" # too many instances, the display also doesn't quote the path which is often desired in logs where we use them the most often.
 # Without the hashes we run into a `rustfmt` bug in some snapshot tests, see #13250
 needless_raw_string_hashes = "allow"
 # Disallowed restriction lints
-ignore_without_reason = "allow" # Too many exsisting instances, and there's no auto fix.
-print_stdout = "deny" # deny print! and println! (LSP requires stdout/stderr for communication)
+ignore_without_reason = "allow"          # Too many exsisting instances, and there's no auto fix.
+print_stdout = "deny"                    # deny print! and println! (LSP requires stdout/stderr for communication)
 print_stderr = "deny"
-dbg_macro = "deny"    # deny dbg! macro (LSP requires stdout/stderr for communication)
+dbg_macro = "deny"                       # deny dbg! macro (LSP requires stdout/stderr for communication)
 empty_drop = "warn"
 empty_structs_with_brackets = "warn"
 exit = "warn"
@@ -184,7 +188,6 @@ if_not_else = "allow"
 
 # Diagnostics are not actionable: Enable once https://github.com/rust-lang/rust-clippy/issues/13774 is resolved.
 large_stack_arrays = "allow"
-
 
 [profile.release]
 lto = "fat"
