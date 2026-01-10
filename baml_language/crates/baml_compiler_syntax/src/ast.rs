@@ -442,7 +442,7 @@ impl ConfigBlock {
         self.syntax.children().filter_map(ConfigItem::cast)
     }
 
-    /// Get all type_builder blocks inside this config block.
+    /// Get all `type_builder` blocks inside this config block.
     pub fn type_builder_blocks(&self) -> impl Iterator<Item = TypeBuilderBlock> {
         self.syntax.children().filter_map(TypeBuilderBlock::cast)
     }
