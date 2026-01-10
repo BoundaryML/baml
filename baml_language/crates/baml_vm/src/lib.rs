@@ -11,7 +11,6 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod builtins;
-pub mod bytecode;
 pub mod debug;
 pub mod errors;
 pub mod indexable;
@@ -23,15 +22,7 @@ pub mod watch;
 // Re-export lookup functions from baml_builtins for convenience.
 pub use baml_builtins::{find_builtin_by_path, find_function, find_method};
 pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
-pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
-    VizNodeMeta, VizNodeType,
-};
 pub use errors::{InternalError, RuntimeError, StackTrace};
-pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
+pub use indexable::EvalStack;
 pub use native::NativeFunction;
-pub use types::{
-    Class, Enum, Function, FunctionKind, Future, FutureKind, Object, ObjectType, Program, Value,
-    Variant, type_tags,
-};
 pub use vm::{BamlVmProgram, Frame, Vm, VmExecState};

@@ -22,7 +22,7 @@
 mod analysis;
 mod emit;
 
-use baml_vm::ObjectPool;
+use baml_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
 
 /// Context for MIR codegen.
@@ -41,7 +41,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     /// Enum variant mappings (enum name -> variant name -> variant index).
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool for strings, etc.
-    pub objects: &'obj mut ObjectPool,
+    pub objects: &'obj mut ObjectPool<()>,
 }
 
 use std::collections::HashMap;
@@ -50,7 +50,7 @@ use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
-pub use baml_vm::{
+pub use baml_vm_types::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value, type_tags,
 };
@@ -62,7 +62,9 @@ pub use baml_vm::{
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(
+    db: &dyn baml_compiler_mir::Db,
+) -> Result<Program<()>, LoweringError> {
     let project = db.project();
     compile_files(db, project.files(db))
 }
@@ -75,7 +77,7 @@ pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Progr
 pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
-) -> Result<Program, LoweringError> {
+) -> Result<Program<()>, LoweringError> {
     let mut program = Program::new();
     let project = db.project();
 
@@ -90,9 +92,9 @@ pub fn compile_files(
     let mut global_idx = 0;
 
     // First, add builtin functions (stable indices 0, 1, 2, ...)
-    let builtins = baml_vm::functions();
-    for path in builtins.keys() {
-        globals.insert(path.clone(), global_idx);
+    let builtins = baml_builtins::builtins();
+    for path in builtins {
+        globals.insert(path.path.to_string(), global_idx);
         global_idx += 1;
     }
 
@@ -188,12 +190,12 @@ pub fn compile_files(
     }
 
     // Add builtin functions to globals FIRST (stable indices)
-    for (path, (native_fn, arity)) in &builtins {
+    for builtin in builtins {
         let builtin_fn = Function {
-            name: path.clone(),
-            arity: *arity,
+            name: builtin.path.to_string(),
+            arity: builtin.arity(),
             bytecode: Bytecode::default(),
-            kind: FunctionKind::Native(*native_fn),
+            kind: FunctionKind::Native(()),
             locals_in_scope: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),

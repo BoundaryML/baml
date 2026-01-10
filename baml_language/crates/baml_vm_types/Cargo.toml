@@ -1,5 +1,5 @@
 [package]
-name = "baml_compiler_emit"
+name = "baml_vm_types"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -9,6 +9,7 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
+description = "BAML Virtual Machine"
 
 [lib]
 doctest = false
@@ -17,18 +18,17 @@ doctest = false
 workspace = true
 
 [dependencies]
-salsa = { workspace = true }
+colored = "2"
+indexmap = "2"
+paste = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
-baml_compiler_hir = { workspace = true }
-baml_compiler_mir = { workspace = true }
-baml_vm_types = { workspace = true }
-baml_workspace = { workspace = true }
-baml_compiler_tir = { workspace = true }
-baml_compiler_vir = { workspace = true }
+baml_builtins_macros = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
+anyhow = "1"
+indexmap = "2"
+divan = { workspace = true }
+tokio = { version = "1", features = ["rt", "macros"] }
 baml_tests = { workspace = true }
-insta = { workspace = true }
-la-arena = { workspace = true }
+baml_compiler_emit = { workspace = true }

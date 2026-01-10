@@ -1,16 +1,18 @@
 use std::collections::HashMap;
 
+use baml_vm_types::{
+    BinOp, CmpOp, FunctionKind, FutureKind, GlobalPool, Instruction, Object, ObjectIndex,
+    ObjectPool, ObjectType, StackIndex, UnaryOp, Value, Variant,
+    bytecode::{self, BlockNotification},
+    types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
+};
 use indexmap::IndexMap;
 
 use crate::{
-    StackTrace, UnaryOp,
-    bytecode::{BinOp, BlockNotification, CmpOp, Instruction},
+    NativeFunction, StackTrace,
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
-    indexable::{EvalStack, GlobalPool, ObjectIndex, ObjectPool, StackIndex},
-    types::{
-        FunctionKind, FunctionType, Future, FutureKind, FutureType, Instance, Object, ObjectType,
-        PendingFuture, Type, Value, Variant,
-    },
+    indexable::{EvalStack, EvalStackTrait, ObjectPoolTrait},
+    types::ObjectTrait,
     watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
 
@@ -34,7 +36,7 @@ pub struct Frame {
     /// Points to the next instruction that the VM will execute. It is of type
     /// [`isize`] because some jumps can create negative offsets (for loops)
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`crate::Bytecode::instructions`]). However,
+    /// only once (when we index into [`Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
     /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,
@@ -171,7 +173,7 @@ pub struct Vm {
     /// elsewhere since that will make adding a garbage collector harder.
     /// Only allocate objects here and use indices to reference them, don't
     /// bother with Rust references because they will introduce lifetime issues.
-    pub objects: ObjectPool,
+    pub objects: ObjectPool<NativeFunction>,
 
     /// Global variables.
     ///
@@ -233,15 +235,15 @@ pub enum WatchNotification {
     Block(BlockNotification),
     Viz {
         function_name: String,
-        event: crate::bytecode::VizExecEvent,
+        event: baml_vm_types::bytecode::VizExecEvent,
     },
 }
 
 #[derive(Clone, Debug)]
 pub struct BamlVmProgram {
-    pub objects: ObjectPool,
+    pub objects: ObjectPool<NativeFunction>,
     pub globals: GlobalPool,
-    pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
+    pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind<NativeFunction>)>,
     pub resolved_class_names: HashMap<String, ObjectIndex>,
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
@@ -250,8 +252,8 @@ pub struct BamlVmProgram {
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
-fn value_type_tag(value: &Value, objects: &ObjectPool) -> i64 {
-    use crate::types::type_tags;
+fn value_type_tag(value: &Value, objects: &ObjectPool<NativeFunction>) -> i64 {
+    use baml_vm_types::types::type_tags;
 
     match value {
         Value::Int(_) => type_tags::INT,
@@ -301,18 +303,24 @@ impl Vm {
     }
 
     /// Creates a VM from a compiled [`crate::Program`].
-    pub fn from_program(program: crate::Program) -> Self {
-        Self {
+    pub fn from_program(program: baml_vm_types::Program<()>) -> Result<Self, VmError> {
+        Ok(Self {
             frames: Vec::new(),
             stack: EvalStack::new(),
             runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-            objects: program.objects,
+            objects: ObjectPool::from_vec(
+                program
+                    .objects
+                    .into_iter()
+                    .map(|o| crate::native::attach_builtins(o))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
             globals: program.globals,
             env_vars: HashMap::new(),
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
-        }
+        })
     }
 
     /// Bootstraps the VM preparing the given function to run.
@@ -325,7 +333,7 @@ impl Vm {
         );
 
         // TODO: Run collect_garbage in codegen after each function call.
-        if self.objects.len() != self.runtime_allocs_offset.0 {
+        if self.objects.len() != self.runtime_allocs_offset.into_raw() {
             eprintln!("WARNING: garbage collection did not run before setting a new entry point");
         }
 
@@ -700,7 +708,7 @@ impl Vm {
                     let notification = &function.block_notifications[block_index];
 
                     // Create a copy with the function name populated
-                    let full_notification = crate::bytecode::BlockNotification {
+                    let full_notification = bytecode::BlockNotification {
                         function_name: function.name.clone(),
                         block_name: notification.block_name.clone(),
                         level: notification.level,
@@ -715,8 +723,8 @@ impl Vm {
                 Instruction::VizEnter(index) | Instruction::VizExit(index) => {
                     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
                     let delta = match instruction {
-                        Instruction::VizEnter(_) => crate::bytecode::VizExecDelta::Enter,
-                        Instruction::VizExit(_) => crate::bytecode::VizExecDelta::Exit,
+                        Instruction::VizEnter(_) => bytecode::VizExecDelta::Enter,
+                        Instruction::VizExit(_) => bytecode::VizExecDelta::Exit,
                         _ => unreachable!("matched on viz instruction"),
                     };
 
@@ -727,7 +735,7 @@ impl Vm {
                         }
                     })?;
 
-                    let event = crate::bytecode::VizExecEvent {
+                    let event = bytecode::VizExecEvent {
                         delta,
                         node_id: node.node_id,
                         node_type: node.node_type,
@@ -1566,7 +1574,7 @@ impl Vm {
                     ) {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: FunctionType::Llm.into(), // TODO: Fix this
-                            got: FunctionType::from(callable_future.kind).into(),
+                            got: FunctionType::from(&callable_future.kind).into(),
                         }));
                     }
 
@@ -1776,8 +1784,9 @@ impl Vm {
                         FunctionKind::Native(func) => {
                             // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
                             // reference in the stack, using `swap` to insert the result.
-                            let args =
-                                self.stack[StackIndex::from_raw(locals_offset.0 + 1)..].to_owned();
+                            let args = self.stack
+                                [StackIndex::from_raw(locals_offset.into_raw() + 1)..]
+                                .to_owned();
 
                             // Run Rust native function.
                             let result = func(self, &args)?;
@@ -1819,7 +1828,7 @@ impl Vm {
                         FunctionKind::Llm | FunctionKind::Future => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
-                                got: FunctionType::from(callee.kind).into(),
+                                got: FunctionType::from(&callee.kind).into(),
                             }
                             .into());
                         }
@@ -1831,7 +1840,7 @@ impl Vm {
                     let result = self.stack.ensure_pop()?;
 
                     // Clean up any emittable variables in the function's scope
-                    for i in frame.locals_offset.0..self.stack.len() {
+                    for i in frame.locals_offset.into_raw()..self.stack.len() {
                         let index = StackIndex::from_raw(i);
                         if self.watched_vars.remove(&index).is_some() {
                             let var_node = NodeId::LocalVar(index);

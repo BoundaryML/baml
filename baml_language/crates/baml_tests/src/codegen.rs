@@ -16,10 +16,10 @@ pub struct Program {
 }
 
 /// Resolve a variable index to its name using scope information.
-fn resolve_var_name(
+fn resolve_var_name<T: std::fmt::Debug>(
     var_idx: usize,
     inst_idx: usize,
-    function: &baml_vm::Function,
+    function: &baml_vm_types::Function<T>,
 ) -> anyhow::Result<String> {
     // Get the scope ID for this instruction
     let scope_id = function
@@ -46,13 +46,13 @@ fn resolve_var_name(
 }
 
 /// Convert a runtime Instruction to a test Instruction by resolving indices to values.
-fn convert_instruction(
-    inst: &baml_vm::Instruction,
+fn convert_instruction<T: std::fmt::Debug>(
+    inst: &baml_vm_types::Instruction,
     inst_idx: usize,
-    constants: &[baml_vm::Value],
-    objects: &[baml_vm::Object],
+    constants: &[baml_vm_types::Value],
+    objects: &[baml_vm_types::Object<T>],
     globals: &HashMap<String, usize>,
-    function: &baml_vm::Function,
+    function: &baml_vm_types::Function<T>,
 ) -> anyhow::Result<Instruction> {
     // Build reverse lookup for globals (index -> name)
     let globals_by_index: HashMap<usize, &str> = globals
@@ -61,50 +61,50 @@ fn convert_instruction(
         .collect();
 
     Ok(match inst {
-        baml_vm::Instruction::LoadConst(idx) => {
+        baml_vm_types::Instruction::LoadConst(idx) => {
             let value = &constants[*idx];
             let test_value = convert_value(value, objects)?;
             Instruction::LoadConst(test_value)
         }
-        baml_vm::Instruction::LoadVar(idx) => {
+        baml_vm_types::Instruction::LoadVar(idx) => {
             let var_name = resolve_var_name(*idx, inst_idx, function)?;
             Instruction::LoadVar(var_name)
         }
-        baml_vm::Instruction::StoreVar(idx) => {
+        baml_vm_types::Instruction::StoreVar(idx) => {
             let var_name = resolve_var_name(*idx, inst_idx, function)?;
             Instruction::StoreVar(var_name)
         }
-        baml_vm::Instruction::LoadGlobal(global_idx) => {
+        baml_vm_types::Instruction::LoadGlobal(global_idx) => {
             let name = globals_by_index
                 .get(&global_idx.raw())
                 .map(|s| (*s).to_string())
                 .unwrap_or_else(|| format!("global_{global_idx}"));
             Instruction::LoadGlobal(Value::function(&name))
         }
-        baml_vm::Instruction::StoreGlobal(global_idx) => {
+        baml_vm_types::Instruction::StoreGlobal(global_idx) => {
             let name = globals_by_index
                 .get(&global_idx.raw())
                 .map(|s| (*s).to_string())
                 .unwrap_or_else(|| format!("global_{global_idx}"));
             Instruction::StoreGlobal(Value::function(&name))
         }
-        baml_vm::Instruction::LoadField(idx) => Instruction::LoadField(*idx),
-        baml_vm::Instruction::StoreField(idx) => Instruction::StoreField(*idx),
-        baml_vm::Instruction::Pop(n) => Instruction::Pop(*n),
-        baml_vm::Instruction::Copy(idx) => Instruction::Copy(*idx),
-        baml_vm::Instruction::PopReplace(n) => Instruction::PopReplace(*n),
-        baml_vm::Instruction::Jump(offset) => Instruction::Jump(*offset),
-        baml_vm::Instruction::PopJumpIfFalse(offset) => Instruction::PopJumpIfFalse(*offset),
-        baml_vm::Instruction::BinOp(op) => Instruction::BinOp(*op),
-        baml_vm::Instruction::CmpOp(op) => Instruction::CmpOp(*op),
-        baml_vm::Instruction::UnaryOp(op) => Instruction::UnaryOp(*op),
-        baml_vm::Instruction::AllocArray(n) => Instruction::AllocArray(*n),
-        baml_vm::Instruction::AllocMap(n) => Instruction::AllocMap(*n),
-        baml_vm::Instruction::LoadArrayElement => Instruction::LoadArrayElement,
-        baml_vm::Instruction::LoadMapElement => Instruction::LoadMapElement,
-        baml_vm::Instruction::StoreArrayElement => Instruction::StoreArrayElement,
-        baml_vm::Instruction::StoreMapElement => Instruction::StoreMapElement,
-        baml_vm::Instruction::AllocInstance(obj_idx) => {
+        baml_vm_types::Instruction::LoadField(idx) => Instruction::LoadField(*idx),
+        baml_vm_types::Instruction::StoreField(idx) => Instruction::StoreField(*idx),
+        baml_vm_types::Instruction::Pop(n) => Instruction::Pop(*n),
+        baml_vm_types::Instruction::Copy(idx) => Instruction::Copy(*idx),
+        baml_vm_types::Instruction::PopReplace(n) => Instruction::PopReplace(*n),
+        baml_vm_types::Instruction::Jump(offset) => Instruction::Jump(*offset),
+        baml_vm_types::Instruction::PopJumpIfFalse(offset) => Instruction::PopJumpIfFalse(*offset),
+        baml_vm_types::Instruction::BinOp(op) => Instruction::BinOp(*op),
+        baml_vm_types::Instruction::CmpOp(op) => Instruction::CmpOp(*op),
+        baml_vm_types::Instruction::UnaryOp(op) => Instruction::UnaryOp(*op),
+        baml_vm_types::Instruction::AllocArray(n) => Instruction::AllocArray(*n),
+        baml_vm_types::Instruction::AllocMap(n) => Instruction::AllocMap(*n),
+        baml_vm_types::Instruction::LoadArrayElement => Instruction::LoadArrayElement,
+        baml_vm_types::Instruction::LoadMapElement => Instruction::LoadMapElement,
+        baml_vm_types::Instruction::StoreArrayElement => Instruction::StoreArrayElement,
+        baml_vm_types::Instruction::StoreMapElement => Instruction::StoreMapElement,
+        baml_vm_types::Instruction::AllocInstance(obj_idx) => {
             let obj = objects.get(obj_idx.raw()).ok_or_else(|| {
                 anyhow::anyhow!(
                     "Object index {obj_idx} not found for AllocInstance (have {} objects)",
@@ -112,58 +112,63 @@ fn convert_instruction(
                 )
             })?;
             match obj {
-                baml_vm::Object::Class(class) => {
+                baml_vm_types::Object::Class(class) => {
                     Instruction::AllocInstance(Value::class(&class.name))
                 }
                 _ => anyhow::bail!("Expected Class object for AllocInstance, got {obj:?}"),
             }
         }
-        baml_vm::Instruction::AllocVariant(obj_idx) => {
+        baml_vm_types::Instruction::AllocVariant(obj_idx) => {
             let obj = objects.get(obj_idx.raw()).ok_or_else(|| {
                 anyhow::anyhow!("Object index {obj_idx} not found for AllocVariant")
             })?;
             match obj {
-                baml_vm::Object::Enum(enm) => Instruction::AllocVariant(Value::enm(&enm.name)),
+                baml_vm_types::Object::Enum(enm) => {
+                    Instruction::AllocVariant(Value::enm(&enm.name))
+                }
                 _ => anyhow::bail!("Expected Enum object for AllocVariant, got {obj:?}"),
             }
         }
-        baml_vm::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
-        baml_vm::Instruction::Await => Instruction::Await,
-        baml_vm::Instruction::Watch(idx) => Instruction::Watch(*idx),
-        baml_vm::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
-        baml_vm::Instruction::Notify(idx) => Instruction::Notify(*idx),
-        baml_vm::Instruction::Call(n) => Instruction::Call(*n),
-        baml_vm::Instruction::Return => Instruction::Return,
-        baml_vm::Instruction::Assert => Instruction::Assert,
-        baml_vm::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
-        baml_vm::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
-        baml_vm::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
-        baml_vm::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
+        baml_vm_types::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
+        baml_vm_types::Instruction::Await => Instruction::Await,
+        baml_vm_types::Instruction::Watch(idx) => Instruction::Watch(*idx),
+        baml_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
+        baml_vm_types::Instruction::Notify(idx) => Instruction::Notify(*idx),
+        baml_vm_types::Instruction::Call(n) => Instruction::Call(*n),
+        baml_vm_types::Instruction::Return => Instruction::Return,
+        baml_vm_types::Instruction::Assert => Instruction::Assert,
+        baml_vm_types::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
+        baml_vm_types::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
+        baml_vm_types::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
+        baml_vm_types::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
             table_idx: *table_idx,
             default: *default,
         },
-        baml_vm::Instruction::Discriminant => Instruction::Discriminant,
-        baml_vm::Instruction::TypeTag => Instruction::TypeTag,
-        baml_vm::Instruction::Unreachable => Instruction::Unreachable,
+        baml_vm_types::Instruction::Discriminant => Instruction::Discriminant,
+        baml_vm_types::Instruction::TypeTag => Instruction::TypeTag,
+        baml_vm_types::Instruction::Unreachable => Instruction::Unreachable,
     })
 }
 
 /// Convert a runtime Value to a test Value by resolving object indices.
-fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow::Result<Value> {
+fn convert_value<T: std::fmt::Debug>(
+    value: &baml_vm_types::Value,
+    objects: &[baml_vm_types::Object<T>],
+) -> anyhow::Result<Value> {
     Ok(match value {
-        baml_vm::Value::Null => Value::Null,
-        baml_vm::Value::Int(i) => Value::Int(*i),
-        baml_vm::Value::Float(f) => Value::Float(*f),
-        baml_vm::Value::Bool(b) => Value::Bool(*b),
-        baml_vm::Value::Object(obj_idx) => {
+        baml_vm_types::Value::Null => Value::Null,
+        baml_vm_types::Value::Int(i) => Value::Int(*i),
+        baml_vm_types::Value::Float(f) => Value::Float(*f),
+        baml_vm_types::Value::Bool(b) => Value::Bool(*b),
+        baml_vm_types::Value::Object(obj_idx) => {
             let obj = objects
                 .get(obj_idx.raw())
                 .ok_or_else(|| anyhow::anyhow!("Object index {obj_idx} not found"))?;
             match obj {
-                baml_vm::Object::String(s) => Value::string(s),
-                baml_vm::Object::Function(f) => Value::function(&f.name),
-                baml_vm::Object::Class(c) => Value::class(&c.name),
-                baml_vm::Object::Enum(e) => Value::enm(&e.name),
+                baml_vm_types::Object::String(s) => Value::string(s),
+                baml_vm_types::Object::Function(f) => Value::function(&f.name),
+                baml_vm_types::Object::Class(c) => Value::class(&c.name),
+                baml_vm_types::Object::Enum(e) => Value::enm(&e.name),
                 _ => anyhow::bail!("Unsupported object type in constant pool: {obj:?}"),
             }
         }
@@ -172,9 +177,9 @@ fn convert_value(value: &baml_vm::Value, objects: &[baml_vm::Object]) -> anyhow:
 
 /// Compiled function with its objects.
 struct CompiledFunction {
-    function: baml_vm::Function,
+    function: baml_vm_types::Function<()>,
     /// All objects from the program - indices in bytecode constants reference this.
-    objects: baml_vm::ObjectPool,
+    objects: baml_vm_types::ObjectPool<()>,
 }
 
 /// Result of compiling source code.
@@ -195,7 +200,7 @@ fn compile_source(source: &str) -> CompileResult {
     // Extract functions from the program
     let mut functions = Vec::new();
     for (name, obj_idx) in &program.function_indices {
-        if let Some(baml_vm::Object::Function(func)) = program.objects.get(*obj_idx) {
+        if let Some(baml_vm_types::Object::Function(func)) = program.objects.get(*obj_idx) {
             functions.push((
                 name.clone(),
                 CompiledFunction {
@@ -212,7 +217,7 @@ fn compile_source(source: &str) -> CompileResult {
     // Include both user-defined functions and builtins
     let mut globals: HashMap<String, usize> = HashMap::new();
     for (global_idx, value) in program.globals.iter().enumerate() {
-        if let baml_vm::Value::Object(obj_idx) = value {
+        if let baml_vm_types::Value::Object(obj_idx) = value {
             // First check user-defined functions
             let mut found = false;
             for (name, fn_obj_idx) in &program.function_indices {
@@ -224,7 +229,8 @@ fn compile_source(source: &str) -> CompileResult {
             }
             // If not found in user functions, check if it's a builtin function
             if !found
-                && let Some(baml_vm::Object::Function(func)) = program.objects.get(obj_idx.raw())
+                && let Some(baml_vm_types::Object::Function(func)) =
+                    program.objects.get(obj_idx.raw())
             {
                 globals.insert(func.name.clone(), global_idx);
             }

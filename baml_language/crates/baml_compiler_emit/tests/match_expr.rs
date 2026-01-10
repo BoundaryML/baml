@@ -4,7 +4,7 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
-use baml_vm::CmpOp;
+use baml_vm_types::bytecode::CmpOp;
 
 // ============================================================================
 // Basic Catch-All Tests
@@ -45,7 +45,7 @@ fn match_catch_all_named_binding() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Int(42)),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::BinOp(baml_vm::BinOp::Add),
+                Instruction::BinOp(baml_vm_types::BinOp::Add),
                 Instruction::Return,
             ],
         )],
@@ -342,7 +342,7 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(20)),
                 // Addition: 1 + match result
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::BinOp(baml_vm::BinOp::Add),
+                Instruction::BinOp(baml_vm_types::BinOp::Add),
                 Instruction::Return,
             ],
         )],
@@ -1353,7 +1353,7 @@ fn match_catch_all_binding_with_int_patterns() -> anyhow::Result<()> {
                 // 'other' binds to x, then other * 10
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(10)),
-                Instruction::BinOp(baml_vm::BinOp::Mul),
+                Instruction::BinOp(baml_vm_types::BinOp::Mul),
                 Instruction::Jump(8),
                 // Arms in reverse order
                 Instruction::LoadConst(Value::Int(3)),
@@ -1948,7 +1948,7 @@ fn match_arithmetic_scrutinee() -> anyhow::Result<()> {
                 // Compute a + b - result stays on stack
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadVar("b".to_string()),
-                Instruction::BinOp(baml_vm::BinOp::Add),
+                Instruction::BinOp(baml_vm_types::BinOp::Add),
                 // First arm: 0
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(0)),

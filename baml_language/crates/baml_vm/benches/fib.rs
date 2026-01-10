@@ -3,7 +3,8 @@
 //! Do not measure compilation here, only VM execution time.
 
 use baml_tests::bytecode::TestDatabase;
-use baml_vm::{Value, Vm};
+use baml_vm::Vm;
+use baml_vm_types::Value;
 
 struct Program {
     source: &'static str,
@@ -21,7 +22,7 @@ fn bootstrap_vm(input: &Program) -> Vm {
         .function_index(input.function)
         .expect("function not found");
 
-    let mut vm = Vm::from_program(program);
+    let mut vm = Vm::from_program(program).expect("All native functions should be attached");
     vm.set_entry_point(function_index, &input.args);
     vm
 }

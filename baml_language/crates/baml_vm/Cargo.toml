@@ -24,6 +24,7 @@ paste = { workspace = true }
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
+baml_vm_types = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1"

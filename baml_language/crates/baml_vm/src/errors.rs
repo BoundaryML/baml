@@ -1,7 +1,4 @@
-use crate::{
-    bytecode::{BinOp, CmpOp, UnaryOp},
-    types::{Type, Value},
-};
+use baml_vm_types::{BinOp, CmpOp, UnaryOp, Value, types::Type};
 
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///

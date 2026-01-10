@@ -1394,7 +1394,7 @@ impl CompilerRunner {
     }
 
     fn run_vm_runner(&mut self) {
-        use baml_vm::{FunctionKind, Object};
+        use baml_vm_types::{FunctionKind, Object};
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1545,7 +1545,8 @@ impl CompilerRunner {
 
     /// Execute the selected function in the VM
     pub(crate) fn execute_selected_function(&mut self) {
-        use baml_vm::{Object, Vm, VmExecState};
+        use baml_vm::{Vm, VmExecState};
+        use baml_vm_types::Object;
 
         let files: Vec<_> = self.source_files.values().copied().collect();
         let program = match baml_compiler_emit::compile_files(&self.db, &files) {
@@ -1587,7 +1588,14 @@ impl CompilerRunner {
         }
 
         // Create VM and run
-        let mut vm = Vm::from_program(program);
+        let mut vm = match Vm::from_program(program) {
+            Ok(vm) => vm,
+            Err(err) => {
+                self.vm_runner_state.execution_result =
+                    Some(VmExecutionResult::Error(format!("{:?}", err)));
+                return;
+            }
+        };
         vm.set_entry_point(func_index, &[]);
 
         match vm.exec() {
@@ -2363,8 +2371,11 @@ pub(crate) fn normalize_files_to_virtual_root(
 }
 
 /// Format a VM value for display
-fn format_vm_value(value: &baml_vm::Value, objects: &baml_vm::indexable::ObjectPool) -> String {
-    use baml_vm::{Object, Value};
+fn format_vm_value<T>(
+    value: &baml_vm_types::Value,
+    objects: &baml_vm_types::ObjectPool<T>,
+) -> String {
+    use baml_vm_types::{Object, Value};
 
     match value {
         Value::Null => "null".to_string(),

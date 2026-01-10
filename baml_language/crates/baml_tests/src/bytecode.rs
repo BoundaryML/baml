@@ -30,7 +30,8 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-use baml_vm::{ObjectIndex, Program as VmProgram, Value as VmValue, Vm, VmExecState};
+use baml_vm::{Vm, VmExecState};
+use baml_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
 
 // Re-export test types from crate::vm
 pub use crate::vm::{
@@ -110,7 +111,7 @@ impl TestDatabase {
 //
 
 /// Compile BAML source code into a VM program.
-pub fn compile_source(source: &str) -> VmProgram {
+pub fn compile_source(source: &str) -> VmProgram<()> {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
@@ -201,7 +202,7 @@ pub fn collect_vm_exec_states(
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm::from_program(program);
+    let mut vm = Vm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
 
     let mut states = Vec::new();
@@ -263,7 +264,7 @@ fn setup_and_exec_program(
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm::from_program(program);
+    let mut vm = Vm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
     let result = vm.exec();
     Ok((vm, result))
@@ -276,7 +277,7 @@ fn setup_and_exec_program(
 /// Helper struct for testing VM execution with direct bytecode.
 pub struct BytecodeProgram {
     pub arity: usize,
-    pub instructions: Vec<baml_vm::Instruction>,
+    pub instructions: Vec<baml_vm_types::Instruction>,
     pub constants: Vec<VmValue>,
     pub expected: VmExecState,
 }
@@ -291,17 +292,17 @@ pub fn assert_vm_executes_bytecode_with_inspection(
     input: BytecodeProgram,
     inspect: impl FnOnce(&Vm, VmExecState) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let function = baml_vm::Function {
+    let function = baml_vm_types::Function {
         name: "test_fn".to_string(),
         arity: input.arity,
-        bytecode: baml_vm::Bytecode {
+        bytecode: baml_vm_types::Bytecode {
             source_lines: vec![1; input.instructions.len()],
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
             jump_tables: Vec::new(),
         },
-        kind: baml_vm::FunctionKind::Exec,
+        kind: baml_vm_types::FunctionKind::Exec,
         locals_in_scope: {
             let mut names = Vec::with_capacity(input.arity + 1);
             names.push("<fn test_fn>".to_string());
@@ -314,7 +315,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
     };
 
     let mut program = VmProgram::new();
-    let fn_idx = program.add_object(baml_vm::Object::Function(function));
+    let fn_idx = program.add_object(baml_vm_types::Object::Function(function));
     program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
     program
         .function_indices
@@ -324,7 +325,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         .function_index("test_fn")
         .expect("test_fn should exist");
 
-    let mut vm = Vm::from_program(program);
+    let mut vm = Vm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
 
     let result = vm.exec()?;

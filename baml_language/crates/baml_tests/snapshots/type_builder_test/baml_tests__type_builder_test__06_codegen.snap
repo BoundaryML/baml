@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 21
-Globals: 19
+Objects: 27
+Globals: 25
 
 Function Fn (arity: 0, kind: Llm):
   (no bytecode)

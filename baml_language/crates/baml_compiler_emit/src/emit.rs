@@ -11,7 +11,7 @@ use baml_compiler_mir::{
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_compiler_tir::Ty;
-use baml_vm::{
+use baml_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
     bytecode::{BlockNotification, BlockNotificationType, JumpTableData},
@@ -117,7 +117,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Enum variant mappings (enum name -> variant name -> variant index).
     enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool.
-    objects: &'obj mut ObjectPool,
+    objects: &'obj mut ObjectPool<()>,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult,
@@ -176,7 +176,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Compile a MIR function to bytecode.
-    fn compile(mut self, mir: &MirFunction) -> Function {
+    fn compile(mut self, mir: &MirFunction) -> Function<()> {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
@@ -208,7 +208,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let viz_nodes = mir
             .viz_nodes
             .iter()
-            .map(|node| baml_vm::VizNodeMeta {
+            .map(|node| baml_vm_types::VizNodeMeta {
                 node_id: node.node_id,
                 log_filter_key: node.log_filter_key.clone(),
                 parent_log_filter_key: node.parent_log_filter_key.clone(),
@@ -232,16 +232,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Convert MIR `VizNodeType` to VM `VizNodeType`.
-    fn convert_viz_node_type(mir_type: baml_compiler_mir::VizNodeType) -> baml_vm::VizNodeType {
+    fn convert_viz_node_type(
+        mir_type: baml_compiler_mir::VizNodeType,
+    ) -> baml_vm_types::VizNodeType {
         match mir_type {
-            baml_compiler_mir::VizNodeType::FunctionRoot => baml_vm::VizNodeType::FunctionRoot,
-            baml_compiler_mir::VizNodeType::HeaderContextEnter => {
-                baml_vm::VizNodeType::HeaderContextEnter
+            baml_compiler_mir::VizNodeType::FunctionRoot => {
+                baml_vm_types::VizNodeType::FunctionRoot
             }
-            baml_compiler_mir::VizNodeType::BranchGroup => baml_vm::VizNodeType::BranchGroup,
-            baml_compiler_mir::VizNodeType::BranchArm => baml_vm::VizNodeType::BranchArm,
-            baml_compiler_mir::VizNodeType::Loop => baml_vm::VizNodeType::Loop,
-            baml_compiler_mir::VizNodeType::OtherScope => baml_vm::VizNodeType::OtherScope,
+            baml_compiler_mir::VizNodeType::HeaderContextEnter => {
+                baml_vm_types::VizNodeType::HeaderContextEnter
+            }
+            baml_compiler_mir::VizNodeType::BranchGroup => baml_vm_types::VizNodeType::BranchGroup,
+            baml_compiler_mir::VizNodeType::BranchArm => baml_vm_types::VizNodeType::BranchArm,
+            baml_compiler_mir::VizNodeType::Loop => baml_vm_types::VizNodeType::Loop,
+            baml_compiler_mir::VizNodeType::OtherScope => baml_vm_types::VizNodeType::OtherScope,
         }
     }
 
@@ -1237,7 +1241,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
+pub(crate) fn compile_mir_function(
+    mir: &MirFunction,
+    ctx: MirCodegenContext<'_, '_>,
+) -> Function<()> {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
 

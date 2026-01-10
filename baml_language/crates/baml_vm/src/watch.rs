@@ -141,7 +141,9 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
+use baml_vm_types::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
+
+use crate::NativeFunction;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WatchFilter {
@@ -319,7 +321,13 @@ impl Watch {
     /// Links parent.path -> child in the graph.
     ///
     /// Updates reachability incrementally for all affected roots.
-    pub fn link_edge(&mut self, parent: NodeId, path: Path, child: NodeId, objects: &ObjectPool) {
+    pub fn link_edge(
+        &mut self,
+        parent: NodeId,
+        path: Path,
+        child: NodeId,
+        objects: &ObjectPool<NativeFunction>,
+    ) {
         // If pointing to an object, recursively build the dependency graph.
         if let NodeId::HeapObject(index) = child {
             self.track_dependencies(Value::Object(index), objects);
@@ -447,7 +455,7 @@ impl Watch {
     /// This is used when an object is marked as @watch to establish all the
     /// dependency edges. It does not declare any root, call
     /// [`Self::register_root`] separately.
-    pub fn track_dependencies(&mut self, value: Value, objects: &ObjectPool) {
+    pub fn track_dependencies(&mut self, value: Value, objects: &ObjectPool<NativeFunction>) {
         let mut stack = vec![value];
         let mut visited = HashSet::new();
 
@@ -533,8 +541,8 @@ mod tests {
     }
 
     // TODO: fix this nonsense
-    fn dummy_object_pool(n: usize) -> ObjectPool {
-        ObjectPool::from_vec(vec![crate::types::Object::String(String::new()); n])
+    fn dummy_object_pool(n: usize) -> ObjectPool<NativeFunction> {
+        ObjectPool::from_vec(vec![baml_vm_types::Object::String(String::new()); n])
     }
 
     #[test]

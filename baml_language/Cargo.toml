@@ -33,6 +33,7 @@ baml_tests = { path = "crates/baml_tests" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 baml_vm = { path = "crates/baml_vm" }
+baml_vm_types = { path = "crates/baml_vm_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_ide = { path = "crates/baml_ide" }

@@ -356,12 +356,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
+ "baml_builtins",
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_tests",
- "baml_vm",
+ "baml_vm_types",
  "baml_workspace",
  "insta",
  "la-arena",
@@ -603,6 +604,7 @@ dependencies = [
  "baml_db",
  "baml_project",
  "baml_vm",
+ "baml_vm_types",
  "baml_workspace",
  "codspeed-divan-compat",
  "indexmap 2.13.0",
@@ -634,6 +636,7 @@ dependencies = [
  "baml_db",
  "baml_project",
  "baml_vm",
+ "baml_vm_types",
  "baml_workspace",
  "clap",
  "crossterm",
@@ -648,6 +651,24 @@ dependencies = [
 
 [[package]]
 name = "baml_vm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_builtins",
+ "baml_builtins_macros",
+ "baml_compiler_emit",
+ "baml_tests",
+ "baml_vm_types",
+ "codspeed-divan-compat",
+ "colored",
+ "indexmap 2.13.0",
+ "paste",
+ "tokio",
+]
+
+[[package]]
+name = "baml_vm_types"
 version = "0.0.0"
 dependencies = [
  "anyhow",

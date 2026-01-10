@@ -5,13 +5,16 @@
 //! order of globals, constants, and objects.
 
 use baml_vm::{
-    Object as VmObject, ObjectIndex, Value as VmValue, Vm, VmExecState,
+    Vm, VmExecState,
+    vm::WatchNotification as VmWatchNotification,
+    watch::{self},
+};
+use baml_vm_types::{
+    Object as VmObject, ObjectIndex, Value as VmValue,
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
     },
     types::MediaKind,
-    vm::WatchNotification as VmWatchNotification,
-    watch::{self},
 };
 use indexmap::IndexMap;
 
@@ -287,7 +290,7 @@ impl ExecState {
                     function_name,
                     event,
                 } => {
-                    let is_enter = event.delta == baml_vm::bytecode::VizExecDelta::Enter;
+                    let is_enter = event.delta == baml_vm_types::bytecode::VizExecDelta::Enter;
                     Ok(ExecState::Emit(vec![Notification::Viz(VizEvent {
                         function_name,
                         label: event.label,

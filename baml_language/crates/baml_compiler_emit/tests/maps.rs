@@ -4,7 +4,7 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
-use baml_vm::BinOp;
+use baml_vm_types::bytecode::BinOp;
 
 #[test]
 fn create_and_access() -> anyhow::Result<()> {

@@ -24,14 +24,15 @@
 
 use std::io::IsTerminal;
 
-use colored::{Color, Colorize};
-
-use crate::{
+use baml_vm_types::{
     ObjectIndex, ObjectPool, StackIndex,
     bytecode::Instruction,
-    indexable::{EvalStack, GlobalPool},
+    indexable::GlobalPool,
     types::{Function, Object, Value},
 };
+use colored::{Color, Colorize};
+
+use crate::indexable::EvalStack;
 
 /// Context aware instruction display.
 ///
@@ -48,11 +49,11 @@ use crate::{
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
 #[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative in valid bytecode
-pub fn display_instruction(
+pub fn display_instruction<NativeFunction>(
     instruction_ptr: isize,
-    function: &Function,
+    function: &Function<NativeFunction>,
     stack: &EvalStack,
-    objects: &ObjectPool,
+    objects: &ObjectPool<NativeFunction>,
     globals: &GlobalPool,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
@@ -161,7 +162,10 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
+pub fn display_value<NativeFunction>(
+    value: &Value,
+    objects: &ObjectPool<NativeFunction>,
+) -> String {
     match value {
         Value::Object(index) => display_object(objects, *index),
 
@@ -169,7 +173,10 @@ pub fn display_value(value: &Value, objects: &ObjectPool) -> String {
     }
 }
 
-fn display_object(objects: &ObjectPool, index: ObjectIndex) -> String {
+fn display_object<NativeFunction>(
+    objects: &ObjectPool<NativeFunction>,
+    index: ObjectIndex,
+) -> String {
     match &objects[index] {
         // This one's a bit tricky to print.
         Object::Instance(instance) => match &objects[instance.class] {
@@ -280,10 +287,10 @@ impl Col {
 ///
 /// Takes care of calculating how many whitespaces we need to make the table
 /// symmetric and returns the entire table.
-pub fn display_bytecode(
-    function: &Function,
+pub fn display_bytecode<NativeFunction>(
+    function: &Function<NativeFunction>,
     stack: &EvalStack,
-    objects: &ObjectPool,
+    objects: &ObjectPool<NativeFunction>,
     globals: &GlobalPool,
     use_colors: bool,
 ) -> String {
@@ -388,10 +395,10 @@ pub fn display_bytecode(
 
 /// Prints the dissassembly of a function.
 #[allow(clippy::print_stderr)] // intentional debug output for disassembly
-pub fn disassemble(
-    function: &Function,
+pub fn disassemble<NativeFunction>(
+    function: &Function<NativeFunction>,
     stack: &EvalStack,
-    objects: &ObjectPool,
+    objects: &ObjectPool<NativeFunction>,
     globals: &GlobalPool,
 ) {
     let use_colors = std::io::stdout().is_terminal();
