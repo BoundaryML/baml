@@ -44,6 +44,8 @@ jobs:
       beps: ${{ steps.check_beps.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for typescript2/webview changes
+      webview: ${{ steps.check_webview.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,6 +69,7 @@ jobs:
             ':baml_language/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -181,6 +184,22 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':baml_language/crates/baml_playground_wasm/**' \
+            ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -189,6 +208,13 @@ jobs:
     with:
       code_changed: ${{ needs.determine_changes.outputs.code }}
       run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+
+  wasm-pack-tests:
+    name: "WASM Pack Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
     secrets: inherit
 
   beps:
@@ -215,6 +241,13 @@ jobs:
       is_canary: ${{ github.ref == 'refs/heads/canary' }}
     secrets: inherit
     permissions: write-all
+
+  webview-tests:
+    name: "Webview Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/webview-tests.reusable.yaml
+    secrets: inherit
 
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
@@ -268,14 +301,21 @@ jobs:
     if: always()
     needs:
       - cargo-tests
+      - wasm-pack-tests
       - beps
       - docs
+      - webview-tests
       - benchmarks-instrumented
     steps:
       - name: "Check test results"
         run: |
           if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
             echo "::error::Cargo tests failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.wasm-pack-tests.result }}" != "success" && "${{ needs.wasm-pack-tests.result }}" != "skipped" ]]; then
+            echo "::error::WASM pack tests failed"
             exit 1
           fi
 
@@ -286,6 +326,11 @@ jobs:
 
           if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
             echo "::error::Docs workflow failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.webview-tests.result }}" != "success" && "${{ needs.webview-tests.result }}" != "skipped" ]]; then
+            echo "::error::Webview tests failed"
             exit 1
           fi
 

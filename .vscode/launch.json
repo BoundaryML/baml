@@ -2,6 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Launch VS Code extension (v2)",
+      "type": "extensionHost",
+      "request": "launch",
+      "sourceMaps": true,
+      "cwd": "${workspaceFolder}/typescript2/app-vscode-ext",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/typescript2/app-vscode-ext"
+      ],
+      "outFiles": ["${workspaceFolder}/typescript2/app-vscode-ext/dist/**"],
+      "env": {
+        "VSCODE_DEBUG_MODE": "true"
+      },
+      "preLaunchTask": "Build VS Code Extension (v2)"
+    },
+    {
       "name": "Launch VS Code extension",
       "type": "extensionHost",
       "request": "launch",

@@ -1,0 +1,134 @@
+name: Webview Tests (Reusable)
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-webview-tests
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  unit-tests:
+    name: "Unit Tests (jsdom)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install wasm-pack"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Run unit tests"
+        run: pnpm --filter app-vscode-webview test:unit:run
+        working-directory: typescript2
+
+  browser-tests:
+    name: "Browser Tests (Playwright)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install wasm-pack"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: "Build WASM"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Install Playwright browsers"
+        run: npx playwright install chromium
+        working-directory: typescript2/app-vscode-webview
+
+      - name: "Run browser tests"
+        run: pnpm --filter app-vscode-webview test:browser:run
+        working-directory: typescript2
+
+  hmr-tests:
+    name: "HMR Tests (Hot Reload)"
+    runs-on: ubuntu-latest
+    # Only run on main/canary
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install wasm-pack"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: "Build WASM (initial)"
+        run: pnpm --filter pkg-playground build:wasm
+        working-directory: typescript2
+
+      - name: "Install Playwright browsers"
+        run: npx playwright install chromium
+        working-directory: typescript2/app-vscode-webview
+
+      - name: "Run HMR tests"
+        run: pnpm --filter app-vscode-webview test:hmr
+        working-directory: typescript2
+        timeout-minutes: 0.5
+        env:
+          DEBUG_HMR: "1"

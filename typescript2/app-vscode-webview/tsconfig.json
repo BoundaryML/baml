@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@b/pkg-playground": ["../pkg-playground/src"],
+      "@b/pkg-playground/*": ["../pkg-playground/src/*"]
+    }
+  },
+  "include": ["src", "src/**/*", "vite-env.d.ts"],
+  "exclude": ["dist", "build", "node_modules"]
+}

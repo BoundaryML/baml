@@ -1,0 +1,42 @@
+{
+  "name": "app-vscode-webview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest --project unit",
+    "test:unit:run": "vitest run --project unit",
+    "test:browser": "vitest --project browser",
+    "test:browser:run": "vitest run --project browser",
+    "test:hmr": "vitest --project hmr",
+    "test:hmr:run": "vitest run --project hmr"
+  },
+  "dependencies": {
+    "@b/pkg-playground": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.26",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/browser": "^4.0.16",
+    "@vitest/browser-playwright": "^4.0.16",
+    "jotai-devtools": "^0.13.0",
+    "jsdom": "^25.0.1",
+    "playwright": "^1.57.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vitest": "^4.0.16"
+  }
+}
