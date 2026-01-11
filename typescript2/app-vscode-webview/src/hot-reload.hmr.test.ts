@@ -76,6 +76,7 @@ async function startDevServer(): Promise<DevServer> {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
+    env: { ...process.env, NO_COLOR: '1' },
   })
 
   // Collect output and parse port
