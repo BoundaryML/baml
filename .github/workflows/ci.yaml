@@ -272,8 +272,6 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/webview-tests.reusable.yaml
-    with:
-      webview_changed: ${{ needs.determine_changes.outputs.webview }}
     secrets: inherit
 
   benchmarks-instrumented:
