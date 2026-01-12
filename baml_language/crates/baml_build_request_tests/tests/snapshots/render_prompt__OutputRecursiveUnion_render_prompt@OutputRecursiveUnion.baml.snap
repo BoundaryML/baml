@@ -7,4 +7,4 @@ fixture: OutputRecursiveUnion.baml
 function: FnOutputRecursiveUnion
 prompt:
   type: Completion
-  text: "Return back the same value you were given: \n\n"
+  text: "Return back the same value you were given: \n\nRecursiveUnion"

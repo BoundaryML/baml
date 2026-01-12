@@ -7,4 +7,4 @@ fixture: OutputRecursiveTypeAliases.baml
 function: FnOutputRecursiveTypeAliases
 prompt:
   type: Completion
-  text: "Return the given linked list back:\n\n\n\n"
+  text: "Return the given linked list back:\n\n\n\nLinkedListAlias"

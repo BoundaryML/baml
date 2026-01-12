@@ -6,5 +6,9 @@ input_file: crates/baml_build_request_tests/testdata/InputNamedAudio.baml
 fixture: InputNamedAudio.baml
 function: FnInputNamedAudio
 prompt:
-  type: Completion
-  text: Does this sound like a roar? Yes or no? One word no other characters.
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Does this sound like a roar? Yes or no? One word no other characters.

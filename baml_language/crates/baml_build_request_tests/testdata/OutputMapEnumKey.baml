@@ -9,7 +9,7 @@ function FnOutputMapEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) ->
   prompt #"
     Merge these: {{i1}} {{i2}}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

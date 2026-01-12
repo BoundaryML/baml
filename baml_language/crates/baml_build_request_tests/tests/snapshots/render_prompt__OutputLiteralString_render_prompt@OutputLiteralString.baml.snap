@@ -7,4 +7,4 @@ fixture: OutputLiteralString.baml
 function: FnOutputLiteralString
 prompt:
   type: Completion
-  text: "Return a string: "
+  text: "Return a string: Answer with exactly: \"example output\""

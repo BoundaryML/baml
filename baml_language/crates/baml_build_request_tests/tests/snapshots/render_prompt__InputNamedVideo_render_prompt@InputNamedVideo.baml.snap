@@ -6,5 +6,9 @@ input_file: crates/baml_build_request_tests/testdata/InputNamedVideo.baml
 fixture: InputNamedVideo.baml
 function: FnInputNamedVideo
 prompt:
-  type: Completion
-  text: Use 5 words to describe the video.
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Use 5 words to describe the video.

@@ -21,7 +21,7 @@ function FnOutputRecursiveUnion(input: RecursiveUnion) -> RecursiveUnion {
   prompt #"
     Return back the same value you were given: {{ input }}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

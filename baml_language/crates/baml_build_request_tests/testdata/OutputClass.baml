@@ -23,7 +23,7 @@ function FnOutputClass(input: string) -> TestOutputClass {
   client GPT35
   prompt #"
     Return a JSON blob with this schema:
-    {{ctx.output_format}}
+    {{ctx.output_format()}}
 
     For the prop2, always return a 540
 

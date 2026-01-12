@@ -28,6 +28,7 @@ pub mod llm_request;
 pub mod llm_response;
 pub mod orchestrator;
 pub mod parsing;
+pub mod relevant_data_models;
 
 mod prepared_function;
 mod render_options;
@@ -36,6 +37,7 @@ mod types;
 pub use api::*;
 pub use errors::*;
 pub use prepared_function::*;
+pub use relevant_data_models::relevant_data_models;
 pub use render_options::*;
 pub use types::*;
 

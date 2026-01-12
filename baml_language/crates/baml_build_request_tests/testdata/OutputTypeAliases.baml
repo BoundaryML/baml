@@ -11,7 +11,7 @@ function FnOutputTypeAliases(p: Primitive) -> Primitive {
     prompt #"
       Return the given value back: {{ p }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -22,7 +22,7 @@ function MapAlias(m: Graph) -> Graph {
 
       {{ m }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -33,7 +33,7 @@ function NestedAlias(c: Combination) -> Combination {
 
       {{ c }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -55,7 +55,7 @@ function MergeAliasAttributes(money: int) -> MergeAttrs {
 
       {{ money }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -66,7 +66,7 @@ function ReturnAliasWithMergedAttributes(money: int) -> Amount {
 
       {{ money }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -77,7 +77,7 @@ function AliasWithMultipleAttrs(money: int) -> MultipleAttrs {
 
       {{ money }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -90,7 +90,7 @@ function SimpleRecursiveMapAlias(input: RecursiveMapAlias) -> RecursiveMapAlias 
 
       {{ input }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -103,7 +103,7 @@ function SimpleRecursiveListAlias(input: RecursiveListAlias) -> RecursiveListAli
 
       {{ input }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -118,7 +118,7 @@ function RecursiveAliasCycle(input: RecAliasOne) -> RecAliasOne {
 
       {{ input }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -133,7 +133,7 @@ function JsonTypeAliasCycle(input: JsonValue) -> JsonValue {
 
       {{ input }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -148,7 +148,7 @@ function TakeRecAliasDep(input: RecursiveAliasDependency) -> RecursiveAliasDepen
 
       {{ input }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 

@@ -24,7 +24,7 @@ function FnOutputRecursiveClass(input: int[]) -> LinkedList {
     INPUT:
     {{ input }}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

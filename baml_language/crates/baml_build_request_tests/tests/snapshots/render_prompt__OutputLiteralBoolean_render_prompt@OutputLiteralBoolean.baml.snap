@@ -7,4 +7,4 @@ fixture: OutputLiteralBoolean.baml
 function: FnOutputLiteralBoolean
 prompt:
   type: Completion
-  text: "Return a false: "
+  text: "Return a false: Answer with exactly: false"

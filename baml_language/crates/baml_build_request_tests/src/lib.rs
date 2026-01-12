@@ -18,10 +18,7 @@ use std::path::Path;
 
 use baml_db::{Setter, SourceFile, baml_workspace::Project};
 use baml_llm_interface::RenderedPrompt;
-use baml_program::{
-    BamlMap, BamlProgram,
-    context::DynamicBamlContext,
-};
+use baml_program::{BamlMap, BamlProgram, context::DynamicBamlContext};
 use baml_project::ProjectDatabase as RootDatabase;
 use serde::Serialize;
 

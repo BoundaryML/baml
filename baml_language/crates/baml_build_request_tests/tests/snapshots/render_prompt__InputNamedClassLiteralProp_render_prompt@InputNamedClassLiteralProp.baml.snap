@@ -7,4 +7,4 @@ fixture: InputNamedClassLiteralProp.baml
 function: FnInputNamedClassLiteralProp
 prompt:
   type: Completion
-  text: "Return the same object you were given.\n"
+  text: "Return the same object you were given.\n{\n  prop: \"hello\"\n}"

@@ -6,5 +6,9 @@ input_file: crates/baml_build_request_tests/testdata/InputNamedPdf.baml
 fixture: InputNamedPdf.baml
 function: FnInputNamedPdf
 prompt:
-  type: Completion
-  text: Describe the contents of this PDF document and what it is about in 15 words or less.
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Describe the contents of this PDF document and what it is about in 15 words or less.

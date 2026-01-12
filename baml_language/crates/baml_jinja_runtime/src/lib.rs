@@ -7,13 +7,17 @@
 mod baml_value_to_jinja;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 // Re-export LLM interface types
 pub use baml_llm_interface::{ChatMessagePart, LlmClientSpec, RenderedChatMessage, RenderedPrompt};
+pub use baml_output_format::OutputFormatContent;
 pub use baml_value_to_jinja::IntoMiniJinjaValue;
+use baml_output_format::{MapStyle, OutputFormatOptions, render as render_output_format};
 use baml_value_to_jinja::MAGIC_MEDIA_DELIMITER;
 use ir_stub::{BamlMedia, BamlValue};
-use minijinja::{ErrorKind, context, value::Kwargs};
+use minijinja::value::{from_args, Kwargs, Object, Value};
+use minijinja::{context, ErrorKind};
 use serde::Deserialize;
 
 const MAGIC_CHAT_ROLE_DELIMITER: &str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
@@ -29,6 +33,8 @@ pub struct RenderContext {
     pub client: LlmClientSpec,
     /// Tags available in the template.
     pub tags: HashMap<String, BamlValue>,
+    /// Output format schema for the function's return type.
+    pub output_format: OutputFormatContent,
 }
 
 impl Default for RenderContext {
@@ -36,6 +42,7 @@ impl Default for RenderContext {
         Self {
             client: LlmClientSpec::default(),
             tags: HashMap::new(),
+            output_format: OutputFormatContent::empty(),
         }
     }
 }
@@ -58,6 +65,173 @@ pub enum RenderError {
 
     #[error("Render error: {0}")]
     Other(String),
+}
+
+// ============================================================================
+// OutputFormatValue - Jinja Object for ctx.output_format
+// ============================================================================
+
+/// Wrapper that makes OutputFormatContent callable in Jinja templates.
+///
+/// Supports both:
+/// - `{{ctx.output_format}}` - renders with default options
+/// - `{{ctx.output_format(prefix="...", ...)}}` - renders with custom options
+#[derive(Debug)]
+struct OutputFormatValue {
+    content: Arc<OutputFormatContent>,
+}
+
+impl OutputFormatValue {
+    fn new(content: OutputFormatContent) -> Self {
+        Self {
+            content: Arc::new(content),
+        }
+    }
+
+    fn render_with_options(&self, options: &OutputFormatOptions) -> String {
+        match render_output_format(&self.content, options) {
+            Ok(Some(s)) => s,
+            Ok(None) => String::new(),
+            Err(e) => format!("<!-- output_format error: {} -->", e),
+        }
+    }
+}
+
+impl std::fmt::Display for OutputFormatValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Default rendering when used as {{ctx.output_format}}
+        write!(
+            f,
+            "{}",
+            self.render_with_options(&OutputFormatOptions::default())
+        )
+    }
+}
+
+impl Object for OutputFormatValue {
+    fn call(
+        self: &Arc<Self>,
+        _state: &minijinja::State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        // Extract kwargs from args - minijinja passes kwargs as the last argument
+        let (_, kwargs): (&[Value], Kwargs) = from_args(args)?;
+        let options = parse_output_format_kwargs(&kwargs)?;
+        kwargs.assert_all_used()?;
+
+        let rendered = self.render_with_options(&options);
+        Ok(Value::from(rendered))
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        // This is called when the value is rendered directly in a template
+        write!(
+            f,
+            "{}",
+            self.render_with_options(&OutputFormatOptions::default())
+        )
+    }
+}
+
+/// Parse Jinja kwargs into OutputFormatOptions.
+///
+/// Handles the `Option<Option<T>>` pattern:
+/// - Not provided -> None (use default)
+/// - Explicitly null -> Some(None) (disable the option)
+/// - Value provided -> Some(Some(value))
+fn parse_output_format_kwargs(kwargs: &Kwargs) -> Result<OutputFormatOptions, minijinja::Error> {
+    // prefix: Option<Option<String>>
+    let prefix: Option<Option<String>> = match kwargs.get::<Value>("prefix") {
+        Ok(v) if v.is_none() => Some(None), // Explicitly null
+        Ok(v) => Some(Some(
+            v.as_str()
+                .ok_or_else(|| {
+                    minijinja::Error::new(
+                        ErrorKind::InvalidOperation,
+                        "prefix must be a string or null",
+                    )
+                })?
+                .to_string(),
+        )),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    // or_splitter: Option<String>
+    let or_splitter: Option<String> = match kwargs.get::<String>("or_splitter") {
+        Ok(v) => Some(v),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    // enum_value_prefix: Option<Option<String>>
+    let enum_value_prefix: Option<Option<String>> = match kwargs.get::<Value>("enum_value_prefix") {
+        Ok(v) if v.is_none() => Some(None),
+        Ok(v) => Some(Some(
+            v.as_str()
+                .ok_or_else(|| {
+                    minijinja::Error::new(
+                        ErrorKind::InvalidOperation,
+                        "enum_value_prefix must be a string or null",
+                    )
+                })?
+                .to_string(),
+        )),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    // always_hoist_enums: Option<bool>
+    let always_hoist_enums: Option<bool> = match kwargs.get::<bool>("always_hoist_enums") {
+        Ok(v) => Some(v),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    // map_style: Option<MapStyle> - accepts "angle" or "object"
+    let map_style: Option<MapStyle> = match kwargs.get::<String>("map_style") {
+        Ok(s) => Some(s.parse().map_err(|e: String| {
+            minijinja::Error::new(ErrorKind::InvalidOperation, e)
+        })?),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    // hoisted_class_prefix: Option<Option<String>>
+    let hoisted_class_prefix: Option<Option<String>> =
+        match kwargs.get::<Value>("hoisted_class_prefix") {
+            Ok(v) if v.is_none() => Some(None),
+            Ok(v) => Some(Some(
+                v.as_str()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            ErrorKind::InvalidOperation,
+                            "hoisted_class_prefix must be a string or null",
+                        )
+                    })?
+                    .to_string(),
+            )),
+            Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+            Err(e) => return Err(e),
+        };
+
+    // quote_class_fields: Option<bool>
+    let quote_class_fields: Option<bool> = match kwargs.get::<bool>("quote_class_fields") {
+        Ok(v) => Some(v),
+        Err(e) if matches!(e.kind(), ErrorKind::MissingArgument) => None,
+        Err(e) => return Err(e),
+    };
+
+    Ok(OutputFormatOptions::new(
+        prefix,
+        or_splitter,
+        enum_value_prefix,
+        always_hoist_enums,
+        map_style,
+        hoisted_class_prefix,
+        None, // hoist_classes - complex type, skip for now
+        quote_class_fields,
+    ))
 }
 
 // ============================================================================
@@ -119,14 +293,16 @@ fn render_minijinja(
 
     env.add_template("prompt", template)?;
 
-    // Add ctx global
+    // Add ctx global with output_format
     let client = ctx.client.clone();
     let tags = ctx.tags.clone();
+    let output_format = Value::from_object(OutputFormatValue::new(ctx.output_format));
     env.add_global(
         "ctx",
         context! {
             client => client,
             tags => tags,
+            output_format => output_format,
         },
     );
 
@@ -441,5 +617,138 @@ Hello"#;
         let result = evaluate_predicate(&value, &expr);
         assert!(result.is_ok());
         assert!(result.unwrap());
+    }
+
+    // ========================================================================
+    // Tests for ctx.output_format
+    // ========================================================================
+
+    #[test]
+    fn test_ctx_output_format_class() {
+        use baml_base::Ty;
+        use baml_output_format::{Class, OutputFormatBuilder};
+
+        let person_class = Class::new("Person")
+            .with_field("name", Ty::String, Some("The person's name".to_string()), true)
+            .with_field("age", Ty::Int, None, true);
+
+        let output_format = OutputFormatBuilder::new()
+            .with_class(person_class)
+            .with_target(Ty::Class(baml_base::Name::from("Person")))
+            .build();
+
+        let ctx = RenderContext {
+            output_format,
+            ..Default::default()
+        };
+
+        let args = BamlValue::Map(BamlMap::new());
+        let template = "Schema:\n{{ctx.output_format}}";
+
+        let result = render_prompt(template, &args, ctx);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            RenderedPrompt::Completion { text } => {
+                assert!(text.contains("name: string"), "Expected 'name: string' but got: {}", text);
+                assert!(text.contains("age: int"), "Expected 'age: int' but got: {}", text);
+                assert!(text.contains("The person's name"), "Expected description but got: {}", text);
+            }
+            _ => panic!("Expected Completion"),
+        }
+    }
+
+    #[test]
+    fn test_ctx_output_format_primitive() {
+        use baml_base::Ty;
+        use baml_output_format::OutputFormatBuilder;
+
+        let output_format = OutputFormatBuilder::new()
+            .with_target(Ty::Int)
+            .build();
+
+        let ctx = RenderContext {
+            output_format,
+            ..Default::default()
+        };
+
+        let args = BamlValue::Map(BamlMap::new());
+        let template = "{{ctx.output_format}}";
+
+        let result = render_prompt(template, &args, ctx);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            RenderedPrompt::Completion { text } => {
+                assert!(text.contains("int"), "Expected 'int' but got: {}", text);
+            }
+            _ => panic!("Expected Completion"),
+        }
+    }
+
+    #[test]
+    fn test_ctx_output_format_callable() {
+        use baml_base::Ty;
+        use baml_output_format::OutputFormatBuilder;
+
+        let output_format = OutputFormatBuilder::new()
+            .with_target(Ty::String)
+            .build();
+
+        let ctx = RenderContext {
+            output_format,
+            ..Default::default()
+        };
+
+        let args = BamlValue::Map(BamlMap::new());
+        // Call with no args - should work the same as direct access
+        let template = "{{ctx.output_format()}}";
+
+        let result = render_prompt(template, &args, ctx);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            RenderedPrompt::Completion { text } => {
+                assert!(text.contains("string"), "Expected 'string' but got: {}", text);
+            }
+            _ => panic!("Expected Completion"),
+        }
+    }
+
+    #[test]
+    fn test_ctx_output_format_with_custom_or_splitter() {
+        use baml_base::Ty;
+        use baml_output_format::{Class, Enum, OutputFormatBuilder};
+
+        let status_enum = Enum::new("Status")
+            .with_variant("pending", None)
+            .with_variant("done", None);
+
+        let task_class = Class::new("Task")
+            .with_field("status", Ty::Enum(baml_base::Name::from("Status")), None, true);
+
+        let output_format = OutputFormatBuilder::new()
+            .with_enum(status_enum)
+            .with_class(task_class)
+            .with_target(Ty::Class(baml_base::Name::from("Task")))
+            .build();
+
+        let ctx = RenderContext {
+            output_format,
+            ..Default::default()
+        };
+
+        let args = BamlValue::Map(BamlMap::new());
+        let template = r#"{{ctx.output_format(or_splitter=" | ")}}"#;
+
+        let result = render_prompt(template, &args, ctx);
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            RenderedPrompt::Completion { text } => {
+                assert!(text.contains("'pending' | 'done'"), "Expected custom or_splitter but got: {}", text);
+            }
+            _ => panic!("Expected Completion"),
+        }
     }
 }

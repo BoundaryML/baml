@@ -6,5 +6,9 @@ input_file: crates/baml_build_request_tests/testdata/InputNamedImageList.baml
 fixture: InputNamedImageList.baml
 function: FnInputNamedImageList
 prompt:
-  type: Completion
-  text: What colors do these have in common?
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: What colors do these have in common?

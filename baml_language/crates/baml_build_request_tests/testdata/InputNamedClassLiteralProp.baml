@@ -14,7 +14,7 @@ function FnInputNamedClassLiteralProp(input: LiteralClassHello) -> LiteralClassH
   client GPT4
   prompt #"
     Return the same object you were given.
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

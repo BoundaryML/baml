@@ -18,7 +18,7 @@ function FnInputNamedClassLiteralUnionProp(input: LiteralClassOne | LiteralClass
   client GPT4
   prompt #"
     Return the same object you were given.
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
 
     {{ _.role('user') }}
     {{ input }}

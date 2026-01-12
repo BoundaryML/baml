@@ -7,4 +7,4 @@ fixture: OutputLiteralInt.baml
 function: FnOutputLiteralInt
 prompt:
   type: Completion
-  text: "Return an integer: "
+  text: "Return an integer: Answer with exactly: 5"

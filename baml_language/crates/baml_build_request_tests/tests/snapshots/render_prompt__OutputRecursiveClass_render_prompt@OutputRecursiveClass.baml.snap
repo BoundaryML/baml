@@ -7,4 +7,4 @@ fixture: OutputRecursiveClass.baml
 function: FnOutputRecursiveClass
 prompt:
   type: Completion
-  text: "Build a linked list from the input array of integers.\n\nINPUT:\n\n\n"
+  text: "Build a linked list from the input array of integers.\n\nINPUT:\n\n\n{\n  head: Node?\n  len: int\n}"

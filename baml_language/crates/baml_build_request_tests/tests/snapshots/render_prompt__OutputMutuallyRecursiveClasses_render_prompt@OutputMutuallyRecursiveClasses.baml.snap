@@ -7,4 +7,4 @@ fixture: OutputMutuallyRecursiveClasses.baml
 function: FnOutputMutuallyRecursiveClasses
 prompt:
   type: Completion
-  text: "Given the input binary tree, transform it into a generic tree using the given schema.\n\nINPUT:\n\n\n"
+  text: "Given the input binary tree, transform it into a generic tree using the given schema.\n\nINPUT:\n\n\n{\n  data: int\n  children: Forest\n}"

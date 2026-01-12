@@ -6,5 +6,9 @@ input_file: crates/baml_build_request_tests/testdata/InputTestcaseImage.baml
 fixture: InputTestcaseImage.baml
 function: FnInputTestcaseImage
 prompt:
-  type: Completion
-  text: Describe this in 4 words. One word must be the color
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Describe this in 4 words. One word must be the color

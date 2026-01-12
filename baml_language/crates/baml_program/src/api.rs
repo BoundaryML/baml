@@ -14,10 +14,9 @@ use std::collections::HashMap;
 use baml_compiler_tir::Ty;
 use baml_db::baml_workspace::Project;
 use baml_jinja_runtime::{LlmClientSpec, RenderContext};
+use baml_llm_interface::RenderedPrompt;
 use baml_project::ProjectDatabase as RootDatabase;
 use ir_stub::{BamlMap, BamlValue};
-
-use baml_llm_interface::RenderedPrompt;
 
 use crate::{
     context::{DynamicBamlContext, PerCallContext, SharedCallContext},
@@ -29,6 +28,7 @@ use crate::{
         OrchestratorNode, ProviderType, orchestrate_call, orchestrate_stream,
     },
     prepared_function::PreparedFunction,
+    relevant_data_models::relevant_data_models,
     render_options::RenderOptions,
     types::{FunctionResult, TestResult},
 };
@@ -315,6 +315,9 @@ impl BamlProgram {
         let client_name = prepared.client_spec.client_name.clone();
         let (provider, default_role, allowed_roles) = parse_client_config(&client_name);
 
+        // Build output format from the return type
+        let output_format = relevant_data_models(&self.db, self.project, &prepared.return_ty);
+
         Ok(RenderContext {
             client: LlmClientSpec {
                 name: client_name,
@@ -324,6 +327,7 @@ impl BamlProgram {
                 ..Default::default()
             },
             tags: HashMap::new(),
+            output_format,
         })
     }
 }
@@ -399,7 +403,6 @@ fn parse_client_config(client_name: &str) -> (String, String, Vec<String>) {
 
     (provider, default_role, allowed_roles)
 }
-
 
 /// Build orchestrator config from client specification.
 fn build_orchestrator_config(

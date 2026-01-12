@@ -7,4 +7,4 @@ fixture: OutputEnumList.baml
 function: FnOutputEnumList
 prompt:
   type: Completion
-  text: "Print out two of these values randomly selected from the list below in a json array.\n\n\n\nAnswer:"
+  text: "Print out two of these values randomly selected from the list below in a json array.\n\n'ONE' or 'TWO' or 'THREE'[]\n\nAnswer:"

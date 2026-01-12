@@ -7,4 +7,4 @@ fixture: OutputOptional.baml
 function: FnOutputOptional
 prompt:
   type: Completion
-  text: "Return a JSON blob with this schema:\n\n\nJSON:"
+  text: "Return a JSON blob with this schema:\n(OptionalTest_ReturnType?)[]\n\nJSON:"

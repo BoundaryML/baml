@@ -10,7 +10,7 @@ function FnOutputMapLiteralUnionKey(
 
     {{i2}}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 
@@ -21,7 +21,7 @@ function FnOutputMapLiteralUnionKey2(m: map<"key", string>) -> map<"key", string
 
     {{m}}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

@@ -7,4 +7,4 @@ fixture: OutputClassList.baml
 function: FnOutputClassList
 prompt:
   type: Completion
-  text: "Return a JSON array that follows this schema:\n\n\nJSON:"
+  text: "Return a JSON array that follows this schema:\n{\n  prop2: int\n  prop1: string\n}[]\n\nJSON:"

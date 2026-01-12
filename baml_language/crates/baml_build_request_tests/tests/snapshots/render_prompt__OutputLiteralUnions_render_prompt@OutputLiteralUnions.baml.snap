@@ -7,4 +7,4 @@ fixture: OutputLiteralUnions.baml
 function: FnOutputLiteralUnions
 prompt:
   type: Completion
-  text: "Return one of these values without any additional context:\n"
+  text: "Return one of these values without any additional context:\n1 or true or \"string output\""

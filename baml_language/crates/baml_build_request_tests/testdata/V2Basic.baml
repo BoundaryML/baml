@@ -36,7 +36,7 @@ function FnV2Basic(resume: string) -> Resume {
         <<<<
 
         Output JSON schema:
-        {{ ctx.output_format }}
+        {{ ctx.output_format() }}
 
         JSON:
     "#
@@ -85,7 +85,7 @@ function GetQuery(query: string) -> SearchParams {
         <<<<
 
         OUTPUT_JSON_SCHEMA:
-        {{ ctx.output_format }}
+        {{ ctx.output_format() }}
 
         Before OUTPUT_JSON_SCHEMA, list 5 intentions the user may have.
         --- EXAMPLES ---
@@ -129,7 +129,7 @@ function GetDataType(text: string) -> RaysData {
         <<<<
 
         Output JSON schema:
-        {{ ctx.output_format }}
+        {{ ctx.output_format() }}
 
         JSON:
     "#

@@ -7,4 +7,4 @@ fixture: OutputTypeAliases.baml
 function: FnOutputTypeAliases
 prompt:
   type: Completion
-  text: "Return the given value back: \n\n"
+  text: "Return the given value back: \n\nPrimitive"

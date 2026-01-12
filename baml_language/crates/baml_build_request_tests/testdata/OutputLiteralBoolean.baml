@@ -17,7 +17,7 @@ client<llm> GPT35 {
 function FnOutputLiteralBoolean(input: string) -> false {
   client GPT35
   prompt #"
-    Return a false: {{ ctx.output_format}}
+    Return a false: {{ ctx.output_format()}}
   "#
 }
 

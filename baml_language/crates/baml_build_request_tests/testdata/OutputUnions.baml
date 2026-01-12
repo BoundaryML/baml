@@ -24,7 +24,7 @@ function FnOutputUnions(input: string | bool) -> UnionTest_ReturnType {
   client GPT35
   prompt #"
     Return a JSON blob with this schema:
-    {{ctx.output_format}}
+    {{ctx.output_format()}}
 
     JSON:
   "#

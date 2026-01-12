@@ -7,4 +7,4 @@ fixture: OutputUnions.baml
 function: FnOutputUnions
 prompt:
   type: Completion
-  text: "Return a JSON blob with this schema:\n\n\nJSON:"
+  text: "Return a JSON blob with this schema:\n{\n  prop1: string or bool\n  prop2: (float | bool)[]\n  prop3: (bool[] | int[])\n}\n\nJSON:"

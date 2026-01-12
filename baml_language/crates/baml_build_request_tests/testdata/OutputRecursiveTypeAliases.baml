@@ -21,7 +21,7 @@ function FnOutputRecursiveTypeAliases(data: LinkedListAlias) -> LinkedListAlias 
 
       {{ data }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -37,7 +37,7 @@ function FnOutputRecursiveTypeAliases2(cls: ClassToRecAlias) -> ClassToRecAlias 
 
       {{ cls }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -57,7 +57,7 @@ function FnOutputRecursiveTypeAliases3(cls: NodeWithAliasIndirection) -> NodeWit
 
       {{ cls }}
 
-      {{ ctx.output_format }}
+      {{ ctx.output_format() }}
     "#
 }
 
@@ -77,7 +77,7 @@ function FnOutputRecursiveTypeAliases4(s: string) -> JsonTemplate {
     Extract info from this string exactly as it is:
     {{ s }}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

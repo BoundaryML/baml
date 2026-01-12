@@ -7,4 +7,4 @@ fixture: OutputClass.baml
 function: FnOutputClass
 prompt:
   type: Completion
-  text: "Return a JSON blob with this schema:\n\n\nFor the prop2, always return a 540\n\nJSON:"
+  text: "Return a JSON blob with this schema:\n{\n  prop1: string\n  prop2: int\n}\n\nFor the prop2, always return a 540\n\nJSON:"

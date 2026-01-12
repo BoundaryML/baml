@@ -7,4 +7,4 @@ fixture: OutputClassWithEnum.baml
 function: FnOutputClassWithEnum
 prompt:
   type: Completion
-  text: "Return a made up json blob that matches this schema:\n\n---\n\nJSON:"
+  text: "Return a made up json blob that matches this schema:\n{\n  prop1: string\n  prop2: 'ONE' or 'TWO'\n}\n---\n\nJSON:"

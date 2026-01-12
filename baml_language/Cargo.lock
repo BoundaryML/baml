@@ -550,6 +550,7 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "baml_llm_interface",
+ "baml_output_format",
  "indexmap 2.13.0",
  "ir_stub",
  "minijinja",
@@ -680,6 +681,7 @@ dependencies = [
  "baml_jinja_runtime",
  "baml_jsonish",
  "baml_llm_interface",
+ "baml_output_format",
  "baml_project",
  "baml_type_reflection",
  "chrono",

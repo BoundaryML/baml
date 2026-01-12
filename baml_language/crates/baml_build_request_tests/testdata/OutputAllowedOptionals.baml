@@ -18,7 +18,7 @@ function FnOutputAllowedOptionals(optionals: OptionalListAndMap) -> OptionalList
 
     {{optionals}}
 
-    {{ctx.output_format}}
+    {{ctx.output_format()}}
   "#
 }
 

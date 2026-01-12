@@ -7,4 +7,4 @@ fixture: OutputMapEnumKey.baml
 function: FnOutputMapEnumKey
 prompt:
   type: Completion
-  text: "Merge these:  \n\n"
+  text: "Merge these:  \n\nmap<'A' or 'B' or 'C', string>"

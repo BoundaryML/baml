@@ -37,7 +37,7 @@ function FnOutputMutuallyRecursiveClasses(input: BinaryNode) -> Tree {
     INPUT:
     {{ input }}
 
-    {{ ctx.output_format }}
+    {{ ctx.output_format() }}
   "#
 }
 

@@ -17,7 +17,7 @@ client<llm> GPT35 {
 function FnOutputLiteralInt(input: string) -> 5 {
   client GPT35
   prompt #"
-    Return an integer: {{ ctx.output_format}}
+    Return an integer: {{ ctx.output_format()}}
   "#
 }
 

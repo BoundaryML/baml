@@ -4,4 +4,4 @@ expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputEnum.baml
 ---
 fixture: OutputEnum.baml
-error: "Failed to render prompt: Prompt rendering failed: Minijinja error: unknown method: map has no method named output_format (in prompt:3)"
+error: "Failed to render prompt: Prompt rendering failed: Minijinja error: invalid operation: prefix must be a string or null (in prompt:3)"

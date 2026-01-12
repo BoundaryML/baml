@@ -25,7 +25,7 @@ function FnOutputOptionalClass(input: string) -> ClassOptionalOutput? {
     Return a json blob for the following input:
     {{input}}
 
-    {{ctx.output_format}}
+    {{ctx.output_format()}}
 
     JSON:
   "#
@@ -48,7 +48,7 @@ function FnOutputOptionalClass2(input: string) -> ClassOptionalOutput2? {
     Return a json blob for the following input:
     {{input}}
 
-    {{ctx.output_format}}
+    {{ctx.output_format()}}
 
     JSON:
   "#
