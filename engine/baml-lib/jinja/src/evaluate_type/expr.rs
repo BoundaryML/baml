@@ -738,6 +738,12 @@ fn typecheck_attr_access_on_union(
     types: &PredefinedTypes,
     state: &mut ScopeTracker,
 ) -> Type {
+    // Extract union name if this is a type alias
+    let union_name = match union_type {
+        Type::Alias { name, .. } => Some(name.as_str()),
+        _ => None,
+    };
+
     // Resolve items.
     let union_items = match union_type {
         Type::Union(items) => items,
@@ -753,6 +759,8 @@ fn typecheck_attr_access_on_union(
     // Attribute must be present on all items of the union and also have the
     // same type.
     let mut attr_type = None;
+    let mut classes_missing_property: Vec<&str> = Vec::new();
+    let mut has_type_mismatch = false;
 
     // Search recursively for all types in the union to check
     // if they all contain the property.
@@ -769,9 +777,10 @@ fn typecheck_attr_access_on_union(
                     get_attr.span(),
                 );
 
-                // Prop not found in one of the types is a type error.
+                // Prop not found in one of the types - track it
                 if err.is_some() {
-                    return expected_class_got(union_type, get_attr, state);
+                    classes_missing_property.push(class_name);
+                    continue;
                 }
 
                 // Check if previous type matches the current one
@@ -781,7 +790,7 @@ fn typecheck_attr_access_on_union(
                     Some(prev_type) => {
                         // Found two distinct types for the same prop.
                         if !class_prop_type.equals_ignoring_literal_values(prev_type) {
-                            return expected_class_got(union_type, get_attr, state);
+                            has_type_mismatch = true;
                         }
                     }
                 }
@@ -795,9 +804,40 @@ fn typecheck_attr_access_on_union(
 
             // Found a type that's not a class, stop here.
             _ => {
-                return expected_class_got(union_type, get_attr, state);
+                let variable_name = pretty_print(&get_attr.expr);
+                state.errors.push(TypeError::new_non_class_in_union(
+                    &variable_name,
+                    get_attr.name,
+                    &union_item_type.name(),
+                    get_attr.span(),
+                ));
+                return Type::Unknown;
             }
         }
+    }
+
+    // Report specific errors based on what went wrong
+    if !classes_missing_property.is_empty() {
+        let variable_name = pretty_print(&get_attr.expr);
+        state.errors.push(TypeError::new_property_not_found_in_union(
+            &variable_name,
+            get_attr.name,
+            &classes_missing_property,
+            union_name,
+            get_attr.span(),
+        ));
+        return Type::Unknown;
+    }
+
+    if has_type_mismatch {
+        let variable_name = pretty_print(&get_attr.expr);
+        state.errors.push(TypeError::new_property_type_mismatch_in_union(
+            &variable_name,
+            get_attr.name,
+            union_name,
+            get_attr.span(),
+        ));
+        return Type::Unknown;
     }
 
     match attr_type {
@@ -807,6 +847,7 @@ fn typecheck_attr_access_on_union(
 }
 
 /// Helper for [`typecheck_attr_access_on_union`].
+/// Used when the type is not a union at all (e.g., primitive type alias).
 fn expected_class_got(
     got: &Type,
     get_attr: &ast::Spanned<ast::GetAttr<'_>>,

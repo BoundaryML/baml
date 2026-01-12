@@ -404,6 +404,56 @@ impl TypeError {
             span: Span::default(),
         }
     }
+
+    fn new_property_not_found_in_union(
+        _variable_name: &str,
+        property: &str,
+        missing_on_classes: &[&str],
+        union_name: Option<&str>,
+        span: Span,
+    ) -> Self {
+        let classes_str = missing_on_classes.join(", ");
+        let message = match union_name {
+            Some(name) => format!(
+                "property '{property}' does not exist on {classes_str} in type alias {name}"
+            ),
+            None => format!(
+                "property '{property}' does not exist on {classes_str}"
+            ),
+        };
+        Self { message, span }
+    }
+
+    fn new_property_type_mismatch_in_union(
+        _variable_name: &str,
+        property: &str,
+        union_name: Option<&str>,
+        span: Span,
+    ) -> Self {
+        let message = match union_name {
+            Some(name) => format!(
+                "property '{property}' has inconsistent types across classes in type alias {name}"
+            ),
+            None => format!(
+                "property '{property}' has inconsistent types across union members"
+            ),
+        };
+        Self { message, span }
+    }
+
+    fn new_non_class_in_union(
+        variable_name: &str,
+        property: &str,
+        non_class_type: &str,
+        span: Span,
+    ) -> Self {
+        Self {
+            message: format!(
+                "cannot access property '{property}' on '{variable_name}': union contains non-class type {non_class_type}"
+            ),
+            span,
+        }
+    }
 }
 
 struct ScopeTracker {

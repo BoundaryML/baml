@@ -112,7 +112,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             err_unnarrowed.message(),
-            "'foo' is a (none | class Foo), expected class"
+            "cannot access property 'name' on 'foo': union contains non-class type none"
         );
     }
 
