@@ -3146,6 +3146,34 @@ class BamlSyncClient:
                 
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def TestSkipDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.SkipDynamicClass:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.TestSkipDynamic(input=input,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSkipDynamic", args={
+                "input": input,
+            })
+            return typing.cast(types.SkipDynamicClass, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def TestSkipNonDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.SkipNonDynamicClass:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.TestSkipNonDynamic(input=input,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestSkipNonDynamic", args={
+                "input": input,
+            })
+            return typing.cast(types.SkipNonDynamicClass, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestStreamingTimeout(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -6457,6 +6485,30 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def TestSkipDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[stream_types.SkipDynamicClass, types.SkipDynamicClass]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSkipDynamic", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[stream_types.SkipDynamicClass, types.SkipDynamicClass](
+          __result__,
+          lambda x: typing.cast(stream_types.SkipDynamicClass, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.SkipDynamicClass, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestSkipNonDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[stream_types.SkipNonDynamicClass, types.SkipNonDynamicClass]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestSkipNonDynamic", args={
+            "input": input,
+        })
+        return baml_py.BamlSyncStream[stream_types.SkipNonDynamicClass, types.SkipNonDynamicClass](
+          __result__,
+          lambda x: typing.cast(stream_types.SkipNonDynamicClass, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.SkipNonDynamicClass, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def TestStreamingTimeout(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -8579,6 +8631,20 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return __result__
+    def TestSkipDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSkipDynamic", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    def TestSkipNonDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSkipNonDynamic", args={
+            "input": input,
+        }, mode="request")
+        return __result__
     def TestStreamingTimeout(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10454,6 +10520,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSingleFallbackClient", args={
             
+        }, mode="stream")
+        return __result__
+    def TestSkipDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSkipDynamic", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    def TestSkipNonDynamic(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestSkipNonDynamic", args={
+            "input": input,
         }, mode="stream")
         return __result__
     def TestStreamingTimeout(self, input: str,

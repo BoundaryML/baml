@@ -704,6 +704,166 @@ end
 </Tab>
 </Tabs>
 
+### Cached Token Tracking
+
+When using providers that support prompt caching (like Anthropic, OpenAI, Google, or Vertex), you can track cached input tokens via the `cached_input_tokens` field:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+async def run():
+    collector = Collector(name="cache-tracker")
+    
+    # First call - content will be cached by the provider
+    res = await b.TestCaching(large_content, "Question 1", baml_options={"collector": collector})
+    
+    # Second call with same content - should use cached tokens
+    res2 = await b.TestCaching(large_content, "Question 2", baml_options={"collector": collector})
+    
+    # Access cached token counts
+    first_log = collector.logs[0]
+    second_log = collector.logs[1]
+    
+    print(f"First call cached tokens: {first_log.usage.cached_input_tokens}")
+    print(f"Second call cached tokens: {second_log.usage.cached_input_tokens}")
+    
+    # Collector aggregates cached tokens across all calls
+    print(f"Total cached tokens: {collector.usage.cached_input_tokens}")
+    
+    # You can also access cached tokens per LLM call (including retries)
+    print(f"Per-call cached tokens: {first_log.calls[0].usage.cached_input_tokens}")
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+async function run() {
+    const collector = new Collector("cache-tracker")
+    
+    // First call - content will be cached by the provider
+    const res = await b.TestCaching(largeContent, "Question 1", { collector })
+    
+    // Second call with same content - should use cached tokens
+    const res2 = await b.TestCaching(largeContent, "Question 2", { collector })
+    
+    // Access cached token counts
+    const firstLog = collector.logs[0]
+    const secondLog = collector.logs[1]
+    
+    console.log(`First call cached tokens: ${firstLog.usage.cachedInputTokens}`)
+    console.log(`Second call cached tokens: ${secondLog.usage.cachedInputTokens}`)
+    
+    // Collector aggregates cached tokens across all calls
+    console.log(`Total cached tokens: ${collector.usage.cachedInputTokens}`)
+    
+    // You can also access cached tokens per LLM call (including retries)
+    console.log(`Per-call cached tokens: ${firstLog.calls[0].usage?.cachedInputTokens}`)
+}
+```
+</Tab>
+
+<Tab title="Go" language="go">
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    
+    b "example.com/myproject/baml_client"
+)
+
+func run() {
+    ctx := context.Background()
+    
+    collector, err := b.NewCollector("cache-tracker")
+    if err != nil {
+        log.Fatalf("Failed to create collector: %v", err)
+    }
+    
+    // First call - content will be cached by the provider
+    _, err = b.TestCaching(ctx, largeContent, "Question 1", b.WithCollector(collector))
+    if err != nil {
+        log.Fatalf("First call failed: %v", err)
+    }
+    
+    // Second call with same content - should use cached tokens
+    _, err = b.TestCaching(ctx, largeContent, "Question 2", b.WithCollector(collector))
+    if err != nil {
+        log.Fatalf("Second call failed: %v", err)
+    }
+    
+    // Access cached token counts
+    logs, _ := collector.Logs()
+    firstLog := logs[0]
+    secondLog := logs[1]
+    
+    firstUsage, _ := firstLog.Usage()
+    secondUsage, _ := secondLog.Usage()
+    
+    firstCached, _ := firstUsage.CachedInputTokens()
+    secondCached, _ := secondUsage.CachedInputTokens()
+    
+    fmt.Printf("First call cached tokens: %d\n", firstCached)
+    fmt.Printf("Second call cached tokens: %d\n", secondCached)
+    
+    // Collector aggregates cached tokens across all calls
+    totalUsage, _ := collector.Usage()
+    totalCached, _ := totalUsage.CachedInputTokens()
+    fmt.Printf("Total cached tokens: %d\n", totalCached)
+}
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+
+def run
+    collector = Baml::Collector.new(name: "cache-tracker")
+    
+    # First call - content will be cached by the provider
+    res = Baml.Client.TestCaching(
+        content: large_content,
+        question: "Question 1",
+        baml_options: { collector: collector }
+    )
+    
+    # Second call with same content - should use cached tokens
+    res2 = Baml.Client.TestCaching(
+        content: large_content,
+        question: "Question 2",
+        baml_options: { collector: collector }
+    )
+    
+    # Access cached token counts
+    first_log = collector.logs[0]
+    second_log = collector.logs[1]
+    
+    puts "First call cached tokens: #{first_log.usage.cached_input_tokens}"
+    puts "Second call cached tokens: #{second_log.usage.cached_input_tokens}"
+    
+    # Collector aggregates cached tokens across all calls
+    puts "Total cached tokens: #{collector.usage.cached_input_tokens}"
+    
+    # You can also access cached tokens per LLM call (including retries)
+    puts "Per-call cached tokens: #{first_log.calls[0].usage.cached_input_tokens}"
+end
+```
+</Tab>
+</Tabs>
+
+<Info>
+Cached token tracking is supported for Anthropic, OpenAI, Google AI, and Vertex AI providers. AWS Bedrock does not currently support cached token reporting and will return `null` for this field.
+</Info>
+
 ## API Reference
 
 ### Collector Class
@@ -763,9 +923,10 @@ The `Usage` class has the following properties:
 |----------|------|-------------|
 | `input_tokens` | `int \| null` | The cumulative number of tokens used in the inputs. |
 | `output_tokens` | `int \| null` | The cumulative number of tokens used in the outputs. |
+| `cached_input_tokens` | `int \| null` | The number of cached input tokens (e.g., Anthropic's `cache_read_input_tokens`). |
 
 <Info>
-Note: Usage may not include all things like "thinking_tokens" or "cached_tokens". For that you may need to look at the raw HTTP response and build your own adapters.
+Note: Usage may not include all provider-specific token types like "thinking_tokens" or "cache_creation_input_tokens". For those, you may need to look at the raw HTTP response and build your own adapters.
 </Info>
 
 ### LLMCall Class

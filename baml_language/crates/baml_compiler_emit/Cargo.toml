@@ -1,0 +1,35 @@
+[package]
+name = "baml_compiler_emit"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_builtins = { workspace = true }
+baml_compiler_hir = { workspace = true }
+baml_compiler_mir = { workspace = true }
+baml_compiler_tir = { workspace = true }
+baml_compiler_vir = { workspace = true }
+baml_vm_types = { workspace = true }
+baml_workspace = { workspace = true }
+salsa = { workspace = true }
+
+[dev-dependencies]
+baml_tests = { workspace = true }
+anyhow = { workspace = true }
+insta = { workspace = true }
+la-arena = { workspace = true }
+

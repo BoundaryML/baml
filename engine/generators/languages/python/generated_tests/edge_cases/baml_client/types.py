@@ -12,11 +12,13 @@
 
 import typing
 import typing_extensions
+from enum import Enum
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
+import baml_py
 
 CheckT = typing_extensions.TypeVar('CheckT')
 CheckName = typing_extensions.TypeVar('CheckName', bound=str)
@@ -130,11 +132,11 @@ class NumberEdgeCases(BaseModel):
     zero: int
     negativeInt: int
     largeInt: int
-    veryLargeInt: int
+    veryLargeInt: int = Field(description='i64 max value')
     smallFloat: float
     largeFloat: float
     negativeFloat: float
-    scientificNotation: float
+    scientificNotation: float = Field(description='> 1e3, but < 1e6')
     infinity: typing.Optional[float] = None
     notANumber: typing.Optional[float] = None
 

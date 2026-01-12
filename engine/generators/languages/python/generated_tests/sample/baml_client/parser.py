@@ -11,7 +11,9 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 
+import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -25,14 +27,14 @@ class LlmResponseParser:
     def Bar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example", "types.Example2"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Bar", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Union["types.Example", "types.Example2"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Bar", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Union["types.Example", "types.Example2"], __result__)
 
     def Foo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Union["types.Example2", "types.Example"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="request")
-        return typing.cast(typing.Union["types.Example2", "types.Example"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Union["types.Example2", "types.Example"], __result__)
 
     
 
@@ -45,13 +47,13 @@ class LlmStreamParser:
     def Bar(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Union["stream_types.Example", "stream_types.Example2"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Bar", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Bar", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], __result__)
 
     def Foo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Union["stream_types.Example2", "stream_types.Example"]:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="Foo", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], __result__)
 
     

@@ -44,6 +44,8 @@ jobs:
       beps: ${{ steps.check_beps.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for typescript2/webview changes
+      webview: ${{ steps.check_webview.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,6 +69,7 @@ jobs:
             ':baml_language/**' \
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -79,7 +82,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_lexer/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
             ':baml_language/crates/baml_base/**' \
             ':baml_language/Cargo.toml' \
             ':baml_language/Cargo.lock' \
@@ -95,9 +98,9 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_parser/**' \
-            ':baml_language/crates/baml_syntax/**' \
-            ':baml_language/crates/baml_lexer/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_compiler_syntax/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -111,9 +114,9 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_workspace/**' \
-            ':baml_language/crates/baml_parser/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -128,7 +131,7 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_thir/**' \
-            ':baml_language/crates/baml_hir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -142,7 +145,7 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_codegen/**' \
+            ':baml_language/crates/baml_compiler_emit/**' \
             ':baml_language/crates/baml_thir/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
@@ -181,6 +184,47 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':baml_language/crates/baml_playground_wasm/**' \
+            ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Lint checks
+  cargo-stow:
+    name: "Cargo Stow"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 10
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Run cargo stow --check"
+        run: cargo run -p baml_tools_stow --release -- stow --check
+        working-directory: baml_language
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -189,6 +233,13 @@ jobs:
     with:
       code_changed: ${{ needs.determine_changes.outputs.code }}
       run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+
+  wasm-pack-tests:
+    name: "WASM Pack Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
     secrets: inherit
 
   beps:
@@ -216,9 +267,16 @@ jobs:
     secrets: inherit
     permissions: write-all
 
+  webview-tests:
+    name: "Webview Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/webview-tests.reusable.yaml
+    secrets: inherit
+
   benchmarks-instrumented:
     name: "benchmarks instrumented (baml)"
-    runs-on: codspeed-macro
+    runs-on: ubuntu-latest
     needs: determine_changes
     if: |
       (
@@ -252,7 +310,7 @@ jobs:
           tool: cargo-codspeed
 
       - name: "Build benchmarks"
-        run: cargo codspeed build -p baml_tests
+        run: cargo codspeed build -p baml_tests -m walltime
         working-directory: baml_language
 
       - name: "Run benchmarks"
@@ -267,15 +325,28 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
+      - cargo-stow
       - cargo-tests
+      - wasm-pack-tests
       - beps
       - docs
+      - webview-tests
       - benchmarks-instrumented
     steps:
       - name: "Check test results"
         run: |
+          if [[ "${{ needs.cargo-stow.result }}" != "success" && "${{ needs.cargo-stow.result }}" != "skipped" ]]; then
+            echo "::error::Cargo stow check failed"
+            exit 1
+          fi
+
           if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
             echo "::error::Cargo tests failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.wasm-pack-tests.result }}" != "success" && "${{ needs.wasm-pack-tests.result }}" != "skipped" ]]; then
+            echo "::error::WASM pack tests failed"
             exit 1
           fi
 
@@ -286,6 +357,11 @@ jobs:
 
           if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
             echo "::error::Docs workflow failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.webview-tests.result }}" != "success" && "${{ needs.webview-tests.result }}" != "skipped" ]]; then
+            echo "::error::Webview tests failed"
             exit 1
           fi
 

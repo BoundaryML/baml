@@ -1,0 +1,17 @@
+# Stow configuration
+approved_prefixes = ["lsp", "tools", "compiler", "builtins", "vm", "ide", "playground"]
+test_crate_exceptions = ["baml_tests"]
+
+[[dependency_rules]]
+pattern = "anyhow"
+allowed_prefixes = ["lsp"]
+allowed_crates = ["baml_cli"]
+regular_deps_only = true
+reason = "Use thiserror for proper error types in library crates."
+
+[[dependency_rules]]
+pattern = "baml_compiler*"
+allowed_prefixes = ["compiler", "lsp"]
+allowed_crates = ["baml_db", "baml_project"]
+regular_deps_only = true
+reason = "Use baml_db or baml_project to access compiler interfaces."

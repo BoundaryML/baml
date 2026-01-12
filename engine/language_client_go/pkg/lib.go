@@ -1,7 +1,6 @@
 package baml
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
@@ -22,9 +21,28 @@ func EncodeValue(value any) (*cffi.HostValue, error) {
 }
 
 func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
-	raw_decoded_data, goType := serde.Decode(holder, typeMap)
-	fmt.Printf("-> Decoded: goType=%v, raw_decoded_data=%v\n", goType, raw_decoded_data)
+	raw_decoded_data, _ := serde.Decode(holder, typeMap)
 	return raw_decoded_data
+}
+
+func DecodeToValue(holder *cffi.CFFIValueHolder) any {
+	raw_decoded_data, goType := serde.Decode(holder, typeMap)
+
+	if !raw_decoded_data.IsValid() {
+		return nil
+	}
+
+	// If int, bool, float, string, return the value directly
+	if goType == reflect.TypeOf(int64(0)) {
+		return raw_decoded_data.Int()
+	}
+	if goType == reflect.TypeOf(float64(0)) {
+		return raw_decoded_data.Float()
+	}
+	if goType == reflect.TypeOf(false) {
+		return raw_decoded_data.Bool()
+	}
+	return raw_decoded_data.Interface()
 }
 
 func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.HostValue, error) {

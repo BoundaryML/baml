@@ -113,15 +113,16 @@ impl FunctionResult {
     }
 
     pub fn result_with_constraints_content(&self) -> Result<&ResponseBamlValue> {
-        self.result_with_constraints()
+        let Some(result) = self
+            .result_with_constraints()
             .as_ref()
             .map(|res| match res {
                 Ok(val) => Ok(val),
                 Err(err) => Err(anyhow::anyhow!(self.format_last_error_with_details(err))),
             })
-            .unwrap_or_else(|| {
-                // If we don't have a parsed result, check if we have an LLMFailure
-                match self.llm_response() {
+        else {
+            // If we don't have a parsed result, check if we have an LLMFailure
+            return match self.llm_response() {
                     LLMResponse::LLMFailure(err) => {
                         // Convert LLMFailure to appropriate error type
                         match &err.code {
@@ -158,8 +159,10 @@ impl FunctionResult {
                     LLMResponse::Success(_) => {
                         Err(anyhow::anyhow!("This should never happen - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"))
                     }
-                }
-            })
+                };
+        };
+
+        result
     }
 
     fn format_last_error_with_details(&self, last_error: &anyhow::Error) -> ExposedError {
@@ -200,6 +203,18 @@ impl FunctionResult {
                 status_code: ErrorCode::ServiceUnavailable,
             };
         }
+
+        // Check if the underlying LLM response was a timeout - if so, preserve the TimeoutError
+        // instead of converting it to a ValidationError
+        if let LLMResponse::LLMFailure(llm_err) = self.llm_response() {
+            if matches!(llm_err.code, ErrorCode::Timeout) {
+                return ExposedError::TimeoutError {
+                    client_name: llm_err.client.clone(),
+                    message: llm_err.message.clone(),
+                };
+            }
+        }
+
         let message = match self.llm_response() {
             LLMResponse::Success(_) => {
                 format!("Failed to parse LLM response: {actual_error}")

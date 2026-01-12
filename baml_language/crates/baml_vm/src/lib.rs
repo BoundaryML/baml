@@ -8,10 +8,9 @@
 //! 2. Execute Instruction.
 //! 3. Increment instruction pointer and repeat loop.
 //!
-//! The instructions that the VM runs are defined in [`Instruction`] enum.
+//! The instructions that the VM runs are defined in [`baml_vm_types::bytecode::Instruction`] enum.
 
 pub mod builtins;
-pub mod bytecode;
 pub mod debug;
 pub mod errors;
 pub mod indexable;
@@ -20,18 +19,10 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-pub use builtins::{
-    FunctionDef, TypePattern, builtins, find_builtin_by_path, find_function, find_method, functions,
-};
-pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, UnaryOp, VizExecDelta, VizExecEvent, VizNodeMeta,
-    VizNodeType,
-};
+// Re-export lookup functions from baml_builtins for convenience.
+pub use baml_builtins::{find_builtin_by_path, find_function, find_method};
+pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
 pub use errors::{InternalError, RuntimeError, StackTrace};
-pub use indexable::{EvalStack, GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
+pub use indexable::EvalStack;
 pub use native::NativeFunction;
-pub use types::{
-    Class, Enum, Function, FunctionKind, Future, FutureKind, Object, ObjectType, Program, Value,
-    Variant,
-};
 pub use vm::{BamlVmProgram, Frame, Vm, VmExecState};

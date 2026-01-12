@@ -140,5 +140,10 @@ pub fn trigger_on_tick_callback(id: u32) {
     let on_tick_fn = ON_TICK_CALLBACK_FN
         .get()
         .expect("expected on tick callback function to be set. Did you call register_callbacks?");
-    on_tick_fn(id);
+    // Use block_in_place to tell Tokio this is a blocking operation.
+    // This allows Tokio to move other async tasks to different worker threads,
+    // preventing deadlock when the callback performs blocking FFI calls.
+    tokio::task::block_in_place(|| {
+        on_tick_fn(id);
+    });
 }

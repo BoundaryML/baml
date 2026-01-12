@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -83,7 +83,7 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: field 'field2' is missing a type annotation
-   ╭─[ 0:4:3 ]
+   ╭─[ partial_input.baml:4:3 ]
    │
  4 │   field2  // Missing type entirely
    │   ───┬──  
@@ -93,7 +93,7 @@ Error: field 'field2' is missing a type annotation
 ───╯
 
 Error: field 'string' is missing a type annotation
-   ╭─[ 0:6:10 ]
+   ╭─[ partial_input.baml:6:10 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │          ───┬──  
@@ -103,7 +103,7 @@ Error: field 'string' is missing a type annotation
 ───╯
 
 Error: Expected Unexpected token in class body, found '@'
-   ╭─[ 0:6:17 ]
+   ╭─[ partial_input.baml:6:17 ]
    │
  6 │   field4 string @alias(  // Unclosed attribute
    │                 ┬  
@@ -113,7 +113,7 @@ Error: Expected Unexpected token in class body, found '@'
 ───╯
 
 Error: Expected ')', found identifier
-   ╭─[ 0:7:10 ]
+   ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
@@ -123,7 +123,7 @@ Error: Expected ')', found identifier
 ───╯
 
 Error: field 'string' is missing a type annotation
-   ╭─[ 0:7:10 ]
+   ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
@@ -133,7 +133,7 @@ Error: field 'string' is missing a type annotation
 ───╯
 
 Error: Expected ')', found function
-    ╭─[ 0:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -143,7 +143,7 @@ Error: Expected ')', found function
 ────╯
 
 Error: Expected return type (->), found function
-    ╭─[ 0:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -153,7 +153,7 @@ Error: Expected return type (->), found function
 ────╯
 
 Error: Expected function body, found function
-    ╭─[ 0:13:1 ]
+    ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
@@ -163,7 +163,7 @@ Error: Expected function body, found function
 ────╯
 
 Error: Expected '{', found identifier
-    ╭─[ 0:19:3 ]
+    ╭─[ partial_input.baml:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
@@ -173,7 +173,7 @@ Error: Expected '{', found identifier
 ────╯
 
 Error: Expected top-level declaration, found identifier
-    ╭─[ 0:19:3 ]
+    ╭─[ partial_input.baml:19:3 ]
     │
  19 │   VALUE2
     │   ───┬──  
@@ -183,7 +183,7 @@ Error: Expected top-level declaration, found identifier
 ────╯
 
 Error: Expected top-level declaration, found '}'
-    ╭─[ 0:20:1 ]
+    ╭─[ partial_input.baml:20:1 ]
     │
  20 │ }
     │ ┬  

@@ -10272,6 +10272,100 @@ func (*parse_stream) TestSingleFallbackClient(text string, opts ...CallOptionFun
 	return casted, nil
 }
 
+// / Parse version of TestSkipDynamic (Takes in string and returns stream_types.SkipDynamicClass)
+func (*parse_stream) TestSkipDynamic(text string, opts ...CallOptionFunc) (stream_types.SkipDynamicClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSkipDynamic: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestSkipDynamic", encoded)
+	if err != nil {
+		return stream_types.SkipDynamicClass{}, err
+	}
+
+	casted := (result).(stream_types.SkipDynamicClass)
+
+	return casted, nil
+}
+
+// / Parse version of TestSkipNonDynamic (Takes in string and returns stream_types.SkipNonDynamicClass)
+func (*parse_stream) TestSkipNonDynamic(text string, opts ...CallOptionFunc) (stream_types.SkipNonDynamicClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": true},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: TestSkipNonDynamic: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestSkipNonDynamic", encoded)
+	if err != nil {
+		return stream_types.SkipNonDynamicClass{}, err
+	}
+
+	casted := (result).(stream_types.SkipNonDynamicClass)
+
+	return casted, nil
+}
+
 // / Parse version of TestStreamingTimeout (Takes in string and returns string)
 func (*parse_stream) TestStreamingTimeout(text string, opts ...CallOptionFunc) (string, error) {
 

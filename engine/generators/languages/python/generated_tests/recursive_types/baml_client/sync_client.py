@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -50,6 +51,7 @@ class BamlSyncClient:
     def with_options(self,
         tb: typing.Optional[type_builder.TypeBuilder] = None,
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
+        client: typing.Optional[str] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
         tags: typing.Optional[typing.Dict[str, str]] = None,
@@ -60,6 +62,8 @@ class BamlSyncClient:
             options["tb"] = tb
         if client_registry is not None:
             options["client_registry"] = client_registry
+        if client is not None:
+            options["client"] = client
         if collector is not None:
             options["collector"] = collector
         if env is not None:
@@ -89,35 +93,35 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> types.JSON:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.Foo(x=x,
+            __stream__ = self.stream.Foo(x=x,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="Foo", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="Foo", args={
                 "x": x,
             })
-            return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.JSON, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> types.JSON:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.JsonInput(x=x,
+            __stream__ = self.stream.JsonInput(x=x,
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonInput", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="JsonInput", args={
                 "x": x,
             })
-            return typing.cast(types.JSON, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.JSON, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -130,26 +134,26 @@ class BamlStreamClient:
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.JSON, types.JSON]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="Foo", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="Foo", args={
             "x": x,
         })
         return baml_py.BamlSyncStream[stream_types.JSON, types.JSON](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.JSON, types.JSON]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="JsonInput", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="JsonInput", args={
             "x": x,
         })
         return baml_py.BamlSyncStream[stream_types.JSON, types.JSON](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.JSON, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.JSON, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -162,17 +166,17 @@ class BamlHttpRequestClient:
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
             "x": x,
         }, mode="request")
-        return result
+        return __result__
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
             "x": x,
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -184,17 +188,17 @@ class BamlHttpStreamRequestClient:
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="Foo", args={
             "x": x,
         }, mode="stream")
-        return result
+        return __result__
     def JsonInput(self, x: types.JSON,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="JsonInput", args={
             "x": x,
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

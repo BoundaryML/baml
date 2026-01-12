@@ -1,0 +1,50 @@
+name: WASM Pack Tests (Reusable)
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-wasm-pack-tests
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  wasm-pack-test:
+    name: "wasm-pack test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install wasm-pack"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: "Run wasm-pack tests (baml_playground_wasm)"
+        run: wasm-pack test --node crates/baml_playground_wasm
+        working-directory: baml_language

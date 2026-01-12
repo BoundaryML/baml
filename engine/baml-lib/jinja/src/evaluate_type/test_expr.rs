@@ -384,3 +384,54 @@ fn test_function_reference_without_call_expr() {
         ]
     );
 }
+
+#[test]
+fn test_filter_chain_type_propagation() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_class(
+        "Location",
+        vec![("country".into(), Type::String)].into_iter().collect(),
+    );
+    types.add_variable("this", Type::ClassRef("Location".into()));
+
+    // format() returns String, so chaining lower (expects String) should work
+    assert_eq!(
+        assert_evaluates_to!(r#"this|format(type="json")|lower"#, &types),
+        Type::String
+    );
+
+    // format() returns String, so chaining lower then regex_match should work
+    assert_eq!(
+        assert_evaluates_to!(
+            r#"this|format(type="json")|lower|regex_match("usa")"#,
+            &types
+        ),
+        Type::Bool
+    );
+
+    // String literal should work with lower filter
+    assert_eq!(
+        assert_evaluates_to!(r#""hello"|lower"#, &types),
+        Type::String
+    );
+
+    // String variable should work with lower filter
+    types.add_variable("string_var", Type::String);
+    assert_eq!(
+        assert_evaluates_to!(r#"string_var|lower"#, &types),
+        Type::String
+    );
+
+    // Chaining string filters: capitalize -> lower -> upper
+    assert_eq!(
+        assert_evaluates_to!(r#""hello"|capitalize|lower|upper"#, &types),
+        Type::String
+    );
+
+    // Int should NOT work with lower filter (should produce error)
+    types.add_variable("int_var", Type::Int);
+    assert_eq!(
+        assert_fails_to!(r#"int_var|lower"#, &types),
+        vec!["'int_var' is a int, expected string"]
+    );
+}

@@ -5,17 +5,17 @@
 | Suite | Location | Purpose |
 |-------|----------|---------|
 | `baml_tests` | `crates/baml_tests/` | Snapshot tests with detailed CST/HIR/THIR output |
-| `baml_lsp_tests` | `crates/baml_lsp_tests/` | LSP integration tests with inline expectations |
+| `baml_ide_tests` | `crates/baml_ide_tests/` | LSP integration tests with inline expectations |
 
 ## Workflow: Debugging a Failing Test
 
-### 1. Identify the issue in baml_lsp_tests
+### 1. Identify the issue in baml_ide_tests
 
 ```bash
-cargo test --package baml_lsp_tests
+cargo test --package baml_ide_tests
 ```
 
-Look for errors in `crates/baml_lsp_tests/test_files/syntax/`.
+Look for errors in `crates/baml_ide_tests/test_files/syntax/`.
 
 ### 2. Create a minimal repro in baml_tests
 
@@ -55,7 +55,7 @@ Snapshots are created in `crates/baml_tests/snapshots/my_repro/`:
 
 ### 5. Fix the issue
 
-Edit the relevant crate (`baml_parser`, `baml_syntax`, `baml_hir`, etc.).
+Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_compiler_hir`, etc.).
 
 ### 6. Re-run and update snapshots
 
@@ -64,15 +64,15 @@ Edit the relevant crate (`baml_parser`, `baml_syntax`, `baml_hir`, etc.).
 cargo test --package baml_tests my_repro
 cargo insta accept --all
 
-# Update baml_lsp_tests inline expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp_tests
+# Update baml_ide_tests inline expectations
+UPDATE_EXPECT=1 cargo test --package baml_ide_tests
 ```
 
 ### 7. Verify all tests pass
 
 ```bash
 cargo test --package baml_tests
-cargo test --package baml_lsp_tests
+cargo test --package baml_ide_tests
 ```
 
 ## Quick Commands
@@ -85,7 +85,7 @@ cargo test --package baml_tests my_project_name
 cargo test --package baml_tests
 
 # Run LSP tests and auto-update expectations
-UPDATE_EXPECT=1 cargo test --package baml_lsp_tests
+UPDATE_EXPECT=1 cargo test --package baml_ide_tests
 
 # Accept all pending snapshots
 cargo insta accept --all
@@ -96,18 +96,20 @@ cargo insta review
 
 ## Key Files
 
-- **Lexer**: `crates/baml_lexer/src/tokens.rs`
-- **Parser**: `crates/baml_parser/src/parser.rs`
-- **Syntax kinds**: `crates/baml_syntax/src/syntax_kind.rs`
-- **AST helpers**: `crates/baml_syntax/src/ast.rs`
-- **HIR lowering**: `crates/baml_hir/src/body.rs`
+- **Lexer**: `crates/baml_compiler_lexer/src/tokens.rs`
+- **Parser**: `crates/baml_compiler_parser/src/parser.rs`
+- **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
+- **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
+- **HIR lowering**: `crates/baml_compiler_hir/src/body.rs`
 - **Type checking**: `crates/baml_thir/src/lower.rs`
 
 
-DO NOT EDIT the diagnostics manually in baml_lsp_tests. Use update_expect=1
+DO NOT EDIT the diagnostics manually in baml_ide_tests. Use update_expect=1
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
 A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
 
 BEFORE you run these lsp tests with update_expect, make sure to just run without it and figure out if the new results are what you expect.
+
+Just because the existing file may say 'no diagnostics expected' doesn't mean it is correct by the way. We haven't finished implementing all diagnostics. You have to see if we added some other comments elsewhere in the file to see what we should sort of expect, or just inspect the behavior manually.

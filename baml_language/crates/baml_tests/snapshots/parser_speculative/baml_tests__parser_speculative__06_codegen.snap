@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 8
-Objects: 34
-Globals: 26
+Objects: 40
+Globals: 32
 
 Function Ambiguous (arity: 1, kind: Llm):
   (no bytecode)

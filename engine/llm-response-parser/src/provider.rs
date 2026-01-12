@@ -82,9 +82,15 @@ mod tests {
     #[test]
     fn test_provider_string_conversion() {
         assert_eq!(LLMProvider::OpenAI.as_str(), "openai");
-        assert_eq!(LLMProvider::from_str("openai"), Some(LLMProvider::OpenAI));
-        assert_eq!(LLMProvider::from_str("OPENAI"), Some(LLMProvider::OpenAI));
-        assert_eq!(LLMProvider::from_str("unknown"), None);
+        assert_eq!(
+            LLMProvider::try_from_str("openai"),
+            Some(LLMProvider::OpenAI)
+        );
+        assert_eq!(
+            LLMProvider::try_from_str("OPENAI"),
+            Some(LLMProvider::OpenAI)
+        );
+        assert_eq!(LLMProvider::try_from_str("unknown"), None);
     }
 
     #[test]

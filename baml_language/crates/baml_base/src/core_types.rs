@@ -73,6 +73,28 @@ impl ariadne::Span for Span {
 /// An interned string - used for identifiers, keywords, etc.
 pub type Name = SmolStr;
 
+/// The types of media we support
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MediaKind {
+    Image,
+    Audio,
+    Video,
+    Pdf,
+    Generic, // could be any of the media types
+}
+
+impl fmt::Display for MediaKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MediaKind::Image => write!(f, "image"),
+            MediaKind::Audio => write!(f, "audio"),
+            MediaKind::Video => write!(f, "video"),
+            MediaKind::Pdf => write!(f, "pdf"),
+            MediaKind::Generic => write!(f, "image | audio | video | pdf"),
+        }
+    }
+}
+
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);

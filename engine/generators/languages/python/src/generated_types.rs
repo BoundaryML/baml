@@ -10,6 +10,9 @@ mod class {
     ///
     /// ```askama
     /// class {{name}}(BaseModel):
+    ///     {%- if let Some(desc) = description %}
+    ///     {{ crate::utils::format_docstring(desc, "    ") }}
+    ///     {%- endif %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
     ///     {%- endif %}
@@ -24,7 +27,7 @@ mod class {
     ///         {%- endif %}
     ///         arbitrary_types_allowed = True
     ///     {%- endif %}
-    ///     {%- if fields.is_empty() && !dynamic %}pass{% endif %}
+    ///     {%- if fields.is_empty() && !dynamic && description.is_none() %}pass{% endif %}
     ///     {%- for field in fields %}
     ///     {{- field.render()?|indent(4, true) }}
     ///     {%- endfor %}
@@ -34,6 +37,7 @@ mod class {
     pub struct ClassPy<'a> {
         pub name: String,
         pub docstring: Option<String>,
+        pub description: Option<String>,
         pub fields: Vec<FieldPy<'a>>,
         pub dynamic: bool,
         pub pkg: &'a CurrentRenderPackage,
@@ -45,7 +49,14 @@ mod class {
     /// {% if let Some(docstring) = docstring %}
     /// {{ crate::utils::prefix_lines(docstring, "# ") }}
     /// {% endif %}
-    /// {{ name }}: {{ type.serialize_type(&pkg.in_type_definition()) }}{% if let Some(default_value) = type.default_value() %} = {{default_value}}{% endif %}
+    /// {{ name }}: {{ type.serialize_type(&pkg.in_type_definition()) }}
+    /// {%- if let Some(desc) = description %}
+    /// {%- if let Some(default_value) = type.default_value() %} = Field(default={{default_value}}, description={{desc}})
+    /// {%- else %} = Field(description={{desc}})
+    /// {%- endif %}
+    /// {%- else %}
+    /// {%- if let Some(default_value) = type.default_value() %} = {{default_value}}{% endif %}
+    /// {%- endif %}
     /// ```
     #[derive(askama::Template, Clone)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
@@ -53,14 +64,15 @@ mod class {
         pub docstring: Option<String>,
         pub name: String,
         pub r#type: TypePy,
+        pub description: Option<crate::r#type::EscapedPythonString>,
         pub pkg: &'a CurrentRenderPackage,
     }
     impl std::fmt::Debug for FieldPy<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
-                "FieldPy {{docstring: {:?}, name: {}, type: {:?}, pkg: <<Mutex>> }}",
-                self.docstring, self.name, self.r#type
+                "FieldPy {{docstring: {:?}, name: {}, type: {:?}, description: {:?}, pkg: <<Mutex>> }}",
+                self.docstring, self.name, self.r#type, self.description
             )
         }
     }
@@ -381,9 +393,9 @@ mod type_aliases {
 /// from enum import Enum
 ///
 /// {% if pkg.is_pydantic_2 %}
-/// from pydantic import BaseModel, ConfigDict
+/// from pydantic import BaseModel, ConfigDict, Field
 /// {% else %}
-/// from pydantic import BaseModel, Extra
+/// from pydantic import BaseModel, Extra, Field
 /// from pydantic.generics import GenericModel
 /// {% endif %}
 ///
@@ -468,9 +480,9 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// import typing_extensions
 ///
 /// {%- if pkg.is_pydantic_2 %}
-/// from pydantic import BaseModel, ConfigDict
+/// from pydantic import BaseModel, ConfigDict, Field
 /// {%- else %}
-/// from pydantic import BaseModel, Extra
+/// from pydantic import BaseModel, Extra, Field
 /// from pydantic.generics import GenericModel
 /// {%- endif %}
 ///

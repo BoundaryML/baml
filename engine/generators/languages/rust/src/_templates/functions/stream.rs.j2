@@ -1,0 +1,44 @@
+//! Streaming BAML function calls.
+
+use baml::{BamlEncode, BamlError};
+
+use crate::baml_client::{get_runtime, runtime::FunctionOptions, stream_types, types};
+
+#[derive(Default)]
+pub struct BamlStreamClient {
+    pub(super) options: Option<FunctionOptions>,
+}
+
+macro_rules! baml_function_stream {
+    ($name:ident($($param:ident : $ptype:ty),* $(,)?) -> ($stream_ret:ty, $final_ret:ty)) => {
+        pub fn $name(&self, $($param: $ptype),*) -> Result<baml::StreamingCall<$stream_ret, $final_ret>, BamlError> {
+            let args = self.options.as_ref().unwrap_or(&FunctionOptions::default()).to_baml_args()
+                $(.arg(stringify!($param), $param.baml_encode()))*;
+            get_runtime().call_function_stream(stringify!($name), &args)
+        }
+    };
+}
+
+#[allow(dead_code, non_snake_case)]
+impl BamlStreamClient {
+    pub(super) fn new(options: Option<FunctionOptions>) -> Self {
+        Self { options }
+    }
+
+    pub fn wih_options<F>(&self, _options_fn: F) -> Self
+    where
+        F: Fn(FunctionOptions) -> FunctionOptions,
+    {
+        // Placeholder implementation
+        BamlStreamClient {
+            options: self.options.clone(),
+        }
+    }
+
+    {% for function in functions %}
+    {% if let Some(docstring) = function.documentation -%}
+    {{ crate::utils::prefix_lines(docstring, "/// ") }}
+    {%- endif %}
+    baml_function_stream!({{ function.name }}({% for (name, arg_type) in function.args -%}{{name}}: {{arg_type.serialize_type_as_parameter(pkg)}}, {% endfor %}) -> ({{ function.stream_return_type.serialize_type(pkg) }}, {{ function.return_type.serialize_type(pkg) }}));
+    {% endfor %}
+}

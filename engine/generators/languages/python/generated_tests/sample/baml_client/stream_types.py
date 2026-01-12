@@ -12,8 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
+import baml_py
 
 from . import types
 

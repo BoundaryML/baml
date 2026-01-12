@@ -95,7 +95,7 @@ impl RuntimeCli {
             }
         }
 
-        let mut matches = match command.try_get_matches_from_mut(argv) {
+        let matches = match command.try_get_matches_from_mut(argv) {
             Ok(matches) => matches,
             Err(err) => err.exit(),
         };

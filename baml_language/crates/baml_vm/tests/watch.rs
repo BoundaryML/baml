@@ -98,7 +98,6 @@ fn notify_on_function_call_modifications() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -122,7 +121,6 @@ fn notify_on_change_with_alias() -> anyhow::Result<()> {
 }
 
 #[test]
-#[ignore = "requires type inference for aliases"]
 fn notify_on_change_with_alias_in_nested_scope() -> anyhow::Result<()> {
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -360,7 +358,7 @@ fn manual_notify() -> anyhow::Result<()> {
 #[test]
 fn basic_block_notification() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
-    use baml_vm::bytecode::BlockNotificationType;
+    use baml_vm_types::bytecode::BlockNotificationType;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -385,7 +383,7 @@ fn basic_block_notification() -> anyhow::Result<()> {
 #[test]
 fn multiple_block_notifications() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
-    use baml_vm::bytecode::BlockNotificationType;
+    use baml_vm_types::bytecode::BlockNotificationType;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -426,7 +424,7 @@ fn multiple_block_notifications() -> anyhow::Result<()> {
 #[test]
 fn viz_header_before_if_emits_enter_and_exit() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
-    use baml_vm::bytecode::BlockNotificationType;
+    use baml_vm_types::bytecode::BlockNotificationType;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -468,7 +466,7 @@ fn viz_header_before_if_emits_enter_and_exit() -> anyhow::Result<()> {
 #[test]
 fn viz_header_before_while_emits_enter_and_exit() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
-    use baml_vm::bytecode::BlockNotificationType;
+    use baml_vm_types::bytecode::BlockNotificationType;
 
     assert_vm_emits(WatchProgram {
         source: r#"
@@ -510,7 +508,7 @@ fn viz_header_before_while_emits_enter_and_exit() -> anyhow::Result<()> {
 #[test]
 fn viz_standalone_header_no_viz_events() -> anyhow::Result<()> {
     use baml_tests::bytecode::BlockEvent;
-    use baml_vm::bytecode::BlockNotificationType;
+    use baml_vm_types::bytecode::BlockNotificationType;
 
     assert_vm_emits(WatchProgram {
         source: r#"

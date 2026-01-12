@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function Foo:
-    Return: Int
+    Return: Literal(Int(1))

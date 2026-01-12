@@ -1,0 +1,46 @@
+//! Synchronous BAML function calls.
+
+use crate::baml_client::{functions::stream::BamlStreamClient, runtime::{get_runtime, FunctionOptions}, types};
+use baml::{BamlError, BamlEncode};
+
+pub struct BamlClient {
+    options: Option<FunctionOptions>,
+    pub stream: BamlStreamClient,
+}
+
+pub static B: BamlClient = BamlClient { options: None, stream: BamlStreamClient { options: None } };
+
+
+/// Generates a BAML function with N parameters.
+macro_rules! baml_function {
+    ($name:ident($($param:ident : $ptype:ty),* $(,)?) -> $ret:ty) => {
+        pub fn $name(&self, $($param: $ptype),*) -> Result<$ret, BamlError> {
+            let args = self.options.as_ref().unwrap_or(&FunctionOptions::default()).to_baml_args()
+                $(.arg(stringify!($param), $param.baml_encode()))*;
+            let result: $ret = get_runtime().call_function(stringify!($name), &args)?;
+            Ok(result)
+        }
+    };
+}
+
+#[allow(dead_code, non_snake_case)]
+impl BamlClient {
+    pub fn with_options<F>(
+        &self,
+        options_fn: F,
+    ) -> Self
+    where
+        F: Fn(FunctionOptions) -> FunctionOptions,
+    {
+        let options = options_fn(self.options.as_ref().map(|o| o.clone()).unwrap_or_default());
+        let stream = BamlStreamClient::new(Some(options.clone()));
+        BamlClient { options: Some(options), stream }
+    }
+
+    {% for function in functions %}
+    {% if let Some(docstring) = function.documentation -%}
+    {{ crate::utils::prefix_lines(docstring, "/// ") }}
+    {%- endif %}
+    baml_function!({{ function.name }}({% for (name, arg_type) in function.args -%}{{name}}: {{arg_type.serialize_type_as_parameter(pkg)}}, {% endfor %}) -> {{ function.return_type.serialize_type(pkg) }});
+    {% endfor %}
+}

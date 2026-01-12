@@ -2,7 +2,7 @@
 function simple_break() -> int {
   while (true) {
     break;
-  }
+  };
   return 42;
 }
 
@@ -10,7 +10,7 @@ function simple_break() -> int {
 function simple_continue() -> int {
   while (true) {
     continue;
-  }
+  };
   return 0;
 }
 
@@ -18,7 +18,7 @@ function simple_continue() -> int {
 function break_in_for() -> int {
   for (let i = 0; i < 10; i = i + 1) {
     break;
-  }
+  };
   return 1;
 }
 
@@ -26,7 +26,7 @@ function break_in_for() -> int {
 function continue_in_for() -> int {
   for (let i = 0; i < 10; i = i + 1) {
     continue;
-  }
+  };
   return 2;
 }
 
@@ -48,8 +48,8 @@ function break_with_locals() -> int {
     if (true) {
       let y = 2;
       break;  // Should pop y and x before jumping out
-    }
-  }
+    };
+  };
   return 4;
 }
 
@@ -60,7 +60,7 @@ function continue_with_locals() -> int {
     if (true) {
       let y = 2;
       continue;  // Should pop y and x before jumping back
-    }
-  }
+    };
+  };
   return 5;
 }

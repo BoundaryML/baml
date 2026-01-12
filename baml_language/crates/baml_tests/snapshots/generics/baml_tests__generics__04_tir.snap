@@ -1,9 +1,9 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function GetTodo:
     Return: Unknown
     Errors:
-      - Unknown type baml
+      - Unknown type for variable `baml`

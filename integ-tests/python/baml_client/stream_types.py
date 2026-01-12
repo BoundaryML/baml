@@ -12,7 +12,7 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 import baml_py
 
@@ -23,19 +23,19 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (107)
+# Generated classes (109)
 # #########################################################################
 
 class AddTodoItem(BaseModel):
     type: typing_extensions.Literal['add_todo_item']
     item: str
     time: str
-    description: str
+    description: str = Field(description='20 word description of the item')
 
 class AddressWithMeta(BaseModel):
-    street: typing.Optional[str] = None
-    city: typing.Optional[str] = None
-    zipcode: typing.Optional[str] = None
+    street: typing.Optional[str] = Field(default=None, description='The street name')
+    city: typing.Optional[str] = Field(default=None, description='The city')
+    zipcode: typing.Optional[str] = Field(default=None, description='5-digit zip code')
 
 class AnotherObject(BaseModel):
     id: typing.Optional[str] = None
@@ -63,10 +63,10 @@ class BlockConstraintForParam(BaseModel):
     bcfp2: typing.Optional[str] = None
 
 class BookOrder(BaseModel):
-    orderId: typing.Optional[str] = None
-    title: typing.Optional[str] = None
-    quantity: typing.Optional[int] = None
-    price: typing.Optional[float] = None
+    orderId: typing.Optional[str] = Field(default=None, description='The ID of the book order')
+    title: typing.Optional[str] = Field(default=None, description='The title of the ordered book')
+    quantity: typing.Optional[int] = Field(default=None, description='The quantity of books ordered')
+    price: typing.Optional[float] = Field(default=None, description='The price of the book')
 
 class ClassForNullLiteral(BaseModel):
     a: typing.Optional[typing_extensions.Literal['hi']] = None
@@ -94,7 +94,7 @@ class ClassWithImage(BaseModel):
 
 class ClassWithoutDone(BaseModel):
     i_16_digits: typing.Optional[int] = None
-    s_20_words: StreamState[typing.Optional[str]]
+    s_20_words: StreamState[typing.Optional[str]] = Field(description='A string with 20 words in it')
 
 class ClientDetails1559(BaseModel):
     client_name: typing.Optional[str] = None
@@ -109,7 +109,7 @@ class ComplexMemoryObject(BaseModel):
     id: typing.Optional[str] = None
     name: typing.Optional[str] = None
     description: typing.Optional[str] = None
-    metadata: typing.List[typing.Union[str, int, float]]
+    metadata: typing.List[typing.Union[str, int, float]] = Field(description='Additional metadata about the memory object, which can be a mix of types.')
 
 class CompoundBigNumbers(BaseModel):
     big: typing.Optional["BigNumbers"] = None
@@ -197,11 +197,11 @@ class FakeImage(BaseModel):
     url: typing.Optional[str] = None
 
 class FlightConfirmation(BaseModel):
-    confirmationNumber: typing.Optional[str] = None
-    flightNumber: typing.Optional[str] = None
-    departureTime: typing.Optional[str] = None
-    arrivalTime: typing.Optional[str] = None
-    seatNumber: typing.Optional[str] = None
+    confirmationNumber: typing.Optional[str] = Field(default=None, description='The flight confirmation number')
+    flightNumber: typing.Optional[str] = Field(default=None, description='The flight number')
+    departureTime: typing.Optional[str] = Field(default=None, description='The scheduled departure time of the flight')
+    arrivalTime: typing.Optional[str] = Field(default=None, description='The scheduled arrival time of the flight')
+    seatNumber: typing.Optional[str] = Field(default=None, description='The seat number assigned on the flight')
 
 class FooAny(BaseModel):
     planetary_age: typing.Optional[typing.Union["Martian", "Earthling"]] = None
@@ -228,10 +228,10 @@ class FormatterTest3(BaseModel):
     ipsum: typing.Optional[str] = None
 
 class GroceryReceipt(BaseModel):
-    receiptId: typing.Optional[str] = None
-    storeName: typing.Optional[str] = None
-    items: typing.List[typing.Union[str, int, float]]
-    totalAmount: typing.Optional[float] = None
+    receiptId: typing.Optional[str] = Field(default=None, description='The ID of the grocery receipt')
+    storeName: typing.Optional[str] = Field(default=None, description='The name of the grocery store')
+    items: typing.List[typing.Union[str, int, float]] = Field(description='A list of items purchased. Each item consists of a name, quantity, and price.')
+    totalAmount: typing.Optional[float] = Field(default=None, description='The total amount spent on groceries')
 
 class Haiku(BaseModel):
     line1: typing.Optional[str] = None
@@ -297,7 +297,7 @@ class MemoryObject(BaseModel):
     description: typing.Optional[str] = None
 
 class MergeAttrs(BaseModel):
-    amount: typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]] = None
+    amount: typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]] = Field(default=None, description='In USD')
 
 class NamedArgsSingleClass(BaseModel):
     key: typing.Optional[str] = None
@@ -305,13 +305,13 @@ class NamedArgsSingleClass(BaseModel):
     key_three: typing.Optional[int] = None
 
 class Nested(BaseModel):
-    prop3: typing.Optional[str] = None
-    prop4: typing.Optional[str] = None
+    prop3: typing.Optional[str] = Field(default=None, description='write "three"')
+    prop4: typing.Optional[str] = Field(default=None, description='write "four"')
     prop20: typing.Optional["Nested2"] = None
 
 class Nested2(BaseModel):
-    prop11: typing.Optional[str] = None
-    prop12: typing.Optional[str] = None
+    prop11: typing.Optional[str] = Field(default=None, description='write "three"')
+    prop12: typing.Optional[str] = Field(default=None, description='write "four"')
 
 class NestedBlockConstraint(BaseModel):
     nbc: typing.Optional[types.Checked["BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]] = None
@@ -330,7 +330,7 @@ class NodeWithAliasIndirection(BaseModel):
 class Note1599(BaseModel):
     note_title: typing.Optional[str] = None
     note_description: typing.Optional[str] = None
-    note_amount: typing.Optional[str] = None
+    note_amount: typing.Optional[str] = Field(default=None, description='If there is a quantity, specify it here')
 
 class OptionalListAndMap(BaseModel):
     p: typing.Optional[typing.List[str]] = None
@@ -363,10 +363,10 @@ class Person(BaseModel):
     hair_color: typing.Optional[typing.Union[types.Color, str]] = None
 
 class PersonWithMeta(BaseModel):
-    name: typing.Optional[str] = None
-    age: typing.Optional[int] = None
-    address: typing.Optional["AddressWithMeta"] = None
-    tags: typing.List[str]
+    name: typing.Optional[str] = Field(default=None, description='Person\'s full legal name')
+    age: typing.Optional[int] = Field(default=None, description='Age in years')
+    address: typing.Optional["AddressWithMeta"] = Field(default=None, description='Home address')
+    tags: typing.List[str] = Field(description='User tags')
 
 class PhoneNumber(BaseModel):
     value: typing.Optional[str] = None
@@ -415,20 +415,20 @@ class Resume(BaseModel):
     skills: typing.List[str]
 
 class Schema(BaseModel):
-    prop1: typing.Optional[str] = None
-    prop2: typing.Optional[typing.Union["Nested", str]] = None
-    prop5: typing.List[typing.Optional[str]]
-    prop6: typing.Optional[typing.Union[str, typing.List["Nested"]]] = None
-    nested_attrs: typing.List[typing.Optional[typing.Union[str, "Nested"]]]
-    parens: typing.Optional[str] = None
-    other_group: typing.Optional[typing.Union[str, int]] = None
+    prop1: typing.Optional[str] = Field(default=None, description='write "one"')
+    prop2: typing.Optional[typing.Union["Nested", str]] = Field(default=None, description='write "two"')
+    prop5: typing.List[typing.Optional[str]] = Field(description='write "hi"')
+    prop6: typing.Optional[typing.Union[str, typing.List["Nested"]]] = Field(default=None, description='write the string "blah" regardless of the other types here')
+    nested_attrs: typing.List[typing.Optional[typing.Union[str, "Nested"]]] = Field(description='write the string "nested" regardless of other types')
+    parens: typing.Optional[str] = Field(default=None, description='write "parens1"')
+    other_group: typing.Optional[typing.Union[str, int]] = Field(default=None, description='write "other"')
 
 class SearchParams(BaseModel):
-    dateRange: typing.Optional[int] = None
+    dateRange: typing.Optional[int] = Field(default=None, description='In ISO duration format, e.g. P1Y2M10D.')
     location: typing.List[str]
-    jobTitle: typing.Optional["WithReasoning"] = None
-    company: typing.Optional["WithReasoning"] = None
-    description: typing.List["WithReasoning"]
+    jobTitle: typing.Optional["WithReasoning"] = Field(default=None, description='An exact job title, not a general category.')
+    company: typing.Optional["WithReasoning"] = Field(default=None, description='The exact name of the company, not a product or service.')
+    description: typing.List["WithReasoning"] = Field(description='Any specific projects or features the user is looking for.')
     tags: typing.List[typing.Union[types.Tag, str]]
 
 class SemanticContainer(BaseModel):
@@ -438,11 +438,21 @@ class SemanticContainer(BaseModel):
     class_2: typing.Optional["types.ClassWithBlockDone"] = None
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.List["SmallThing"]
+    three_small_things: typing.List["SmallThing"] = Field(description='Should have three items.')
     final_string: typing.Optional[str] = None
 
 class SimpleTag(BaseModel):
     field: typing.Optional[str] = None
+
+class SkipDynamicClass(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    value: typing.Optional[str] = None
+    internal_id: typing.Optional[str] = None
+
+class SkipNonDynamicClass(BaseModel):
+    name: typing.Optional[str] = None
+    description: typing.Optional[str] = None
+    metadata: typing.Optional[str] = None
 
 class SmallThing(BaseModel):
     i_16_digits: int
@@ -456,7 +466,7 @@ class StringToClassEntry(BaseModel):
     word: typing.Optional[str] = None
 
 class TestClassAlias(BaseModel):
-    key: typing.Optional[str] = None
+    key: typing.Optional[str] = Field(default=None, description='This is a description for key\naf asdf')
     key2: typing.Optional[str] = None
     key3: typing.Optional[str] = None
     key4: typing.Optional[str] = None
@@ -471,16 +481,16 @@ class TestClassWithEnum(BaseModel):
     prop2: typing.Optional[types.EnumInClass] = None
 
 class TestMemoryOutput(BaseModel):
-    items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
-    more_items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
+    items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]] = Field(description='Add 10 items, which can be either simple MemoryObjects or more complex MemoryObjects with metadata.')
+    more_items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]] = Field(description='Add 3 more items, which can be either simple MemoryObjects or more complex MemoryObjects with metadata.')
 
 class TestOutputClass(BaseModel):
-    prop1: typing.Optional[str] = None
+    prop1: typing.Optional[str] = Field(default=None, description='A long string with about 200 words')
     prop2: typing.Optional[int] = None
 
 class TodoMessageToUser(BaseModel):
     type: typing_extensions.Literal['todo_message_to_user']
-    message: typing.Optional[str] = None
+    message: typing.Optional[str] = Field(default=None, description='A message to the user, about 50 words long')
 
 class Tree(BaseModel):
     data: typing.Optional[int] = None
@@ -511,7 +521,7 @@ class UniverseQuestionInput(BaseModel):
 
 class WithReasoning(BaseModel):
     value: typing.Optional[str] = None
-    reasoning: typing.Optional[str] = None
+    reasoning: typing.Optional[str] = Field(default=None, description='Why the value is a good fit.')
 
 # #########################################################################
 # Generated type aliases (21)

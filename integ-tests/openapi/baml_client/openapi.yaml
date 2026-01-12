@@ -3042,6 +3042,32 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestSkipDynamic:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSkipDynamic'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSkipDynamicResponse
+                $ref: '#/components/schemas/SkipDynamicClass'
+      operationId: TestSkipDynamic
+  /call/TestSkipNonDynamic:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSkipNonDynamic'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSkipNonDynamicResponse
+                $ref: '#/components/schemas/SkipNonDynamicClass'
+      operationId: TestSkipNonDynamic
   /call/TestStreamingTimeout:
     post:
       requestBody:
@@ -6888,6 +6914,38 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestSkipDynamic:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSkipDynamicRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestSkipNonDynamic:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSkipNonDynamicRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestStreamingTimeout:
       required: true
       content:
@@ -8713,6 +8771,28 @@ components:
           type: string
       required:
       - field
+      additionalProperties: false
+    SkipDynamicClass:
+      type: object
+      properties:
+        internal_id:
+          type: string
+        value:
+          type: string
+      required:
+      - value
+      additionalProperties: false
+    SkipNonDynamicClass:
+      type: object
+      properties:
+        description:
+          type: string
+        metadata:
+          type: string
+        name:
+          type: string
+      required:
+      - name
       additionalProperties: false
     SmallThing:
       type: object

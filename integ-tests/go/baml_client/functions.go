@@ -16153,6 +16153,154 @@ func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (stri
 	}
 }
 
+func TestSkipDynamic(ctx context.Context, input string, opts ...CallOptionFunc) (types.SkipDynamicClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestSkipDynamic", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SkipDynamicClass{}, err
+		}
+
+		if result.Error != nil {
+			return types.SkipDynamicClass{}, result.Error
+		}
+
+		casted := (result.Data).(types.SkipDynamicClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSkipDynamic", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SkipDynamicClass{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SkipDynamicClass{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SkipDynamicClass), nil
+			}
+		}
+
+		return types.SkipDynamicClass{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
+func TestSkipNonDynamic(ctx context.Context, input string, opts ...CallOptionFunc) (types.SkipNonDynamicClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "TestSkipNonDynamic", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SkipNonDynamicClass{}, err
+		}
+
+		if result.Error != nil {
+			return types.SkipNonDynamicClass{}, result.Error
+		}
+
+		casted := (result.Data).(types.SkipNonDynamicClass)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "TestSkipNonDynamic", encoded, callOpts.onTick)
+		if err != nil {
+			return types.SkipNonDynamicClass{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.SkipNonDynamicClass{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.SkipNonDynamicClass), nil
+			}
+		}
+
+		return types.SkipNonDynamicClass{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func TestStreamingTimeout(ctx context.Context, input string, opts ...CallOptionFunc) (string, error) {
 
 	var callOpts callOption

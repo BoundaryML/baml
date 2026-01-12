@@ -73,11 +73,10 @@ const BreakpointBadge: React.FC = () => {
               {breakpoints.map((bp) => (
                 <div
                   key={bp.name}
-                  className={`flex items-center gap-3 text-xs px-3 py-2 rounded ${
-                    bp.name === breakpoint
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'text-muted-foreground'
-                  }`}
+                  className={`flex items-center gap-3 text-xs px-3 py-2 rounded ${bp.name === breakpoint
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'text-muted-foreground'
+                    }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="font-mono font-medium w-8 flex-shrink-0">
@@ -137,15 +136,17 @@ export const StatusBar: React.FC = () => {
   const bamlCliVersion = useAtomValue(bamlCliVersionAtom);
   const version = useAtomValue(sdk.atoms.versionAtom);
   const [showDialog, setShowDialog] = useState(false);
+  const isDev = process.env.NODE_ENV === 'development';
+  if (!isDev) return null;
 
   return (
-    <div className="w-full border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex-shrink-0">
+    <div className="w-full border-t bg-transparent supports-[backdrop-filter]:bg-background/60 flex-shrink-0">
       <div className="flex items-center justify-end px-4 py-2 text-xs gap-4">
-        <BreakpointBadge />
+        {/* <BreakpointBadge /> */}
         {bamlCliVersion && (
           <div className="text-muted-foreground">baml-cli {bamlCliVersion}</div>
         )}
-        <div className="text-muted-foreground">BAML playground: {version}</div>
+        {/* <div className="text-muted-foreground">BAML playground: {version}</div> */}
 
         <ErrorCount onClick={() => setShowDialog(true)} />
         <ErrorWarningDialog open={showDialog} onOpenChange={setShowDialog} />

@@ -5,12 +5,16 @@
 //! order of globals, constants, and objects.
 
 use baml_vm::{
-    Object as VmObject, ObjectIndex, Value as VmValue, Vm, VmExecState,
+    Vm, VmExecState,
+    vm::WatchNotification as VmWatchNotification,
+    watch::{self},
+};
+use baml_vm_types::{
+    Object as VmObject, ObjectIndex, Value as VmValue,
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
     },
-    vm::WatchNotification as VmWatchNotification,
-    watch::{self},
+    types::MediaKind,
 };
 use indexmap::IndexMap;
 
@@ -66,7 +70,7 @@ pub enum Object {
     Map(IndexMap<String, Value>),
     Instance(Instance),
     Variant(Variant),
-    // Media(BamlMedia),
+    Media(MediaKind),
     /// Function name (for `LoadGlobal` instructions)
     Function(String),
     /// Class name (for `AllocInstance` instructions)
@@ -124,7 +128,7 @@ impl Object {
                 }))
             }
 
-            // VmObject::Media(media) => Ok(Object::Media(media.clone())),
+            VmObject::Media(media) => Ok(Object::Media(media.kind)),
             VmObject::Function(f) => Ok(Object::Function(f.name.clone())),
 
             VmObject::Class(c) => Ok(Object::Class(c.name.clone())),
@@ -286,7 +290,7 @@ impl ExecState {
                     function_name,
                     event,
                 } => {
-                    let is_enter = event.delta == baml_vm::bytecode::VizExecDelta::Enter;
+                    let is_enter = event.delta == baml_vm_types::bytecode::VizExecDelta::Enter;
                     Ok(ExecState::Emit(vec![Notification::Viz(VizEvent {
                         function_name,
                         label: event.label,
@@ -335,4 +339,8 @@ pub enum Instruction {
     NotifyBlock(usize),
     VizEnter(usize),
     VizExit(usize),
+    JumpTable { table_idx: usize, default: isize },
+    Discriminant,
+    TypeTag,
+    Unreachable,
 }

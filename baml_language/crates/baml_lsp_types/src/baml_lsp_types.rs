@@ -109,9 +109,9 @@ pub struct SerializableOrchestratorNode {
     pub provider: String,
 }
 
-// TODO: Previously converted from baml_runtime::internal_baml_diagnostics::Span
-// impl From<&baml_runtime::internal_baml_diagnostics::Span> for BamlSpan {
-//     fn from(span: &baml_runtime::internal_baml_diagnostics::Span) -> Self {
+// TODO: Previously converted from baml_runtime::internal_baml_compiler_diagnostics::Span
+// impl From<&baml_runtime::internal_baml_compiler_diagnostics::Span> for BamlSpan {
+//     fn from(span: &baml_runtime::internal_baml_compiler_diagnostics::Span) -> Self {
 //         let (start, end) = span.line_and_column();
 //         BamlSpan {
 //             file_path: span.file.path().to_string(),

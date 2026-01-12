@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected LLM function missing 'prompt' field, found '}'
-   ╭─[ 0:5:1 ]
+   ╭─[ ambiguous_function.baml:5:1 ]
    │
  5 │ }
    │ ┬  
@@ -14,7 +14,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
-   ╭─[ 0:9:3 ]
+   ╭─[ ambiguous_function.baml:9:3 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │   ──┬──  
@@ -24,7 +24,7 @@ expression: output
 ───╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'GPT4', found identifier
-   ╭─[ 0:9:9 ]
+   ╭─[ ambiguous_function.baml:9:9 ]
    │
  9 │   clent GPT4  // Typo in "client"
    │         ──┬─  
@@ -34,11 +34,51 @@ expression: output
 ───╯
 
   [parse] Error: Expected LLM function missing 'client' field, found '}'
-    ╭─[ 0:11:1 ]
+    ╭─[ ambiguous_function.baml:11:1 ]
     │
  11 │ }
     │ ┬  
     │ ╰── Expected LLM function missing 'client' field, found '}'
     │ 
     │ Note: Error code: E0010
+────╯
+
+  [hir] Error: Statement must end with a semicolon.
+    ╭─[ mixed_functions.baml:19:3 ]
+    │
+ 19 │   let score = analysis.score
+    │   ─────────────┬────────────  
+    │                ╰────────────── Statement must end with a semicolon.
+    │ 
+    │ Note: Error code: E0028
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:20:6 ]
+    │
+ 20 │   if score > 0.8 {
+    │      ─────┬─────  
+    │           ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:22:13 ]
+    │
+ 22 │   } else if score > 0.5 {
+    │             ─────┬─────  
+    │                  ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ mixed_functions.baml:24:13 ]
+    │
+ 24 │   } else if score > 0.2 {
+    │             ─────┬─────  
+    │                  ╰─────── Condition in `if` statement must be wrapped in parentheses.
+    │ 
+    │ Note: Error code: E0030
 ────╯

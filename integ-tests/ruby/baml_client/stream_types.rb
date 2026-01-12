@@ -26,7 +26,7 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (107)
+  # Generated classes (109)
   # #########################################################################
 
 
@@ -708,6 +708,21 @@ module BamlClient
   class SimpleTag < T::Struct
       include Baml::Sorbet::Struct
       const :field, T.nilable(String)
+  end
+
+
+  class SkipDynamicClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(String)
+      const :internal_id, T.nilable(String)
+  end
+
+
+  class SkipNonDynamicClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :description, T.nilable(String)
+      const :metadata, T.nilable(String)
   end
 
 

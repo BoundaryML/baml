@@ -11,6 +11,7 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -50,6 +51,7 @@ class BamlSyncClient:
     def with_options(self,
         tb: typing.Optional[type_builder.TypeBuilder] = None,
         client_registry: typing.Optional[baml_py.baml_py.ClientRegistry] = None,
+        client: typing.Optional[str] = None,
         collector: typing.Optional[typing.Union[baml_py.baml_py.Collector, typing.List[baml_py.baml_py.Collector]]] = None,
         env: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None,
         tags: typing.Optional[typing.Dict[str, str]] = None,
@@ -60,6 +62,8 @@ class BamlSyncClient:
             options["tb"] = tb
         if client_registry is not None:
             options["client_registry"] = client_registry
+        if client is not None:
+            options["client"] = client
         if collector is not None:
             options["collector"] = collector
         if env is not None:
@@ -89,21 +93,21 @@ class BamlSyncClient:
     @property
     def parse_stream(self):
       return self.__llm_stream_parser
-    
+
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> types.Person:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
-            stream = self.stream.PersonTest(
+            __stream__ = self.stream.PersonTest(
                 baml_options=baml_options)
-            return stream.get_final_response()
+            return __stream__.get_final_response()
         else:
             # Original non-streaming code
-            result = self.__options.merge_options(baml_options).call_function_sync(function_name="PersonTest", args={
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="PersonTest", args={
                 
             })
-            return typing.cast(types.Person, result.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(types.Person, __result__.cast_to(types, types, stream_types, False, __runtime__))
     
 
 
@@ -116,14 +120,14 @@ class BamlStreamClient:
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[stream_types.Person, types.Person]:
-        ctx, result = self.__options.merge_options(baml_options).create_sync_stream(function_name="PersonTest", args={
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="PersonTest", args={
             
         })
         return baml_py.BamlSyncStream[stream_types.Person, types.Person](
-          result,
+          __result__,
           lambda x: typing.cast(stream_types.Person, x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(types.Person, x.cast_to(types, types, stream_types, False, __runtime__)),
-          ctx,
+          __ctx__,
         )
     
 
@@ -136,10 +140,10 @@ class BamlHttpRequestClient:
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PersonTest", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PersonTest", args={
             
         }, mode="request")
-        return result
+        return __result__
     
 
 class BamlHttpStreamRequestClient:
@@ -151,10 +155,10 @@ class BamlHttpStreamRequestClient:
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        result = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PersonTest", args={
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="PersonTest", args={
             
         }, mode="stream")
-        return result
+        return __result__
     
 
 b = BamlSyncClient(DoNotUseDirectlyCallManager({}))

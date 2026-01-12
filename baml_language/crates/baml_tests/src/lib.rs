@@ -22,13 +22,13 @@ include!(concat!(env!("OUT_DIR"), "/generated_tests.rs"));
 
 // Helper function for formatting syntax trees
 #[cfg(test)]
-fn format_syntax_tree(node: &baml_db::baml_syntax::SyntaxNode) -> String {
+fn format_syntax_tree(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> String {
     format_node_recursive(node, 0)
 }
 
 #[cfg(test)]
-fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) -> String {
-    use baml_db::baml_syntax::NodeOrToken;
+fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth: usize) -> String {
+    use baml_db::baml_compiler_syntax::NodeOrToken;
 
     let mut result = String::new();
     let indent = "  ".repeat(depth);
@@ -75,8 +75,8 @@ fn format_node_recursive(node: &baml_db::baml_syntax::SyntaxNode, depth: usize) 
 
 // Helper function for formatting TypeRef as code
 #[cfg(test)]
-fn format_type_ref(type_ref: &baml_hir::TypeRef) -> String {
-    use baml_hir::TypeRef;
+fn format_type_ref(type_ref: &baml_compiler_hir::TypeRef) -> String {
+    use baml_compiler_hir::TypeRef;
     match type_ref {
         TypeRef::Path(path) => format_path(path),
         TypeRef::Int => "int".to_string(),
@@ -84,10 +84,7 @@ fn format_type_ref(type_ref: &baml_hir::TypeRef) -> String {
         TypeRef::String => "string".to_string(),
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
-        TypeRef::Image => "image".to_string(),
-        TypeRef::Audio => "audio".to_string(),
-        TypeRef::Video => "video".to_string(),
-        TypeRef::Pdf => "pdf".to_string(),
+        TypeRef::Media(kind) => kind.to_string(),
         TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
         TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
         TypeRef::Map { key, value } => {
@@ -117,7 +114,7 @@ fn format_type_ref(type_ref: &baml_hir::TypeRef) -> String {
 }
 
 #[cfg(test)]
-fn format_path(path: &baml_hir::Path) -> String {
+fn format_path(path: &baml_compiler_hir::Path) -> String {
     path.segments
         .iter()
         .map(|s| s.to_string())
@@ -128,17 +125,17 @@ fn format_path(path: &baml_hir::Path) -> String {
 // Helper function for formatting HIR items from a specific file
 #[cfg(test)]
 fn format_hir_file(
-    db: &baml_db::RootDatabase,
+    db: &baml_project::ProjectDatabase,
     source_file: baml_db::SourceFile,
-    items: &[baml_db::baml_hir::ItemId],
+    items: &[baml_db::baml_compiler_hir::ItemId],
 ) -> String {
     use std::fmt::Write;
 
-    use baml_db::baml_hir::ItemId;
-    use baml_hir::{function_body, function_signature};
+    use baml_compiler_hir::{function_body, function_signature};
+    use baml_db::baml_compiler_hir::ItemId;
 
     // Get the ItemTree once and keep it alive for all lookups
-    let item_tree = baml_db::baml_hir::file_item_tree(db, source_file);
+    let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, source_file);
     let mut result = String::new();
 
     for item in items {
@@ -166,7 +163,7 @@ fn format_hir_file(
 
                 // Show body
                 match body.as_ref() {
-                    baml_db::baml_hir::FunctionBody::Llm(llm) => {
+                    baml_db::baml_compiler_hir::FunctionBody::Llm(llm) => {
                         // Show LLM function body as inline config
                         if let Some(ref client) = llm.client {
                             writeln!(result, "  client {}", client).unwrap();
@@ -180,9 +177,9 @@ fn format_hir_file(
                             writeln!(result, "  \"#").unwrap();
                         }
                     }
-                    baml_db::baml_hir::FunctionBody::Expr(expr_body) => {
+                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => {
                         // Print as code for readability
-                        let code = baml_hir::body_to_code(expr_body);
+                        let code = baml_compiler_hir::body_to_code(expr_body);
                         // Indent the code (skip the outer braces since we already have them)
                         let code = code.trim();
                         if code.starts_with('{') && code.ends_with('}') {
@@ -199,7 +196,7 @@ fn format_hir_file(
                             }
                         }
                     }
-                    baml_db::baml_hir::FunctionBody::Missing => {
+                    baml_db::baml_compiler_hir::FunctionBody::Missing => {
                         writeln!(result, "    // missing body").unwrap();
                     }
                 }
@@ -257,6 +254,64 @@ fn format_hir_file(
                 writeln!(result, "test {} {{", test.name).unwrap();
                 if !test.function_refs.is_empty() {
                     writeln!(result, "  functions: {:?}", test.function_refs).unwrap();
+                }
+                // Format type_builder block if present
+                if let Some(ref type_builder) = test.type_builder {
+                    writeln!(result, "  type_builder {{").unwrap();
+                    for entry in &type_builder.entries {
+                        match entry {
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::Class(class) => {
+                                writeln!(result, "    class {} {{", class.name).unwrap();
+                                for field in &class.fields {
+                                    writeln!(
+                                        result,
+                                        "      {}: {}",
+                                        field.name,
+                                        format_type_ref(&field.type_ref)
+                                    )
+                                    .unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::Enum(enum_def) => {
+                                writeln!(result, "    enum {} {{", enum_def.name).unwrap();
+                                for variant in &enum_def.variants {
+                                    writeln!(result, "      {}", variant.name).unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::DynamicClass(class) => {
+                                writeln!(result, "    dynamic class {} {{", class.name).unwrap();
+                                for field in &class.fields {
+                                    writeln!(
+                                        result,
+                                        "      {}: {}",
+                                        field.name,
+                                        format_type_ref(&field.type_ref)
+                                    )
+                                    .unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::DynamicEnum(enum_def) => {
+                                writeln!(result, "    dynamic enum {} {{", enum_def.name).unwrap();
+                                for variant in &enum_def.variants {
+                                    writeln!(result, "      {}", variant.name).unwrap();
+                                }
+                                writeln!(result, "    }}").unwrap();
+                            }
+                            baml_db::baml_compiler_hir::TypeBuilderEntry::TypeAlias(alias) => {
+                                writeln!(
+                                    result,
+                                    "    type {} = {}",
+                                    alias.name,
+                                    format_type_ref(&alias.type_ref)
+                                )
+                                .unwrap();
+                            }
+                        }
+                    }
+                    writeln!(result, "  }}").unwrap();
                 }
                 writeln!(result, "}}").unwrap();
                 writeln!(result).unwrap(); // blank line after test

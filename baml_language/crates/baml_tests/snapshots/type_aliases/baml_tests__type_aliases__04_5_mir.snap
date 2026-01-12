@@ -1,0 +1,85 @@
+---
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Bar() -> Named("foo") {
+    // Locals:
+    let _0: Named("foo") // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Foo() -> Named("foo") {
+    // Locals:
+    let _0: Named("foo") // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Baz() -> Named("Json") {
+    // Locals:
+    let _0: Named("Json") // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn EchoJSON(i: Named("JSON")) -> Named("JSON") {
+    // Locals:
+    let _0: Named("JSON") // return
+    let _1: Named("JSON") // i // param
+    let _2: String
+
+    bb0: {
+        _2 = const "Whoops";
+        _0 = NotJSON { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn MakeJSON(i: Class("NotJSON")) -> Named("JSON") {
+    // Locals:
+    let _0: Named("JSON") // return
+    let _1: Class("NotJSON") // i // param
+    let _2: Named("NotJSON")
+
+    bb0: {
+        _2 = copy _1;
+        _0 = copy _2.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}

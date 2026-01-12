@@ -11,7 +11,9 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 
+import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -25,26 +27,26 @@ class LlmResponseParser:
     def TestComplexNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ComplexNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexNested", llm_response=llm_response, mode="request")
-        return typing.cast(types.ComplexNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexNested", llm_response=llm_response, mode="request")
+        return typing.cast(types.ComplexNested, __result__)
 
     def TestDeeplyNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.DeeplyNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDeeplyNested", llm_response=llm_response, mode="request")
-        return typing.cast(types.DeeplyNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDeeplyNested", llm_response=llm_response, mode="request")
+        return typing.cast(types.DeeplyNested, __result__)
 
     def TestRecursiveStructure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.RecursiveStructure:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveStructure", llm_response=llm_response, mode="request")
-        return typing.cast(types.RecursiveStructure, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveStructure", llm_response=llm_response, mode="request")
+        return typing.cast(types.RecursiveStructure, __result__)
 
     def TestSimpleNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleNested", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleNested", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleNested, __result__)
 
     
 
@@ -57,25 +59,25 @@ class LlmStreamParser:
     def TestComplexNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.ComplexNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexNested", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.ComplexNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestComplexNested", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.ComplexNested, __result__)
 
     def TestDeeplyNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.DeeplyNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestDeeplyNested", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.DeeplyNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestDeeplyNested", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.DeeplyNested, __result__)
 
     def TestRecursiveStructure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.RecursiveStructure:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveStructure", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.RecursiveStructure, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestRecursiveStructure", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.RecursiveStructure, __result__)
 
     def TestSimpleNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleNested:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleNested", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleNested, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestSimpleNested", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleNested, __result__)
 
     

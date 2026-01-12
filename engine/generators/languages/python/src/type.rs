@@ -13,18 +13,21 @@ pub struct EscapedPythonString(String);
 
 impl EscapedPythonString {
     pub fn new(s: &str) -> Self {
-        let has_single_quote = s.contains('\'');
-        let has_double_quote = s.contains('"');
-        let has_newline = s.contains('\n');
-        if has_newline {
-            return Self(format!("\"\"\"{s}\"\"\""));
-        }
-        match (has_single_quote, has_double_quote) {
-            (true, false) => Self(format!("\"{s}\"")),
-            (true, true) => Self(format!("'{}'", s.replace('\'', "\\'"))),
-            (false, true) => Self(format!("'{s}'")),
-            (false, false) => Self(format!("'{s}'")),
-        }
+        // Escape special characters and wrap in quotes
+        // We always use single quotes and escape as needed
+        let escaped = s
+            .replace('\\', "\\\\")
+            .replace('\'', "\\'")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t");
+        Self(format!("'{}'", escaped))
+    }
+}
+
+impl std::fmt::Display for EscapedPythonString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

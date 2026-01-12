@@ -209,6 +209,10 @@ export default class TypeBuilder {
     
     SimpleTag: ClassViewer<'SimpleTag', "field">;
     
+    SkipDynamicClass: ClassBuilder<'SkipDynamicClass', "value" | "internal_id">;
+    
+    SkipNonDynamicClass: ClassViewer<'SkipNonDynamicClass', "name" | "description" | "metadata">;
+    
     SmallThing: ClassViewer<'SmallThing', "i_16_digits" | "i_8_digits">;
     
     SomeClassNestedDynamic: ClassBuilder<'SomeClassNestedDynamic', "hi">;
@@ -288,7 +292,7 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "AddTodoItem","AddressWithMeta","AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyJsonTodo","DummyJsonTodoUpdate","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PersonWithMeta","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","RenderEnumInput","RenderTestClass","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","TodoMessageToUser","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",
+            "AddTodoItem","AddressWithMeta","AnotherObject","BigNumbers","BinaryNode","Blah","BlockConstraint","BlockConstraintForParam","BookOrder","ClassForNullLiteral","ClassOptionalOutput","ClassOptionalOutput2","ClassToRecAlias","ClassWithBlockDone","ClassWithImage","ClassWithoutDone","ClientDetails1559","ComplexMemoryObject","CompoundBigNumbers","ContactInfo","CustomStory","CustomTaskResult","Document1559","DummyJsonTodo","DummyJsonTodoUpdate","DummyOutput","DynInputOutput","DynamicClassOne","DynamicClassTwo","DynamicOutput","DynamicSchema","Earthling","Education","Email","EmailAddress","Event","FakeImage","FlightConfirmation","FooAny","Forest","FormatterTest0","FormatterTest1","FormatterTest2","FormatterTest3","GroceryReceipt","Haiku","InnerClass","InnerClass2","InputClass","InputClassNested","LinkedList","LinkedListAliasNode","LiteralClassHello","LiteralClassOne","LiteralClassTwo","MaintainFieldOrder","MalformedConstraints","MalformedConstraints2","Martian","MemoryObject","MergeAttrs","NamedArgsSingleClass","Nested","Nested2","NestedBlockConstraint","NestedBlockConstraintForParam","Node","NodeWithAliasIndirection","Note1599","OptionalListAndMap","OptionalTest_Prop1","OptionalTest_ReturnType","OrderInfo","OriginalA","OriginalB","Person","PersonWithMeta","PhoneNumber","Quantity","RaysData","ReceiptInfo","ReceiptItem","Recipe","RecursiveAliasDependency","RenderEnumInput","RenderTestClass","Resume","Schema","SearchParams","SemanticContainer","SimpleTag","SkipDynamicClass","SkipNonDynamicClass","SmallThing","SomeClassNestedDynamic","StringToClassEntry","TestClassAlias","TestClassNested","TestClassWithEnum","TestMemoryOutput","TestOutputClass","TodoMessageToUser","Tree","TwoStoriesOneTitle","TwoStoriesOneTitleCheck","UnionTest_ReturnType","UniverseQuestion","UniverseQuestionInput","WithReasoning",
           ]),
           enums: new Set([
             "AliasedEnum","Category","Category2","Category3","Color","DataType","DynEnumOne","DynEnumThree","DynEnumTwo","EnumInClass","EnumOutput","Hobby","MapKey","NamedArgsSingleEnum","NamedArgsSingleEnumList","OptionalTest_CategoryType","OrderStatus","RenderStatusEnum","RenderTestEnum","Tag","TestEnum",
@@ -660,6 +664,14 @@ export default class TypeBuilder {
           "field",
         ]);
         
+        this.SkipDynamicClass = this.tb.classBuilder("SkipDynamicClass", [
+          "value","internal_id",
+        ]);
+        
+        this.SkipNonDynamicClass = this.tb.classViewer("SkipNonDynamicClass", [
+          "name","description","metadata",
+        ]);
+        
         this.SmallThing = this.tb.classViewer("SmallThing", [
           "i_16_digits","i_8_digits",
         ]);
@@ -820,7 +832,7 @@ export default class TypeBuilder {
         // wraps over the Rust type builder, so we only need to call tb.reset().
         // In JS it's not possible unless we refactor the way class builders are
         // accessed.
-         this.DummyOutput.reset();  this.DynInputOutput.reset();  this.DynamicClassOne.reset();  this.DynamicClassTwo.reset();  this.DynamicOutput.reset();  this.DynamicSchema.reset();  this.OriginalB.reset();  this.Person.reset();  this.RenderEnumInput.reset();  this.RenderTestClass.reset();  this.SomeClassNestedDynamic.reset(); 
+         this.DummyOutput.reset();  this.DynInputOutput.reset();  this.DynamicClassOne.reset();  this.DynamicClassTwo.reset();  this.DynamicOutput.reset();  this.DynamicSchema.reset();  this.OriginalB.reset();  this.Person.reset();  this.RenderEnumInput.reset();  this.RenderTestClass.reset();  this.SkipDynamicClass.reset();  this.SomeClassNestedDynamic.reset(); 
     }
 
     __tb() {

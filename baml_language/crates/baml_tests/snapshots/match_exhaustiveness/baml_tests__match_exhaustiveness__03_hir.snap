@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -116,9 +116,9 @@ function ExhaustiveIntLiterals(code: SuccessCode) -> string {
 
 function ExhaustiveStringLiterals(role: Role) -> string {
       match (role) {
-          _ => "User",
-          _ => "Assistant",
-          _ => "System",
+          "user" => "User",
+          "assistant" => "Assistant",
+          "system" => "System",
       }
 }
 
@@ -173,8 +173,8 @@ function BoolUnionPattern(b: bool) -> string {
 
 function StringLiteralUnionPattern(role: Role) -> string {
       match (role) {
-          _ => "chat participant",
-          _ => "system",
+          "user" | "assistant" => "chat participant",
+          "system" => "system",
       }
 }
 
@@ -234,6 +234,19 @@ function IntLiteralUnionPattern(code: SuccessCode) -> string {
       }
 }
 
+function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+      match (x) {
+          0 => match (y) {
+              0 => match (z) {
+                  0 => "all zero",
+                  _ => "z nonzero",
+              },
+              _ => "y nonzero",
+          },
+          _ => "x nonzero",
+      }
+}
+
 function MultipleUnreachableSpans(s: Status) -> string {
       match (s) {
           Status.Active => "active",
@@ -251,10 +264,22 @@ function ExhaustiveCustomBool(b: CustomBool) -> string {
       }
 }
 
+function NestedEnumMatch(s1: Status, s2: Status) -> string {
+      match (s1) {
+          Status.Active => match (s2) {
+              Status.Active => "both active",
+              Status.Inactive => "first active, second inactive",
+              Status.Pending => "first active, second pending",
+          },
+          Status.Inactive => "first inactive",
+          Status.Pending => "first pending",
+      }
+}
+
 function ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
       match (x) {
           200 => "http ok",
-          _ => "string success",
+          "success" => "string success",
           true => "boolean true",
       }
 }
@@ -287,6 +312,10 @@ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
       match (code) {
           null => "no code",
       }
+}
+
+function GetStatus() -> Status {
+      Status.Active
 }
 
 function EnumVariantUnion(s: Status) -> string {
@@ -351,7 +380,7 @@ function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
 
 function WrongLiteralTypeIntWithString(x: int) -> string {
       match (x) {
-          _ => "wrong type",
+          "hello" => "wrong type",
       }
 }
 
@@ -366,6 +395,14 @@ function GuardedWithFallback(x: int) -> int {
       match (x) {
           n: int if n > 0 => n * 2,
           _ => 0,
+      }
+}
+
+function MatchArithmeticScrutinee(a: int, b: int) -> string {
+      match (a + b) {
+          0 => "zero",
+          1 => "one",
+          _ => "other",
       }
 }
 
@@ -417,10 +454,10 @@ function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
 
 function DuplicateStringLiteral(role: Role) -> string {
       match (role) {
-          _ => "first user",
-          _ => "second user",
-          _ => "assistant",
-          _ => "system",
+          "user" => "first user",
+          "user" => "second user",
+          "assistant" => "assistant",
+          "system" => "system",
       }
 }
 
@@ -428,6 +465,14 @@ function NonExhaustiveEnumMissingOne(s: Status) -> string {
       match (s) {
           Status.Active => "active",
           Status.Inactive => "inactive",
+      }
+}
+
+function MatchComplexScrutinee(x: int) -> string {
+      match (x * 2 + 1) {
+          1 => "x was 0",
+          3 => "x was 1",
+          _ => "other",
       }
 }
 
@@ -447,7 +492,7 @@ function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
 function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
       match (x) {
           200 => "http ok",
-          _ => "string success",
+          "success" => "string success",
       }
 }
 
@@ -489,7 +534,7 @@ function OverlappingTypedPatterns(r: Result) -> string {
 function StringLiteralAfterStringType(s: string) -> string {
       match (s) {
           x: string => "any string",
-          _ => "unreachable",
+          "hello" => "unreachable",
       }
 }
 
@@ -521,15 +566,23 @@ function PartialUnionPatternCoverage(r: FullResult) -> string {
 
 function NonExhaustiveStringLiteral(role: Role) -> string {
       match (role) {
-          _ => "User",
-          _ => "Assistant",
+          "user" => "User",
+          "assistant" => "Assistant",
+      }
+}
+
+function MatchFunctionCallScrutinee() -> string {
+      match (GetStatus()) {
+          Status.Active => "active",
+          Status.Inactive => "inactive",
+          Status.Pending => "pending",
       }
 }
 
 function StringLiteralWithCatchAll(role: Role) -> string {
       match (role) {
-          _ => "User message",
-          _ => "Assistant message",
+          "user" => "User message",
+          "assistant" => "Assistant message",
           _ => "Other",
       }
 }

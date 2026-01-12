@@ -83,7 +83,9 @@ class NumberEdgeCases {
   smallFloat float
   largeFloat float
   negativeFloat float
-  scientificNotation float
+  scientificNotation float @description(#"
+    > 1e3, but < 1e6
+  "#)
   infinity float?
   notANumber float?
 }

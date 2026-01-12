@@ -89,6 +89,23 @@ if ! cargo clippy --workspace --all-targets --all-features -- -D warnings; then
 fi
 echo -e "${GREEN}✓ Clippy checks passed${NC}"
 
+# Run cargo stow to validate Cargo.toml files
+echo -e "${YELLOW}Running cargo stow --check...${NC}"
+if ! cargo stow --check; then
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}✗ Cargo.toml validation failed!${NC}"
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "Run 'cargo stow --fix' to auto-fix some issues, or fix manually."
+    echo ""
+    echo -e "${YELLOW}To skip these checks (for WIP commits):${NC}"
+    echo "  • git commit --no-verify"
+    echo "  • SKIP_CHECKS=1 git commit"
+    echo ""
+    exit 1
+fi
+echo -e "${GREEN}✓ Cargo.toml validation passed${NC}"
+
 # Run bep:readme to keep BEP index up to date
 echo -e "${YELLOW}Checking BEP index...${NC}"
 cd "$REPO_ROOT" || exit 1

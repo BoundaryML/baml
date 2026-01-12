@@ -3,7 +3,7 @@ use std::{
     fmt,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indexmap::IndexMap;
 use pretty::RcDoc;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
@@ -1292,11 +1292,17 @@ impl<T> BamlValueWithMeta<T> {
                 // let map_result = fields1.into_iter().zip(fields2).map(|((k1,v1),(_k2,v2))| {
                 //     v1.zip_meta(v2).map(|r| (k1, r))
                 // }).collect::<Result<IndexMap<_,_>>>()?;
+
+                // Only zip fields that exist in both. Fields that exist only in fields1
+                // (e.g., @skip fields added as null fillers by semantic streaming) are
+                // dropped because they don't have corresponding metadata in fields2.
+                // These fields will be re-added with proper null values when converting
+                // to the final response type.
                 let map_result = fields1
                     .into_iter()
-                    .map(|(k1, v1)| {
-                        let v2 = fields2.get(&k1).context("Missing expected key")?;
-                        v1.zip_meta(v2).map(|r| (k1, r))
+                    .filter_map(|(k1, v1)| {
+                        // Skip fields only in fields1 (e.g., @skip fields)
+                        fields2.get(&k1).map(|v2| v1.zip_meta(v2).map(|r| (k1, r)))
                     })
                     .collect::<Result<IndexMap<_, _>>>()?;
                 Ok(BamlValueWithMeta::Class(

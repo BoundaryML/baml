@@ -12,6 +12,7 @@ describe("Union streaming regression", () => {
     )[] = [];
 
     for await (const chunk of stream) {
+      console.log("chunk", chunk);
       snapshots.push(chunk);
     }
 
@@ -57,6 +58,7 @@ describe("Union streaming regression", () => {
     //     - the ith AddTodoItem tool is either equal to the ith tool of final, or missing.
     //   - some chunks have fewer tools than the final response.
     //   - some chunks have a non-null message that is shorter than the final message.
+
     for (const snapshot of snapshots) {
       // zip the snapshot tools with final response tools
       const zipped = (snapshot ?? []).map((tool, index) => [tool, final[index]]);
@@ -84,7 +86,7 @@ describe("Union streaming regression", () => {
     });
     expect(message_lengths.length).toBeGreaterThan(0);
     expect(message_lengths.length).toBeGreaterThan(2);
-    const middle_index = message_lengths.length / 2;
+    const middle_index = Math.floor(message_lengths.length / 2);
     expect(message_lengths[middle_index]).toBeLessThan(message_lengths[message_lengths.length - 1])
 
 

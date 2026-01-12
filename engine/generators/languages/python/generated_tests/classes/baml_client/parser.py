@@ -11,7 +11,9 @@
 # baml-cli is available with the baml package.
 
 import typing
+import typing_extensions
 
+import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -25,14 +27,14 @@ class LlmResponseParser:
     def ConsumeSimpleClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleClass:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeSimpleClass", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleClass, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeSimpleClass", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleClass, __result__)
 
     def MakeSimpleClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.SimpleClass:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSimpleClass", llm_response=llm_response, mode="request")
-        return typing.cast(types.SimpleClass, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeSimpleClass", llm_response=llm_response, mode="request")
+        return typing.cast(types.SimpleClass, __result__)
 
     
 
@@ -45,13 +47,13 @@ class LlmStreamParser:
     def ConsumeSimpleClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleClass:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeSimpleClass", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleClass, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeSimpleClass", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleClass, __result__)
 
     def MakeSimpleClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> stream_types.SimpleClass:
-        result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSimpleClass", llm_response=llm_response, mode="stream")
-        return typing.cast(stream_types.SimpleClass, result)
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="MakeSimpleClass", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.SimpleClass, __result__)
 
     

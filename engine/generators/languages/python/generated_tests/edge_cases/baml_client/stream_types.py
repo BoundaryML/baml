@@ -12,9 +12,11 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
+import baml_py
 
+from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -112,11 +114,11 @@ class NumberEdgeCases(BaseModel):
     zero: typing.Optional[int] = None
     negativeInt: typing.Optional[int] = None
     largeInt: typing.Optional[int] = None
-    veryLargeInt: typing.Optional[int] = None
+    veryLargeInt: typing.Optional[int] = Field(default=None, description='i64 max value')
     smallFloat: typing.Optional[float] = None
     largeFloat: typing.Optional[float] = None
     negativeFloat: typing.Optional[float] = None
-    scientificNotation: typing.Optional[float] = None
+    scientificNotation: typing.Optional[float] = Field(default=None, description='> 1e3, but < 1e6')
     infinity: typing.Optional[float] = None
     notANumber: typing.Optional[float] = None
 
