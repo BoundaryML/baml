@@ -2,7 +2,7 @@
 //!
 //! FQNs provide a way to uniquely identify items in the BAML project,
 //! distinguishing between builtins, standard library items, user-defined
-//! items, and (future) external packages.
+//! items, and (future) other modules and external packages.
 
 use baml_base::Name;
 
