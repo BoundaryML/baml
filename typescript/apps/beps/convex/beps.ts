@@ -176,6 +176,15 @@ export const create = mutation({
     title: v.string(),
     shepherds: v.array(v.id("users")),
     content: v.optional(v.string()),
+    pages: v.optional(
+      v.array(
+        v.object({
+          slug: v.string(),
+          title: v.string(),
+          content: v.string(),
+        })
+      )
+    ),
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
@@ -192,12 +201,42 @@ export const create = mutation({
       updatedAt: now,
     });
 
+    // Create initial pages if provided
+    const pagesSnapshot: Array<{
+      slug: string;
+      title: string;
+      content: string;
+      order: number;
+    }> = [];
+
+    if (args.pages && args.pages.length > 0) {
+      for (let i = 0; i < args.pages.length; i++) {
+        const page = args.pages[i];
+        await ctx.db.insert("bepPages", {
+          bepId,
+          slug: page.slug,
+          title: page.title,
+          content: page.content,
+          order: i,
+          createdAt: now,
+          updatedAt: now,
+        });
+        pagesSnapshot.push({
+          slug: page.slug,
+          title: page.title,
+          content: page.content,
+          order: i,
+        });
+      }
+    }
+
     // Create initial version
     await ctx.db.insert("bepVersions", {
       bepId,
       version: 1,
       title: args.title,
       content,
+      pagesSnapshot: pagesSnapshot.length > 0 ? pagesSnapshot : undefined,
       editedBy: args.userId,
       editNote: "Initial creation",
       createdAt: now,
