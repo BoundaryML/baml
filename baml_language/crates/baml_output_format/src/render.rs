@@ -6,7 +6,7 @@
 use baml_base::{LiteralValue, Ty};
 use thiserror::Error;
 
-use crate::render_options::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
+use crate::render_options::{HoistClasses, MapStyle, OutputFormatOptions, RenderSetting};
 use crate::types::OutputFormatContent;
 
 /// Error during output format rendering.
@@ -19,7 +19,7 @@ pub enum RenderError {
 /// Rendering context passed through recursive calls.
 struct RenderContext<'a> {
     content: &'a OutputFormatContent,
-    options: &'a RenderOptions,
+    options: &'a OutputFormatOptions,
     /// Track which classes have been rendered to avoid infinite recursion.
     rendered_classes: std::collections::HashSet<String>,
     /// Indent level for nested structures.
@@ -27,7 +27,7 @@ struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
-    fn new(content: &'a OutputFormatContent, options: &'a RenderOptions) -> Self {
+    fn new(content: &'a OutputFormatContent, options: &'a OutputFormatOptions) -> Self {
         Self {
             content,
             options,
@@ -58,7 +58,7 @@ impl<'a> RenderContext<'a> {
 
     fn hoisted_class_prefix(&self) -> Option<String> {
         match &self.options.hoisted_class_prefix {
-            RenderSetting::Auto => Some(RenderOptions::DEFAULT_TYPE_PREFIX.to_string()),
+            RenderSetting::Auto => Some(OutputFormatOptions::DEFAULT_TYPE_PREFIX.to_string()),
             RenderSetting::Always(s) => Some(s.clone()),
             RenderSetting::Never => None,
         }
@@ -72,7 +72,7 @@ impl<'a> RenderContext<'a> {
 /// Render the output format content to a string.
 pub fn render(
     content: &OutputFormatContent,
-    options: &RenderOptions,
+    options: &OutputFormatOptions,
 ) -> Result<Option<String>, RenderError> {
     let mut ctx = RenderContext::new(content, options);
 
@@ -120,7 +120,7 @@ pub fn render(
 }
 
 /// Render simple targets (primitives) with a descriptive prefix.
-fn render_simple_target(target: &Ty, options: &RenderOptions) -> Option<String> {
+fn render_simple_target(target: &Ty, options: &OutputFormatOptions) -> Option<String> {
     match target {
         Ty::Int | Ty::Float | Ty::String | Ty::Bool | Ty::Null => {
             let type_name = match target {
@@ -445,7 +445,7 @@ mod tests {
             .with_target(Ty::Int)
             .build();
 
-        let result = render(&content, &RenderOptions::default()).unwrap();
+        let result = render(&content, &OutputFormatOptions::default()).unwrap();
         assert!(result.is_some());
         assert!(result.unwrap().contains("Answer as an int"));
     }
@@ -456,7 +456,7 @@ mod tests {
             .with_target(Ty::String)
             .build();
 
-        let result = render(&content, &RenderOptions::default()).unwrap();
+        let result = render(&content, &OutputFormatOptions::default()).unwrap();
         assert!(result.is_some());
         assert!(result.unwrap().contains("Answer as a string"));
     }
@@ -472,7 +472,7 @@ mod tests {
             .with_target(Ty::Class(BaseName::from("Person")))
             .build();
 
-        let result = render(&content, &RenderOptions::default()).unwrap();
+        let result = render(&content, &OutputFormatOptions::default()).unwrap();
         assert!(result.is_some());
         let rendered = result.unwrap();
         assert!(rendered.contains("name: string"), "Expected 'name: string' but got: {}", rendered);
@@ -492,7 +492,7 @@ mod tests {
             .with_target(Ty::Enum(BaseName::from("Color")))
             .build();
 
-        let options = RenderOptions::new(
+        let options = OutputFormatOptions::new(
             Some(None), // prefix = null (suppress)
             None,
             None,
@@ -525,7 +525,7 @@ mod tests {
             .with_target(Ty::Class(BaseName::from("Task")))
             .build();
 
-        let options = RenderOptions::new(
+        let options = OutputFormatOptions::new(
             None,
             Some(" | ".to_string()), // Custom or_splitter
             None,

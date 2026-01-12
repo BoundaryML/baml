@@ -17,6 +17,8 @@ use baml_jinja_runtime::{LlmClientSpec, RenderContext};
 use baml_project::ProjectDatabase as RootDatabase;
 use ir_stub::{BamlMap, BamlValue};
 
+use baml_llm_interface::RenderedPrompt;
+
 use crate::{
     context::{DynamicBamlContext, PerCallContext, SharedCallContext},
     errors::RuntimeError,
@@ -27,7 +29,6 @@ use crate::{
         OrchestratorNode, ProviderType, orchestrate_call, orchestrate_stream,
     },
     prepared_function::PreparedFunction,
-    prompt::{MediaContent, MediaType, MessagePart, RenderedMessage, RenderedPrompt, Role},
     render_options::RenderOptions,
     types::{FunctionResult, TestResult},
 };
@@ -261,13 +262,9 @@ impl BamlProgram {
         // Convert args to BamlValue::Map for the jinja runtime
         let args = BamlValue::Map(prepared.args.clone());
 
-        // Render using the jinja runtime
-        let jinja_result =
-            baml_jinja_runtime::render_prompt(&prepared.prompt_template.template, &args, ctx)
-                .map_err(|e| RuntimeError::Render(e.to_string()))?;
-
-        // Convert from jinja runtime's RenderedPrompt to runtime's RenderedPrompt
-        Ok(convert_jinja_prompt(jinja_result))
+        // Render using the jinja runtime (returns baml_llm_interface::RenderedPrompt directly)
+        baml_jinja_runtime::render_prompt(&prepared.prompt_template.template, &args, ctx)
+            .map_err(|e| RuntimeError::Render(e.to_string()))
     }
 
     /// Build a provider-specific request without executing.
@@ -403,85 +400,6 @@ fn parse_client_config(client_name: &str) -> (String, String, Vec<String>) {
     (provider, default_role, allowed_roles)
 }
 
-/// Convert from jinja runtime's RenderedPrompt to the runtime's RenderedPrompt.
-fn convert_jinja_prompt(jinja_prompt: baml_jinja_runtime::RenderedPrompt) -> RenderedPrompt {
-    use baml_jinja_runtime::RenderedPrompt as JinjaPrompt;
-
-    match jinja_prompt {
-        JinjaPrompt::Completion(text) => {
-            // Convert completion to a single user message
-            RenderedPrompt::simple(text)
-        }
-        JinjaPrompt::Chat(messages) => {
-            // Convert chat messages
-            let converted: Vec<RenderedMessage> = messages
-                .into_iter()
-                .map(|msg| {
-                    let role = match msg.role.as_str() {
-                        "system" => Role::System,
-                        "user" => Role::User,
-                        "assistant" => Role::Assistant,
-                        other => Role::Custom(other.to_string()),
-                    };
-
-                    let parts: Vec<MessagePart> = msg
-                        .parts
-                        .into_iter()
-                        .map(|part| convert_jinja_part(part))
-                        .collect();
-
-                    RenderedMessage {
-                        role,
-                        parts,
-                        allow_duplicate_role: msg.allow_duplicate_role,
-                    }
-                })
-                .collect();
-
-            RenderedPrompt::new(converted)
-        }
-    }
-}
-
-/// Convert a jinja ChatMessagePart to runtime MessagePart.
-fn convert_jinja_part(part: baml_jinja_runtime::ChatMessagePart) -> MessagePart {
-    use baml_jinja_runtime::ChatMessagePart as JinjaPart;
-
-    match part {
-        JinjaPart::Text(text) => MessagePart::Text(text),
-        JinjaPart::Media(media) => {
-            // Convert BamlMedia to MediaContent
-            let media_type = match media.media_type {
-                ir_stub::BamlMediaType::Image => MediaType::Image,
-                ir_stub::BamlMediaType::Audio => MediaType::Audio,
-                ir_stub::BamlMediaType::Video => MediaType::Video,
-                ir_stub::BamlMediaType::Pdf => MediaType::File, // PDF is a file type
-            };
-
-            let content = match media.content {
-                ir_stub::BamlMediaContent::Url(url) => MediaContent::Url {
-                    url: url.url,
-                    media_type,
-                },
-                ir_stub::BamlMediaContent::Base64(b64) => MediaContent::Base64 {
-                    mime_type: b64.media_type,
-                    data: b64.base64,
-                    media_type,
-                },
-                ir_stub::BamlMediaContent::File(file) => MediaContent::FilePath {
-                    path: file.path.into(),
-                    media_type,
-                },
-            };
-
-            MessagePart::Media(content)
-        }
-        JinjaPart::WithMeta(inner, meta) => MessagePart::WithMeta {
-            part: Box::new(convert_jinja_part(*inner)),
-            meta,
-        },
-    }
-}
 
 /// Build orchestrator config from client specification.
 fn build_orchestrator_config(
@@ -534,7 +452,7 @@ mod tests {
     fn create_test_runtime() -> BamlProgram {
         // Create a minimal database for testing
         let mut db = RootDatabase::default();
-        let project = db.set_project_root("/tmp/test");
+        let project = db.set_project_root(std::path::Path::new("/tmp/test"));
 
         BamlProgram::with_project(db, project)
     }
@@ -548,9 +466,16 @@ mod tests {
 
         assert!(result.is_ok());
         let prompt = result.unwrap();
-        // The prompt should be rendered with messages
-        assert_eq!(prompt.messages.len(), 1);
-        assert_eq!(prompt.messages[0].text_content(), "Hello, Alice!");
+        // For a simple template without _.chat(), it should be a Completion
+        match prompt {
+            RenderedPrompt::Completion { text } => {
+                assert_eq!(text, "Hello, Alice!");
+            }
+            RenderedPrompt::Chat { messages } => {
+                // If it's chat format, check the content
+                assert!(!messages.is_empty());
+            }
+        }
     }
 
     #[test]

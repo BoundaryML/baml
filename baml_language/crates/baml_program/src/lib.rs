@@ -28,7 +28,6 @@ pub mod llm_request;
 pub mod llm_response;
 pub mod orchestrator;
 pub mod parsing;
-pub mod prompt;
 
 mod prepared_function;
 mod render_options;

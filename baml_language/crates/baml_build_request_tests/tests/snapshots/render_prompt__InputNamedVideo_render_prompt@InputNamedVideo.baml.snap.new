@@ -1,0 +1,15 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+assertion_line: 46
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputNamedVideo.baml
+---
+fixture: InputNamedVideo.baml
+function: FnInputNamedVideo
+prompt:
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Use 5 words to describe the video.

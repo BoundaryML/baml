@@ -2,7 +2,7 @@
 
 use crate::errors::RuntimeError;
 use crate::llm_request::openai::{OpenAiClientConfig, OpenAiRequest};
-use crate::prompt::RenderedPrompt;
+use baml_llm_interface::RenderedPrompt;
 
 use super::{ClientConfig, OrchestratorNode, ProviderType};
 
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_prepare_node_request() {
-        let prompt = RenderedPrompt::simple("Hello");
+        let prompt = RenderedPrompt::Completion { text: "Hello".to_string() };
         let node = OrchestratorNode {
             client: ClientConfig {
                 name: "openai".to_string(),

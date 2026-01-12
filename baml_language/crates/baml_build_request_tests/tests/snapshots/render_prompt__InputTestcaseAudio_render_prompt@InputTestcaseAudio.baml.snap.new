@@ -1,0 +1,15 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+assertion_line: 46
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputTestcaseAudio.baml
+---
+fixture: InputTestcaseAudio.baml
+function: FnInputTestcaseAudio
+prompt:
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Does this sound like a roar? Yes or no? One word no other characters.

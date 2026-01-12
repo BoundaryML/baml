@@ -196,7 +196,7 @@ fn render_minijinja(
 
     // If no chat delimiters, return as completion
     if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(MAGIC_MEDIA_DELIMITER) {
-        return Ok(RenderedPrompt::Completion(rendered));
+        return Ok(RenderedPrompt::Completion { text: rendered });
     }
 
     // Parse chat messages
@@ -247,7 +247,7 @@ fn render_minijinja(
                         .unwrap_or(part);
 
                     match serde_json::from_str::<BamlMedia>(media_data) {
-                        Ok(m) => Some(ChatMessagePart::Media(m)),
+                        Ok(m) => Some(ChatMessagePart::Media { media: m }),
                         Err(_) => {
                             return Err(RenderError::Other(format!(
                                 "Media variable had unrecognizable data: {media_data}"
@@ -255,7 +255,7 @@ fn render_minijinja(
                         }
                     }
                 } else if !part.trim().is_empty() {
-                    Some(ChatMessagePart::Text(part.trim().to_string()))
+                    Some(ChatMessagePart::Text { text: part.trim().to_string() })
                 } else {
                     None
                 };
@@ -290,7 +290,7 @@ fn render_minijinja(
         }
     }
 
-    Ok(RenderedPrompt::Chat(chat_messages))
+    Ok(RenderedPrompt::Chat { messages: chat_messages })
 }
 
 /// Evaluate a Jinja expression on a BamlValue.
@@ -337,7 +337,7 @@ mod tests {
 
         assert!(result.is_ok());
         match result.unwrap() {
-            RenderedPrompt::Completion(s) => assert_eq!(s, "Process: Hello"),
+            RenderedPrompt::Completion { text } => assert_eq!(text, "Process: Hello"),
             _ => panic!("Expected Completion"),
         }
     }
@@ -357,7 +357,7 @@ You are a helpful assistant.
 
         assert!(result.is_ok());
         match result.unwrap() {
-            RenderedPrompt::Chat(messages) => {
+            RenderedPrompt::Chat { messages } => {
                 assert_eq!(messages.len(), 2);
                 assert_eq!(messages[0].role, "system");
                 assert_eq!(messages[1].role, "user");
@@ -386,9 +386,9 @@ You are a helpful assistant.
         let result = render_prompt(template, &args, RenderContext::default());
         assert!(result.is_ok());
         match result.unwrap() {
-            RenderedPrompt::Completion(s) => {
-                assert!(s.contains("- one"));
-                assert!(s.contains("- two"));
+            RenderedPrompt::Completion { text } => {
+                assert!(text.contains("- one"));
+                assert!(text.contains("- two"));
             }
             _ => panic!("Expected Completion"),
         }
@@ -405,7 +405,7 @@ Hello"#;
 
         assert!(result.is_ok());
         match result.unwrap() {
-            RenderedPrompt::Chat(messages) => {
+            RenderedPrompt::Chat { messages } => {
                 assert_eq!(messages.len(), 1);
                 assert_eq!(messages[0].role, "system");
             }

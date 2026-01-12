@@ -11,7 +11,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ir_stub.workspace = true
+baml_llm_interface.workspace = true
 baml_base.workspace = true
+baml_type_reflection.workspace = true
 baml_jsonish.workspace = true
 baml_jinja_runtime.workspace = true
 baml_db.workspace = true

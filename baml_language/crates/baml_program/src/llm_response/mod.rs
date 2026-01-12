@@ -2,7 +2,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use crate::prompt::RenderedPrompt;
+use baml_llm_interface::RenderedPrompt;
 use indexmap::IndexMap;
 
 /// All possible outcomes from an LLM call.
@@ -155,8 +155,8 @@ mod tests {
         let response = LLMResponse::Success(LLMCompleteResponse {
             client: "openai".to_string(),
             model: "gpt-4".to_string(),
-            prompt: RenderedPrompt::simple("test"),
-            request_options: BamlMap::new(),
+            prompt: RenderedPrompt::Completion { text: "test".to_string() },
+            request_options: IndexMap::new(),
             content: "Hello!".to_string(),
             start_time: SystemTime::now(),
             latency: Duration::from_millis(100),

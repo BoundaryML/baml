@@ -6,8 +6,11 @@ use std::time::Duration;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
+use baml_llm_interface::ChatMessagePart;
+use ir_stub::BamlMediaContent;
+
 use crate::errors::BuildRequestError;
-use crate::prompt::{MediaContent, MessagePart, RenderedMessage, RenderedPrompt};
+use baml_llm_interface::{RenderedChatMessage, RenderedPrompt};
 use crate::render_options::RenderOptions;
 
 /// HTTP method for requests.
@@ -143,12 +146,19 @@ impl OpenAiRequest {
         config: &OpenAiClientConfig,
         stream: bool,
     ) -> Result<Self, BuildRequestError> {
-        // Convert messages to OpenAI format
-        let messages: Vec<OpenAiMessage> = rendered
-            .messages
-            .iter()
-            .map(|m| Self::convert_message(m))
-            .collect();
+        // Convert messages to OpenAI format based on prompt type
+        let messages: Vec<OpenAiMessage> = match rendered {
+            RenderedPrompt::Completion { text } => {
+                // Convert completion to a single user message
+                vec![OpenAiMessage {
+                    role: "user".to_string(),
+                    content: OpenAiContent::Text(text.clone()),
+                }]
+            }
+            RenderedPrompt::Chat { messages } => {
+                messages.iter().map(|m| Self::convert_message(m)).collect()
+            }
+        };
 
         // Build request body
         let mut body = serde_json::json!({
@@ -189,11 +199,11 @@ impl OpenAiRequest {
     }
 
     /// Convert a rendered message to OpenAI format.
-    fn convert_message(msg: &RenderedMessage) -> OpenAiMessage {
-        let role = msg.role.as_str().to_string();
+    fn convert_message(msg: &RenderedChatMessage) -> OpenAiMessage {
+        let role = msg.role.clone();
 
         // Check if we have any media parts
-        let has_media = msg.parts.iter().any(|p| matches!(p, MessagePart::Media(_)));
+        let has_media = msg.parts.iter().any(|p| matches!(p, ChatMessagePart::Media { .. }));
 
         let content = if has_media {
             // Use array format for mixed content
@@ -205,7 +215,12 @@ impl OpenAiRequest {
             OpenAiContent::Parts(parts)
         } else {
             // Use simple string format for text-only
-            let text = msg.text_content();
+            let text = msg
+                .parts
+                .iter()
+                .filter_map(|p| p.as_text().cloned())
+                .collect::<Vec<_>>()
+                .join("");
             OpenAiContent::Text(text)
         };
 
@@ -213,25 +228,25 @@ impl OpenAiRequest {
     }
 
     /// Convert a message part to OpenAI format.
-    fn convert_part(part: &MessagePart) -> OpenAiContentPart {
+    fn convert_part(part: &ChatMessagePart) -> OpenAiContentPart {
         match part {
-            MessagePart::Text(text) => OpenAiContentPart::Text { text: text.clone() },
-            MessagePart::Media(media) => {
-                let url = match media {
-                    MediaContent::Url { url, .. } => url.clone(),
-                    MediaContent::Base64 { mime_type, data, .. } => {
-                        format!("data:{};base64,{}", mime_type, data)
+            ChatMessagePart::Text { text } => OpenAiContentPart::Text { text: text.clone() },
+            ChatMessagePart::Media { media } => {
+                let url = match &media.content {
+                    BamlMediaContent::Url(url_content) => url_content.url.clone(),
+                    BamlMediaContent::Base64(b64) => {
+                        format!("data:{};base64,{}", b64.media_type, b64.base64)
                     }
-                    MediaContent::FilePath { path, .. } => {
+                    BamlMediaContent::File(file) => {
                         // This shouldn't happen in a well-resolved request
-                        format!("file://{}", path.display())
+                        format!("file://{}", file.path)
                     }
                 };
                 OpenAiContentPart::ImageUrl {
                     image_url: OpenAiImageUrl { url, detail: None },
                 }
             }
-            MessagePart::WithMeta { part, .. } => Self::convert_part(part),
+            ChatMessagePart::WithMeta { inner, .. } => Self::convert_part(inner),
         }
     }
 
@@ -477,10 +492,20 @@ mod tests {
 
     #[test]
     fn test_openai_request_from_rendered() {
-        let rendered = RenderedPrompt::new(vec![
-            RenderedMessage::system("You are helpful."),
-            RenderedMessage::user("Hello!"),
-        ]);
+        let rendered = RenderedPrompt::Chat {
+            messages: vec![
+                RenderedChatMessage {
+                    role: "system".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text { text: "You are helpful.".to_string() }],
+                },
+                RenderedChatMessage {
+                    role: "user".to_string(),
+                    allow_duplicate_role: false,
+                    parts: vec![ChatMessagePart::Text { text: "Hello!".to_string() }],
+                },
+            ],
+        };
 
         let config = OpenAiClientConfig {
             api_key: "sk-test-key".to_string(),
@@ -497,7 +522,7 @@ mod tests {
 
     #[test]
     fn test_curl_masks_secrets() {
-        let rendered = RenderedPrompt::simple("Test");
+        let rendered = RenderedPrompt::Completion { text: "Test".to_string() };
         let config = OpenAiClientConfig {
             api_key: "sk-secret-key".to_string(),
             ..Default::default()
@@ -512,7 +537,7 @@ mod tests {
 
     #[test]
     fn test_curl_exposes_secrets() {
-        let rendered = RenderedPrompt::simple("Test");
+        let rendered = RenderedPrompt::Completion { text: "Test".to_string() };
         let config = OpenAiClientConfig {
             api_key: "sk-secret-key".to_string(),
             ..Default::default()
@@ -551,7 +576,7 @@ mod tests {
             body,
             200,
             "openai",
-            RenderedPrompt::simple("test"),
+            RenderedPrompt::Completion { text: "test".to_string() },
             std::time::SystemTime::now(),
             Duration::from_millis(100),
         );
@@ -574,7 +599,7 @@ mod tests {
             body,
             429,
             "openai",
-            RenderedPrompt::simple("test"),
+            RenderedPrompt::Completion { text: "test".to_string() },
             std::time::SystemTime::now(),
             Duration::from_millis(100),
         );

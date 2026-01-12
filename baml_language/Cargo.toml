@@ -45,6 +45,7 @@ baml_program = { path = "crates/baml_program" }
 baml_project = { path = "crates/baml_project" }
 baml_tests = { path = "crates/baml_tests" }
 baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
+baml_type_reflection = { path = "crates/baml_type_reflection" }
 baml_tools_stow = { path = "crates/baml_tools_stow" }
 baml_vm = { path = "crates/baml_vm" }
 baml_vm_types = { path = "crates/baml_vm_types" }

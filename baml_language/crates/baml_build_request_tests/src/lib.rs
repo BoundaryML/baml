@@ -17,10 +17,10 @@
 use std::path::Path;
 
 use baml_db::{Setter, SourceFile, baml_workspace::Project};
+use baml_llm_interface::RenderedPrompt;
 use baml_program::{
     BamlMap, BamlProgram,
     context::DynamicBamlContext,
-    prompt::{MediaContent, MessagePart, RenderedMessage, RenderedPrompt, Role},
 };
 use baml_project::ProjectDatabase as RootDatabase;
 use serde::Serialize;
@@ -65,141 +65,7 @@ pub fn derive_test_name(fixture_name: &str) -> String {
 pub struct PromptSnapshot {
     pub fixture: String,
     pub function: String,
-    pub prompt: RenderedPromptSnapshot,
-}
-
-/// Serializable version of RenderedPrompt.
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-pub enum RenderedPromptSnapshot {
-    Completion { text: String },
-    Chat { messages: Vec<ChatMessageSnapshot> },
-}
-
-/// Serializable chat message.
-#[derive(Debug, Serialize)]
-pub struct ChatMessageSnapshot {
-    pub role: String,
-    pub content: Vec<ChatMessagePartSnapshot>,
-}
-
-/// Serializable chat message part.
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-pub enum ChatMessagePartSnapshot {
-    Text {
-        text: String,
-    },
-    Media {
-        media_type: String,
-    },
-    WithMeta {
-        inner: Box<ChatMessagePartSnapshot>,
-        meta: serde_json::Value,
-    },
-}
-
-impl From<&RenderedPrompt> for RenderedPromptSnapshot {
-    fn from(prompt: &RenderedPrompt) -> Self {
-        // Check if this looks like a completion (single user message with no chat markers)
-        // or a chat prompt (multiple messages or explicit roles)
-        if prompt.messages.len() == 1 && prompt.messages[0].role == Role::User {
-            // Single user message - treat as completion
-            RenderedPromptSnapshot::Completion {
-                text: prompt.messages[0].text_content(),
-            }
-        } else {
-            // Multiple messages or explicit roles - treat as chat
-            RenderedPromptSnapshot::Chat {
-                messages: prompt
-                    .messages
-                    .iter()
-                    .map(ChatMessageSnapshot::from)
-                    .collect(),
-            }
-        }
-    }
-}
-
-impl From<&RenderedMessage> for ChatMessageSnapshot {
-    fn from(msg: &RenderedMessage) -> Self {
-        ChatMessageSnapshot {
-            role: msg.role.as_str().to_string(),
-            content: msg
-                .parts
-                .iter()
-                .map(ChatMessagePartSnapshot::from)
-                .collect(),
-        }
-    }
-}
-
-impl From<&MessagePart> for ChatMessagePartSnapshot {
-    fn from(part: &MessagePart) -> Self {
-        match part {
-            MessagePart::Text(text) => ChatMessagePartSnapshot::Text { text: text.clone() },
-            MessagePart::Media(media) => ChatMessagePartSnapshot::Media {
-                media_type: match media {
-                    MediaContent::Url { media_type, .. } => format!("{:?}", media_type),
-                    MediaContent::Base64 { media_type, .. } => format!("{:?}", media_type),
-                    MediaContent::FilePath { media_type, .. } => format!("{:?}", media_type),
-                },
-            },
-            MessagePart::WithMeta { part, meta } => ChatMessagePartSnapshot::WithMeta {
-                inner: Box::new(ChatMessagePartSnapshot::from(part.as_ref())),
-                meta: serde_json::to_value(meta).unwrap_or_default(),
-            },
-        }
-    }
-}
-
-// ============================================================================
-// Conversions from baml_llm_interface types
-// ============================================================================
-
-impl From<&baml_llm_interface::RenderedPrompt> for RenderedPromptSnapshot {
-    fn from(prompt: &baml_llm_interface::RenderedPrompt) -> Self {
-        match prompt {
-            baml_llm_interface::RenderedPrompt::Completion(text) => {
-                RenderedPromptSnapshot::Completion { text: text.clone() }
-            }
-            baml_llm_interface::RenderedPrompt::Chat(messages) => RenderedPromptSnapshot::Chat {
-                messages: messages.iter().map(ChatMessageSnapshot::from).collect(),
-            },
-        }
-    }
-}
-
-impl From<&baml_llm_interface::RenderedChatMessage> for ChatMessageSnapshot {
-    fn from(msg: &baml_llm_interface::RenderedChatMessage) -> Self {
-        ChatMessageSnapshot {
-            role: msg.role.clone(),
-            content: msg
-                .parts
-                .iter()
-                .map(ChatMessagePartSnapshot::from)
-                .collect(),
-        }
-    }
-}
-
-impl From<&baml_llm_interface::ChatMessagePart> for ChatMessagePartSnapshot {
-    fn from(part: &baml_llm_interface::ChatMessagePart) -> Self {
-        match part {
-            baml_llm_interface::ChatMessagePart::Text(text) => {
-                ChatMessagePartSnapshot::Text { text: text.clone() }
-            }
-            baml_llm_interface::ChatMessagePart::Media(media) => ChatMessagePartSnapshot::Media {
-                media_type: format!("{}", media.media_type),
-            },
-            baml_llm_interface::ChatMessagePart::WithMeta(part, meta) => {
-                ChatMessagePartSnapshot::WithMeta {
-                    inner: Box::new(ChatMessagePartSnapshot::from(part.as_ref())),
-                    meta: serde_json::to_value(meta).unwrap_or_default(),
-                }
-            }
-        }
-    }
+    pub prompt: RenderedPrompt,
 }
 
 /// Render a prompt for a fixture file using BamlProgram.
@@ -224,7 +90,7 @@ pub fn render_prompt_for_fixture(
         .prepare_function(&func_name, args)
         .map_err(|e| anyhow::anyhow!("Failed to prepare function '{}': {}", func_name, e))?;
 
-    // Render the prompt through the runtime
+    // Render the prompt through the runtime (now returns baml_llm_interface::RenderedPrompt directly)
     let dynamic_ctx = DynamicBamlContext::new();
     runtime
         .render_prompt(&prepared, &dynamic_ctx)

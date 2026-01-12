@@ -7,49 +7,62 @@ use serde::Serialize;
 
 /// A part of a chat message.
 #[derive(Debug, PartialEq, Serialize, Clone)]
+#[serde(tag = "type")]
 pub enum ChatMessagePart {
     /// Raw text content.
-    Text(String),
+    Text {
+        /// The text content.
+        text: String,
+    },
     /// Media content (image, audio, etc.).
-    Media(BamlMedia),
+    Media {
+        /// The media content.
+        #[serde(flatten)]
+        media: BamlMedia,
+    },
     /// A part with additional metadata.
-    WithMeta(Box<ChatMessagePart>, HashMap<String, serde_json::Value>),
+    WithMeta {
+        /// The inner part.
+        inner: Box<ChatMessagePart>,
+        /// The metadata.
+        meta: HashMap<String, serde_json::Value>,
+    },
 }
 
 impl ChatMessagePart {
     /// Wrap this part with additional metadata.
-    pub fn with_meta(self, meta: HashMap<String, serde_json::Value>) -> ChatMessagePart {
+    pub fn with_meta(self, new_meta: HashMap<String, serde_json::Value>) -> ChatMessagePart {
         match self {
-            ChatMessagePart::WithMeta(part, mut existing_meta) => {
-                existing_meta.extend(meta);
-                ChatMessagePart::WithMeta(part, existing_meta)
+            ChatMessagePart::WithMeta { inner, mut meta } => {
+                meta.extend(new_meta);
+                ChatMessagePart::WithMeta { inner, meta }
             }
-            _ => ChatMessagePart::WithMeta(Box::new(self), meta),
+            _ => ChatMessagePart::WithMeta { inner: Box::new(self), meta: new_meta },
         }
     }
 
     /// Get the text content if this is a text part.
     pub fn as_text(&self) -> Option<&String> {
         match self {
-            ChatMessagePart::Text(t) => Some(t),
-            ChatMessagePart::WithMeta(t, _) => t.as_text(),
-            ChatMessagePart::Media(_) => None,
+            ChatMessagePart::Text { text } => Some(text),
+            ChatMessagePart::WithMeta { inner, .. } => inner.as_text(),
+            ChatMessagePart::Media { .. } => None,
         }
     }
 
     /// Get the media content if this is a media part.
     pub fn as_media(&self) -> Option<&BamlMedia> {
         match self {
-            ChatMessagePart::Media(m) => Some(m),
-            ChatMessagePart::WithMeta(t, _) => t.as_media(),
-            ChatMessagePart::Text(_) => None,
+            ChatMessagePart::Media { media } => Some(media),
+            ChatMessagePart::WithMeta { inner, .. } => inner.as_media(),
+            ChatMessagePart::Text { .. } => None,
         }
     }
 
     /// Get the metadata if present.
     pub fn meta(&self) -> Option<&HashMap<String, serde_json::Value>> {
         match self {
-            ChatMessagePart::WithMeta(_, meta) => Some(meta),
+            ChatMessagePart::WithMeta { meta, .. } => Some(meta),
             _ => None,
         }
     }
@@ -57,9 +70,9 @@ impl ChatMessagePart {
     /// Convert to completion format (text only, media ignored).
     pub fn as_completion(self) -> String {
         match self {
-            ChatMessagePart::Text(t) => t,
-            ChatMessagePart::Media(_) => String::new(),
-            ChatMessagePart::WithMeta(p, _) => p.as_completion(),
+            ChatMessagePart::Text { text } => text,
+            ChatMessagePart::Media { .. } => String::new(),
+            ChatMessagePart::WithMeta { inner, .. } => inner.as_completion(),
         }
     }
 }
@@ -67,8 +80,8 @@ impl ChatMessagePart {
 impl std::fmt::Display for ChatMessagePart {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ChatMessagePart::Text(t) => write!(f, "{t}"),
-            ChatMessagePart::Media(media) => match &media.content {
+            ChatMessagePart::Text { text } => write!(f, "{text}"),
+            ChatMessagePart::Media { media } => match &media.content {
                 BamlMediaContent::Url(url) => {
                     write!(f, "<{}_placeholder: {}>", media.media_type, url.url)
                 }
@@ -79,7 +92,7 @@ impl std::fmt::Display for ChatMessagePart {
                     write!(f, "<{}_placeholder: {}>", media.media_type, file.path)
                 }
             },
-            ChatMessagePart::WithMeta(part, meta) => write!(f, "{meta:?}::{part}"),
+            ChatMessagePart::WithMeta { inner, meta } => write!(f, "{meta:?}::{inner}"),
         }
     }
 }

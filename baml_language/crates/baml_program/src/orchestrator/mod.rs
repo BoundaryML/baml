@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use crate::errors::RuntimeError;
 use crate::llm_response::LLMResponse;
-use crate::prompt::RenderedPrompt;
+use baml_llm_interface::RenderedPrompt;
 use crate::types::BamlValue;
 
 /// Configuration for the orchestrator.
@@ -392,9 +392,9 @@ mod tests {
 
     #[test]
     fn test_orchestrate_stream_returns_stream() {
-        use crate::prompt::RenderedPrompt;
+        use baml_llm_interface::RenderedPrompt;
 
-        let prompt = RenderedPrompt::simple("Hello");
+        let prompt = RenderedPrompt::Completion { text: "Hello".to_string() };
         let config = OrchestratorConfig::single(OrchestratorNode {
             client: ClientConfig {
                 name: "openai".to_string(),
@@ -424,9 +424,9 @@ mod tests {
 
     #[test]
     fn test_orchestrate_stream_cancellation() {
-        use crate::prompt::RenderedPrompt;
+        use baml_llm_interface::RenderedPrompt;
 
-        let prompt = RenderedPrompt::simple("Hello");
+        let prompt = RenderedPrompt::Completion { text: "Hello".to_string() };
         let config = OrchestratorConfig::single(OrchestratorNode {
             client: ClientConfig {
                 name: "openai".to_string(),

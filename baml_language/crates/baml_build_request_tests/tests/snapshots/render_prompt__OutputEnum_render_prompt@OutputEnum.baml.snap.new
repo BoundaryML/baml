@@ -1,8 +1,0 @@
----
-source: crates/baml_build_request_tests/tests/render_prompt.rs
-assertion_line: 46
-expression: "&result"
-input_file: crates/baml_build_request_tests/testdata/OutputEnum.baml
----
-fixture: OutputEnum.baml
-error: "Failed to render prompt: Prompt rendering failed: Minijinja error: unknown method: map has no method named output_format (in prompt:3)"

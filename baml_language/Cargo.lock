@@ -341,6 +341,7 @@ dependencies = [
  "baml_program",
  "baml_project",
  "insta",
+ "ir_stub",
  "serde",
  "serde_json",
 ]
@@ -678,7 +679,9 @@ dependencies = [
  "baml_db",
  "baml_jinja_runtime",
  "baml_jsonish",
+ "baml_llm_interface",
  "baml_project",
+ "baml_type_reflection",
  "chrono",
  "getrandom 0.2.16",
  "indexmap 2.13.0",
@@ -783,6 +786,10 @@ dependencies = [
  "toml",
  "toml_edit 0.22.27",
 ]
+
+[[package]]
+name = "baml_type_reflection"
+version = "0.0.0"
 
 [[package]]
 name = "baml_vm"

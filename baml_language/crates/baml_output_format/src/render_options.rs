@@ -60,7 +60,7 @@ pub const INLINE_RENDER_ENUM_MAX_VALUES: usize = 6;
 ///
 /// These correspond to the kwargs accepted by `ctx.output_format()`.
 #[derive(Debug, Clone)]
-pub struct RenderOptions {
+pub struct OutputFormatOptions {
     /// Custom prefix text (e.g., "Answer in JSON using this schema:").
     /// Auto = determine based on type, Never = no prefix, Always = use specified.
     pub prefix: RenderSetting<String>,
@@ -87,7 +87,7 @@ pub struct RenderOptions {
     pub quote_class_fields: bool,
 }
 
-impl Default for RenderOptions {
+impl Default for OutputFormatOptions {
     fn default() -> Self {
         Self {
             prefix: RenderSetting::Auto,
@@ -102,14 +102,14 @@ impl Default for RenderOptions {
     }
 }
 
-impl RenderOptions {
+impl OutputFormatOptions {
     /// Default delimiter for union types.
     pub const DEFAULT_OR_SPLITTER: &'static str = " or ";
 
     /// Default type prefix used in "Answer in JSON using this {prefix}:" messages.
     pub const DEFAULT_TYPE_PREFIX: &'static str = "schema";
 
-    /// Create RenderOptions from kwargs values.
+    /// Create OutputFormatOptions from kwargs values.
     ///
     /// The `Option<Option<T>>` pattern means:
     /// - `None` = user didn't provide the parameter
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_render_options_default() {
-        let opts = RenderOptions::default();
+        let opts = OutputFormatOptions::default();
         assert_eq!(opts.or_splitter, " or ");
         assert!(!opts.quote_class_fields);
         assert!(matches!(opts.map_style, MapStyle::TypeParameters));
