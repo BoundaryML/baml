@@ -16,6 +16,7 @@ on:
     branches:
       - sam/mise-protoc-gen-go
       - aaron/fix-windows
+      - aaron/fix-windows-cli-build
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
   # Turbo remote caching
@@ -72,6 +73,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Tools
+        if: matrix._.os != 'windows-2022'
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
