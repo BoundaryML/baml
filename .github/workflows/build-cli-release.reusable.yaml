@@ -72,6 +72,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # This sets up protoc-gen-go for non-Windows builds
+      # and on windows this seems to hang forever since 0.217.0
       - name: Setup Tools
         if: matrix._.os != 'windows-2022'
         uses: ./.github/actions/setup-tools
