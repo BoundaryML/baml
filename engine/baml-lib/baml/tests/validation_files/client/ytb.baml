@@ -76,7 +76,7 @@ template_string FormatPreviousActions(actions: HistoryAction[]) #"
 {% if actions | length > 0 %}
 {% for action in actions %}
 - type: {{ action.type }}
-{% if action.type == "SPEAK" %}
+{% if action.type == "SPEAK" or action.type == "HIGHLIGHT_CODE" %}
   speakerId: {{ action.speakerId }}
   content: {{ action.content }}
   tone: {{ action.tone }}

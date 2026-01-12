@@ -204,6 +204,45 @@ pub fn predicate_implications<'a>(
                 left_implications
             }
 
+            ast::BinOpKind::ScOr => {
+                if branch {
+                    // For `A or B` being TRUE: at least one is true
+                    // We need to union the narrowed types for each variable
+                    let left_implications =
+                        predicate_implications(&binary_op.left, context, true);
+                    let right_implications =
+                        predicate_implications(&binary_op.right, context, true);
+
+                    // Merge implications by variable name, creating unions where needed
+                    let mut merged: std::collections::HashMap<String, Type> =
+                        std::collections::HashMap::new();
+
+                    for (var_name, var_type) in left_implications {
+                        merged.insert(var_name, var_type);
+                    }
+
+                    for (var_name, var_type) in right_implications {
+                        merged
+                            .entry(var_name)
+                            .and_modify(|existing| {
+                                *existing = Type::merge([existing.clone(), var_type.clone()]);
+                            })
+                            .or_insert(var_type);
+                    }
+
+                    merged.into_iter().collect()
+                } else {
+                    // For `A or B` being FALSE: both must be false
+                    // This is like AND on the false branches
+                    let mut left_implications =
+                        predicate_implications(&binary_op.left, context, false);
+                    let right_implications =
+                        predicate_implications(&binary_op.right, context, false);
+                    left_implications.extend(right_implications);
+                    left_implications
+                }
+            }
+
             ast::BinOpKind::Ne => {
                 let maybe_non_null_variable = match (&binary_op.left, &binary_op.right) {
                     (Var { .. }, Const(n)) if fuzzy_null(n) => Some(&binary_op.left),
