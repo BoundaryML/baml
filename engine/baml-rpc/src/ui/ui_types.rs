@@ -206,6 +206,18 @@ pub struct UiHttpMetadataSummary {
     pub status: u16,
 }
 
+/// A single chunk from an SSE stream response, with its timestamp for ordering
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiStreamChunk {
+    /// Epoch milliseconds when this chunk was received
+    #[serde(rename = "timestamp_epoch_ms")]
+    #[ts(type = "number")]
+    pub timestamp: EpochMsTimestamp,
+    /// The raw SSE event data (e.g., `{"type":"content_block_delta",...}`)
+    pub raw: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct UiHttpResponse {
     #[serde(rename = "end_epoch_ms")]
@@ -214,7 +226,13 @@ pub struct UiHttpResponse {
     pub status_code: u16,
     #[ts(type = "Record<string, unknown>")]
     pub headers: HashMap<String, serde_json::Value>,
+    /// For non-streaming responses, this contains the full body.
+    /// For streaming responses, this is the concatenated stream chunks (for backwards compatibility).
     pub body: String,
+    /// For streaming responses, ordered list of individual chunks with timestamps.
+    /// This allows the UI to display events in the correct chronological order.
+    #[ts(optional)]
+    pub stream_chunks: Option<Vec<UiStreamChunk>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
