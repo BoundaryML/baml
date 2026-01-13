@@ -57,39 +57,12 @@ type Four = int | string | b
 
 //----
 //- diagnostics
-// Error: Expected top-level declaration, found identifier
+// Error: Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    ╭─[ class_invalid_type_aliases.baml:9:1 ]
 //    │
 //  9 │ typpe Two = float
 //    │ ──┬──  
-//    │   ╰──── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ class_invalid_type_aliases.baml:9:7 ]
-//    │
-//  9 │ typpe Two = float
-//    │       ─┬─  
-//    │        ╰─── Expected top-level declaration, found identifier
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found '='
-//    ╭─[ class_invalid_type_aliases.baml:9:11 ]
-//    │
-//  9 │ typpe Two = float
-//    │           ┬  
-//    │           ╰── Expected top-level declaration, found '='
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected top-level declaration, found identifier
-//    ╭─[ class_invalid_type_aliases.baml:9:13 ]
-//    │
-//  9 │ typpe Two = float
-//    │             ──┬──  
-//    │               ╰──── Expected top-level declaration, found identifier
+//    │   ╰──── Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

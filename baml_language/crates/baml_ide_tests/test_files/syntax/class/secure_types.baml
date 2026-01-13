@@ -28,84 +28,12 @@ class ComplexTypes {
 
 //----
 //- diagnostics
-// Error: Expected ')', found '.'
+// Error: Path identifiers (e.g., 'a.b') are not supported in type expressions
 //    ╭─[ class_secure_types.baml:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │                                                                 ┬  
-//    │                                                                 ╰── Expected ')', found '.'
+//    │                                                                 ╰── Path identifiers (e.g., 'a.b') are not supported in type expressions
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected Unexpected token in class body, found '.'
-//    ╭─[ class_secure_types.baml:4:65 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                 ┬  
-//    │                                                                 ╰── Expected Unexpected token in class body, found '.'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: field 'foobar' is missing a type annotation
-//    ╭─[ class_secure_types.baml:4:66 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                  ───┬──  
-//    │                                                                     ╰──── field 'foobar' is missing a type annotation
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Unexpected token in class body, found '['
-//    ╭─[ class_secure_types.baml:4:72 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                        ┬  
-//    │                                                                        ╰── Expected Unexpected token in class body, found '['
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Unexpected token in class body, found ']'
-//    ╭─[ class_secure_types.baml:4:73 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                         ┬  
-//    │                                                                         ╰── Expected Unexpected token in class body, found ']'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected Unexpected token in class body, found ')'
-//    ╭─[ class_secure_types.baml:4:74 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                          ┬  
-//    │                                                                          ╰── Expected Unexpected token in class body, found ')'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected '>', found '>>'
-//     ╭─[ class_secure_types.baml:16:62 ]
-//     │
-//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
-//     │                                                              ─┬  
-//     │                                                               ╰── Expected '>', found '>>'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected '>', found '>>'
-//     ╭─[ class_secure_types.baml:16:62 ]
-//     │
-//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
-//     │                                                              ─┬  
-//     │                                                               ╰── Expected '>', found '>>'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Unexpected token in class body, found '>>'
-//     ╭─[ class_secure_types.baml:16:62 ]
-//     │
-//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
-//     │                                                              ─┬  
-//     │                                                               ╰── Expected Unexpected token in class body, found '>>'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
