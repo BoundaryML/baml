@@ -11,4 +11,4 @@ prompt:
     - role: system
       content:
         - type: Text
-          text: "Return the same object you were given.\n{\n  prop: \"one\"\n} or {\n  prop: \"two\"\n}"
+          text: "Return the same object you were given.\nAnswer in JSON using any of these schemas:\n{\n  prop: \"one\",\n} or {\n  prop: \"two\",\n}"

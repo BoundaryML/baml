@@ -7,4 +7,4 @@ fixture: OutputRecursiveTypeAliasClass.baml
 function: FnOutputRecursiveTypeAliasClass
 prompt:
   type: Completion
-  text: "Return the given object back:\n\n\n\n{\n  list: LinkedListAlias\n}"
+  text: "Return the given object back:\n\n\n\nLinkedListAliasNode {\n  value: int,\n  next: LinkedListAliasNode or null,\n}\n\nAnswer in JSON using this schema:\n{\n  list: LinkedListAlias,\n}"

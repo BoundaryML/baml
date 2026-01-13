@@ -7,4 +7,4 @@ fixture: OutputTypeAliasRecursiveList.baml
 function: FnOutputTypeAliasRecursiveList
 prompt:
   type: Completion
-  text: "Return the given JSON array:\n\n\n\nRecursiveListAlias"
+  text: "Return the given JSON array:\n\n\n\nRecursiveListAlias = RecursiveListAlias[]\n\nAnswer in JSON using this schema:\nRecursiveListAlias"

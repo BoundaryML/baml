@@ -7,4 +7,4 @@ fixture: OutputTypeAliasRecursiveCycle.baml
 function: FnOutputTypeAliasRecursiveCycle
 prompt:
   type: Completion
-  text: "Return the given JSON array:\n\n\n\nRecAliasOne"
+  text: "Return the given JSON array:\n\n\n\nRecAliasOne = RecAliasTwo\nRecAliasTwo = RecAliasThree\nRecAliasThree = RecAliasOne[]\n\nAnswer in JSON using this schema:\nRecAliasOne"

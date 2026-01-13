@@ -142,7 +142,7 @@ impl Object for OutputFormatValue {
 fn parse_output_format_kwargs(kwargs: &Kwargs) -> Result<OutputFormatOptions, minijinja::Error> {
     // prefix: Option<Option<String>>
     let prefix: Option<Option<String>> = match kwargs.get::<Value>("prefix") {
-        Ok(v) if v.is_none() => Some(None), // Explicitly null
+        Ok(v) if v.is_none() || v.is_undefined() => Some(None), // Explicitly null
         Ok(v) => Some(Some(
             v.as_str()
                 .ok_or_else(|| {
@@ -166,7 +166,7 @@ fn parse_output_format_kwargs(kwargs: &Kwargs) -> Result<OutputFormatOptions, mi
 
     // enum_value_prefix: Option<Option<String>>
     let enum_value_prefix: Option<Option<String>> = match kwargs.get::<Value>("enum_value_prefix") {
-        Ok(v) if v.is_none() => Some(None),
+        Ok(v) if v.is_none() || v.is_undefined() => Some(None),
         Ok(v) => Some(Some(
             v.as_str()
                 .ok_or_else(|| {
@@ -200,7 +200,7 @@ fn parse_output_format_kwargs(kwargs: &Kwargs) -> Result<OutputFormatOptions, mi
     // hoisted_class_prefix: Option<Option<String>>
     let hoisted_class_prefix: Option<Option<String>> =
         match kwargs.get::<Value>("hoisted_class_prefix") {
-            Ok(v) if v.is_none() => Some(None),
+            Ok(v) if v.is_none() || v.is_undefined() => Some(None),
             Ok(v) => Some(Some(
                 v.as_str()
                     .ok_or_else(|| {

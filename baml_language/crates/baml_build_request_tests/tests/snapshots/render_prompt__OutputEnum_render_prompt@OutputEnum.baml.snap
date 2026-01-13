@@ -4,4 +4,7 @@ expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputEnum.baml
 ---
 fixture: OutputEnum.baml
-error: "Failed to render prompt: Prompt rendering failed: Minijinja error: invalid operation: prefix must be a string or null (in prompt:3)"
+function: FnOutputEnum
+prompt:
+  type: Completion
+  text: "Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.\n\nEnumOutput\n----\n- ONE\n- TWO\n- THREE\n"

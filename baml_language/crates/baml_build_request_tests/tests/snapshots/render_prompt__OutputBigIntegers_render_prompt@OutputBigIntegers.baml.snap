@@ -7,4 +7,4 @@ fixture: OutputBigIntegers.baml
 function: FnOutputBigIntegers
 prompt:
   type: Completion
-  text: "Please make sure every integer in the output has  digits.\nFor floats, provide a mix - from 0-10 places before the decimal point,\nand 1-10 places after the decimal point. Bet.\n\n{\n  a: int\n  b: float\n}"
+  text: "Please make sure every integer in the output has  digits.\nFor floats, provide a mix - from 0-10 places before the decimal point,\nand 1-10 places after the decimal point. Bet.\n\nAnswer in JSON using this schema:\n{\n  a: int,\n  b: float,\n}"

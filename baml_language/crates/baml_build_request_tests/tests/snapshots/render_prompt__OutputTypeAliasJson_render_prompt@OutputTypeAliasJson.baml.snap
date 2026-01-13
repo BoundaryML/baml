@@ -7,4 +7,4 @@ fixture: OutputTypeAliasJson.baml
 function: FnOutputTypeAliasJson
 prompt:
   type: Completion
-  text: "Return the given input back:\n\n\n\nJsonValue"
+  text: "Return the given input back:\n\n\n\nJsonValue = int or string or bool or float or JsonObject or JsonArray\nJsonArray = JsonValue[]\nJsonObject = map<string, JsonValue>\n\nAnswer in JSON using this schema:\nJsonValue"

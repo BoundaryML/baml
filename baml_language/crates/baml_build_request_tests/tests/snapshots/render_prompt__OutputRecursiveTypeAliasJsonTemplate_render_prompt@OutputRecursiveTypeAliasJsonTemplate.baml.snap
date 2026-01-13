@@ -11,4 +11,4 @@ prompt:
     - role: user
       content:
         - type: Text
-          text: "Extract info from this string exactly as it is:\n\n\nJsonTemplate"
+          text: "Extract info from this string exactly as it is:\n\n\nJsonTemplate = map<string, JsonEntry>\nJsonEntry = SimpleTag or JsonTemplate\n\nAnswer in JSON using this schema:\nJsonTemplate"

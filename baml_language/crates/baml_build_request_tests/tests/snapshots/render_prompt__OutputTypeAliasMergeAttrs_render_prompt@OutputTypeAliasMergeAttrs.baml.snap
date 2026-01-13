@@ -7,4 +7,4 @@ fixture: OutputTypeAliasMergeAttrs.baml
 function: FnOutputTypeAliasMergeAttrs
 prompt:
   type: Completion
-  text: "Return the given integer in the specified format:\n\n\n\n{\n  amount: Amount\n}"
+  text: "Return the given integer in the specified format:\n\n\n\nAnswer in JSON using this schema:\n{\n  amount: Amount,\n}"

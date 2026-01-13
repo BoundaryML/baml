@@ -7,4 +7,4 @@ fixture: OutputOptionalClassOptionalFields.baml
 function: FnOutputOptionalClassOptionalFields
 prompt:
   type: Completion
-  text: "Return a json blob for the following input:\n\n\n{\n  prop3: Blah?\n  prop2: string?\n  prop1: string?\n}?\n\nJSON:"
+  text: "Return a json blob for the following input:\n\n\nAnswer in JSON using this schema:\n{\n  prop1: string or null,\n  prop2: string or null,\n  prop3: {\n    prop4: string or null,\n  } or null,\n} or null\n\nJSON:"

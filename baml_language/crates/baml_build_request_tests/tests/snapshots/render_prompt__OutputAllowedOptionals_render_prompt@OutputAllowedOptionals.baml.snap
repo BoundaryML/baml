@@ -7,4 +7,4 @@ fixture: OutputAllowedOptionals.baml
 function: FnOutputAllowedOptionals
 prompt:
   type: Completion
-  text: "Return the given input:\n\n\n\n{\n  p: string[]?\n  q: map<string, string>?\n}"
+  text: "Return the given input:\n\n\n\nAnswer in JSON using this schema:\n{\n  p: string[] or null,\n  q: map<string, string> or null,\n}"

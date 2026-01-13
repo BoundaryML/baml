@@ -232,6 +232,15 @@ impl OutputFormatBuilder {
         self
     }
 
+    /// Add a structural recursive type alias.
+    ///
+    /// Structural recursive aliases are type aliases that reference themselves
+    /// (directly or indirectly) and need to be rendered as named definitions.
+    pub fn with_structural_recursive_alias(mut self, name: impl Into<String>, ty: Ty) -> Self {
+        self.structural_recursive_aliases.insert(name.into(), ty);
+        self
+    }
+
     /// Build the OutputFormatContent.
     pub fn build(self) -> OutputFormatContent {
         OutputFormatContent {

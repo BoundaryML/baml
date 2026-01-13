@@ -7,4 +7,4 @@ fixture: OutputLiteralUnions.baml
 function: FnOutputLiteralUnions
 prompt:
   type: Completion
-  text: "Return one of these values without any additional context:\n1 or true or \"string output\""
+  text: "Return one of these values without any additional context:\nAnswer in JSON using any of these schemas:\n1 or true or \"string output\""

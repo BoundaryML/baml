@@ -89,36 +89,74 @@ pub fn render(
     // Add hoisted definitions if needed
     let hoisted = render_hoisted_definitions(&mut ctx)?;
 
-    if rendered.is_empty() && hoisted.is_empty() {
+    // Add structural recursive alias definitions
+    let alias_definitions = render_structural_recursive_aliases(&mut ctx)?;
+
+    if rendered.is_empty() && hoisted.is_empty() && alias_definitions.is_empty() {
         return Ok(None);
     }
 
     let mut result = String::new();
 
-    // Add prefix for complex types if configured
-    match &options.prefix {
-        RenderSetting::Always(prefix) => {
-            result.push_str(prefix);
-            result.push('\n');
-        }
-        RenderSetting::Auto => {
-            // Default prefix for complex types
-        }
-        RenderSetting::Never => {
-            // No prefix
-        }
-    }
-
+    // Add hoisted class and enum definitions first
     if !hoisted.is_empty() {
         result.push_str(&hoisted);
-        if !rendered.is_empty() {
-            result.push('\n');
-        }
+        result.push('\n');
+    }
+
+    // Add type alias definitions
+    if !alias_definitions.is_empty() {
+        result.push_str(&alias_definitions);
+        result.push('\n');
+    }
+
+    // Add prefix for complex types if configured
+    let prefix = get_auto_prefix(&content.target, options);
+    if let Some(p) = prefix {
+        result.push_str(&p);
     }
 
     result.push_str(&rendered);
 
     Ok(Some(result))
+}
+
+/// Get the auto-generated prefix based on target type.
+fn get_auto_prefix(target: &Ty, options: &OutputFormatOptions) -> Option<String> {
+    match &options.prefix {
+        RenderSetting::Always(prefix) => {
+            if prefix.is_empty() {
+                None
+            } else {
+                Some(format!("{}\n", prefix))
+            }
+        }
+        RenderSetting::Never => None,
+        RenderSetting::Auto => {
+            // Generate appropriate prefix based on target type
+            match target {
+                Ty::Class(_) | Ty::Named(_) => Some("Answer in JSON using this schema:\n".to_string()),
+                Ty::List(_) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+                Ty::Union(_) => Some("Answer in JSON using any of these schemas:\n".to_string()),
+                Ty::Map { .. } => Some("Answer in JSON using this schema:\n".to_string()),
+                Ty::Enum(_) => Some("Answer with any of the categories:\n".to_string()),
+                Ty::Optional(_) => Some("Answer in JSON using this schema:\n".to_string()),
+                _ => None,
+            }
+        }
+    }
+}
+
+/// Render structural recursive type alias definitions.
+fn render_structural_recursive_aliases(ctx: &mut RenderContext) -> Result<String, RenderError> {
+    let mut result = String::new();
+
+    for (alias_name, target_type) in ctx.content.structural_recursive_aliases.iter() {
+        let rendered_target = render_type_inline(target_type, ctx)?;
+        result.push_str(&format!("{} = {}\n", alias_name, rendered_target));
+    }
+
+    Ok(result)
 }
 
 /// Render simple targets (primitives) with a descriptive prefix.
@@ -203,11 +241,11 @@ fn render_hoisted_definitions(ctx: &mut RenderContext) -> Result<String, RenderE
 
                 for field in &class.fields {
                     let field_type = render_type_inline(&field.field_type, ctx)?;
-                    result.push_str(&format!("  {}: {}", field.name.rendered_name(), field_type));
                     if let Some(desc) = &field.description {
-                        result.push_str(&format!(" // {}", desc));
+                        result.push_str(&format!("  {}: {}, // {}\n", field.name.rendered_name(), field_type, desc));
+                    } else {
+                        result.push_str(&format!("  {}: {},\n", field.name.rendered_name(), field_type));
                     }
-                    result.push('\n');
                 }
 
                 result.push_str("}\n");
@@ -235,7 +273,8 @@ fn render_type(ty: &Ty, ctx: &mut RenderContext, is_top_level: bool) -> Result<S
 
         Ty::Optional(inner) => {
             let inner_str = render_type(inner, ctx, false)?;
-            Ok(format!("{}?", inner_str))
+            let or_splitter = ctx.or_splitter();
+            Ok(format!("{}{}null", inner_str, or_splitter))
         }
 
         Ty::List(inner) => {
@@ -293,7 +332,8 @@ fn render_type_inline(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderErro
 
         Ty::Optional(inner) => {
             let inner_str = render_type_inline(inner, ctx)?;
-            Ok(format!("{}?", inner_str))
+            let or_splitter = ctx.or_splitter();
+            Ok(format!("{}{}null", inner_str, or_splitter))
         }
 
         Ty::List(inner) => {
@@ -320,7 +360,8 @@ fn render_type_inline(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderErro
         }
 
         Ty::Class(name) | Ty::Named(name) => {
-            // For inline, just use the class name
+            // For inline classes that are not recursive, we should reference by name
+            // (The old implementation does this for hoisted classes)
             Ok(name.to_string())
         }
 
@@ -378,7 +419,7 @@ fn render_class(name: &str, ctx: &mut RenderContext, _is_top_level: bool) -> Res
 
     for field in &class.fields {
         let field_indent = format!("{}  ", indent);
-        let field_type = render_type_inline(&field.field_type, ctx)?;
+        let field_type = render_field_type(&field.field_type, ctx)?;
 
         let field_name = if ctx.quote_class_fields() {
             format!("\"{}\"", field.name.rendered_name())
@@ -386,18 +427,87 @@ fn render_class(name: &str, ctx: &mut RenderContext, _is_top_level: bool) -> Res
             field.name.rendered_name().to_string()
         };
 
-        result.push_str(&format!("{}{}: {}", field_indent, field_name, field_type));
-
+        // Add trailing comma after each field
         if let Some(desc) = &field.description {
-            result.push_str(&format!(" // {}", desc));
+            result.push_str(&format!("{}{}: {}, // {}\n", field_indent, field_name, field_type, desc));
+        } else {
+            result.push_str(&format!("{}{}: {},\n", field_indent, field_name, field_type));
         }
-
-        result.push('\n');
     }
 
     result.push_str(&format!("{}}}", indent));
 
     Ok(result)
+}
+
+/// Render a field type, expanding nested classes inline when appropriate.
+fn render_field_type(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderError> {
+    match ty {
+        Ty::Class(name) | Ty::Named(name) => {
+            // Check if this class is recursive - if so, just use the name
+            if ctx.content.recursive_classes.contains(name.as_str()) {
+                return Ok(name.to_string());
+            }
+
+            // For non-recursive classes, expand inline
+            if let Some(class) = ctx.content.find_class(name.as_str()) {
+                let mut result = String::new();
+                result.push_str("{\n");
+
+                for field in &class.fields {
+                    let field_type = render_field_type(&field.field_type, ctx)?;
+                    let field_name = if ctx.quote_class_fields() {
+                        format!("\"{}\"", field.name.rendered_name())
+                    } else {
+                        field.name.rendered_name().to_string()
+                    };
+
+                    // Replace newlines in nested types for proper indentation
+                    let field_type = field_type.replace('\n', "\n    ");
+
+                    if let Some(desc) = &field.description {
+                        result.push_str(&format!("    {}: {}, // {}\n", field_name, field_type, desc));
+                    } else {
+                        result.push_str(&format!("    {}: {},\n", field_name, field_type));
+                    }
+                }
+
+                result.push_str("  }");
+                Ok(result)
+            } else {
+                // Unknown class, just use name
+                Ok(name.to_string())
+            }
+        }
+
+        Ty::Optional(inner) => {
+            let inner_str = render_field_type(inner, ctx)?;
+            let or_splitter = ctx.or_splitter();
+            Ok(format!("{}{}null", inner_str, or_splitter))
+        }
+
+        Ty::List(inner) => {
+            let inner_str = render_field_type(inner, ctx)?;
+            // If inner type is complex (contains newlines), wrap in array brackets on separate lines
+            if inner_str.contains('\n') {
+                Ok(format!("[\n    {}\n  ]", inner_str.replace('\n', "\n    ")))
+            } else {
+                Ok(format!("{}[]", inner_str))
+            }
+        }
+
+        Ty::Union(variants) => {
+            let or_splitter = ctx.or_splitter();
+            let rendered: Vec<String> = variants
+                .iter()
+                .map(|v| render_field_type(v, ctx))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rendered.join(or_splitter))
+        }
+
+        // For other types, delegate to render_type_inline
+        _ => render_type_inline(ty, ctx),
+    }
 }
 
 /// Render an enum definition.
@@ -412,13 +522,13 @@ fn render_enum(name: &str, ctx: &mut RenderContext, is_top_level: bool) -> Resul
     if is_top_level {
         // Full format with name and variants on separate lines
         result.push_str(&enum_def.name.rendered_name());
-        result.push('\n');
+        result.push_str("\n----\n"); // Add separator after enum name
 
         let prefix = ctx.enum_value_prefix();
         for variant in &enum_def.variants {
             result.push_str(&format!("{}{}", prefix, variant.name.rendered_name()));
             if let Some(desc) = &variant.description {
-                result.push_str(&format!(" // {}", desc));
+                result.push_str(&format!(": {}", desc));
             }
             result.push('\n');
         }

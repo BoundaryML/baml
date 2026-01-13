@@ -7,4 +7,4 @@ fixture: OutputClassNested.baml
 function: FnOutputClassNested
 prompt:
   type: Completion
-  text: "Return a made up json blob that matches this schema:\n{\n  prop2: InnerClass\n  prop1: string\n}\n---\n\nJSON:"
+  text: "Return a made up json blob that matches this schema:\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: {\n    prop1: string,\n    prop2: string,\n    inner: {\n        prop2: int,\n        prop3: float,\n      },\n  },\n}\n---\n\nJSON:"

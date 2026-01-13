@@ -7,4 +7,4 @@ fixture: OutputRecursiveTypeAliasIndirection.baml
 function: FnOutputRecursiveTypeAliasIndirection
 prompt:
   type: Completion
-  text: "Return the given object back:\n\n\n\n{\n  value: int\n  next: NodeIndirection?\n}"
+  text: "Return the given object back:\n\n\n\nAnswer in JSON using this schema:\n{\n  value: int,\n  next: NodeIndirection or null,\n}"
