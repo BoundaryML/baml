@@ -449,15 +449,17 @@ jobs:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
 
-  # CI Result - Single required status check
-  # This job always runs and reports success when:
-  # 1. All tests passed, OR
-  # 2. Tests were intentionally skipped (only baml_language/ or beps/ changed)
-  # Configure this as the required status check instead of individual jobs
-  ci-result:
-    name: "CI Result"
+  # CI Failure Alert - Required status check using "skipped = success" pattern
+  # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
+  #
+  # This job exploits GitHub's behavior where skipped jobs report as "Success".
+  # - When all tests pass (or are intentionally skipped): this job SKIPS → reports SUCCESS
+  # - When any test fails or is cancelled: this job RUNS and FAILS → blocks merge
+  #
+  # Configure "BAML Runtime / CI Failure Alert" as a required status check.
+  ci-failure-alert:
+    name: "CI Failure Alert"
     runs-on: ubuntu-latest
-    if: always()
     needs:
       - determine_changes
       - lint
@@ -465,55 +467,25 @@ jobs:
       - build-wasm
       - test-generators
       - tests
+    # Only run if something failed or was cancelled (otherwise skip → success)
+    if: ${{ failure() || cancelled() }}
     steps:
-      - name: Check CI result
+      - name: Report failure
         run: |
-          # Check if tests were skipped intentionally
-          if [[ "${{ needs.determine_changes.outputs.runtime }}" == "false" ]]; then
-            echo "## ✅ CI Passed (Tests Skipped)" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Reason:** ${{ needs.determine_changes.outputs.skip_reason }}" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Runtime tests were intentionally skipped because no runtime code changed." >> $GITHUB_STEP_SUMMARY
-            exit 0
-          fi
-
-          # Check if all required jobs passed
-          FAILED="false"
-
-          if [[ "${{ needs.lint.result }}" != "success" ]]; then
-            echo "::error::Lint check failed with result: ${{ needs.lint.result }}"
-            FAILED="true"
-          fi
-
-          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
-            echo "::error::Typecheck failed with result: ${{ needs.typecheck.result }}"
-            FAILED="true"
-          fi
-
-          if [[ "${{ needs.build-wasm.result }}" != "success" ]]; then
-            echo "::error::Build WASM failed with result: ${{ needs.build-wasm.result }}"
-            FAILED="true"
-          fi
-
-          if [[ "${{ needs.test-generators.result }}" != "success" ]]; then
-            echo "::error::Test generators failed with result: ${{ needs.test-generators.result }}"
-            FAILED="true"
-          fi
-
-          if [[ "${{ needs.tests.result }}" != "success" ]]; then
-            echo "::error::Tests failed with result: ${{ needs.tests.result }}"
-            FAILED="true"
-          fi
-
-          if [[ "$FAILED" == "true" ]]; then
-            echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-          echo "## ✅ CI Passed" >> $GITHUB_STEP_SUMMARY
+          echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All checks completed successfully." >> $GITHUB_STEP_SUMMARY
+          echo "One or more required jobs failed or were cancelled." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| typecheck | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| build-wasm | ${{ needs.build-wasm.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| test-generators | ${{ needs.test-generators.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| tests | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::error::One or more CI jobs failed!"
+          exit 1
 
   # Sync Zed extension to separate repository
   sync-zed-repository:
