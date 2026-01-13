@@ -503,6 +503,7 @@ dependencies = [
  "rowan 0.16.1",
  "smol_str",
  "text-size",
+ "tracing",
 ]
 
 [[package]]

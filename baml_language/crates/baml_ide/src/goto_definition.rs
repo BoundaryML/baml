@@ -83,35 +83,56 @@ pub fn goto_definition(
     file_id: FileId,
     position: TextSize,
 ) -> Option<NavigationTarget> {
+    tracing::debug!("=== baml_ide::goto_definition called ===");
+    tracing::debug!("  Position: {:?}", position);
+
     // Get the source file
     let source_files = db.get_source_files();
     let source_file = source_files.iter().find(|f| f.file_id(db) == file_id)?;
     let text = source_file.text(db);
+    tracing::debug!("  Found source file, text length: {}", text.len());
 
     // Find the word at the cursor position
-    let _word_range = find_word_at_offset(&text, position)?;
-    // let word = &text[word_range.start().into()..word_range.end().into()];
+    let word_range = find_word_at_offset(&text, position)?;
+    let word = &text[word_range.start().into()..word_range.end().into()];
+    tracing::debug!("  Word at position: '{}' (range: {:?})", word, word_range);
 
     // Get the function containing this position
+    tracing::debug!("  Looking for function at position...");
     let function_loc = find_function_at_position(db, file_id, position)?;
+    tracing::debug!("  Found function containing position");
 
     // Get the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
+    tracing::debug!("  Got function body");
 
     // Find the expression at this position
     let expr_body = match &*body {
-        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => expr_body,
-        _ => return None, // Can't find expressions in missing or error bodies
+        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => {
+            tracing::debug!("  Function body is Expr type");
+            expr_body
+        },
+        other => {
+            tracing::debug!("  Function body is not Expr type: {:?}", other);
+            return None; // Can't find expressions in missing or error bodies
+        }
     };
+
+    tracing::debug!("  Looking for expression at position...");
     let expr_id = find_expr_at_position(expr_body, position)?;
+    tracing::debug!("  Found expression at position: {:?}", expr_id);
 
     // Get the type inference results for the function
+    tracing::debug!("  Getting type inference results...");
     let inference_result = get_function_inference(db, function_loc)?;
+    tracing::debug!("  Got inference results, {} resolutions", inference_result.expr_resolutions.len());
 
     // Look up the resolution for this expression
     let resolution = inference_result.expr_resolutions.get(&expr_id)?;
+    tracing::debug!("  Found resolution for expression: {:?}", resolution);
 
     // Convert the resolution to a navigation target
+    tracing::debug!("  Converting resolution to navigation target...");
     resolution_to_navigation_target(db, resolution, expr_body, file_id, function_loc)
 }
 
@@ -121,12 +142,16 @@ fn find_function_at_position(
     file_id: FileId,
     position: TextSize,
 ) -> Option<FunctionLoc> {
+    tracing::debug!("    find_function_at_position: position {:?}", position);
+
     // Get the source file
     let source_files = db.get_source_files();
     let source_file = source_files.iter().find(|f| f.file_id(db) == file_id)?;
+    tracing::debug!("    Got source file");
 
     // Get all items in the file
     let file_items = baml_db::baml_compiler_hir::file_items(db, *source_file);
+    tracing::debug!("    Got {} items in file", file_items.items(db).len());
 
     // Get the syntax tree to check text ranges
     let tree = baml_db::baml_compiler_parser::syntax_tree(db, *source_file);
@@ -134,12 +159,15 @@ fn find_function_at_position(
     let ast_file = baml_db::baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
     // Iterate through items to find functions
+    let mut function_count = 0;
     for item_id in file_items.items(db) {
         if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
+            function_count += 1;
             // Get the function from the item tree
             let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, *source_file);
             let func = &item_tree[func_loc.id(db)];
             let func_name = &func.name;
+            tracing::debug!("    Checking function #{}: {}", function_count, func_name);
 
             // Find the function node in the AST
             for item in ast_file.items() {
@@ -149,7 +177,10 @@ fn find_function_at_position(
                             if name.text() == func_name {
                                 // Check if position is within this function's range
                                 let range = func_node.syntax().text_range();
+                                tracing::debug!("      Function {} range: {:?}, contains position {:?}: {}",
+                                    func_name, range, position, range.contains(position));
                                 if range.contains(position) {
+                                    tracing::debug!("      Found matching function!");
                                     return Some(*func_loc);
                                 }
                             }
@@ -194,21 +225,43 @@ fn find_expr_at_position(
     // Find the smallest (most specific) expression that contains this position
     let mut smallest_expr: Option<(ExprId, text_size::TextRange)> = None;
 
+    tracing::debug!("    find_expr_at_position: looking for position {:?}", position);
+    tracing::debug!("      Total expressions in body: {}", body.expr_spans.len());
+
+    // Find the expression that contains this position
     for (expr_id, span) in &body.expr_spans {
         if span.range.contains(position) {
+            tracing::debug!("      Found expression {:?} at range {:?} (len: {:?})", expr_id, span.range, span.range.len());
             match smallest_expr {
-                None => smallest_expr = Some((*expr_id, span.range)),
-                Some((_, current_range)) => {
+                None => {
+                    tracing::debug!("        First matching expression, using it");
+                    smallest_expr = Some((*expr_id, span.range));
+                }
+                Some((current_id, current_range)) => {
                     // If this span is smaller, use it (more specific)
                     if span.range.len() < current_range.len() {
+                        tracing::debug!("        Found smaller expression (len {:?} < {:?}), replacing {:?} with {:?}",
+                            span.range.len(), current_range.len(), current_id, expr_id);
                         smallest_expr = Some((*expr_id, span.range));
+                    } else {
+                        tracing::debug!("        Expression not smaller (len {:?} >= {:?}), keeping current",
+                            span.range.len(), current_range.len());
                     }
                 }
             }
         }
     }
 
-    smallest_expr.map(|(expr_id, _)| expr_id)
+    match smallest_expr {
+        Some((expr_id, range)) => {
+            tracing::debug!("      Selected smallest expression: {:?} with range {:?}", expr_id, range);
+            Some(expr_id)
+        }
+        None => {
+            tracing::debug!("      No expression found at position");
+            None
+        }
+    }
 }
 
 /// Convert a resolution to a navigation target.
@@ -219,14 +272,21 @@ fn resolution_to_navigation_target(
     file_id: FileId,
     function_loc: FunctionLoc,
 ) -> Option<NavigationTarget> {
+    tracing::debug!("    resolution_to_navigation_target");
+    tracing::debug!("      Resolution type: {:?}", resolution);
+
     match resolution {
         ResolvedValue::Local { name, definition_site } => {
+            tracing::debug!("      Local variable: {}", name);
             // Navigate to the local variable's definition
             match definition_site {
                 Some(DefinitionSite::Statement(stmt_id)) => {
+                    tracing::debug!("        Definition site: Statement {:?}", stmt_id);
                     // Get the span from the function body's statement spans
                     let span = body.get_stmt_span(*stmt_id)?;
+                    tracing::debug!("        Got statement span: {:?}", span);
                     let file_path = db.file_id_to_path(file_id)?.to_path_buf();
+                    tracing::debug!("        Target file path: {:?}", file_path);
                     Some(NavigationTarget::new(
                         name.clone(),
                         file_path,
@@ -253,18 +313,22 @@ fn resolution_to_navigation_target(
             }
         }
         ResolvedValue::Function(fqn) => {
+            tracing::debug!("      Function reference: {}", fqn.name);
             // Look up the function in the symbol table
             lookup_symbol_definition(db, fqn)
         }
         ResolvedValue::Class(fqn) => {
+            tracing::debug!("      Class reference: {}", fqn.name);
             // Look up the class in the symbol table
             lookup_symbol_definition(db, fqn)
         }
         ResolvedValue::Enum(fqn) => {
+            tracing::debug!("      Enum reference: {}", fqn.name);
             // Look up the enum in the symbol table
             lookup_symbol_definition(db, fqn)
         }
         ResolvedValue::TypeAlias(fqn) => {
+            tracing::debug!("      Type alias reference: {}", fqn.name);
             // Look up the type alias in the symbol table
             lookup_symbol_definition(db, fqn)
         }
@@ -291,14 +355,28 @@ fn lookup_symbol_definition(
     db: &ProjectDatabase,
     fqn: &FullyQualifiedName,
 ) -> Option<NavigationTarget> {
+    tracing::debug!("      lookup_symbol_definition: {}", fqn.name);
+
     // Get the symbol table
     let project = db.get_project()?;
     let symbol_table = baml_db::baml_compiler_hir::symbol_table(db, project);
+    tracing::debug!("        Got symbol table");
 
     // Look up the symbol in both type and value namespaces
     let definition = symbol_table
         .lookup_type(db, fqn)
-        .or_else(|| symbol_table.lookup_value(db, fqn))?;
+        .or_else(|| symbol_table.lookup_value(db, fqn));
+
+    let definition = match definition {
+        Some(def) => {
+            tracing::debug!("        Found definition in symbol table");
+            def
+        }
+        None => {
+            tracing::debug!("        Symbol not found in symbol table");
+            return None;
+        }
+    };
 
     // Get the location from the definition
     use baml_db::baml_compiler_hir::Definition;
