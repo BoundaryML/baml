@@ -1097,6 +1097,8 @@ redirects:
     destination: "/ref/llm-client-providers/openai-generic"
   - source: "/docs/snippets/clients/providers/google-vertex"
     destination: "/ref/llm-client-providers/google-vertex"
+  - source: "/ref/llm-client-providers/vertex-ai"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/openrouter"
     destination: "/ref/llm-client-providers/openai-generic-open-router"
   - source: "/docs/snippets/clients/providers/together"
