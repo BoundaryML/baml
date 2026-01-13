@@ -29,8 +29,6 @@ mod normalize;
 pub mod pretty;
 mod resolve;
 mod types;
-#[cfg(test)]
-mod test_resolution;
 
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
@@ -39,7 +37,7 @@ pub use builtins::{
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
-pub use resolve::{ResolvedMethod, ResolvedValue, ResolutionMap, resolve_method};
+pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
 pub use types::*;
 

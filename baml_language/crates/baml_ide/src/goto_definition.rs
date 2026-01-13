@@ -122,6 +122,10 @@ pub fn goto_definition(
     let expr_id = find_expr_at_position(expr_body, position)?;
     tracing::debug!("  Found expression at position: {:?}", expr_id);
 
+    // Debug: let's see what this expression actually is
+    let expr = &expr_body.exprs[expr_id];
+    tracing::debug!("  Expression content: {:?}", expr);
+
     // Get the type inference results for the function
     tracing::debug!("  Getting type inference results...");
     let inference_result = get_function_inference(db, function_loc)?;
@@ -228,29 +232,47 @@ fn find_expr_at_position(
     tracing::debug!("    find_expr_at_position: looking for position {:?}", position);
     tracing::debug!("      Total expressions in body: {}", body.expr_spans.len());
 
-    // Find the expression that contains this position
-    for (expr_id, span) in &body.expr_spans {
-        if span.range.contains(position) {
-            tracing::debug!("      Found expression {:?} at range {:?} (len: {:?})", expr_id, span.range, span.range.len());
-            match smallest_expr {
-                None => {
-                    tracing::debug!("        First matching expression, using it");
-                    smallest_expr = Some((*expr_id, span.range));
-                }
-                Some((current_id, current_range)) => {
-                    // If this span is smaller, use it (more specific)
-                    if span.range.len() < current_range.len() {
-                        tracing::debug!("        Found smaller expression (len {:?} < {:?}), replacing {:?} with {:?}",
-                            span.range.len(), current_range.len(), current_id, expr_id);
-                        smallest_expr = Some((*expr_id, span.range));
-                    } else {
-                        tracing::debug!("        Expression not smaller (len {:?} >= {:?}), keeping current",
-                            span.range.len(), current_range.len());
-                    }
-                }
-            }
+    // First, log ALL expressions and their ranges for debugging
+    tracing::debug!("      All expressions in body:");
+    tracing::debug!("      Total expressions in arena: {}", body.exprs.len());
+    tracing::debug!("      Total expressions with spans: {}", body.expr_spans.len());
+
+    // Check if there are expressions without spans
+    for (idx, expr) in body.exprs.iter() {
+        if !body.expr_spans.contains_key(&idx) {
+            tracing::debug!("        WARNING: Expression {:?} has no span! Content: {:?}", idx, expr);
         }
     }
+
+    let mut expr_list: Vec<_> = body.expr_spans.iter().collect();
+    expr_list.sort_by_key(|(_, span)| span.range.start());
+    for (expr_id, span) in &expr_list {
+        let expr = &body.exprs[**expr_id];
+        tracing::debug!("        {:?}: range {:?} (len {:?}) - {:?}", expr_id, span.range, span.range.len(), expr);
+    }
+
+    // Find ALL expressions that contain this position, then select the smallest
+    let mut candidates: Vec<(ExprId, text_size::TextRange)> = Vec::new();
+    for (expr_id, span) in &body.expr_spans {
+        if span.range.contains(position) {
+            candidates.push((*expr_id, span.range));
+        }
+    }
+
+    // Sort by range length (smallest first)
+    candidates.sort_by_key(|(_, range)| range.len());
+
+    // Log the candidates for debugging
+    if !candidates.is_empty() {
+        tracing::debug!("      Found {} expressions containing position:", candidates.len());
+        for (expr_id, range) in &candidates {
+            let expr = &body.exprs[*expr_id];
+            tracing::debug!("        {:?}: range {:?} (len {:?}) - {:?}", expr_id, range, range.len(), expr);
+        }
+        tracing::debug!("      Selecting smallest: {:?}", candidates[0].0);
+    }
+
+    smallest_expr = candidates.first().copied();
 
     match smallest_expr {
         Some((expr_id, range)) => {
@@ -445,6 +467,66 @@ fn lookup_symbol_definition(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use baml_project::ProjectDatabase;
+
+    /// Create a test database with the given BAML source code.
+    fn setup_test_db(source: &str) -> (ProjectDatabase, FileId) {
+        let mut db = ProjectDatabase::new();
+
+        // Create a temporary directory for the test
+        let temp_dir = std::env::temp_dir().join(format!("baml_test_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Set the project root
+        db.set_project_root(&temp_dir);
+
+        // Add the test file
+        let file_path = temp_dir.join("test.baml");
+        db.add_file(&file_path, source);
+        let file_id = db.path_to_file_id(&file_path).unwrap();
+
+        // Clean up temp dir on drop would be nice but not critical for tests
+
+        (db, file_id)
+    }
+
+    #[test]
+    fn test_goto_definition_match_scrutinee() {
+        let source = r#"enum SentimentResponse {
+    Happy { data string }
+    Sad { reason string }
+}
+
+function Foo(r SentimentResponse, s string) -> string {
+    match (r) {
+        Happy => s.data
+        Sad(f) => f.reason
+    }
+}"#;
+
+        let (db, file_id) = setup_test_db(source);
+
+        // Find the position of 'r' in 'match (r)'
+        let match_pos = source.find("match (r)").unwrap();
+        let r_pos = match_pos + "match (".len();
+        let position = TextSize::from(r_pos as u32);
+
+        // Try to go to definition
+        let result = goto_definition(&db, file_id, position);
+
+        // Should find the parameter 'r' definition
+        assert!(result.is_some(), "Should find definition for 'r' in match scrutinee");
+
+        if let Some(nav_target) = result {
+            assert_eq!(nav_target.name, "r", "Expected to find parameter 'r' but found '{}'", nav_target.name);
+            // The parameter span should contain "r SentimentResponse"
+            // The exact span range depends on how the parser handles it
+            assert!(nav_target.span.range.start() < TextSize::from(100),
+                "Parameter should be in the function signature");
+            assert!(nav_target.span.range.end() > TextSize::from(93),
+                "Parameter span should include the parameter name");
+        }
+    }
 
     #[test]
     fn test_find_word_at_offset() {

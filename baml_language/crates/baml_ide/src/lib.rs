@@ -65,3 +65,9 @@ impl<T> std::ops::Deref for RangedValue<T> {
 
 #[cfg(test)]
 pub mod testing;
+
+#[cfg(test)]
+mod goto_definition_tests;
+
+#[cfg(test)]
+mod find_references_tests;
