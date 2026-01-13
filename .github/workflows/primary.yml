@@ -35,9 +35,134 @@ env:
   TURBO_TEAM: gloo
 
 jobs:
+  # Determine if runtime-related files have changed
+  # This job enables auto-pass when only baml_language/ or typescript/apps/beps/ files are modified
+  determine_changes:
+    name: "Determine changes"
+    runs-on: ubuntu-latest
+    outputs:
+      # Flag that is raised when runtime-related code is changed
+      # If false, we can skip all runtime tests since only baml_language/ or beps/ changed
+      runtime: ${{ steps.check_runtime.outputs.changed }}
+      skip_reason: ${{ steps.check_runtime.outputs.skip_reason }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine merge base
+        id: merge_base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+        run: |
+          sha=$(git merge-base HEAD "origin/${BASE_REF}" 2>/dev/null || echo "")
+          if [ -z "$sha" ]; then
+            # Fallback for workflow_dispatch or schedule
+            sha=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
+          fi
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if runtime code changed
+        id: check_runtime
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          # For scheduled runs, workflow_dispatch, or pushes to canary, always run
+          if [[ "${{ github.event_name }}" == "schedule" ]] || \
+             [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "${{ github.ref }}" == "refs/heads/canary" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Get list of all changed files
+          CHANGED_FILES=$(git diff --name-only "${MERGE_BASE}...HEAD" 2>/dev/null || echo "")
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes detected, running all tests"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if ALL changed files are in baml_language/ or typescript/apps/beps/ (auto-skip paths)
+          # If any file is outside these paths, we need to run the tests
+          RUNTIME_CHANGED="false"
+          ONLY_BAML_LANGUAGE="true"
+          ONLY_BEPS="true"
+
+          while IFS= read -r file; do
+            # Skip empty lines
+            [ -z "$file" ] && continue
+
+            # Check if file is in baml_language/
+            if [[ ! "$file" =~ ^baml_language/ ]]; then
+              ONLY_BAML_LANGUAGE="false"
+            fi
+
+            # Check if file is in typescript/apps/beps/
+            if [[ ! "$file" =~ ^typescript/apps/beps/ ]]; then
+              ONLY_BEPS="false"
+            fi
+
+            # Check if file is in a path that requires runtime tests
+            # Runtime tests are needed for: engine/, typescript/ (except beps), integ-tests/, .github/workflows/primary.yml
+            if [[ "$file" =~ ^engine/ ]] || \
+               [[ "$file" =~ ^integ-tests/ ]] || \
+               [[ "$file" == ".github/workflows/primary.yml" ]] || \
+               [[ "$file" =~ ^\.github/actions/ ]] || \
+               ([[ "$file" =~ ^typescript/ ]] && [[ ! "$file" =~ ^typescript/apps/beps/ ]]); then
+              RUNTIME_CHANGED="true"
+            fi
+          done <<< "$CHANGED_FILES"
+
+          # Determine skip reason
+          SKIP_REASON=""
+          if [[ "$RUNTIME_CHANGED" == "false" ]]; then
+            if [[ "$ONLY_BAML_LANGUAGE" == "true" ]]; then
+              SKIP_REASON="Only baml_language/ files changed - these are covered by CI - BAML Language workflow"
+            elif [[ "$ONLY_BEPS" == "true" ]]; then
+              SKIP_REASON="Only typescript/apps/beps/ files changed - these are covered by CI - BAML Language BEPs workflow"
+            else
+              SKIP_REASON="No runtime-related files changed (only baml_language/ or typescript/apps/beps/)"
+            fi
+          fi
+
+          echo "Runtime changed: $RUNTIME_CHANGED"
+          echo "Skip reason: $SKIP_REASON"
+          echo "changed=${RUNTIME_CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "skip_reason=${SKIP_REASON}" >> "$GITHUB_OUTPUT"
+
+  # Auto-pass summary when skipping runtime tests
+  skip-summary:
+    name: "Skip Summary"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'false'
+    steps:
+      - name: Report skipped tests
+        run: |
+          echo "## ⏭️ BAML Runtime Tests Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason:** ${{ needs.determine_changes.outputs.skip_reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The BAML Runtime tests have been automatically skipped because the changes in this PR don't affect the runtime code." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### What this means:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ No runtime code was modified" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Changes are covered by other CI workflows" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ This is an intentional optimization to reduce CI time" >> $GITHUB_STEP_SUMMARY
+
   # Run all quality checks in parallel (lightweight setup)
   lint:
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
       matrix:
         check:
@@ -103,6 +228,8 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,6 +258,8 @@ jobs:
 
   build-wasm:
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -151,6 +280,8 @@ jobs:
   # Test node generator (only needs CLI)
   test-generators:
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -206,6 +337,8 @@ jobs:
   # Run tests in parallel (rebuild what's needed)
   tests:
     runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.runtime == 'true'
     strategy:
       matrix:
         test-suite: [rust-unit, python-integration]
@@ -279,7 +412,8 @@ jobs:
 
   # Build CLI for releases only
   build-cli:
-    if: github.event_name == 'release'
+    needs: determine_changes
+    if: github.event_name == 'release' && needs.determine_changes.outputs.runtime == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -315,11 +449,50 @@ jobs:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
 
+  # CI Failure Alert - Required status check using "skipped = success" pattern
+  # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
+  #
+  # This job exploits GitHub's behavior where skipped jobs report as "Success".
+  # - When all tests pass (or are intentionally skipped): this job SKIPS → reports SUCCESS
+  # - When any test fails or is cancelled: this job RUNS and FAILS → blocks merge
+  #
+  # Configure "BAML Runtime / CI Failure Alert" as a required status check.
+  ci-failure-alert:
+    name: "CI Failure Alert"
+    runs-on: ubuntu-latest
+    needs:
+      - determine_changes
+      - lint
+      - typecheck
+      - build-wasm
+      - test-generators
+      - tests
+    # Only run if something failed or was cancelled (otherwise skip → success)
+    if: ${{ failure() || cancelled() }}
+    steps:
+      - name: Report failure
+        run: |
+          echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more required jobs failed or were cancelled." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| typecheck | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| build-wasm | ${{ needs.build-wasm.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| test-generators | ${{ needs.test-generators.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| tests | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::error::One or more CI jobs failed!"
+          exit 1
+
   # Sync Zed extension to separate repository
   sync-zed-repository:
     runs-on: ubuntu-latest
-    # Only run on pushes to canary branch or manual dispatch
-    if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: determine_changes
+    # Only run on pushes to canary branch or manual dispatch, and only if runtime changed
+    if: github.ref == 'refs/heads/canary' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.determine_changes.outputs.runtime == 'true'
     steps:
       - name: Checkout main repository
         uses: actions/checkout@v4
