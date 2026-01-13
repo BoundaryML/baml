@@ -3,31 +3,17 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedAudio.baml
 ---
-{
-  "fixture": "InputNamedAudio.baml",
-  "function": "FnInputNamedAudio",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "user",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Does this sound like a roar? Yes or no? One word no other characters."
-          },
-          {
-            "Media": {
-              "media_type": "Audio",
-              "mime_type": null,
-              "content": {
-                "Url": {
-                  "url": "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
-                }
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: InputNamedAudio.baml
+function: FnInputNamedAudio
+prompt:
+  Chat:
+    - role: user
+      allow_duplicate_role: false
+      parts:
+        - Text: Does this sound like a roar? Yes or no? One word no other characters.
+        - Media:
+            media_type: Audio
+            mime_type: ~
+            content:
+              Url:
+                url: "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"

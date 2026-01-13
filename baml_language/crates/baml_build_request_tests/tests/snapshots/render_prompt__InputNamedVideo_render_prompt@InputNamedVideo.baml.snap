@@ -3,15 +3,12 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedVideo.baml
 ---
-fixture = 'InputNamedVideo.baml'
-function = 'FnInputNamedVideo'
-
-[prompt]
-type = 'Chat'
-
-[[prompt.messages]]
-role = 'user'
-
-[[prompt.messages.content]]
-type = 'Text'
-text = 'Use 5 words to describe the video.'
+fixture: InputNamedVideo.baml
+function: FnInputNamedVideo
+prompt:
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: Use 5 words to describe the video.

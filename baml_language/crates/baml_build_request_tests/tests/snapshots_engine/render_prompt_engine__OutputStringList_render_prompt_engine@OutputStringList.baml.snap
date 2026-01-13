@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputStringList.baml
 ---
-{
-  "fixture": "OutputStringList.baml",
-  "function": "FnOutputStringList",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Return a list of strings in json format like [\"string1\", \"string2\", \"string3\"].\n\nJSON:"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputStringList.baml
+function: FnOutputStringList
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return a list of strings in json format like [\"string1\", \"string2\", \"string3\"].\n\nJSON:"

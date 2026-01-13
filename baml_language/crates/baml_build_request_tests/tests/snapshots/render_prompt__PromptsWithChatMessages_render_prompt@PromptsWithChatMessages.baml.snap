@@ -3,22 +3,16 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/PromptsWithChatMessages.baml
 ---
-fixture = 'PromptsWithChatMessages.baml'
-function = 'FnPromptsWithChatMessages'
-
-[prompt]
-type = 'Chat'
-
-[[prompt.messages]]
-role = 'system'
-
-[[prompt.messages.content]]
-type = 'Text'
-text = 'You are an assistant that always responds in a very excited way with emojis and also outputs this word 4 times after giving a response:'
-
-[[prompt.messages]]
-role = 'user'
-
-[[prompt.messages.content]]
-type = 'Text'
-text = 'Tell me a haiku about'
+fixture: PromptsWithChatMessages.baml
+function: FnPromptsWithChatMessages
+prompt:
+  type: Chat
+  messages:
+    - role: system
+      content:
+        - type: Text
+          text: "You are an assistant that always responds in a very excited way with emojis and also outputs this word 4 times after giving a response:"
+    - role: user
+      content:
+        - type: Text
+          text: Tell me a haiku about

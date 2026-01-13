@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedEnum.baml
 ---
-{
-  "fixture": "InputNamedEnum.baml",
-  "function": "FnInputNamedEnum",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Print these values back to me:\nONE"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: InputNamedEnum.baml
+function: FnInputNamedEnum
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Print these values back to me:\nONE"

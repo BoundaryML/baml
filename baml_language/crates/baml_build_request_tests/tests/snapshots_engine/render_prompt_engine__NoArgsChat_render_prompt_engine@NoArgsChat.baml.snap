@@ -3,7 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/NoArgsChat.baml
 ---
-{
-  "fixture": "NoArgsChat.baml",
-  "error": "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:21\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m20 | \u001b[0m\n\u001b[1;94m21 | \u001b[0mtest \u001b[1;91mTestNoArgsChat\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"
-}
+fixture: NoArgsChat.baml
+error: "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:21\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m20 | \u001b[0m\n\u001b[1;94m21 | \u001b[0mtest \u001b[1;91mTestNoArgsChat\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"

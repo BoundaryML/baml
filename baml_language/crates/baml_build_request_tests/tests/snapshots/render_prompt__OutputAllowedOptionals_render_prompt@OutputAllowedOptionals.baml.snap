@@ -3,17 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputAllowedOptionals.baml
 ---
-fixture = 'OutputAllowedOptionals.baml'
-function = 'FnOutputAllowedOptionals'
-
-[prompt]
-type = 'Completion'
-text = '''
-Return the given input:
-
-
-
-{
-  p: string[]?
-  q: map<string, string>?
-}'''
+fixture: OutputAllowedOptionals.baml
+function: FnOutputAllowedOptionals
+prompt:
+  type: Completion
+  text: "Return the given input:\n\n\n\n{\n  q: map<string, string>?\n  p: string[]?\n}"

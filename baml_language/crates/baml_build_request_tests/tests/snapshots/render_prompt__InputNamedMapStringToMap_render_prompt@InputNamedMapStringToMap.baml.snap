@@ -3,5 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedMapStringToMap.baml
 ---
-fixture = 'InputNamedMapStringToMap.baml'
-error = '''Failed to prepare function 'FnInputNamedMapStringToMap': Validation error: Function 'FnInputNamedMapStringToMap' has no body'''
+fixture: InputNamedMapStringToMap.baml
+error: "Failed to prepare function 'FnInputNamedMapStringToMap': Validation error: Function 'FnInputNamedMapStringToMap' has no body"

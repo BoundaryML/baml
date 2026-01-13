@@ -3,7 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedPdf.baml
 ---
-{
-  "fixture": "InputNamedPdf.baml",
-  "error": "Failed to render prompt: Internal error: no baml src reader provided"
-}
+fixture: InputNamedPdf.baml
+error: "Failed to render prompt: Internal error: no baml src reader provided"

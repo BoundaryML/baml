@@ -3,9 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputLiteralOrNull.baml
 ---
-fixture = 'OutputLiteralOrNull.baml'
-function = 'FnOutputLiteralOrNull'
-
-[prompt]
-type = 'Completion'
-text = 'Return the empty object: {}.'
+fixture: OutputLiteralOrNull.baml
+function: FnOutputLiteralOrNull
+prompt:
+  type: Completion
+  text: "Return the empty object: {}."

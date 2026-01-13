@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputLiteralInt.baml
 ---
-{
-  "fixture": "OutputLiteralInt.baml",
-  "function": "FnOutputLiteralInt",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Return an integer: Answer using this specific value:\n5"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputLiteralInt.baml
+function: FnOutputLiteralInt
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return an integer: Answer using this specific value:\n5"

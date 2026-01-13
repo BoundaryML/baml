@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputEnumList.baml
 ---
-{
-  "fixture": "OutputEnumList.baml",
-  "function": "FnOutputEnumList",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Print out two of these values randomly selected from the list below in a json array.\n\nVALUE_ENUM\n----\n- ONE\n- two: two\n- hi: three\n\nAnswer with a JSON Array using this schema:\nVALUE_ENUM[]\n\nAnswer:"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputEnumList.baml
+function: FnOutputEnumList
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Print out two of these values randomly selected from the list below in a json array.\n\nVALUE_ENUM\n----\n- ONE\n- two: two\n- hi: three\n\nAnswer with a JSON Array using this schema:\nVALUE_ENUM[]\n\nAnswer:"

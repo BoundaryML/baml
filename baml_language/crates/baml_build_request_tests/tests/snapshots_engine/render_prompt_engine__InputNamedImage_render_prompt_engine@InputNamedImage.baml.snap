@@ -3,31 +3,17 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedImage.baml
 ---
-{
-  "fixture": "InputNamedImage.baml",
-  "function": "FnInputNamedImage",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "user",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Describe this in 4 words. One word must be the color"
-          },
-          {
-            "Media": {
-              "media_type": "Image",
-              "mime_type": "image/jpeg",
-              "content": {
-                "Url": {
-                  "url": "https://www.pbs.org/wnet/nature/files/2023/11/Odontodactylus_scyllarus_Re%CC%81union-e1699977649790.jpg"
-                }
-              }
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: InputNamedImage.baml
+function: FnInputNamedImage
+prompt:
+  Chat:
+    - role: user
+      allow_duplicate_role: false
+      parts:
+        - Text: Describe this in 4 words. One word must be the color
+        - Media:
+            media_type: Image
+            mime_type: image/jpeg
+            content:
+              Url:
+                url: "https://www.pbs.org/wnet/nature/files/2023/11/Odontodactylus_scyllarus_Re%CC%81union-e1699977649790.jpg"

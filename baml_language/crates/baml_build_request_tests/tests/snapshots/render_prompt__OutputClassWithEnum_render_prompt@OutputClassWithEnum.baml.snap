@@ -3,17 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputClassWithEnum.baml
 ---
-fixture = 'OutputClassWithEnum.baml'
-function = 'FnOutputClassWithEnum'
-
-[prompt]
-type = 'Completion'
-text = '''
-Return a made up json blob that matches this schema:
-{
-  prop2: 'ONE' or 'TWO'
-  prop1: string
-}
----
-
-JSON:'''
+fixture: OutputClassWithEnum.baml
+function: FnOutputClassWithEnum
+prompt:
+  type: Completion
+  text: "Return a made up json blob that matches this schema:\n{\n  prop1: string\n  prop2: 'ONE' or 'TWO'\n}\n---\n\nJSON:"

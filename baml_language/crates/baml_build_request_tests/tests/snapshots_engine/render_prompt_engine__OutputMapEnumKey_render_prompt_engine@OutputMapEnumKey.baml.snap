@@ -3,7 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputMapEnumKey.baml
 ---
-{
-  "fixture": "OutputMapEnumKey.baml",
-  "error": "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:16\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m15 | \u001b[0m\n\u001b[1;94m16 | \u001b[0mtest \u001b[1;91mTestOutputMapEnumKey\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"
-}
+fixture: OutputMapEnumKey.baml
+error: "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:16\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m15 | \u001b[0m\n\u001b[1;94m16 | \u001b[0mtest \u001b[1;91mTestOutputMapEnumKey\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"

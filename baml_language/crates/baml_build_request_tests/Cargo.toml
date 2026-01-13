@@ -29,4 +29,4 @@ indexmap = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["glob", "toml", "json"] }
+insta = { workspace = true, features = ["glob", "toml", "yaml"] }

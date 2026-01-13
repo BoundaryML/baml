@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputLiteralOrNull.baml
 ---
-{
-  "fixture": "OutputLiteralOrNull.baml",
-  "function": "FnOutputLiteralOrNull",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Return the empty object: {}."
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputLiteralOrNull.baml
+function: FnOutputLiteralOrNull
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the empty object: {}."

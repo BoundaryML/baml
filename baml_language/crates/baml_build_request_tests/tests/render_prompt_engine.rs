@@ -56,7 +56,7 @@ fn render_prompt_engine_snapshots() {
                 "{}_render_prompt_engine",
                 fixture_name.trim_end_matches(".baml").replace('-', "_")
             );
-            insta::assert_json_snapshot!(snapshot_name, &result);
+            insta::assert_yaml_snapshot!(snapshot_name, &result);
         });
     });
 }

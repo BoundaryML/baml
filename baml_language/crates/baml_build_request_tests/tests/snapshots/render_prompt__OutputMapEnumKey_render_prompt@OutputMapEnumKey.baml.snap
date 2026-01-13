@@ -3,12 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputMapEnumKey.baml
 ---
-fixture = 'OutputMapEnumKey.baml'
-function = 'FnOutputMapEnumKey'
-
-[prompt]
-type = 'Completion'
-text = '''
-Merge these:  
-
-map<'A' or 'B' or 'C', string>'''
+fixture: OutputMapEnumKey.baml
+function: FnOutputMapEnumKey
+prompt:
+  type: Completion
+  text: "Merge these:  \n\nmap<'A' or 'B' or 'C', string>"

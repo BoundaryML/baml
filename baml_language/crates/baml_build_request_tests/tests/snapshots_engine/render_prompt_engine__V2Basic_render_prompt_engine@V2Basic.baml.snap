@@ -3,7 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/V2Basic.baml
 ---
-{
-  "fixture": "V2Basic.baml",
-  "error": "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:138\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m137 | \u001b[0m\n\u001b[1;94m138 | \u001b[0mtest \u001b[1;91mTestV2Basic\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"
-}
+fixture: V2Basic.baml
+error: "Failed to create runtime: \u001b[1;91merror\u001b[0m: \u001b[1mError validating: Missing `args` property\u001b[0m\n  \u001b[1;94m-->\u001b[0m  \u001b[4mtest.baml:138\u001b[0m\n\u001b[1;94m   | \u001b[0m\n\u001b[1;94m137 | \u001b[0m\n\u001b[1;94m138 | \u001b[0mtest \u001b[1;91mTestV2Basic\u001b[0m {\n\u001b[1;94m   | \u001b[0m\n\n"

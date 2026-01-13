@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputEnum.baml
 ---
-{
-  "fixture": "OutputEnum.baml",
-  "function": "FnOutputEnum",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.\n\nVALUE_ENUM\n----\n- ONE\n- two: two\n- hi: three"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputEnum.baml
+function: FnOutputEnum
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.\n\nVALUE_ENUM\n----\n- ONE\n- two: two\n- hi: three"

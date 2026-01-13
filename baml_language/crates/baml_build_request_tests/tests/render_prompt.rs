@@ -53,7 +53,7 @@ fn render_prompt_snapshots() {
                 "{}_render_prompt",
                 fixture_name.trim_end_matches(".baml").replace('-', "_")
             );
-            insta::assert_toml_snapshot!(snapshot_name, &result);
+            insta::assert_yaml_snapshot!(snapshot_name, &result);
         });
     });
 }

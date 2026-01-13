@@ -3,5 +3,5 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputEnum.baml
 ---
-fixture = 'OutputEnum.baml'
-error = 'Failed to render prompt: Prompt rendering failed: Minijinja error: invalid operation: prefix must be a string or null (in prompt:3)'
+fixture: OutputEnum.baml
+error: "Failed to render prompt: Prompt rendering failed: Minijinja error: invalid operation: prefix must be a string or null (in prompt:3)"

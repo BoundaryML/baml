@@ -3,9 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedBoolean.baml
 ---
-fixture = 'InputNamedBoolean.baml'
-function = 'FnInputNamedBoolean'
-
-[prompt]
-type = 'Completion'
-text = 'Return this value back to me: '
+fixture: InputNamedBoolean.baml
+function: FnInputNamedBoolean
+prompt:
+  type: Completion
+  text: "Return this value back to me: "

@@ -3,29 +3,15 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputClassDynamic.baml
 ---
-{
-  "fixture": "OutputClassDynamic.baml",
-  "function": "FnOutputClassDynamic",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "You are an expert extraction algorithm. Only extract relevant information from the text. If you do not know the value of an attribute asked to extract, return null for the attribute's value.\n\nAnswer with a JSON Array using this schema:\n[\n  {\n    name: string or null,\n    hair_color: 'RED' or 'BLUE' or 'GREEN' or 'YELLOW' or 'BLACK' or 'WHITE' or null,\n  }\n]"
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "example text"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputClassDynamic.baml
+function: FnOutputClassDynamic
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "You are an expert extraction algorithm. Only extract relevant information from the text. If you do not know the value of an attribute asked to extract, return null for the attribute's value.\n\nAnswer with a JSON Array using this schema:\n[\n  {\n    name: string or null,\n    hair_color: 'RED' or 'BLUE' or 'GREEN' or 'YELLOW' or 'BLACK' or 'WHITE' or null,\n  }\n]"
+    - role: user
+      allow_duplicate_role: false
+      parts:
+        - Text: example text

@@ -3,9 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedLiteralString.baml
 ---
-fixture = 'InputNamedLiteralString.baml'
-function = 'FnInputNamedLiteralString'
-
-[prompt]
-type = 'Completion'
-text = 'Return this value back to me: '
+fixture: InputNamedLiteralString.baml
+function: FnInputNamedLiteralString
+prompt:
+  type: Completion
+  text: "Return this value back to me: "

@@ -3,22 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputMutuallyRecursiveClasses.baml
 ---
-fixture = 'OutputMutuallyRecursiveClasses.baml'
-function = 'FnOutputMutuallyRecursiveClasses'
-
-[prompt]
-type = 'Completion'
-text = '''
-Given the input binary tree, transform it into a generic tree using the given schema.
-
-INPUT:
-
-
-Forest {
-  trees: Tree[]
-}
-
-{
-  children: Forest
-  data: int
-}'''
+fixture: OutputMutuallyRecursiveClasses.baml
+function: FnOutputMutuallyRecursiveClasses
+prompt:
+  type: Completion
+  text: "Given the input binary tree, transform it into a generic tree using the given schema.\n\nINPUT:\n\n\nForest {\n  trees: Tree[]\n}\n\n{\n  children: Forest\n  data: int\n}"

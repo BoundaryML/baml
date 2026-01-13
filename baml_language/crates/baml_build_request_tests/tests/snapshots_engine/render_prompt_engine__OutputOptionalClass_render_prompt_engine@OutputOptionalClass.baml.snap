@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputOptionalClass.baml
 ---
-{
-  "fixture": "OutputOptionalClass.baml",
-  "function": "FnOutputOptionalClass",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Return a json blob for the following input:\nexample input\n\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: string,\n} or null\n\nJSON:"
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputOptionalClass.baml
+function: FnOutputOptionalClass
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return a json blob for the following input:\nexample input\n\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: string,\n} or null\n\nJSON:"

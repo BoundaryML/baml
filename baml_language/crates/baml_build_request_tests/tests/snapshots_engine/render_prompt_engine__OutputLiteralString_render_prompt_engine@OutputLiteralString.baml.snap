@@ -3,20 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputLiteralString.baml
 ---
-{
-  "fixture": "OutputLiteralString.baml",
-  "function": "FnOutputLiteralString",
-  "prompt": {
-    "Chat": [
-      {
-        "role": "system",
-        "allow_duplicate_role": false,
-        "parts": [
-          {
-            "Text": "Return a string: Answer using this specific value:\n\"example output\""
-          }
-        ]
-      }
-    ]
-  }
-}
+fixture: OutputLiteralString.baml
+function: FnOutputLiteralString
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return a string: Answer using this specific value:\n\"example output\""

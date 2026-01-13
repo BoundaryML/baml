@@ -3,9 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputInt.baml
 ---
-fixture = 'OutputInt.baml'
-function = 'FnOutputInt'
-
-[prompt]
-type = 'Completion'
-text = 'Return the integer 5 with no additional context.'
+fixture: OutputInt.baml
+function: FnOutputInt
+prompt:
+  type: Completion
+  text: Return the integer 5 with no additional context.

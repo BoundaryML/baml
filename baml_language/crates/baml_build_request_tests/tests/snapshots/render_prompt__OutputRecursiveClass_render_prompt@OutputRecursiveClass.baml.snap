@@ -3,23 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputRecursiveClass.baml
 ---
-fixture = 'OutputRecursiveClass.baml'
-function = 'FnOutputRecursiveClass'
-
-[prompt]
-type = 'Completion'
-text = '''
-Build a linked list from the input array of integers.
-
-INPUT:
-
-
-Node {
-  data: int
-  next: Node?
-}
-
-{
-  len: int
-  head: Node?
-}'''
+fixture: OutputRecursiveClass.baml
+function: FnOutputRecursiveClass
+prompt:
+  type: Completion
+  text: "Build a linked list from the input array of integers.\n\nINPUT:\n\n\nNode {\n  data: int\n  next: Node?\n}\n\n{\n  len: int\n  head: Node?\n}"

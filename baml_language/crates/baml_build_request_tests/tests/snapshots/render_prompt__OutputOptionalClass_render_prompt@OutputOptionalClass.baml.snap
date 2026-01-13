@@ -3,18 +3,8 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputOptionalClass.baml
 ---
-fixture = 'OutputOptionalClass.baml'
-function = 'FnOutputOptionalClass'
-
-[prompt]
-type = 'Completion'
-text = '''
-Return a json blob for the following input:
-
-
-{
-  prop1: string
-  prop2: string
-}?
-
-JSON:'''
+fixture: OutputOptionalClass.baml
+function: FnOutputOptionalClass
+prompt:
+  type: Completion
+  text: "Return a json blob for the following input:\n\n\n{\n  prop1: string\n  prop2: string\n}?\n\nJSON:"
