@@ -1379,7 +1379,7 @@ fn get_enum_variant_info(
 /// Look up the span of a top-level item's name from the syntax tree.
 ///
 /// This is used to get accurate spans for duplicate name errors, since the
-/// ItemTree is position-independent and doesn't store spans.
+/// `ItemTree` is position-independent and doesn't store spans.
 ///
 /// The `occurrence` parameter specifies which occurrence to return (0 = first, 1 = second, etc.)
 /// when there are multiple items of the same kind with the same name in the file.
