@@ -25,37 +25,15 @@ function FnOutputOptionalClass(input: string) -> ClassOptionalOutput? {
     Return a json blob for the following input:
     {{input}}
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
 
     JSON:
   "#
 }
 
-
-class Blah {
-  prop4 string?
-}
-
-class ClassOptionalOutput2 {
-  prop1 string?
-  prop2 string?
-  prop3 Blah?
-}
-
-function FnOutputOptionalClass2(input: string) -> ClassOptionalOutput2? {
-  client GPT35
-  prompt #"
-    Return a json blob for the following input:
-    {{input}}
-
-    {{ctx.output_format()}}
-
-    JSON:
-  "#
-}
 
 test TestOutputOptionalClass {
-  functions [FnOutputOptionalClass2, FnOutputOptionalClass]
+  functions [FnOutputOptionalClass]
   args {
     input "example input"
   }

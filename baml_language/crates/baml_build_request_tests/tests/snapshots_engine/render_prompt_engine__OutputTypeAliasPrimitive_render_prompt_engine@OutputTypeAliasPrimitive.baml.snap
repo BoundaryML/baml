@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasPrimitive.baml
+---
+fixture: OutputTypeAliasPrimitive.baml
+function: FnOutputTypeAliasPrimitive
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the given value back: 42\n\nAnswer in JSON using any of these schemas:\nint or string or bool or float"

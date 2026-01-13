@@ -1,0 +1,10 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasReturnMerged.baml
+---
+fixture: OutputTypeAliasReturnMerged.baml
+function: FnOutputTypeAliasReturnMerged
+prompt:
+  type: Completion
+  text: "Return the given integer without additional context:\n\n\n\nAmount"

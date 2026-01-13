@@ -33,7 +33,7 @@ function FnOutputEnumList(input: string) -> EnumOutput[] {
   prompt #"
     Print out two of these values randomly selected from the list below in a json array.
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
 
     Answer:
   "#

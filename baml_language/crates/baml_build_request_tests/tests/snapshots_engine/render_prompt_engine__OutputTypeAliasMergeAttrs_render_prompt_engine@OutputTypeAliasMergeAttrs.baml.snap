@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasMergeAttrs.baml
+---
+fixture: OutputTypeAliasMergeAttrs.baml
+function: FnOutputTypeAliasMergeAttrs
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the given integer in the specified format:\n\n100\n\nAnswer in JSON using this schema:\n{\n  // In USD\n  amount: int,\n}"

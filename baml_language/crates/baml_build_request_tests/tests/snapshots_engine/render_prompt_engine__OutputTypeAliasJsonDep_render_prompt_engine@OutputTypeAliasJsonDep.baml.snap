@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasJsonDep.baml
+---
+fixture: OutputTypeAliasJsonDep.baml
+function: FnOutputTypeAliasJsonDep
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the given input back:\n\n{\n    \"value\": \"hello\",\n}\n\nJsonValue = int or string or bool or float or JsonObject or JsonArray\nJsonObject = map<string, JsonValue>\nJsonArray = JsonValue[]\n\nAnswer in JSON using this schema:\n{\n  value: JsonValue,\n}"

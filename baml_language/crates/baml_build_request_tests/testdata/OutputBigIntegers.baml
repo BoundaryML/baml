@@ -40,7 +40,7 @@ function FnOutputBigIntegers(digits: int) -> BigNumbers {
     For floats, provide a mix - from 0-10 places before the decimal point,
     and 1-10 places after the decimal point. Bet.
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
   "#
 }
 
@@ -52,7 +52,7 @@ function FnOutputBigIntegersOne(digits: int) -> int {
 
     Please make sure the integer has {{ digits }} digits.
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
   "#
 }
 
@@ -67,7 +67,7 @@ function FnOutputBigIntegersUnion(digits: int) -> (int | string)[] {
     a string, please don't make it the string representation
     of an integer. Instead use common dog names.
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
   "#
 }
 
@@ -89,7 +89,7 @@ function FnOutputBigIntegersCompound(digits: int, yapping: bool) -> CompoundBigN
     For floats, provide a mix - from 0-10 places before the decimal point,
     and 1-10 places after the decimal point. Bet.
 
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
   "#
 }
 

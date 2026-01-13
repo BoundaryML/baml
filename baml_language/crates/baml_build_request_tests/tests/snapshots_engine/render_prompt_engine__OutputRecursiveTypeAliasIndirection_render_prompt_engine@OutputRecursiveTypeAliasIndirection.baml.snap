@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveTypeAliasIndirection.baml
+---
+fixture: OutputRecursiveTypeAliasIndirection.baml
+function: FnOutputRecursiveTypeAliasIndirection
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the given object back:\n\n{\n    \"value\": 1,\n}\n\nNodeWithAliasIndirection {\n  value: int,\n  next: NodeWithAliasIndirection or null,\n}\n\nAnswer in JSON using this schema: NodeWithAliasIndirection"

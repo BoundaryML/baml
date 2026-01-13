@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveTypeAliasClass.baml
+---
+fixture: OutputRecursiveTypeAliasClass.baml
+function: FnOutputRecursiveTypeAliasClass
+prompt:
+  Chat:
+    - role: system
+      allow_duplicate_role: false
+      parts:
+        - Text: "Return the given object back:\n\n{\n    \"list\": {\n        \"value\": 1,\n    },\n}\n\nLinkedListAliasNode {\n  value: int,\n  next: LinkedListAliasNode or null,\n}\n\nAnswer in JSON using this schema:\n{\n  list: LinkedListAliasNode,\n}"

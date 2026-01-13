@@ -1,0 +1,10 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasJsonDep.baml
+---
+fixture: OutputTypeAliasJsonDep.baml
+function: FnOutputTypeAliasJsonDep
+prompt:
+  type: Completion
+  text: "Return the given input back:\n\n\n\n{\n  value: JsonValue\n}"

@@ -36,7 +36,7 @@ function FnOutputOptional(input: string) -> (OptionalTest_ReturnType?)[]
   client GPT35
   prompt #"
     Return a JSON blob with this schema:
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
 
     JSON:
   "#

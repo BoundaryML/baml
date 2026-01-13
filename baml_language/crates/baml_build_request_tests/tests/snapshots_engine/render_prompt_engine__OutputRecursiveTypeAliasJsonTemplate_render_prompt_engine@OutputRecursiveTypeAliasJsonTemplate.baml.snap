@@ -1,0 +1,13 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveTypeAliasJsonTemplate.baml
+---
+fixture: OutputRecursiveTypeAliasJsonTemplate.baml
+function: FnOutputRecursiveTypeAliasJsonTemplate
+prompt:
+  Chat:
+    - role: user
+      allow_duplicate_role: false
+      parts:
+        - Text: "Extract info from this string exactly as it is:\nHello, world!\n\nJsonEntry = {\n  field: string,\n} or JsonTemplate\nJsonTemplate = map<string, JsonEntry>\n\nAnswer in JSON using this schema: JsonTemplate"

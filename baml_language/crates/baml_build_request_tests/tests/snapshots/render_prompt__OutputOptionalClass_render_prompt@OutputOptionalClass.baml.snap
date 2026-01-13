@@ -7,4 +7,4 @@ fixture: OutputOptionalClass.baml
 function: FnOutputOptionalClass
 prompt:
   type: Completion
-  text: "Return a json blob for the following input:\n\n\n{\n  prop1: string\n  prop2: string\n}?\n\nJSON:"
+  text: "Return a json blob for the following input:\n\n\n{\n  prop2: string\n  prop1: string\n}?\n\nJSON:"

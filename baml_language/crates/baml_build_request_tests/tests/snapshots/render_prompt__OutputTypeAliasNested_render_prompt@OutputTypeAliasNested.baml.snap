@@ -1,0 +1,10 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputTypeAliasNested.baml
+---
+fixture: OutputTypeAliasNested.baml
+function: FnOutputTypeAliasNested
+prompt:
+  type: Completion
+  text: "Return the given value back:\n\n\n\nCombination"

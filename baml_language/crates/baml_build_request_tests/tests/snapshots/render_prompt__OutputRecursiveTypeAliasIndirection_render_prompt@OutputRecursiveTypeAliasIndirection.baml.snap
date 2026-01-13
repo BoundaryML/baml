@@ -1,0 +1,10 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveTypeAliasIndirection.baml
+---
+fixture: OutputRecursiveTypeAliasIndirection.baml
+function: FnOutputRecursiveTypeAliasIndirection
+prompt:
+  type: Completion
+  text: "Return the given object back:\n\n\n\n{\n  value: int\n  next: NodeIndirection?\n}"

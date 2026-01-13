@@ -34,7 +34,7 @@ function FnOutputClassNested(input: string) -> TestClassNested {
   client GPT35
   prompt #"
     Return a made up json blob that matches this schema:
-    {{ctx.output_format()}}
+    {{ctx.output_format}}
     ---
 
     JSON:

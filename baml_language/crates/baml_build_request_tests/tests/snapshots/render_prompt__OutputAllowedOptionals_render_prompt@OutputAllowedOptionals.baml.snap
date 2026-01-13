@@ -7,4 +7,4 @@ fixture: OutputAllowedOptionals.baml
 function: FnOutputAllowedOptionals
 prompt:
   type: Completion
-  text: "Return the given input:\n\n\n\n{\n  q: map<string, string>?\n  p: string[]?\n}"
+  text: "Return the given input:\n\n\n\n{\n  p: string[]?\n  q: map<string, string>?\n}"

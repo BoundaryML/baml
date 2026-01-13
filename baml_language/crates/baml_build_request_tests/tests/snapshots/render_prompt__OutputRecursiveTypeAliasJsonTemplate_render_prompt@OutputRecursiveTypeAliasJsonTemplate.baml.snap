@@ -1,0 +1,14 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveTypeAliasJsonTemplate.baml
+---
+fixture: OutputRecursiveTypeAliasJsonTemplate.baml
+function: FnOutputRecursiveTypeAliasJsonTemplate
+prompt:
+  type: Chat
+  messages:
+    - role: user
+      content:
+        - type: Text
+          text: "Extract info from this string exactly as it is:\n\n\nJsonTemplate"
