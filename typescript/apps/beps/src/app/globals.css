@@ -147,3 +147,20 @@ body {
 .edit-mode-active {
   box-shadow: inset 0 0 0 2px hsl(var(--primary) / 0.2);
 }
+
+/* Compact comment editor */
+.comment-editor [contenteditable] {
+  min-height: 80px !important;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.comment-editor .mdxeditor-toolbar {
+  padding: 4px 8px;
+  gap: 2px;
+}
+
+.comment-editor .mdxeditor-toolbar button {
+  padding: 4px;
+}
+

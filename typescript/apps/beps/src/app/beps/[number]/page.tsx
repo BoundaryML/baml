@@ -7,7 +7,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
-// BepContentWithComments removed - now using TiptapEditor for both read and edit modes
+import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
@@ -17,9 +17,9 @@ import { BepEditProvider, useEditContext } from "@/components/bep/bep-edit-conte
 import { BepSubmitModal } from "@/components/bep/bep-submit-modal";
 import { BepAddPageModal } from "@/components/bep/bep-add-page-modal";
 import { BepPresence } from "@/components/bep/bep-presence";
-import { LexicalEditor, LexicalEditorHandle, LexicalToolbar } from "@/components/editor/lexical";
+import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";
 import { CommentThread } from "@/components/comments/comment-thread";
-import { BlockCommentSidebar } from "@/components/comments/block-comment-sidebar";
+import { CommentSidebar } from "@/components/comments/comment-sidebar";
 import { DecisionList } from "@/components/decisions/decision-list";
 import { IssueList } from "@/components/issues/issue-list";
 import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
@@ -60,7 +60,7 @@ function BepDetailPageInner() {
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<number | undefined>();
   const [, setIsSubmitting] = useState(false); // TODO: Use for loading state in submit modal
-  const editorRef = useRef<LexicalEditorHandle>(null);
+  const editorRef = useRef<MDXEditorHandle>(null);
   // Track new pages added during edit mode (temporary until saved)
   const [newPages, setNewPages] = useState<Array<{ tempId: string; slug: string; title: string }>>([]);
 
@@ -602,7 +602,7 @@ function BepDetailPageInner() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 py-8 lg:mr-80 lg:ml-8">
         {/* Historical version banner */}
         {isViewingHistorical && viewingVersion && (
           <Alert className="mb-6 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
@@ -680,41 +680,48 @@ function BepDetailPageInner() {
               />
             ) : (
               <div>
-                {/* Lexical editor - editable in edit mode, read-only otherwise */}
+                {/* Content display - MDXEditor for editing, BepContent (Shiki) for reading */}
                 {isContentPage && (
-                  <div className={isEditMode ? "border rounded-lg overflow-hidden" : "relative pr-12"}>
-                    {isEditMode && (
-                      <LexicalToolbar editor={editorRef.current?.getEditor() ?? null} />
+                  <>
+                    {isEditMode ? (
+                      /* Edit mode - use MDXEditor */
+                      <div className="border rounded-lg overflow-hidden">
+                        <MDXEditorComponent
+                          ref={editorRef}
+                          initialContent={getCurrentContent()}
+                          editable={true}
+                          onChange={handleContentChange}
+                          placeholder="Start writing your proposal..."
+                          showToolbar={true}
+                        />
+                      </div>
+                    ) : (
+                      /* Read mode - use BepContent with Shiki highlighting + comment gutter */
+                      <div className="relative">
+                        <BepContent content={getCurrentContent()} />
+                        {/* Comment gutter - positioned on the right edge */}
+                        {currentVersionId && (
+                          <CommentSidebar
+                            contentSelector="[data-bep-content]"
+                            bepId={bep._id}
+                            versionId={currentVersionId}
+                            pageId={currentPageId}
+                            readOnly={isViewingHistorical}
+                            comments={(pageComments ?? []).filter(c => c.anchor).map(c => ({
+                              _id: c._id,
+                              parentId: c.parentId,
+                              anchor: c.anchor as { nodeId: string; nodeType: string; nodeText: string },
+                              authorName: c.authorName,
+                              content: c.content,
+                              type: c.type,
+                              createdAt: c.createdAt,
+                              resolved: c.resolved,
+                            }))}
+                          />
+                        )}
+                      </div>
                     )}
-                    <div className={isEditMode ? "p-4 edit-mode-active" : ""}>
-                      <LexicalEditor
-                        ref={editorRef}
-                        initialContent={getCurrentContent()}
-                        editable={isEditMode}
-                        onChange={isEditMode ? handleContentChange : undefined}
-                        placeholder="Start writing your proposal..."
-                      />
-                    </div>
-                    {/* Block comment sidebar - only in read mode */}
-                    {!isEditMode && currentVersionId && (
-                      <BlockCommentSidebar
-                        editor={editorRef.current?.getEditor() ?? null}
-                        bepId={bep._id}
-                        versionId={currentVersionId}
-                        pageId={currentPageId}
-                        comments={(pageComments ?? []).filter(c => c.anchor).map(c => ({
-                          _id: c._id,
-                          anchor: c.anchor as { nodeId: string; nodeType: string; nodeText: string },
-                          authorName: c.authorName,
-                          content: c.content,
-                          type: c.type,
-                          createdAt: c.createdAt,
-                          resolved: c.resolved,
-                        }))}
-                        readOnly={isViewingHistorical}
-                      />
-                    )}
-                  </div>
+                  </>
                 )}
 
                 {/* Comments section - hide in edit mode */}

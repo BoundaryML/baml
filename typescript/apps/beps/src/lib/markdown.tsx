@@ -1,11 +1,13 @@
 import type { Components } from "react-markdown";
+import { ShikiCodeBlock } from "@/components/ui/shiki-code-block";
+import { isValidElement, Children } from "react";
 
 export const markdownComponents: Components = {
   h1: ({ children }) => (
     <h1 className="text-3xl font-bold mt-8 mb-4 first:mt-0">{children}</h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-2xl font-semibold mt-6 mb-3 pb-2 border-b">{children}</h2>
+    <h2 className="text-2xl font-semibold mt-6 mb-3 pb-2 border-b border-border">{children}</h2>
   ),
   h3: ({ children }) => (
     <h3 className="text-xl font-semibold mt-5 mb-2">{children}</h3>
@@ -18,34 +20,53 @@ export const markdownComponents: Components = {
   ol: ({ children }) => <ol className="my-3 ml-6 list-decimal space-y-1">{children}</ol>,
   li: ({ children }) => <li className="leading-7">{children}</li>,
   blockquote: ({ children }) => (
-    <blockquote className="my-4 border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground">
+    <blockquote className="my-4 border-l-4 border-amber-500/60 pl-4 italic text-muted-foreground bg-amber-500/5 py-2 rounded-r-md">
       {children}
     </blockquote>
   ),
   code: ({ className, children }) => {
+    // Inline code (no className)
     const isInline = !className;
     if (isInline) {
       return (
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">
+        <code className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[0.875em] text-gray-800 border border-gray-200">
           {children}
         </code>
       );
     }
+    // Block code - will be rendered by ShikiCodeBlock in pre component
     return (
       <code className={className}>
         {children}
       </code>
     );
   },
-  pre: ({ children }) => (
-    <pre className="my-4 overflow-x-auto rounded-lg bg-muted p-4 font-mono text-sm">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    // Extract code content and language from the code child
+    const childArray = Children.toArray(children);
+    const codeChild = childArray.find(
+      (child) => isValidElement(child) && child.type === "code"
+    );
+
+    if (isValidElement(codeChild)) {
+      const className = (codeChild.props as { className?: string }).className || "";
+      const language = className.replace(/^language-/, "");
+      const code = String((codeChild.props as { children?: unknown }).children || "").replace(/\n$/, "");
+
+      return <ShikiCodeBlock code={code} language={language} showLineNumbers />;
+    }
+
+    // Fallback for non-code pre content
+    return (
+      <pre className="my-5 overflow-x-auto rounded-xl bg-slate-900 dark:bg-slate-950 p-5 font-mono text-sm text-slate-200 border border-slate-800 shadow-lg">
+        {children}
+      </pre>
+    );
+  },
   a: ({ href, children }) => (
     <a
       href={href}
-      className="text-primary underline underline-offset-4 hover:text-primary/80"
+      className="text-sky-500 dark:text-sky-400 underline underline-offset-4 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
       target={href?.startsWith("http") ? "_blank" : undefined}
       rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}
     >
@@ -53,23 +74,29 @@ export const markdownComponents: Components = {
     </a>
   ),
   table: ({ children }) => (
-    <div className="my-4 overflow-x-auto">
-      <table className="w-full border-collapse border border-border">
+    <div className="my-5 overflow-x-auto rounded-lg border border-border shadow-sm">
+      <table className="w-full border-collapse">
         {children}
       </table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+  thead: ({ children }) => <thead className="bg-slate-100 dark:bg-slate-800/50">{children}</thead>,
   th: ({ children }) => (
-    <th className="border border-border px-4 py-2 text-left font-semibold">
+    <th className="border-b border-border px-4 py-3 text-left font-semibold text-sm uppercase tracking-wider text-slate-600 dark:text-slate-300">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="border border-border px-4 py-2">{children}</td>
+    <td className="border-b border-border/50 px-4 py-3 text-sm">{children}</td>
   ),
-  hr: () => <hr className="my-6 border-border" />,
+  hr: () => <hr className="my-8 border-border" />,
   img: ({ src, alt }) => (
-    <img src={src} alt={alt} className="my-4 max-w-full rounded-lg" />
+    <img src={src} alt={alt} className="my-4 max-w-full rounded-xl shadow-md" />
+  ),
+  strong: ({ children }) => (
+    <strong className="font-semibold text-foreground">{children}</strong>
+  ),
+  em: ({ children }) => (
+    <em className="italic text-slate-600 dark:text-slate-300">{children}</em>
   ),
 };
