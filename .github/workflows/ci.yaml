@@ -329,7 +329,7 @@ jobs:
   #
   # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
   ci-failure-alert:
-    name: "CI Failure Alert"
+    name: "CI-v2 Failure Alert"
     runs-on: ubuntu-latest
     needs:
       - cargo-stow
