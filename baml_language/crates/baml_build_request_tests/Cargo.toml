@@ -19,5 +19,14 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Engine dependencies for comparison tests
+baml-runtime = { path = "../../../engine/baml-runtime", features = ["internal"] }
+internal-baml-core = { path = "../../../engine/baml-lib/baml-core" }
+internal-baml-jinja = { path = "../../../engine/baml-lib/jinja-runtime" }
+baml-types = { path = "../../../engine/baml-lib/baml-types" }
+baml-ids = { path = "../../../engine/baml-ids" }
+indexmap = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
 [dev-dependencies]
-insta = { workspace = true, features = ["glob", "yaml"] }
+insta = { workspace = true, features = ["glob", "toml", "json"] }

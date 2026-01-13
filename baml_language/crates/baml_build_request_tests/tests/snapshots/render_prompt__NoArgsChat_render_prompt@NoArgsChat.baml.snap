@@ -3,16 +3,22 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/NoArgsChat.baml
 ---
-fixture: NoArgsChat.baml
-function: FnNoArgsChat
-prompt:
-  type: Chat
-  messages:
-    - role: system
-      content:
-        - type: Text
-          text: You are a helpful assistant.
-    - role: user
-      content:
-        - type: Text
-          text: What is the capital of France?
+fixture = 'NoArgsChat.baml'
+function = 'FnNoArgsChat'
+
+[prompt]
+type = 'Chat'
+
+[[prompt.messages]]
+role = 'system'
+
+[[prompt.messages.content]]
+type = 'Text'
+text = 'You are a helpful assistant.'
+
+[[prompt.messages]]
+role = 'user'
+
+[[prompt.messages.content]]
+type = 'Text'
+text = 'What is the capital of France?'

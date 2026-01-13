@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputClassNested.baml
+---
+{
+  "fixture": "OutputClassNested.baml",
+  "function": "FnOutputClassNested",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return a made up json blob that matches this schema:\nAnswer in JSON using this schema:\n{\n  prop1: string,\n  prop2: {\n    prop1: string,\n    prop2: string,\n    inner: {\n      prop2: int,\n      prop3: float,\n    },\n  },\n}\n---\n\nJSON:"
+          }
+        ]
+      }
+    ]
+  }
+}

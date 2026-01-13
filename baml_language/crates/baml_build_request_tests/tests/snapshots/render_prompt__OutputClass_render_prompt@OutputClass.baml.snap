@@ -3,8 +3,18 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputClass.baml
 ---
-fixture: OutputClass.baml
-function: FnOutputClass
-prompt:
-  type: Completion
-  text: "Return a JSON blob with this schema:\n{\n  prop1: string\n  prop2: int\n}\n\nFor the prop2, always return a 540\n\nJSON:"
+fixture = 'OutputClass.baml'
+function = 'FnOutputClass'
+
+[prompt]
+type = 'Completion'
+text = '''
+Return a JSON blob with this schema:
+{
+  prop2: int
+  prop1: string
+}
+
+For the prop2, always return a 540
+
+JSON:'''

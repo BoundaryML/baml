@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveUnion.baml
+---
+{
+  "fixture": "OutputRecursiveUnion.baml",
+  "function": "FnOutputRecursiveUnion",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return back the same value you were given: {\"key\": \"value\", \"key2\": {\"key\": \"value2\", \"key2\": \"value3\"}}\n\nRecursiveUnion = string or map<string, RecursiveUnion>\n\nAnswer in JSON using this schema: RecursiveUnion"
+          }
+        ]
+      }
+    ]
+  }
+}

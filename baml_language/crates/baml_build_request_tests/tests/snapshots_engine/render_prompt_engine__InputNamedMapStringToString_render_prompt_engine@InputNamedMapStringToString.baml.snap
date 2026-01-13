@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputNamedMapStringToString.baml
+---
+{
+  "fixture": "InputNamedMapStringToString.baml",
+  "function": "FnInputNamedMapStringToString",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return this value back to me: {\"key\": \"example string\"}"
+          }
+        ]
+      }
+    ]
+  }
+}

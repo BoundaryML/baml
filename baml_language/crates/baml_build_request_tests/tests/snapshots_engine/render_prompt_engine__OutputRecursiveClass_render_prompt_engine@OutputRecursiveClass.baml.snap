@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputRecursiveClass.baml
+---
+{
+  "fixture": "OutputRecursiveClass.baml",
+  "function": "FnOutputRecursiveClass",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "user",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Build a linked list from the input array of integers.\n\nINPUT:\n[1, 2, 3, 4, 5]\n\nNode {\n  data: int,\n  next: Node or null,\n}\n\nAnswer in JSON using this schema:\n{\n  head: Node or null,\n  len: int,\n}"
+          }
+        ]
+      }
+    ]
+  }
+}

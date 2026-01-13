@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputNamedStringOptional.baml
+---
+{
+  "fixture": "InputNamedStringOptional.baml",
+  "function": "FnInputNamedStringOptional",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return this value back to me: example string"
+          }
+        ]
+      }
+    ]
+  }
+}

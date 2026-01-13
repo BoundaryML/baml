@@ -1,0 +1,31 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/PromptsWithChatMessages.baml
+---
+{
+  "fixture": "PromptsWithChatMessages.baml",
+  "function": "FnPromptsWithChatMessages",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "You are an assistant that always responds in a very excited way with emojis and also outputs this word 4 times after giving a response: cats"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Tell me a haiku about cats"
+          }
+        ]
+      }
+    ]
+  }
+}

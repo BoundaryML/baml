@@ -83,4 +83,7 @@ function FnOutputRecursiveTypeAliases4(s: string) -> JsonTemplate {
 
 test TestOutputRecursiveTypeAliases {
   functions [FnOutputRecursiveTypeAliases, FnOutputRecursiveTypeAliases2, FnOutputRecursiveTypeAliases3, FnOutputRecursiveTypeAliases4]
+  args {
+    s "Hello, world!"
+  }
 }

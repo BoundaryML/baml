@@ -3,8 +3,13 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedClass.baml
 ---
-fixture: InputNamedClass.baml
-function: FnInputNamedClass
-prompt:
-  type: Completion
-  text: "Print these values back to me:\n\n\n"
+fixture = 'InputNamedClass.baml'
+function = 'FnInputNamedClass'
+
+[prompt]
+type = 'Completion'
+text = '''
+Print these values back to me:
+
+
+'''

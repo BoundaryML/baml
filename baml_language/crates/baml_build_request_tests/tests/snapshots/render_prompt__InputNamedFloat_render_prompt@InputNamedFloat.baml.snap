@@ -3,8 +3,9 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedFloat.baml
 ---
-fixture: InputNamedFloat.baml
-function: FnInputNamedFloat
-prompt:
-  type: Completion
-  text: "Return this value back to me: "
+fixture = 'InputNamedFloat.baml'
+function = 'FnInputNamedFloat'
+
+[prompt]
+type = 'Completion'
+text = 'Return this value back to me: '

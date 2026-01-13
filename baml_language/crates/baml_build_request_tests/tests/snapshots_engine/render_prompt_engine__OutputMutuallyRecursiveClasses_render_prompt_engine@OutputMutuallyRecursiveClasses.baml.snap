@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputMutuallyRecursiveClasses.baml
+---
+{
+  "fixture": "OutputMutuallyRecursiveClasses.baml",
+  "function": "FnOutputMutuallyRecursiveClasses",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Given the input binary tree, transform it into a generic tree using the given schema.\n\nINPUT:\n{\n    \"data\": 2,\n    \"left\": {\n        \"data\": 1,\n        \"left\": null,\n        \"right\": null,\n    },\n    \"right\": {\n        \"data\": 3,\n        \"left\": null,\n        \"right\": null,\n    },\n}\n\nTree {\n  data: int,\n  children: Forest,\n}\n\nForest {\n  trees: Tree[],\n}\n\nAnswer in JSON using this schema: Tree"
+          }
+        ]
+      }
+    ]
+  }
+}

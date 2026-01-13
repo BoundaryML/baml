@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputNamedClassLiteralProp.baml
+---
+{
+  "fixture": "InputNamedClassLiteralProp.baml",
+  "function": "FnInputNamedClassLiteralProp",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return the same object you were given.\nAnswer in JSON using this schema:\n{\n  prop: \"hello\",\n}"
+          }
+        ]
+      }
+    ]
+  }
+}

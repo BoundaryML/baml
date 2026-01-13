@@ -1,0 +1,22 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/OutputClass.baml
+---
+{
+  "fixture": "OutputClass.baml",
+  "function": "FnOutputClass",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "system",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Return a JSON blob with this schema:\nAnswer in JSON using this schema:\n{\n  // A long string with about 200 words\n  prop1: string,\n  prop2: int,\n}\n\nFor the prop2, always return a 540\n\nJSON:"
+          }
+        ]
+      }
+    ]
+  }
+}

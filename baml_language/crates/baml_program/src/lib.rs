@@ -32,6 +32,7 @@ pub mod relevant_data_models;
 
 mod prepared_function;
 mod render_options;
+mod tarjan;
 mod types;
 
 pub use api::*;

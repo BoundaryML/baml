@@ -3,8 +3,11 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputNamedEnumList.baml
 ---
-fixture: InputNamedEnumList.baml
-function: FnInputNamedEnumList
-prompt:
-  type: Completion
-  text: "Print these values back to me:\n"
+fixture = 'InputNamedEnumList.baml'
+function = 'FnInputNamedEnumList'
+
+[prompt]
+type = 'Completion'
+text = '''
+Print these values back to me:
+'''

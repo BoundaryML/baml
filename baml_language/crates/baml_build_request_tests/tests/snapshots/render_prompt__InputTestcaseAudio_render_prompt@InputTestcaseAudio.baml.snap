@@ -3,12 +3,15 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/InputTestcaseAudio.baml
 ---
-fixture: InputTestcaseAudio.baml
-function: FnInputTestcaseAudio
-prompt:
-  type: Chat
-  messages:
-    - role: user
-      content:
-        - type: Text
-          text: Does this sound like a roar? Yes or no? One word no other characters.
+fixture = 'InputTestcaseAudio.baml'
+function = 'FnInputTestcaseAudio'
+
+[prompt]
+type = 'Chat'
+
+[[prompt.messages]]
+role = 'user'
+
+[[prompt.messages.content]]
+type = 'Text'
+text = 'Does this sound like a roar? Yes or no? One word no other characters.'

@@ -3,6 +3,9 @@
 //! Given a target type (e.g., the return type of a function), this module
 //! traverses the type graph and collects all enums and classes that need
 //! to be included in the output format schema.
+//!
+//! This module also detects recursive cycles using Tarjan's strongly connected
+//! components algorithm, marking classes that are part of cycles as recursive.
 
 use std::collections::HashSet;
 
@@ -14,7 +17,9 @@ use baml_output_format::{
     OutputFormatContent,
 };
 use baml_project::ProjectDatabase;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
+
+use crate::tarjan::{Graph, Tarjan};
 
 /// Collect all enums and classes referenced by the target type.
 ///
@@ -36,7 +41,7 @@ pub fn relevant_data_models(
 }
 
 struct OutputFormatTypeCollector<'db> {
-    // NOTE: These fields are kept for future use (recursive class detection, attributes, etc.)
+    // NOTE: These fields are kept for future use (attributes, etc.)
     #[allow(dead_code)]
     db: &'db ProjectDatabase,
     #[allow(dead_code)]
@@ -53,6 +58,10 @@ struct OutputFormatTypeCollector<'db> {
     /// Types we've already visited, to avoid infinite loops on recursive types
     /// and prevent duplicate processing when the same type appears multiple times.
     visited_types: HashSet<String>,
+
+    /// Classes we've collected, in order of discovery.
+    /// Used to build the dependency graph for cycle detection.
+    collected_class_names: Vec<String>,
 }
 
 impl<'db> OutputFormatTypeCollector<'db> {
@@ -78,6 +87,7 @@ impl<'db> OutputFormatTypeCollector<'db> {
             enums: IndexMap::new(),
             classes: IndexMap::new(),
             visited_types: HashSet::new(),
+            collected_class_names: Vec::new(),
         }
     }
 
@@ -173,6 +183,9 @@ impl<'db> OutputFormatTypeCollector<'db> {
             return; // Class not found in database
         };
 
+        // Track this class for cycle detection
+        self.collected_class_names.push(name_str.clone());
+
         // Collect field types for further traversal
         let class_fields: Vec<ClassField> = fields
             .iter()
@@ -198,7 +211,98 @@ impl<'db> OutputFormatTypeCollector<'db> {
         self.classes.insert(name_str, class_def);
     }
 
+    /// Build a dependency graph from collected classes.
+    ///
+    /// The graph maps each class name to the set of class names it references.
+    fn build_dependency_graph(&self) -> Graph<String> {
+        let mut graph: Graph<String> = std::collections::HashMap::new();
+
+        for class_name in &self.collected_class_names {
+            let mut deps: HashSet<String> = HashSet::new();
+
+            // Find the Name key that matches this class
+            if let Some((_, fields)) = self
+                .class_fields
+                .iter()
+                .find(|(n, _)| n.to_string() == *class_name)
+            {
+                for (_, field_type) in fields {
+                    self.extract_class_refs(field_type, &mut deps);
+                }
+            }
+
+            graph.insert(class_name.clone(), deps);
+        }
+
+        graph
+    }
+
+    /// Extract class references from a type.
+    ///
+    /// Recursively walks the type structure and collects all class names
+    /// that are referenced, but only if they're in our collected set.
+    fn extract_class_refs(&self, ty: &TirTy, refs: &mut HashSet<String>) {
+        match ty {
+            TirTy::Class(name) | TirTy::Named(name) => {
+                let name_str = name.to_string();
+                // Only include if it's in our collected classes
+                if self.collected_class_names.contains(&name_str) {
+                    refs.insert(name_str);
+                }
+            }
+            TirTy::Optional(inner) | TirTy::List(inner) | TirTy::WatchAccessor(inner) => {
+                self.extract_class_refs(inner, refs);
+            }
+            TirTy::Map { key, value } => {
+                self.extract_class_refs(key, refs);
+                self.extract_class_refs(value, refs);
+            }
+            TirTy::Union(variants) => {
+                for v in variants {
+                    self.extract_class_refs(v, refs);
+                }
+            }
+            TirTy::Function { params, ret } => {
+                for p in params {
+                    self.extract_class_refs(p, refs);
+                }
+                self.extract_class_refs(ret, refs);
+            }
+            // Terminal types - no class references
+            TirTy::Int
+            | TirTy::Float
+            | TirTy::String
+            | TirTy::Bool
+            | TirTy::Null
+            | TirTy::Media(_)
+            | TirTy::Literal(_)
+            | TirTy::Enum(_)
+            | TirTy::Unknown
+            | TirTy::Error
+            | TirTy::Void => {}
+        }
+    }
+
+    /// Compute recursive classes using Tarjan's algorithm.
+    ///
+    /// Returns a set of all class names that are part of a cycle.
+    fn compute_recursive_classes(&self) -> IndexSet<String> {
+        let graph = self.build_dependency_graph();
+        let cycles = Tarjan::components(&graph);
+
+        let mut recursive: IndexSet<String> = IndexSet::new();
+        for cycle in cycles {
+            for class_name in cycle {
+                recursive.insert(class_name);
+            }
+        }
+        recursive
+    }
+
     fn build(self, target: &TirTy) -> OutputFormatContent {
+        // Compute recursive classes before consuming self
+        let recursive_classes = self.compute_recursive_classes();
+
         let mut builder = OutputFormatBuilder::new();
 
         for (_, e) in self.enums {
@@ -207,6 +311,11 @@ impl<'db> OutputFormatTypeCollector<'db> {
 
         for (_, c) in self.classes {
             builder = builder.with_class(c);
+        }
+
+        // Add recursive classes
+        for name in recursive_classes {
+            builder = builder.with_recursive_class(name);
         }
 
         // Set the target type

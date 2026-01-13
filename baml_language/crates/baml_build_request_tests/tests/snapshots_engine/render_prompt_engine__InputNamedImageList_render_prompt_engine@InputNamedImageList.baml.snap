@@ -1,0 +1,50 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputNamedImageList.baml
+---
+{
+  "fixture": "InputNamedImageList.baml",
+  "function": "FnInputNamedImageList",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "user",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "What colors do these have in common? ["
+          },
+          {
+            "Media": {
+              "media_type": "Image",
+              "mime_type": "image/png",
+              "content": {
+                "Url": {
+                  "url": "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
+                }
+              }
+            }
+          },
+          {
+            "Text": ","
+          },
+          {
+            "Media": {
+              "media_type": "Image",
+              "mime_type": null,
+              "content": {
+                "Url": {
+                  "url": "https://i.imgur.com/93fWs5R.png"
+                }
+              }
+            }
+          },
+          {
+            "Text": "]"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -3,8 +3,9 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/PromptsNoChatMessages.baml
 ---
-fixture: PromptsNoChatMessages.baml
-function: FnPromptsNoChatMessages
-prompt:
-  type: Completion
-  text: Tell me a short story about .
+fixture = 'PromptsNoChatMessages.baml'
+function = 'FnPromptsNoChatMessages'
+
+[prompt]
+type = 'Completion'
+text = 'Tell me a short story about .'

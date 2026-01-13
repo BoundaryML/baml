@@ -1,0 +1,33 @@
+---
+source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+expression: "&result"
+input_file: crates/baml_build_request_tests/testdata/InputTestcaseAudio.baml
+---
+{
+  "fixture": "InputTestcaseAudio.baml",
+  "function": "FnInputTestcaseAudio",
+  "prompt": {
+    "Chat": [
+      {
+        "role": "user",
+        "allow_duplicate_role": false,
+        "parts": [
+          {
+            "Text": "Does this sound like a roar? Yes or no? One word no other characters."
+          },
+          {
+            "Media": {
+              "media_type": "Audio",
+              "mime_type": "audio/mp3",
+              "content": {
+                "Base64": {
+                  "base64": "//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAABRAACbvAACBAgKDQ0QExcZGRweIiQkJyouMTQ0ODs+QkJFSUxPT1NWWl1dYGRna25ucXV4e3t/goaJiYyPkpaWmJyfoqamqq2ws7O3ur3BwcTHy87O0tbZ3eHh5Ofq7e3v8vT29vr7//8AAAA8TEFNRTMuOThyBK8AAAAAAAAAADQgJATvTQABzAAAm7x1lCT3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

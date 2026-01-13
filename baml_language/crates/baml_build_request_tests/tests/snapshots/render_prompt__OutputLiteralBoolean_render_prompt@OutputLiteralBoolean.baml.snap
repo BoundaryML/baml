@@ -3,8 +3,9 @@ source: crates/baml_build_request_tests/tests/render_prompt.rs
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/OutputLiteralBoolean.baml
 ---
-fixture: OutputLiteralBoolean.baml
-function: FnOutputLiteralBoolean
-prompt:
-  type: Completion
-  text: "Return a false: Answer with exactly: false"
+fixture = 'OutputLiteralBoolean.baml'
+function = 'FnOutputLiteralBoolean'
+
+[prompt]
+type = 'Completion'
+text = 'Return a false: Answer with exactly: false'

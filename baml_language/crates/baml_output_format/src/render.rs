@@ -58,8 +58,10 @@ impl<'a> RenderContext<'a> {
 
     fn hoisted_class_prefix(&self) -> Option<String> {
         match &self.options.hoisted_class_prefix {
-            RenderSetting::Auto => Some(OutputFormatOptions::DEFAULT_TYPE_PREFIX.to_string()),
-            RenderSetting::Always(s) => Some(s.clone()),
+            // Default: no prefix for hoisted classes (matches engine behavior)
+            RenderSetting::Auto => None,
+            RenderSetting::Always(s) if !s.is_empty() => Some(s.clone()),
+            RenderSetting::Always(_) => None, // Empty string means no prefix
             RenderSetting::Never => None,
         }
     }
