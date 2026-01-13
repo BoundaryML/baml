@@ -500,6 +500,7 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_project",
+ "rowan 0.16.1",
  "smol_str",
  "text-size",
 ]

@@ -20,13 +20,15 @@
 pub mod code_action;
 pub mod code_lens;
 pub mod document_symbols;
+pub mod find_references;
 pub mod goto_definition;
 pub mod hover;
 
 pub use code_action::{CodeAction, CodeActionKind};
 pub use code_lens::{CodeLens, CodeLensKind};
 pub use document_symbols::{DocumentSymbol, SymbolKind};
-pub use goto_definition::{NavigationTarget, find_word_at_offset};
+pub use find_references::{Reference, find_all_references};
+pub use goto_definition::{NavigationTarget, find_word_at_offset, goto_definition};
 pub use hover::{Hover, HoverContent, hover};
 
 /// Markup format for hover content.

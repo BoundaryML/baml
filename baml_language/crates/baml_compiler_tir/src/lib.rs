@@ -10,7 +10,10 @@
 //!
 //! This follows patterns from rust-analyzer and ruff for incremental type checking.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
@@ -248,7 +251,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
         }
     }
 
-    TypingContextMap::new(db, context)
+    TypingContextMap::new(db, context /* functions */)
 }
 
 /// Query: Get class field types for a project.
@@ -842,6 +845,53 @@ pub fn infer_function_body<'db>(
         errors: ctx.errors,
         expr_resolutions: ctx.expr_resolutions,
     }
+}
+
+/// Salsa tracked query for function type inference.
+///
+/// This caches the type inference results for a function, enabling
+/// incremental recomputation when dependencies change.
+#[salsa::tracked]
+pub fn function_type_inference<'db>(
+    db: &'db dyn Db,
+    function: FunctionLoc<'db>,
+) -> Arc<InferenceResult> {
+    // Get the function signature and body
+    let signature = baml_compiler_hir::function_signature(db, function);
+    let body = baml_compiler_hir::function_body(db, function);
+
+    // Get the project context
+    let project = db.project();
+
+    // Build global context from the project
+    // Get function signatures as global types (for function calls)
+    let typing_ctx = typing_context(db, project);
+    let globals = Some(typing_ctx.functions(db).clone());
+
+    // Get class field types
+    let class_field_types = class_field_types(db, project);
+    let class_fields = Some(class_field_types.classes(db).clone());
+
+    // Get type aliases
+    let type_aliases_map = type_aliases(db, project);
+    let type_aliases = Some(type_aliases_map.aliases(db).clone());
+
+    // Get enum variants
+    let enum_variants_map = enum_variants(db, project);
+    let enum_variants = Some(enum_variants_map.enums(db).clone());
+
+    let result = infer_function(
+        db,
+        &signature,
+        &body,
+        globals,
+        class_fields,
+        type_aliases,
+        enum_variants,
+        function,
+    );
+
+    Arc::new(result)
 }
 
 /// Infer types for a function given its signature and body.

@@ -313,9 +313,14 @@ fn lower_method_signature(
                         .unwrap_or(TypeRef::Unknown)
                 };
 
+                // Get the span of the entire parameter
+                use rowan::ast::AstNode;
+                let span = Some(param_node.syntax().text_range());
+
                 params.push(Param {
                     name: Name::new(param_name),
                     type_ref,
+                    span,
                 });
             }
         }
