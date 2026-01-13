@@ -38,24 +38,33 @@ use baml_compiler_hir::FullyQualifiedName;
 /// Value paths are identifiers used in expressions: variable references,
 /// function calls, enum variant access, and builtin function calls.
 ///
-/// **This is a transient type** - used during type inference to determine
-/// what a path refers to, then discarded. The type information is extracted
-/// and used, but the `ResolvedValue` itself is not stored in the typed IR.
+/// This type is used both during type inference and stored for IDE features
+/// (go-to-definition, find-references).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedValue {
     /// Local variable (from let binding or function parameter).
     ///
     /// Locals don't have FQNs - they're ephemeral within their scope.
-    /// Field access on locals is handled separately during type inference.
     Local {
         /// The local variable name.
         name: Name,
+        /// Where this local was defined (for go-to-definition).
+        definition_site: Option<crate::DefinitionSite>,
     },
 
     /// User-defined function.
     ///
     /// Functions are project-level and have a fully-qualified name.
     Function(FullyQualifiedName),
+
+    /// User-defined class.
+    Class(FullyQualifiedName),
+
+    /// User-defined enum.
+    Enum(FullyQualifiedName),
+
+    /// Type alias.
+    TypeAlias(FullyQualifiedName),
 
     /// Enum variant (e.g., `Status.Active`).
     ///
@@ -67,11 +76,20 @@ pub enum ResolvedValue {
         variant: Name,
     },
 
+    /// Class field access.
+    Field {
+        /// The class's FQN.
+        class_fqn: FullyQualifiedName,
+        /// The field name.
+        field: Name,
+    },
+
     /// Builtin free function (e.g., `env.get`, `baml.deep_copy`).
     ///
     /// These are functions provided by the runtime, not user-defined.
+    /// Path is normalized (e.g., "baaml.deep_copy" becomes "baml.deep_copy").
     BuiltinFunction {
-        /// The builtin's path as registered (e.g., "env.get").
+        /// The normalized builtin path (e.g., "env.get", "baml.deep_copy").
         path: String,
     },
 
@@ -107,10 +125,10 @@ impl ResolvedValue {
         matches!(self, ResolvedValue::Unknown)
     }
 
-    /// Get the local variable name if this is a local.
-    pub fn as_local(&self) -> Option<&Name> {
+    /// Get the local variable info if this is a local.
+    pub fn as_local(&self) -> Option<(&Name, Option<crate::DefinitionSite>)> {
         match self {
-            ResolvedValue::Local { name } => Some(name),
+            ResolvedValue::Local { name, definition_site } => Some((name, *definition_site)),
             _ => None,
         }
     }
@@ -177,7 +195,12 @@ impl ResolvedMethod {
     }
 }
 
+use std::collections::HashMap;
+use baml_compiler_hir::ExprId;
 use crate::{Ty, builtins};
+
+/// Resolution map for all expressions in a function body.
+pub type ResolutionMap = HashMap<ExprId, ResolvedValue>;
 
 /// Resolve a method call on a known receiver type.
 ///

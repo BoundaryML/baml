@@ -26,6 +26,8 @@ mod normalize;
 pub mod pretty;
 mod resolve;
 mod types;
+#[cfg(test)]
+mod test_resolution;
 
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
@@ -34,7 +36,7 @@ pub use builtins::{
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
-pub use resolve::{ResolvedMethod, ResolvedValue, resolve_method};
+pub use resolve::{ResolvedMethod, ResolvedValue, ResolutionMap, resolve_method};
 use text_size::TextRange;
 pub use types::*;
 
@@ -434,11 +436,23 @@ pub struct InferenceResult {
     pub exhaustive_matches: HashSet<ExprId>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty>>,
+    /// Resolution information for IDE features (go-to-definition, find-references).
+    /// Maps expression IDs to what they resolve to.
+    pub expr_resolutions: ResolutionMap,
 }
 
 // ============================================================================
 // Type Context
 // ============================================================================
+
+/// Where a local variable was defined (for go-to-definition).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionSite {
+    /// Defined in a let statement.
+    Statement(StmtId),
+    /// Defined as a function parameter (with its index).
+    Parameter(usize),
+}
 
 /// Context for type inference, tracking scopes and accumulated results.
 pub struct TypeContext<'db> {
@@ -474,6 +488,10 @@ pub struct TypeContext<'db> {
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
     watched_vars: HashSet<Name>,
+    /// Resolution map for expressions (for IDE features).
+    expr_resolutions: ResolutionMap,
+    /// Track where local variables were defined (for go-to-definition).
+    local_definitions: HashMap<Name, DefinitionSite>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -507,6 +525,8 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
+            expr_resolutions: HashMap::new(),
+            local_definitions: HashMap::new(),
         }
     }
 
@@ -579,6 +599,25 @@ impl<'db> TypeContext<'db> {
     /// Check if a variable is watched (declared with `watch let`).
     pub fn is_watched(&self, name: &Name) -> bool {
         self.watched_vars.contains(name)
+    }
+
+    /// Set the resolution for an expression.
+    pub fn set_expr_resolution(&mut self, expr_id: ExprId, resolution: ResolvedValue) {
+        self.expr_resolutions.insert(expr_id, resolution);
+    }
+
+    /// Define a local variable and track its definition site.
+    pub fn define_with_site(&mut self, name: Name, ty: Ty, definition_site: DefinitionSite) {
+        // Get the current scope (last in the stack)
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name.clone(), ty);
+        }
+        self.local_definitions.insert(name, definition_site);
+    }
+
+    /// Get the definition site for a local variable.
+    pub fn get_definition_site(&self, name: &Name) -> Option<DefinitionSite> {
+        self.local_definitions.get(name).copied()
     }
 
     /// Get the database reference.
@@ -725,8 +764,9 @@ pub fn infer_function_body<'db>(
     );
 
     // Add parameters to the current scope (on top of globals)
-    for (name, ty) in &param_types {
-        ctx.define(name.clone(), ty.clone());
+    // Track their index in the parameter list for go-to-definition
+    for (index, (name, ty)) in param_types.iter().enumerate() {
+        ctx.define_with_site(name.clone(), ty.clone(), DefinitionSite::Parameter(index));
     }
 
     // Type check the body against the expected return type (checking mode for bidirectional typing)
@@ -800,6 +840,7 @@ pub fn infer_function_body<'db>(
         enum_variant_exprs: ctx.enum_variant_exprs,
         exhaustive_matches: ctx.exhaustive_matches,
         errors: ctx.errors,
+        expr_resolutions: ctx.expr_resolutions,
     }
 }
 
@@ -915,7 +956,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 // Single segment: simple variable lookup
                 let name = &segments[0];
                 if let Some(ty) = ctx.lookup(name) {
-                    ty.clone()
+                    let ty = ty.clone();
+                    let definition_site = ctx.get_definition_site(name);
+                    // Store resolution for IDE features
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Local {
+                            name: name.clone(),
+                            definition_site,
+                        },
+                    );
+                    ty
                 } else {
                     ctx.push_error(TypeError::UnknownVariable {
                         name: name.to_string(),
@@ -935,6 +986,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     .collect::<Vec<_>>()
                     .join(".");
                 if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                    // Store resolution for builtin function
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::BuiltinFunction {
+                            // Use normalized path (baaml -> baml)
+                            path: def.path.to_string(),
+                        },
+                    );
+
                     // It's a builtin function - return its function type
                     let mut param_types: Vec<Ty> = Vec::new();
                     if let Some(ref receiver_pattern) = def.receiver {
@@ -958,10 +1018,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if let Some(variants) = ctx.lookup_enum_variants(enum_name) {
                         if variants.contains(variant_name) {
                             use baml_compiler_hir::FullyQualifiedName;
+                            let enum_fqn = FullyQualifiedName::local(enum_name.clone());
+
+                            // Store resolution for enum variant
+                            ctx.set_expr_resolution(
+                                expr_id,
+                                ResolvedValue::EnumVariant {
+                                    enum_fqn: enum_fqn.clone(),
+                                    variant: variant_name.clone(),
+                                },
+                            );
+
                             // This is a valid enum variant - record it and return the enum type
                             ctx.enum_variant_exprs
                                 .insert(expr_id, (enum_name.clone(), variant_name.clone()));
-                            return Ty::Enum(FullyQualifiedName::local(enum_name.clone()));
+                            return Ty::Enum(enum_fqn);
                         }
                         // Enum exists but variant doesn't
                         ctx.push_error(TypeError::UnknownEnumVariant {
@@ -2334,14 +2405,14 @@ fn check_stmt_with_return(
             let pat = &body.patterns[*pattern];
             match pat {
                 Pattern::Binding(name) => {
-                    ctx.define(name.clone(), ty);
+                    ctx.define_with_site(name.clone(), ty, DefinitionSite::Statement(stmt_id));
                     if *is_watched {
                         ctx.mark_watched(name.clone());
                     }
                 }
                 Pattern::TypedBinding { name, ty: _ } => {
                     // TODO: Check declared type matches inferred type
-                    ctx.define(name.clone(), ty);
+                    ctx.define_with_site(name.clone(), ty, DefinitionSite::Statement(stmt_id));
                     if *is_watched {
                         ctx.mark_watched(name.clone());
                     }
