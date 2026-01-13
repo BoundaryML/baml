@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -13784,16 +13784,34 @@ expression: output
 ───╯
 
   [validation] Error: Duplicate type alias `Language`
-   ╭─[ rust.baml:1:1 ]
-   │
- 1 │ // Try parsing rust source with baml.
-   │ │ 
-   │ ╰─ type alias `Language` redefined here
-   │ │ 
-   │ ╰─ `Language` first defined in rust.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
+     ╭─[ rust.baml:30:18 ]
+     │
+  30 │             type Language = crate::BamlLanguage;
+     │                  ────┬───  
+     │                      ╰───── type alias `Language` redefined here
+     │ 
+ 203 │     type Language = crate::BamlLanguage;
+     │          ────┬───  
+     │              ╰───── `Language` first defined in rust.baml
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
+  [validation] Error: Duplicate type alias `Language`
+     ╭─[ rust.baml:203:10 ]
+     │
+ 203 │     type Language = crate::BamlLanguage;
+     │          ────┬───  
+     │              ╰───── type alias `Language` redefined here
+     │
+     ├─[ rust.baml:203:10 ]
+     │
+  30 │             type Language = crate::BamlLanguage;
+     │                  ────┬───  
+     │                      ╰───── `Language` first defined in rust.baml
+     │ 
+     │ Note: Error code: E0011
+─────╯
 
   [hir] Error: Condition in `while` statement must be wrapped in parentheses.
     ╭─[ very_invalid.baml:8:11 ]

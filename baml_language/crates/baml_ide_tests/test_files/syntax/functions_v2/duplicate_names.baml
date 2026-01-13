@@ -108,13 +108,30 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Duplicate function `Bar`
-//    ╭─[ functions_v2_duplicate_names.baml:1:1 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:10 ]
 //    │
 //  1 │ function Bar {
-//    │ │ 
-//    │ ╰─ function `Bar` redefined here
-//    │ │ 
-//    │ ╰─ `Bar` first defined in functions_v2_duplicate_names.baml
+//    │          ─┬─  
+//    │           ╰─── function `Bar` redefined here
+//    │ 
+//  6 │ function Bar(a: string, b: int | bool) -> int {
+//    │          ─┬─  
+//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯
+// Error: Duplicate function `Bar`
+//    ╭─[ functions_v2_duplicate_names.baml:6:10 ]
+//    │
+//  6 │ function Bar(a: string, b: int | bool) -> int {
+//    │          ─┬─  
+//    │           ╰─── function `Bar` redefined here
+//    │
+//    ├─[ functions_v2_duplicate_names.baml:6:10 ]
+//    │
+//  1 │ function Bar {
+//    │          ─┬─  
+//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

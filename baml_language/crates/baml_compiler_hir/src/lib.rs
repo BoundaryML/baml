@@ -989,6 +989,9 @@ use rustc_hash::FxHashMap;
 struct ItemInfo {
     span: Span,
     path: String,
+    kind: &'static str,
+    /// Whether we've already emitted an error for this item as the "first definition".
+    first_error_emitted: bool,
 }
 
 /// Result of HIR validation.
@@ -1031,8 +1034,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Function(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let func = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let func = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "function", func.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1046,8 +1051,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Class(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let class = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let class = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1061,8 +1068,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let enum_def = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let enum_def = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "enum", enum_def.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1076,8 +1085,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let alias = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let alias = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "type alias", alias.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1091,8 +1102,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Client(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let client = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let client = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "client", client.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1106,8 +1119,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Generator(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let generator = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let generator = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "generator", generator.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1122,8 +1137,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 // Tests are validated separately: only same name + same function is a duplicate
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let test = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let test = &item_tree[local_id];
+                let span = get_item_name_span(db, file, "test", test.name.as_str(), local_id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
 
                 // Check each function reference in the test
@@ -1144,6 +1161,8 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                             ItemInfo {
                                 span,
                                 path: path.clone(),
+                                kind: "test",
+                                first_error_emitted: false,
                             },
                         );
                     }
@@ -1199,7 +1218,21 @@ fn check_duplicate(
     span: Span,
     path: String,
 ) {
-    if let Some(existing) = seen.get(&name) {
+    if let Some(existing) = seen.get_mut(&name) {
+        // If this is the first duplicate we've seen, also emit an error for the first definition
+        if !existing.first_error_emitted {
+            errors.push(NameError::DuplicateName {
+                name: name.to_string(),
+                kind: existing.kind,
+                first: span,
+                first_path: path.clone(),
+                second: existing.span,
+                second_path: existing.path.clone(),
+            });
+            existing.first_error_emitted = true;
+        }
+
+        // Emit error for the current (duplicate) definition
         errors.push(NameError::DuplicateName {
             name: name.to_string(),
             kind,
@@ -1209,7 +1242,15 @@ fn check_duplicate(
             second_path: path,
         });
     } else {
-        seen.insert(name, ItemInfo { span, path });
+        seen.insert(
+            name,
+            ItemInfo {
+                span,
+                path,
+                kind,
+                first_error_emitted: false,
+            },
+        );
     }
 }
 
@@ -1313,6 +1354,122 @@ fn get_enum_variant_info(
                     }
                 }
             }
+        }
+    }
+    None
+}
+
+/// Look up the span of a top-level item's name from the syntax tree.
+///
+/// This is used to get accurate spans for duplicate name errors, since the
+/// ItemTree is position-independent and doesn't store spans.
+///
+/// The `occurrence` parameter specifies which occurrence to return (0 = first, 1 = second, etc.)
+/// when there are multiple items of the same kind with the same name in the file.
+/// This corresponds to the collision index in `LocalItemId`.
+fn get_item_name_span(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    kind: &str,
+    name: &str,
+    occurrence: u16,
+) -> Option<Span> {
+    use baml_compiler_syntax::{
+        SyntaxKind,
+        ast::{ClassDef, ClientDef, EnumDef, FunctionDef, GeneratorDef, TestDef, TypeAliasDef},
+    };
+
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let file_id = file.file_id(db);
+    let mut matches_found: u16 = 0;
+
+    for node in tree.children() {
+        match kind {
+            "function" if node.kind() == SyntaxKind::FUNCTION_DEF => {
+                if let Some(func) = FunctionDef::cast(node) {
+                    if let Some(name_token) = func.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "class" if node.kind() == SyntaxKind::CLASS_DEF => {
+                if let Some(class) = ClassDef::cast(node) {
+                    if let Some(name_token) = class.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "enum" if node.kind() == SyntaxKind::ENUM_DEF => {
+                if let Some(enum_def) = EnumDef::cast(node) {
+                    if let Some(name_token) = enum_def.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "type alias" if node.kind() == SyntaxKind::TYPE_ALIAS_DEF => {
+                if let Some(alias) = TypeAliasDef::cast(node) {
+                    if let Some(name_token) = alias.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "client" if node.kind() == SyntaxKind::CLIENT_DEF => {
+                if let Some(client) = ClientDef::cast(node) {
+                    if let Some(name_token) = client.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "generator" if node.kind() == SyntaxKind::GENERATOR_DEF => {
+                if let Some(generator) = GeneratorDef::cast(node) {
+                    if let Some(name_token) = generator.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "test" if node.kind() == SyntaxKind::TEST_DEF => {
+                if let Some(test) = TestDef::cast(node) {
+                    if let Some(name_token) = test.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
     None
