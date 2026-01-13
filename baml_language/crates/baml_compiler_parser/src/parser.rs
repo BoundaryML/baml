@@ -665,8 +665,14 @@ impl<'a> Parser<'a> {
     fn try_recover_invalid_block(&mut self) -> bool {
         // Check pattern: Word Word LBrace
         let is_word = self.at(TokenKind::Word);
-        let next_is_word = self.peek(1).map(|t| t.kind == TokenKind::Word).unwrap_or(false);
-        let then_lbrace = self.peek(2).map(|t| t.kind == TokenKind::LBrace).unwrap_or(false);
+        let next_is_word = self
+            .peek(1)
+            .map(|t| t.kind == TokenKind::Word)
+            .unwrap_or(false);
+        let then_lbrace = self
+            .peek(2)
+            .map(|t| t.kind == TokenKind::LBrace)
+            .unwrap_or(false);
 
         if !is_word || !next_is_word || !then_lbrace {
             return false;
@@ -679,8 +685,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{}'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.",
-                invalid_keyword
+                "Unknown keyword '{invalid_keyword}'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'."
             ),
             span,
         );
@@ -721,8 +726,14 @@ impl<'a> Parser<'a> {
     fn try_recover_invalid_type_alias(&mut self) -> bool {
         // Check pattern: Word Word Equals
         let is_word = self.at(TokenKind::Word);
-        let next_is_word = self.peek(1).map(|t| t.kind == TokenKind::Word).unwrap_or(false);
-        let then_equals = self.peek(2).map(|t| t.kind == TokenKind::Equals).unwrap_or(false);
+        let next_is_word = self
+            .peek(1)
+            .map(|t| t.kind == TokenKind::Word)
+            .unwrap_or(false);
+        let then_equals = self
+            .peek(2)
+            .map(|t| t.kind == TokenKind::Equals)
+            .unwrap_or(false);
 
         if !is_word || !next_is_word || !then_equals {
             return false;
@@ -735,8 +746,7 @@ impl<'a> Parser<'a> {
         // Emit a helpful error message
         self.error(
             format!(
-                "Unknown keyword '{}'. Did you mean 'type'? Usage: type Name = expression",
-                invalid_keyword
+                "Unknown keyword '{invalid_keyword}'. Did you mean 'type'? Usage: type Name = expression"
             ),
             span,
         );
@@ -758,12 +768,14 @@ impl<'a> Parser<'a> {
             // Stop at keywords that would start a new declaration
             if matches!(
                 self.current().map(|t| t.kind),
-                Some(TokenKind::Class)
-                    | Some(TokenKind::Enum)
-                    | Some(TokenKind::Function)
-                    | Some(TokenKind::Client)
-                    | Some(TokenKind::Generator)
-                    | Some(TokenKind::Test)
+                Some(
+                    TokenKind::Class
+                        | TokenKind::Enum
+                        | TokenKind::Function
+                        | TokenKind::Client
+                        | TokenKind::Generator
+                        | TokenKind::Test
+                )
             ) {
                 break;
             }
@@ -1369,7 +1381,8 @@ impl<'a> Parser<'a> {
             if !self.at(TokenKind::RParen) {
                 if let Some(token) = self.current() {
                     let message = if token.kind == TokenKind::Dot {
-                        "Path identifiers (e.g., 'a.b') are not supported in type expressions".to_string()
+                        "Path identifiers (e.g., 'a.b') are not supported in type expressions"
+                            .to_string()
                     } else {
                         format!("Unexpected '{}' in type expression", token.text)
                     };
