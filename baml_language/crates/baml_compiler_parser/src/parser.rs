@@ -575,6 +575,66 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Try to recover from an invalid top-level block like `classs Foo { ... }`.
+    ///
+    /// Recognizes the pattern: identifier identifier { ... } (where the first identifier
+    /// looks like a typo for a keyword like class/enum/function).
+    ///
+    /// Returns true if recovery was performed, false otherwise.
+    fn try_recover_invalid_block(&mut self) -> bool {
+        // Check pattern: Word Word LBrace
+        let is_word = self.at(TokenKind::Word);
+        let next_is_word = self.peek(1).map(|t| t.kind == TokenKind::Word).unwrap_or(false);
+        let then_lbrace = self.peek(2).map(|t| t.kind == TokenKind::LBrace).unwrap_or(false);
+
+        if !is_word || !next_is_word || !then_lbrace {
+            return false;
+        }
+
+        // Get the invalid keyword text for the error message
+        let invalid_keyword = self.current().map(|t| t.text.clone()).unwrap_or_default();
+        let span = self.current().map(|t| t.span).unwrap_or_default();
+
+        // Emit a helpful error message
+        self.error(
+            format!(
+                "Unknown keyword '{}'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.",
+                invalid_keyword
+            ),
+            span,
+        );
+
+        // Wrap the invalid block in an ERROR node
+        self.start_node(SyntaxKind::ERROR);
+
+        // Skip the invalid keyword and name
+        self.bump(); // invalid keyword (e.g., "classs")
+        self.bump(); // name (e.g., "WrongClass")
+
+        // Skip to matching closing brace
+        if self.at(TokenKind::LBrace) {
+            self.bump(); // consume '{'
+            let mut brace_depth = 1;
+
+            while !self.at_end() && brace_depth > 0 {
+                match self.current().map(|t| t.kind) {
+                    Some(TokenKind::LBrace) => {
+                        brace_depth += 1;
+                        self.bump();
+                    }
+                    Some(TokenKind::RBrace) => {
+                        brace_depth -= 1;
+                        self.bump();
+                    }
+                    _ => self.bump(),
+                }
+            }
+        }
+
+        self.finish_node();
+        true
+    }
+
     // ============ Consumption ============
 
     /// Consume current token, including all trivia before it (whitespace, newlines, comments).
@@ -3234,6 +3294,9 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
             parser.consume_header_comment();
+        } else if parser.try_recover_invalid_block() {
+            // Successfully recovered from invalid block like "classs Foo { ... }"
+            // Continue parsing
         } else {
             parser.error_unexpected_token("top-level declaration".to_string());
             parser.bump(); // Skip unknown token
