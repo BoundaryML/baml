@@ -320,10 +320,17 @@ jobs:
           run: cd baml_language && cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
 
-  test-summary:
-    name: "Test Summary"
+  # CI Failure Alert - Required status check using "skipped = success" pattern
+  # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
+  #
+  # This job exploits GitHub's behavior where skipped jobs report as "Success".
+  # - When all tests pass (or are intentionally skipped): this job SKIPS → reports SUCCESS
+  # - When any test fails or is cancelled: this job RUNS and FAILS → blocks merge
+  #
+  # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
+  ci-failure-alert:
+    name: "CI Failure Alert"
     runs-on: ubuntu-latest
-    if: always()
     needs:
       - cargo-stow
       - cargo-tests
@@ -332,42 +339,24 @@ jobs:
       - docs
       - webview-tests
       - benchmarks-instrumented
+    # Only run if something failed or was cancelled (otherwise skip → success)
+    if: ${{ failure() || cancelled() }}
     steps:
-      - name: "Check test results"
+      - name: Report failure
         run: |
-          if [[ "${{ needs.cargo-stow.result }}" != "success" && "${{ needs.cargo-stow.result }}" != "skipped" ]]; then
-            echo "::error::Cargo stow check failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.cargo-tests.result }}" != "success" && "${{ needs.cargo-tests.result }}" != "skipped" ]]; then
-            echo "::error::Cargo tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.wasm-pack-tests.result }}" != "success" && "${{ needs.wasm-pack-tests.result }}" != "skipped" ]]; then
-            echo "::error::WASM pack tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.beps.result }}" != "success" && "${{ needs.beps.result }}" != "skipped" ]]; then
-            echo "::error::BEPs workflow failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.docs.result }}" != "success" && "${{ needs.docs.result }}" != "skipped" ]]; then
-            echo "::error::Docs workflow failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.webview-tests.result }}" != "success" && "${{ needs.webview-tests.result }}" != "skipped" ]]; then
-            echo "::error::Webview tests failed"
-            exit 1
-          fi
-
-          if [[ "${{ needs.benchmarks-instrumented.result }}" != "success" && "${{ needs.benchmarks-instrumented.result }}" != "skipped" ]]; then
-            echo "::error::Benchmarks failed"
-            exit 1
-          fi
-
-          echo "All required checks passed!"
+          echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more required jobs failed or were cancelled." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo-stow | ${{ needs.cargo-stow.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| benchmarks-instrumented | ${{ needs.benchmarks-instrumented.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::error::One or more CI jobs failed!"
+          exit 1
