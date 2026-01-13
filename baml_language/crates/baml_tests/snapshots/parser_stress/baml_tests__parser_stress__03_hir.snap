@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -13,8 +13,8 @@ class StringTorture {
   long: string
 }
 
-function ComplexType() -> map<string, map<string, map<string, int[]? {
-    // missing body
+function ComplexType() -> Map<string, Map<string, Map<string, int[]?>>> {
+      return;
 }
 
 function DeepExpression() -> int {

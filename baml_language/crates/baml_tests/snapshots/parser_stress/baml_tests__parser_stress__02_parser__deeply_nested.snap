@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -155,121 +155,17 @@ SOURCE_FILE
                   L_BRACKET "["
                   R_BRACKET "]"
                   QUESTION "?"
-  GREATER_GREATER ">>"
-  GREATER ">"
-  L_BRACE "{"
-  KW_RETURN "return"
-  L_BRACE "{"
-  R_BRACE "}"
-  R_BRACE "}"
+                GREATER_GREATER ">>"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          MAP_LITERAL "{}"
+            L_BRACE "{"
+            R_BRACE "}"
+        R_BRACE "}"
 
 === ERRORS ===
-Error: Expected '>', found '>>'
-    ╭─[ deeply_nested.baml:28:69 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                     ─┬  
-    │                                                                      ╰── Expected '>', found '>>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected '>', found '>>'
-    ╭─[ deeply_nested.baml:28:69 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                     ─┬  
-    │                                                                      ╰── Expected '>', found '>>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected '>', found '>>'
-    ╭─[ deeply_nested.baml:28:69 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                     ─┬  
-    │                                                                      ╰── Expected '>', found '>>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected function body, found '>>'
-    ╭─[ deeply_nested.baml:28:69 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                     ─┬  
-    │                                                                      ╰── Expected function body, found '>>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '>>'
-    ╭─[ deeply_nested.baml:28:69 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                     ─┬  
-    │                                                                      ╰── Expected top-level declaration, found '>>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '>'
-    ╭─[ deeply_nested.baml:28:71 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                       ┬  
-    │                                                                       ╰── Expected top-level declaration, found '>'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '{'
-    ╭─[ deeply_nested.baml:28:73 ]
-    │
- 28 │ function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    │                                                                         ┬  
-    │                                                                         ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found return
-    ╭─[ deeply_nested.baml:30:3 ]
-    │
- 30 │   return {}
-    │   ───┬──  
-    │      ╰──── Expected top-level declaration, found return
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '{'
-    ╭─[ deeply_nested.baml:30:10 ]
-    │
- 30 │   return {}
-    │          ┬  
-    │          ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ deeply_nested.baml:30:11 ]
-    │
- 30 │   return {}
-    │           ┬  
-    │           ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ deeply_nested.baml:31:1 ]
-    │
- 31 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+None

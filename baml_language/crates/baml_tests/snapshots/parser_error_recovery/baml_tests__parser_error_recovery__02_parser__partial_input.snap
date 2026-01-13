@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -33,8 +33,7 @@ SOURCE_FILE
         TYPE_EXPR "// Unclosed attribute
   field5"
           WORD "field5"
-    FIELD "string"
-      WORD "string"
+        WORD "string"
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -112,22 +111,22 @@ Error: Expected Unexpected token in class body, found '@'
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected ')', found identifier
+Error: Unexpected 'string' in type expression
    ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
-   │             ╰──── Expected ')', found identifier
+   │             ╰──── Unexpected 'string' in type expression
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:7:10 ]
+Error: Expected ')', found '}'
+   ╭─[ partial_input.baml:8:1 ]
    │
- 7 │   field5 string  // This should parse correctly
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected ')', found '}'
    │ 
    │ Note: Error code: E0010
 ───╯

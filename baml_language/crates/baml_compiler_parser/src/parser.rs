@@ -584,14 +584,10 @@ impl<'a> Parser<'a> {
     ///
     /// Returns true if a '>' was consumed (either standalone or as part of '>>').
     fn expect_greater(&mut self) -> bool {
-        // First check if we have a pending '>' from a previous '>>' split
+        // First check if we have a pending '>' from a previous '>>' split.
+        // Don't emit anything - the '>>' token is already in the tree.
         if self.pending_greaters > 0 {
             self.pending_greaters -= 1;
-            // Emit a synthetic '>' token for the syntax tree
-            self.events.push(Event::Token {
-                kind: SyntaxKind::GREATER,
-                text: ">".to_string(),
-            });
             return true;
         }
 
@@ -599,16 +595,11 @@ impl<'a> Parser<'a> {
             self.bump();
             true
         } else if self.at(TokenKind::GreaterGreater) {
-            // Split '>>' into two '>':
-            // - Emit one '>' token now for the current/inner generic
-            // - Leave the second '>' pending for the outer generic
-            self.events.push(Event::Token {
-                kind: SyntaxKind::GREATER,
-                text: ">".to_string(),
-            });
-            self.pending_greaters += 1;
-            // Consume the '>>' token from the input
+            // Handle '>>' as two '>':
+            // - Consume the '>>' token (adds it to tree once)
+            // - Track that the second '>' is pending for the outer generic
             self.bump();
+            self.pending_greaters += 1;
             true
         } else {
             self.error_unexpected_token("'>'".to_string());
