@@ -7,8 +7,8 @@
     "predev": "npm run baml:generate",
     "prebuild": "npm run baml:generate",
     "dev": "npm-run-all --parallel dev:next dev:convex",
-    "dev:next": "next dev",
-    "dev:convex": "convex dev",
+    "dev:next": "infisical run --env=test -- next dev",
+    "dev:convex": "infisical run --env=test -- convex dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -23,6 +23,7 @@
     "@lexical/rich-text": "^0.39.0",
     "@lexical/selection": "^0.39.0",
     "@lexical/utils": "^0.39.0",
+    "@mdxeditor/editor": "^3.52.3",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -51,6 +52,7 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "shiki": "^3.21.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4",
     "uuid": "^13.0.0"
