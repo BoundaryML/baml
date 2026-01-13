@@ -449,6 +449,72 @@ jobs:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
 
+  # CI Result - Single required status check
+  # This job always runs and reports success when:
+  # 1. All tests passed, OR
+  # 2. Tests were intentionally skipped (only baml_language/ or beps/ changed)
+  # Configure this as the required status check instead of individual jobs
+  ci-result:
+    name: "CI Result"
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - determine_changes
+      - lint
+      - typecheck
+      - build-wasm
+      - test-generators
+      - tests
+    steps:
+      - name: Check CI result
+        run: |
+          # Check if tests were skipped intentionally
+          if [[ "${{ needs.determine_changes.outputs.runtime }}" == "false" ]]; then
+            echo "## ✅ CI Passed (Tests Skipped)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Reason:** ${{ needs.determine_changes.outputs.skip_reason }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Runtime tests were intentionally skipped because no runtime code changed." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          # Check if all required jobs passed
+          FAILED="false"
+
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "::error::Lint check failed with result: ${{ needs.lint.result }}"
+            FAILED="true"
+          fi
+
+          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then
+            echo "::error::Typecheck failed with result: ${{ needs.typecheck.result }}"
+            FAILED="true"
+          fi
+
+          if [[ "${{ needs.build-wasm.result }}" != "success" ]]; then
+            echo "::error::Build WASM failed with result: ${{ needs.build-wasm.result }}"
+            FAILED="true"
+          fi
+
+          if [[ "${{ needs.test-generators.result }}" != "success" ]]; then
+            echo "::error::Test generators failed with result: ${{ needs.test-generators.result }}"
+            FAILED="true"
+          fi
+
+          if [[ "${{ needs.tests.result }}" != "success" ]]; then
+            echo "::error::Tests failed with result: ${{ needs.tests.result }}"
+            FAILED="true"
+          fi
+
+          if [[ "$FAILED" == "true" ]]; then
+            echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "## ✅ CI Passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All checks completed successfully." >> $GITHUB_STEP_SUMMARY
+
   # Sync Zed extension to separate repository
   sync-zed-repository:
     runs-on: ubuntu-latest
