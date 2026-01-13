@@ -167,6 +167,11 @@ pub(crate) struct Parser<'a> {
     events: Vec<Event>,
     /// Track pending '>' tokens from split '>>' (for nested generics like `map<K, map<K2, V>>`).
     pending_greaters: u8,
+    /// Track the span of the '>>' token that created the pending '>', for error reporting.
+    pending_greater_span: Option<Span>,
+    /// Track nesting depth of generic type arguments (`TYPE_ARGS`, `GENERIC_ARGS`).
+    /// Used to detect unmatched '>' when exiting the outermost generic.
+    type_args_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -176,6 +181,8 @@ impl<'a> Parser<'a> {
             current: 0,
             events: Vec::new(),
             pending_greaters: 0,
+            pending_greater_span: None,
+            type_args_depth: 0,
         }
     }
 
@@ -588,6 +595,9 @@ impl<'a> Parser<'a> {
         // Don't emit anything - the '>>' token is already in the tree.
         if self.pending_greaters > 0 {
             self.pending_greaters -= 1;
+            if self.pending_greaters == 0 {
+                self.pending_greater_span = None;
+            }
             return true;
         }
 
@@ -598,8 +608,10 @@ impl<'a> Parser<'a> {
             // Handle '>>' as two '>':
             // - Consume the '>>' token (adds it to tree once)
             // - Track that the second '>' is pending for the outer generic
+            let span = self.current().map(|t| t.span);
             self.bump();
             self.pending_greaters += 1;
+            self.pending_greater_span = span;
             true
         } else {
             self.error_unexpected_token("'>'".to_string());
@@ -1349,6 +1361,7 @@ impl<'a> Parser<'a> {
 
             // Check for generic arguments: map<K, V>
             if self.at(TokenKind::Less) {
+                self.type_args_depth += 1;
                 self.with_node(SyntaxKind::TYPE_ARGS, |p| {
                     p.bump(); // <
 
@@ -1360,6 +1373,22 @@ impl<'a> Parser<'a> {
 
                     p.expect_greater();
                 });
+                self.type_args_depth -= 1;
+
+                // If we just exited the outermost generic and have pending '>', report error
+                if self.type_args_depth == 0 && self.pending_greaters > 0 {
+                    if let Some(span) = self.pending_greater_span {
+                        self.error(
+                            format!(
+                                "Unmatched '>' in type expression (found {} extra)",
+                                self.pending_greaters
+                            ),
+                            span,
+                        );
+                    }
+                    self.pending_greaters = 0;
+                    self.pending_greater_span = None;
+                }
             }
         } else if self.at(TokenKind::LParen) {
             // Tuple type or parenthesized type
@@ -2657,6 +2686,7 @@ impl<'a> Parser<'a> {
 
     /// Parse generic arguments: <Type1, Type2, ...>
     fn parse_generic_args(&mut self) {
+        self.type_args_depth += 1;
         self.with_node(SyntaxKind::GENERIC_ARGS, |p| {
             p.expect(TokenKind::Less);
 
@@ -2675,6 +2705,22 @@ impl<'a> Parser<'a> {
 
             p.expect_greater();
         });
+        self.type_args_depth -= 1;
+
+        // If we just exited the outermost generic and have pending '>', report error
+        if self.type_args_depth == 0 && self.pending_greaters > 0 {
+            if let Some(span) = self.pending_greater_span {
+                self.error(
+                    format!(
+                        "Unmatched '>' in type expression (found {} extra)",
+                        self.pending_greaters
+                    ),
+                    span,
+                );
+            }
+            self.pending_greaters = 0;
+            self.pending_greater_span = None;
+        }
     }
 
     /// Check if the current position looks like a map literal rather than a block
