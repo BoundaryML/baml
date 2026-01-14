@@ -1001,19 +1001,38 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             if segments.is_empty() {
                 Ty::Unknown
             } else if segments.len() == 1 {
-                // Single segment: simple variable lookup
+                // Single segment: variable, function, class, or enum lookup
                 let name = &segments[0];
                 if let Some(ty) = ctx.lookup(name) {
                     let ty = ty.clone();
-                    let definition_site = ctx.get_definition_site(name);
-                    // Store resolution for IDE features
-                    ctx.set_expr_resolution(
-                        expr_id,
+
+                    // Determine the resolution based on what kind of entity this is
+                    let resolution = if let Some(definition_site) = ctx.get_definition_site(name) {
+                        // Has a definition site -> it's a local variable or parameter
                         ResolvedValue::Local {
                             name: name.clone(),
-                            definition_site,
-                        },
-                    );
+                            definition_site: Some(definition_site),
+                        }
+                    } else if ctx.class_names.contains(name) {
+                        // Class name
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone()))
+                    } else if ctx.enum_names.contains(name) {
+                        // Enum name
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Enum(FullyQualifiedName::local(name.clone()))
+                    } else if ctx.type_aliases.contains_key(name) {
+                        // Type alias
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::TypeAlias(FullyQualifiedName::local(name.clone()))
+                    } else {
+                        // Must be a function in globals
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Function(FullyQualifiedName::local(name.clone()))
+                    };
+
+                    // Store resolution for IDE features
+                    ctx.set_expr_resolution(expr_id, resolution);
                     ty
                 } else {
                     ctx.push_error(TypeError::UnknownVariable {
@@ -1109,6 +1128,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                 // Apply field accesses for remaining segments
                 for field in &segments[1..] {
+                    // Before updating ty, check if we're accessing a field on a class
+                    // This is for IDE resolution of field access paths
+                    if let Ty::Class(class_fqn) = &ty {
+                        ctx.set_expr_resolution(
+                            expr_id,
+                            ResolvedValue::Field {
+                                class_fqn: class_fqn.clone(),
+                                field: field.clone(),
+                            },
+                        );
+                    }
                     ty = infer_field_access(ctx, &ty, field, span);
                     segment_types.push(ty.clone());
                 }
@@ -1399,6 +1429,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 Ty::Unknown
             };
+
+            // Store resolution for IDE features if this is a class instantiation
+            if let Some(name) = type_name {
+                if ctx.class_names.contains(name) {
+                    use baml_compiler_hir::FullyQualifiedName;
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone())),
+                    );
+                }
+            }
 
             // Type check spread expressions - they must be the same type as the object
             for spread in spreads {
@@ -1729,6 +1770,17 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             fields,
             spreads: _,
         } => {
+            // Store resolution for IDE features if this is a class instantiation
+            if let Some(name) = type_name {
+                if ctx.class_names.contains(name) {
+                    use baml_compiler_hir::FullyQualifiedName;
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone())),
+                    );
+                }
+            }
+
             // If we expect a specific class type, we can use its field types
             if let Ty::Class(expected_fqn) = expected {
                 use baml_compiler_hir::FullyQualifiedName;

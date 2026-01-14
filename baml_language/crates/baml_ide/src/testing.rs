@@ -6,7 +6,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_db::{Setter, SourceFile, baml_workspace::Project};
-use baml_project::ProjectDatabase;
+use baml_project::{ProjectDatabase, position::LineIndex};
 use text_size::TextSize;
 
 /// The cursor marker used in test sources.
@@ -78,7 +78,7 @@ impl CursorTest {
     /// Get goto-definition result at the cursor position.
     ///
     /// Returns the location of the definition as a string in the format:
-    /// - `"file.baml:line:col"` if definition found
+    /// - `"file.baml:line:col -> TARGET_NAME"` if definition found
     /// - `"No definition found"` if no definition found
     pub fn goto_definition(&self) -> String {
         use crate::goto_definition::goto_definition;
@@ -86,13 +86,27 @@ impl CursorTest {
         let file_id = self.cursor.file.file_id(&self.db);
         match goto_definition(&self.db, file_id, self.cursor.offset) {
             Some(nav_target) => {
-                // For simplicity, just return the name and file
                 let filename = self.db.file_id_to_path(nav_target.span.file_id)
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown");
 
-                format!("{} -> {}", filename, nav_target.name)
+                // Get the source text for the target file to convert offset to line:col
+                let source_files = self.db.get_source_files();
+                let position_str = source_files
+                    .iter()
+                    .find(|f| f.file_id(&self.db) == nav_target.span.file_id)
+                    .map(|source_file| {
+                        let text = source_file.text(&self.db);
+                        let line_index = LineIndex::new(&text);
+                        let start_offset: u32 = nav_target.span.range.start().into();
+                        line_index.offset_to_position(start_offset)
+                            .map(|pos| format!("{}:{}", pos.line + 1, pos.character + 1))
+                            .unwrap_or_else(|| "?:?".to_string())
+                    })
+                    .unwrap_or_else(|| "?:?".to_string());
+
+                format!("{}:{} -> {}", filename, position_str, nav_target.name)
             }
             None => "No definition found".to_string(),
         }

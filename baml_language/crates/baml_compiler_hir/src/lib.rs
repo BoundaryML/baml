@@ -1699,6 +1699,21 @@ fn get_item_name_span(
                     }
                 }
             }
+            // Also search for functions (methods) inside class definitions
+            "function" if node.kind() == SyntaxKind::CLASS_DEF => {
+                if let Some(class) = ClassDef::cast(node) {
+                    for method in class.methods() {
+                        if let Some(name_token) = method.name() {
+                            if name_token.text() == name {
+                                if matches_found == occurrence {
+                                    return Some(Span::new(file_id, name_token.text_range()));
+                                }
+                                matches_found += 1;
+                            }
+                        }
+                    }
+                }
+            }
             "class" if node.kind() == SyntaxKind::CLASS_DEF => {
                 if let Some(class) = ClassDef::cast(node) {
                     if let Some(name_token) = class.name() {
@@ -1960,4 +1975,102 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
     }
 
     errors
+}
+
+//
+// ──────────────────────────────────────────────────── DEFINITION SPANS ─────
+//
+
+/// Returns the span of a definition's name in the source code.
+///
+/// Walks the AST to find the item definition and returns the text range of
+/// its name token. Used by IDE features like goto-definition.
+///
+/// Note: This is not a Salsa tracked function because `Definition` is a plain
+/// enum, not a Salsa struct. However, the underlying queries (item trees,
+/// syntax trees) are cached, so this is still efficient.
+pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
+    let (file, kind, name, index) = match def {
+        Definition::Function(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "function", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::Class(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "class", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::Enum(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "enum", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::TypeAlias(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "type alias", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::Client(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "client", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::Generator(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "generator", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+        Definition::Test(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (file, "test", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+        }
+    };
+
+    get_item_name_span(db, file, kind, name.as_str(), index)
+        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())))
+}
+
+/// Returns the span of a class field's name in the source code.
+///
+/// Walks the AST to find the class definition and then the field within it.
+/// Returns the text range of the field's name token.
+pub fn class_field_name_span(db: &dyn Db, class_loc: ClassLoc<'_>, field_name: &str) -> Option<Span> {
+    use baml_compiler_syntax::{SyntaxKind, ast::ClassDef};
+
+    let file = class_loc.file(db);
+    let file_id = file.file_id(db);
+    let item_tree = file_item_tree(db, file);
+    let class_data = &item_tree[class_loc.id(db)];
+    let class_name = class_data.name.as_str();
+    let occurrence = class_loc.id(db).index();
+
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let mut matches_found: u16 = 0;
+
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::CLASS_DEF {
+            if let Some(class) = ClassDef::cast(node) {
+                if let Some(name_token) = class.name() {
+                    if name_token.text() == class_name {
+                        if matches_found == occurrence {
+                            // Found the right class, now find the field
+                            for field in class.fields() {
+                                if let Some(field_name_token) = field.name() {
+                                    if field_name_token.text() == field_name {
+                                        return Some(Span::new(file_id, field_name_token.text_range()));
+                                    }
+                                }
+                            }
+                            return None; // Class found but field not found
+                        }
+                        matches_found += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
