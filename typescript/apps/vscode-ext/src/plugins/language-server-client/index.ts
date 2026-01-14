@@ -291,6 +291,8 @@ export const publishBamlVersionReport = async (): Promise<string | undefined> =>
       let generatorLanguage: string | undefined = undefined;
       if (Array.isArray(lastKnownGenerators)) {
         if (lastKnownGenerators.length === 0) {
+          console.warn('No generators found for telemetry');
+          bamlOutputChannel.appendLine('no_generator found for baml telemetry');
           generatorLanguage = 'no_generator';
         } else {
           try {

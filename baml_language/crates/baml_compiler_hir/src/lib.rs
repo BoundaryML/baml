@@ -739,17 +739,20 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "class",
-                            container_name: name.to_string(),
-                            field_name: field_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_field_attrs.insert(attr_name.clone(), attr_span);
+                    // @check and @assert can be defined multiple times
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "class",
+                                container_name: name.to_string(),
+                                field_name: field_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_field_attrs.insert(attr_name.clone(), attr_span);
+                        }
                     }
 
                     // Validate constraint attribute syntax (@check, @assert)
@@ -893,17 +896,20 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "enum",
-                            container_name: name.to_string(),
-                            field_name: variant_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_variant_attrs.insert(attr_name, attr_span);
+                    // @check and @assert can be defined multiple times
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "enum",
+                                container_name: name.to_string(),
+                                field_name: variant_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_variant_attrs.insert(attr_name, attr_span);
+                        }
                     }
                 }
             }
@@ -1583,8 +1589,8 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
                 // Skip if field has an @alias attribute
                 if has_python && !has_alias {
                     if let Some(type_name) = get_base_type_name(&field.type_ref) {
-                        // Compare case-insensitively for Python
-                        if field_name.to_lowercase() == type_name.to_lowercase() {
+                        // Compare case-sensitively - only error if exactly the same
+                        if field_name == type_name {
                             errors.push(HirDiagnostic::FieldNameMatchesTypeName {
                                 class_name: class_name.to_string(),
                                 field_name: field_name.to_string(),

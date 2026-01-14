@@ -1,0 +1,117 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "OpenRouterMistralSmall3_1_24b"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE
+          STRING_LITERAL "openai-generic"
+            QUOTE """
+            WORD "openai-generic"
+            QUOTE """
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://openrouter.ai/api/v1"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "openrouter"
+                DOT "."
+                WORD "ai"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v1"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE "env.OPENROUTER_API_KEY"
+              KW_ENV "env"
+              DOT "."
+              WORD "OPENROUTER_API_KEY"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "mistralai/mistral-small-3.1-24b-instruct"
+                QUOTE """
+                WORD "mistralai"
+                SLASH "/"
+                WORD "mistral-small-3"
+                DOT "."
+                INTEGER_LITERAL "1"
+                MINUS "-"
+                INTEGER_LITERAL "24"
+                WORD "b-instruct"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.1"
+              FLOAT_LITERAL "0.1"
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "HTTP-Referer"
+                  QUOTE """
+                  WORD "HTTP-Referer"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "https://me.com"
+                    QUOTE """
+                    WORD "https"
+                    COLON ":"
+                    SLASH "/"
+                    SLASH "/"
+                    WORD "me"
+                    DOT "."
+                    WORD "com"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "// Optional
+      "X-Title""
+                  QUOTE """
+                  WORD "X-Title"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "me"
+                    QUOTE """
+                    WORD "me"
+                    QUOTE """
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+  SLASH "/"
+  SLASH "/"
+  MINUS_MINUS "--"
+  MINUS_MINUS "--"
+  SLASH "/"
+  SLASH "/"
+  MINUS "-"
+  WORD "diagnostics"
+  SLASH "/"
+  SLASH "/"
+  LESS "<"
+  WORD "no-diagnostics-expected"
+  GREATER ">"
+
+=== ERRORS ===
+None
