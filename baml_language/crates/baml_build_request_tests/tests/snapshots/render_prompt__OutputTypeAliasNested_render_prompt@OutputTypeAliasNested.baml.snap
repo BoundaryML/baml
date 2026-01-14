@@ -7,4 +7,4 @@ fixture: OutputTypeAliasNested.baml
 function: FnOutputTypeAliasNested
 prompt:
   type: Completion
-  text: "Return the given value back:\n\n\n\nAnswer in JSON using this schema:\nCombination"
+  text: "Return the given value back:\n\n\n\nAnswer in JSON using any of these schemas:\nint or string or bool or float or string[] or map<string, string[]>"

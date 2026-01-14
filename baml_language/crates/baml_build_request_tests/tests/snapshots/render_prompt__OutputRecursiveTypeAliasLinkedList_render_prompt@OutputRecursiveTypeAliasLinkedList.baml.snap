@@ -7,4 +7,4 @@ fixture: OutputRecursiveTypeAliasLinkedList.baml
 function: FnOutputRecursiveTypeAliasLinkedList
 prompt:
   type: Completion
-  text: "Return the given linked list back:\n\n\n\nLinkedListAliasNode {\n  value: int,\n  next: LinkedListAliasNode or null,\n}\n\nAnswer in JSON using this schema:\nLinkedListAlias"
+  text: "Return the given linked list back:\n\n\n\nAnswer in JSON using this schema:\n{\n  value: int,\n  next: LinkedListAliasNode or null,\n}"

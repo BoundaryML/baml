@@ -7,4 +7,4 @@ fixture: OutputEnum.baml
 function: FnOutputEnum
 prompt:
   type: Completion
-  text: "Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.\n\nEnumOutput\n----\n- ONE\n- TWO\n- THREE\n"
+  text: "Choose one of these values randomly. Before you give the answer, write out an unrelated haiku about the ocean.\n\nVALUE_ENUM\n----\n- ONE\n- two: two\n- hi: three\n"

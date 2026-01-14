@@ -10,7 +10,9 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{MediaKind, Name};
-use baml_compiler_hir::project_class_fields;
+use baml_compiler_hir::{
+    file_item_tree, project_class_fields, project_items, ClassId, EnumId, ItemId,
+};
 use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, Ty as TirTy};
 use baml_db::baml_workspace::Project;
 use baml_output_format::{
@@ -21,6 +23,87 @@ use baml_project::ProjectDatabase;
 use indexmap::{IndexMap, IndexSet};
 
 use crate::tarjan::{Graph, Tarjan};
+
+/// Context for resolving type aliases during type conversion.
+struct TypeAliasContext {
+    /// Type alias definitions: alias_name -> resolved_type
+    defs: HashMap<Name, TirTy>,
+    /// Names of aliases that are recursive (reference themselves)
+    recursive: HashSet<String>,
+}
+
+impl TypeAliasContext {
+    /// Create a new type alias context, computing which aliases are recursive.
+    fn new(type_alias_defs: HashMap<Name, TirTy>) -> Self {
+        let mut recursive = HashSet::new();
+
+        // Find all recursive aliases
+        for name in type_alias_defs.keys() {
+            if Self::type_references_name_static(&type_alias_defs, &type_alias_defs[name], &name.to_string(), &mut HashSet::new()) {
+                recursive.insert(name.to_string());
+            }
+        }
+
+        Self {
+            defs: type_alias_defs,
+            recursive,
+        }
+    }
+
+    /// Check if a type references a given name (directly or indirectly through aliases).
+    fn type_references_name_static(
+        type_alias_defs: &HashMap<Name, TirTy>,
+        ty: &TirTy,
+        target_name: &str,
+        visited: &mut HashSet<String>,
+    ) -> bool {
+        match ty {
+            TirTy::Named(name) => {
+                let name_str = name.to_string();
+                if name_str == target_name {
+                    return true;
+                }
+                // Prevent infinite loops
+                if !visited.insert(name_str.clone()) {
+                    return false;
+                }
+                // Check resolved type
+                if let Some(resolved) = type_alias_defs.get(name) {
+                    let result = Self::type_references_name_static(type_alias_defs, resolved, target_name, visited);
+                    visited.remove(&name_str);
+                    return result;
+                }
+                visited.remove(&name_str);
+                false
+            }
+            TirTy::Optional(inner) | TirTy::List(inner) | TirTy::WatchAccessor(inner) => {
+                Self::type_references_name_static(type_alias_defs, inner, target_name, visited)
+            }
+            TirTy::Map { key, value } => {
+                Self::type_references_name_static(type_alias_defs, key, target_name, visited)
+                    || Self::type_references_name_static(type_alias_defs, value, target_name, visited)
+            }
+            TirTy::Union(variants) => {
+                variants.iter().any(|v| Self::type_references_name_static(type_alias_defs, v, target_name, visited))
+            }
+            TirTy::Function { params, ret } => {
+                params.iter().any(|p| Self::type_references_name_static(type_alias_defs, p, target_name, visited))
+                    || Self::type_references_name_static(type_alias_defs, ret, target_name, visited)
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if a type alias name is recursive.
+    fn is_recursive(&self, name: &str) -> bool {
+        self.recursive.contains(name)
+    }
+
+    /// Get the resolved type for a type alias name.
+    fn get(&self, name: &Name) -> Option<&TirTy> {
+        self.defs.get(name)
+    }
+}
 
 /// Collect all enums and classes referenced by the target type.
 ///
@@ -42,8 +125,6 @@ pub fn relevant_data_models(
 }
 
 struct OutputFormatTypeCollector<'db> {
-    // NOTE: These fields are kept for future use (attributes, etc.)
-    #[allow(dead_code)]
     db: &'db ProjectDatabase,
     #[allow(dead_code)]
     project: Project,
@@ -54,8 +135,12 @@ struct OutputFormatTypeCollector<'db> {
     class_fields: IndexMap<Name, IndexMap<Name, TirTy>>,
     /// Class field order from HIR (preserves source order)
     class_field_order: HashMap<String, Vec<String>>,
-    /// Type alias definitions: alias_name -> resolved_type
-    type_alias_defs: HashMap<Name, TirTy>,
+    /// Type alias context with recursive alias tracking
+    type_alias_ctx: TypeAliasContext,
+    /// Class HIR locations for attribute lookup
+    class_locs: HashMap<String, ClassId<'db>>,
+    /// Enum HIR locations for attribute lookup
+    enum_locs: HashMap<String, EnumId<'db>>,
 
     // Results
     enums: IndexMap<String, Enum>,
@@ -107,13 +192,40 @@ impl<'db> OutputFormatTypeCollector<'db> {
             })
             .collect();
 
+        // Create type alias context with recursive alias tracking
+        let type_alias_ctx = TypeAliasContext::new(type_alias_defs);
+
+        // Build class and enum location maps for attribute lookup
+        let mut class_locs: HashMap<String, ClassId<'db>> = HashMap::new();
+        let mut enum_locs: HashMap<String, EnumId<'db>> = HashMap::new();
+
+        for item in project_items(db, project).items(db) {
+            match item {
+                ItemId::Class(class_id) => {
+                    let file = class_id.file(db);
+                    let item_tree = file_item_tree(db, file);
+                    let class_data = &item_tree[class_id.id(db)];
+                    class_locs.insert(class_data.name.to_string(), *class_id);
+                }
+                ItemId::Enum(enum_id) => {
+                    let file = enum_id.file(db);
+                    let item_tree = file_item_tree(db, file);
+                    let enum_data = &item_tree[enum_id.id(db)];
+                    enum_locs.insert(enum_data.name.to_string(), *enum_id);
+                }
+                _ => {}
+            }
+        }
+
         Self {
             db,
             project,
             enum_variants,
             class_fields,
             class_field_order,
-            type_alias_defs,
+            type_alias_ctx,
+            class_locs,
+            enum_locs,
             enums: IndexMap::new(),
             classes: IndexMap::new(),
             structural_recursive_aliases: IndexMap::new(),
@@ -147,7 +259,7 @@ impl<'db> OutputFormatTypeCollector<'db> {
                         self.collect_enum(name);
                     } else if self.class_fields.contains_key(name) {
                         self.collect_class(name, &mut stack);
-                    } else if let Some(resolved_type) = self.type_alias_defs.get(name).cloned() {
+                    } else if let Some(resolved_type) = self.type_alias_ctx.get(name).cloned() {
                         // It's a type alias - collect it
                         self.collect_type_alias(name, &resolved_type, &mut stack);
                     }
@@ -194,13 +306,66 @@ impl<'db> OutputFormatTypeCollector<'db> {
             return; // Enum not found in database
         };
 
+        // Get HIR enum data for attributes
+        let hir_enum = self.enum_locs.get(&name_str).map(|enum_id| {
+            let file = enum_id.file(self.db);
+            let item_tree = file_item_tree(self.db, file);
+            let enum_data = &item_tree[enum_id.id(self.db)];
+            (
+                enum_data.alias.value().cloned(),
+                enum_data.variants.clone(),
+            )
+        });
+
+        let (enum_alias, hir_variants) = hir_enum.unwrap_or((None, vec![]));
+
+        // Build a map of variant name -> (alias, description, skip) from HIR
+        let variant_attrs: HashMap<String, (Option<String>, Option<String>, bool)> = hir_variants
+            .iter()
+            .map(|v| {
+                (
+                    v.name.to_string(),
+                    (
+                        v.alias.value().cloned(),
+                        v.description.value().cloned(),
+                        v.skip.is_explicit(),
+                    ),
+                )
+            })
+            .collect();
+
+        let enum_output_name = if let Some(alias_val) = enum_alias {
+            OutputName::with_alias(name_str.clone(), alias_val)
+        } else {
+            OutputName::new(name_str.clone())
+        };
+
         let enum_def = Enum {
-            name: OutputName::new(name_str.clone()),
+            name: enum_output_name,
             variants: variants
                 .iter()
-                .map(|v| EnumVariant {
-                    name: OutputName::new(v.to_string()),
-                    description: None, // Skip attributes for now
+                .filter_map(|v| {
+                    let variant_name_str = v.to_string();
+                    let (alias, description, skip) = variant_attrs
+                        .get(&variant_name_str)
+                        .cloned()
+                        .unwrap_or((None, None, false));
+
+                    // Skip variants with @skip attribute
+                    if skip {
+                        return None;
+                    }
+
+                    let output_name = if let Some(alias_val) = alias {
+                        OutputName::with_alias(variant_name_str, alias_val)
+                    } else {
+                        OutputName::new(variant_name_str)
+                    };
+
+                    Some(EnumVariant {
+                        name: output_name,
+                        description,
+                    })
                 })
                 .collect(),
         };
@@ -221,6 +386,36 @@ impl<'db> OutputFormatTypeCollector<'db> {
         // Track this class for cycle detection
         self.collected_class_names.push(name_str.clone());
 
+        // Get HIR class data for attributes
+        let hir_class = self.class_locs.get(&name_str).map(|class_id| {
+            let file = class_id.file(self.db);
+            let item_tree = file_item_tree(self.db, file);
+            // Clone the class data to avoid borrowing issues
+            let class_data = &item_tree[class_id.id(self.db)];
+            (
+                class_data.alias.value().cloned(),
+                class_data.description.value().cloned(),
+                class_data.fields.clone(),
+            )
+        });
+
+        let (class_alias, class_description, hir_fields) = hir_class.unwrap_or((None, None, vec![]));
+
+        // Build a map of field name -> (alias, description, skip) from HIR
+        let field_attrs: HashMap<String, (Option<String>, Option<String>, bool)> = hir_fields
+            .iter()
+            .map(|f| {
+                (
+                    f.name.to_string(),
+                    (
+                        f.alias.value().cloned(),
+                        f.description.value().cloned(),
+                        f.skip.is_explicit(),
+                    ),
+                )
+            })
+            .collect();
+
         // Get field order from HIR (preserves source order)
         let field_order = self.class_field_order.get(&name_str);
 
@@ -231,16 +426,33 @@ impl<'db> OutputFormatTypeCollector<'db> {
                 .iter()
                 .filter_map(|field_name| {
                     let name_key = Name::new(field_name.clone());
-                    fields.get(&name_key).map(|field_type| {
+                    fields.get(&name_key).and_then(|field_type| {
+                        // Get field attributes
+                        let (alias, description, skip) = field_attrs
+                            .get(field_name)
+                            .cloned()
+                            .unwrap_or((None, None, false));
+
+                        // Skip fields with @skip attribute
+                        if skip {
+                            return None;
+                        }
+
                         // Push field type onto stack for processing
                         stack.push(field_type.clone());
 
-                        ClassField {
-                            name: OutputName::new(field_name.clone()),
-                            field_type: tir_ty_to_base_ty(field_type),
-                            description: None, // Skip attributes for now
+                        let output_name = if let Some(alias_val) = alias {
+                            OutputName::with_alias(field_name.clone(), alias_val)
+                        } else {
+                            OutputName::new(field_name.clone())
+                        };
+
+                        Some(ClassField {
+                            name: output_name,
+                            field_type: tir_ty_to_base_ty_with_alias_ctx(field_type, &self.type_alias_ctx, &mut HashSet::new()),
+                            description,
                             required: !is_optional(field_type),
-                        }
+                        })
                     })
                 })
                 .collect()
@@ -248,23 +460,47 @@ impl<'db> OutputFormatTypeCollector<'db> {
             // Fallback: use TIR order (may not be source order)
             fields
                 .iter()
-                .map(|(field_name, field_type)| {
+                .filter_map(|(field_name, field_type)| {
+                    let field_name_str = field_name.to_string();
+                    // Get field attributes
+                    let (alias, description, skip) = field_attrs
+                        .get(&field_name_str)
+                        .cloned()
+                        .unwrap_or((None, None, false));
+
+                    // Skip fields with @skip attribute
+                    if skip {
+                        return None;
+                    }
+
                     // Push field type onto stack for processing
                     stack.push(field_type.clone());
 
-                    ClassField {
-                        name: OutputName::new(field_name.to_string()),
-                        field_type: tir_ty_to_base_ty(field_type),
-                        description: None, // Skip attributes for now
+                    let output_name = if let Some(alias_val) = alias {
+                        OutputName::with_alias(field_name_str, alias_val)
+                    } else {
+                        OutputName::new(field_name_str)
+                    };
+
+                    Some(ClassField {
+                        name: output_name,
+                        field_type: tir_ty_to_base_ty_with_alias_ctx(field_type, &self.type_alias_ctx, &mut HashSet::new()),
+                        description,
                         required: !is_optional(field_type),
-                    }
+                    })
                 })
                 .collect()
         };
 
+        let class_output_name = if let Some(alias_val) = class_alias {
+            OutputName::with_alias(name_str.clone(), alias_val)
+        } else {
+            OutputName::new(name_str.clone())
+        };
+
         let class_def = Class {
-            name: OutputName::new(name_str.clone()),
-            description: None, // Skip attributes for now
+            name: class_output_name,
+            description: class_description,
             fields: class_fields,
         };
 
@@ -279,59 +515,17 @@ impl<'db> OutputFormatTypeCollector<'db> {
             self.collected_alias_names.push(name_str.clone());
         }
 
-        // Check if this alias creates a recursive cycle by seeing if the resolved
-        // type references this alias name. If so, add it to structural_recursive_aliases.
-        if self.type_references_alias(resolved_type, &name_str) {
+        // If this alias is recursive, add it to structural_recursive_aliases
+        if self.type_alias_ctx.is_recursive(&name_str) {
             if !self.structural_recursive_aliases.contains_key(&name_str) {
-                let base_ty = tir_ty_to_base_ty(resolved_type);
+                // For recursive aliases, convert to base type (will keep Named references)
+                let base_ty = tir_ty_to_base_ty_with_alias_ctx(resolved_type, &self.type_alias_ctx, &mut HashSet::new());
                 self.structural_recursive_aliases.insert(name_str, base_ty);
             }
         }
 
         // Push the resolved type onto the stack for further traversal
         stack.push(resolved_type.clone());
-    }
-
-    /// Check if a type references a given alias name (directly or indirectly).
-    fn type_references_alias(&self, ty: &TirTy, alias_name: &str) -> bool {
-        let mut visited = HashSet::new();
-        self.type_references_alias_impl(ty, alias_name, &mut visited)
-    }
-
-    fn type_references_alias_impl(&self, ty: &TirTy, alias_name: &str, visited: &mut HashSet<String>) -> bool {
-        match ty {
-            TirTy::Named(name) => {
-                let name_str = name.to_string();
-                if name_str == alias_name {
-                    return true;
-                }
-                // Prevent infinite loops by tracking visited aliases
-                if !visited.insert(name_str.clone()) {
-                    return false; // Already visited this alias
-                }
-                // Check if this named type resolves to something that references the alias
-                if let Some(resolved) = self.type_alias_defs.get(name) {
-                    return self.type_references_alias_impl(resolved, alias_name, visited);
-                }
-                false
-            }
-            TirTy::Class(name) | TirTy::Enum(name) => name.to_string() == alias_name,
-            TirTy::Optional(inner) | TirTy::List(inner) | TirTy::WatchAccessor(inner) => {
-                self.type_references_alias_impl(inner, alias_name, visited)
-            }
-            TirTy::Map { key, value } => {
-                self.type_references_alias_impl(key, alias_name, visited)
-                    || self.type_references_alias_impl(value, alias_name, visited)
-            }
-            TirTy::Union(variants) => {
-                variants.iter().any(|v| self.type_references_alias_impl(v, alias_name, visited))
-            }
-            TirTy::Function { params, ret } => {
-                params.iter().any(|p| self.type_references_alias_impl(p, alias_name, visited))
-                    || self.type_references_alias_impl(ret, alias_name, visited)
-            }
-            _ => false,
-        }
     }
 
     /// Build a dependency graph from collected classes.
@@ -364,32 +558,50 @@ impl<'db> OutputFormatTypeCollector<'db> {
     ///
     /// Recursively walks the type structure and collects all class names
     /// that are referenced, but only if they're in our collected set.
+    /// Resolves type aliases to find underlying class references.
     fn extract_class_refs(&self, ty: &TirTy, refs: &mut HashSet<String>) {
+        self.extract_class_refs_impl(ty, refs, &mut HashSet::new());
+    }
+
+    fn extract_class_refs_impl(&self, ty: &TirTy, refs: &mut HashSet<String>, visited_aliases: &mut HashSet<String>) {
         match ty {
-            TirTy::Class(name) | TirTy::Named(name) => {
+            TirTy::Class(name) => {
                 let name_str = name.to_string();
                 // Only include if it's in our collected classes
                 if self.collected_class_names.contains(&name_str) {
                     refs.insert(name_str);
                 }
             }
+            TirTy::Named(name) => {
+                let name_str = name.to_string();
+                // First check if it's a collected class
+                if self.collected_class_names.contains(&name_str) {
+                    refs.insert(name_str);
+                } else if let Some(resolved) = self.type_alias_ctx.get(name) {
+                    // It's a type alias - resolve it and extract refs from the resolved type
+                    // Prevent infinite loops by tracking visited aliases
+                    if visited_aliases.insert(name_str) {
+                        self.extract_class_refs_impl(resolved, refs, visited_aliases);
+                    }
+                }
+            }
             TirTy::Optional(inner) | TirTy::List(inner) | TirTy::WatchAccessor(inner) => {
-                self.extract_class_refs(inner, refs);
+                self.extract_class_refs_impl(inner, refs, visited_aliases);
             }
             TirTy::Map { key, value } => {
-                self.extract_class_refs(key, refs);
-                self.extract_class_refs(value, refs);
+                self.extract_class_refs_impl(key, refs, visited_aliases);
+                self.extract_class_refs_impl(value, refs, visited_aliases);
             }
             TirTy::Union(variants) => {
                 for v in variants {
-                    self.extract_class_refs(v, refs);
+                    self.extract_class_refs_impl(v, refs, visited_aliases);
                 }
             }
             TirTy::Function { params, ret } => {
                 for p in params {
-                    self.extract_class_refs(p, refs);
+                    self.extract_class_refs_impl(p, refs, visited_aliases);
                 }
-                self.extract_class_refs(ret, refs);
+                self.extract_class_refs_impl(ret, refs, visited_aliases);
             }
             // Terminal types - no class references
             TirTy::Int
@@ -446,17 +658,103 @@ impl<'db> OutputFormatTypeCollector<'db> {
             builder = builder.with_structural_recursive_alias(name, ty);
         }
 
-        // Set the target type
-        builder = builder.with_target(tir_ty_to_base_ty(target));
+        // Set the target type, resolving type aliases
+        let target_ty = tir_ty_to_base_ty_with_alias_ctx(target, &self.type_alias_ctx, &mut HashSet::new());
+        builder = builder.with_target(target_ty);
 
         builder.build()
     }
 }
 
-/// Convert a TIR type to a baml_base type.
+/// Convert a TIR type to a baml_base type, resolving type aliases.
 ///
-/// This is necessary because baml_compiler_tir::Ty and baml_base::Ty have
-/// slightly different representations (e.g., Media(kind) vs Image/Audio/Video/Pdf).
+/// This function resolves non-recursive type aliases to their underlying types.
+/// Recursive aliases are kept as `Ty::Named` since they're handled separately
+/// via `structural_recursive_aliases`.
+fn tir_ty_to_base_ty_with_alias_ctx(
+    ty: &TirTy,
+    alias_ctx: &TypeAliasContext,
+    visited: &mut HashSet<String>,
+) -> baml_base::Ty {
+    match ty {
+        TirTy::Int => baml_base::Ty::Int,
+        TirTy::Float => baml_base::Ty::Float,
+        TirTy::String => baml_base::Ty::String,
+        TirTy::Bool => baml_base::Ty::Bool,
+        TirTy::Null => baml_base::Ty::Null,
+        TirTy::Media(kind) => match kind {
+            MediaKind::Image => baml_base::Ty::Image,
+            MediaKind::Audio => baml_base::Ty::Audio,
+            MediaKind::Video => baml_base::Ty::Video,
+            MediaKind::Pdf => baml_base::Ty::Pdf,
+            MediaKind::Generic => baml_base::Ty::Image,
+        },
+        TirTy::Literal(lit) => baml_base::Ty::Literal(tir_literal_to_base_literal(lit)),
+        TirTy::Class(name) => baml_base::Ty::Class(name.clone()),
+        TirTy::Enum(name) => baml_base::Ty::Enum(name.clone()),
+        TirTy::Named(name) => {
+            let name_str = name.to_string();
+
+            // Recursive aliases: keep as Named (handled via structural_recursive_aliases)
+            if alias_ctx.is_recursive(&name_str) {
+                return baml_base::Ty::Named(name.clone());
+            }
+
+            // Prevent infinite loops during resolution
+            if !visited.insert(name_str.clone()) {
+                return baml_base::Ty::Named(name.clone());
+            }
+
+            // Non-recursive alias: resolve to underlying type
+            if let Some(resolved) = alias_ctx.get(name) {
+                let result = tir_ty_to_base_ty_with_alias_ctx(resolved, alias_ctx, visited);
+                visited.remove(&name_str);
+                return result;
+            }
+
+            // Not a type alias (class/enum handled elsewhere, or unknown)
+            visited.remove(&name_str);
+            baml_base::Ty::Named(name.clone())
+        }
+        TirTy::Optional(inner) => {
+            baml_base::Ty::Optional(Box::new(tir_ty_to_base_ty_with_alias_ctx(inner, alias_ctx, visited)))
+        }
+        TirTy::List(inner) => {
+            baml_base::Ty::List(Box::new(tir_ty_to_base_ty_with_alias_ctx(inner, alias_ctx, visited)))
+        }
+        TirTy::Map { key, value } => baml_base::Ty::Map {
+            key: Box::new(tir_ty_to_base_ty_with_alias_ctx(key, alias_ctx, visited)),
+            value: Box::new(tir_ty_to_base_ty_with_alias_ctx(value, alias_ctx, visited)),
+        },
+        TirTy::Union(variants) => {
+            baml_base::Ty::Union(
+                variants
+                    .iter()
+                    .map(|v| tir_ty_to_base_ty_with_alias_ctx(v, alias_ctx, visited))
+                    .collect(),
+            )
+        }
+        TirTy::Function { params, ret } => baml_base::Ty::Function {
+            params: params
+                .iter()
+                .map(|p| tir_ty_to_base_ty_with_alias_ctx(p, alias_ctx, visited))
+                .collect(),
+            ret: Box::new(tir_ty_to_base_ty_with_alias_ctx(ret, alias_ctx, visited)),
+        },
+        TirTy::Unknown => baml_base::Ty::Unknown,
+        TirTy::Error => baml_base::Ty::Error,
+        TirTy::Void => baml_base::Ty::Void,
+        TirTy::WatchAccessor(inner) => {
+            baml_base::Ty::WatchAccessor(Box::new(tir_ty_to_base_ty_with_alias_ctx(inner, alias_ctx, visited)))
+        }
+    }
+}
+
+/// Convert a TIR type to a baml_base type (without alias resolution).
+///
+/// This is the legacy function kept for tests. Use `tir_ty_to_base_ty_with_alias_ctx`
+/// in the collector for proper type alias handling.
+#[cfg(test)]
 fn tir_ty_to_base_ty(ty: &TirTy) -> baml_base::Ty {
     match ty {
         TirTy::Int => baml_base::Ty::Int,
@@ -469,7 +767,7 @@ fn tir_ty_to_base_ty(ty: &TirTy) -> baml_base::Ty {
             MediaKind::Audio => baml_base::Ty::Audio,
             MediaKind::Video => baml_base::Ty::Video,
             MediaKind::Pdf => baml_base::Ty::Pdf,
-            MediaKind::Generic => baml_base::Ty::Image, // Default to image for generic
+            MediaKind::Generic => baml_base::Ty::Image,
         },
         TirTy::Literal(lit) => baml_base::Ty::Literal(tir_literal_to_base_literal(lit)),
         TirTy::Class(name) => baml_base::Ty::Class(name.clone()),

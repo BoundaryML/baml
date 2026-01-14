@@ -242,10 +242,10 @@ fn render_hoisted_definitions(ctx: &mut RenderContext) -> Result<String, RenderE
                 for field in &class.fields {
                     let field_type = render_type_inline(&field.field_type, ctx)?;
                     if let Some(desc) = &field.description {
-                        result.push_str(&format!("  {}: {}, // {}\n", field.name.rendered_name(), field_type, desc));
-                    } else {
-                        result.push_str(&format!("  {}: {},\n", field.name.rendered_name(), field_type));
+                        // Block comment before field (matches old implementation)
+                        result.push_str(&format!("  // {}\n", desc.replace("\n", "\n  // ")));
                     }
+                    result.push_str(&format!("  {}: {},\n", field.name.rendered_name(), field_type));
                 }
 
                 result.push_str("}\n");
@@ -427,12 +427,11 @@ fn render_class(name: &str, ctx: &mut RenderContext, _is_top_level: bool) -> Res
             field.name.rendered_name().to_string()
         };
 
-        // Add trailing comma after each field
+        // Block comment before field (matches old implementation)
         if let Some(desc) = &field.description {
-            result.push_str(&format!("{}{}: {}, // {}\n", field_indent, field_name, field_type, desc));
-        } else {
-            result.push_str(&format!("{}{}: {},\n", field_indent, field_name, field_type));
+            result.push_str(&format!("{}// {}\n", field_indent, desc.replace("\n", &format!("\n{}// ", field_indent))));
         }
+        result.push_str(&format!("{}{}: {},\n", field_indent, field_name, field_type));
     }
 
     result.push_str(&format!("{}}}", indent));
@@ -465,11 +464,11 @@ fn render_field_type(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderError
                     // Replace newlines in nested types for proper indentation
                     let field_type = field_type.replace('\n', "\n    ");
 
+                    // Block comment before field (matches old implementation)
                     if let Some(desc) = &field.description {
-                        result.push_str(&format!("    {}: {}, // {}\n", field_name, field_type, desc));
-                    } else {
-                        result.push_str(&format!("    {}: {},\n", field_name, field_type));
+                        result.push_str(&format!("    // {}\n", desc.replace("\n", "\n    // ")));
                     }
+                    result.push_str(&format!("    {}: {},\n", field_name, field_type));
                 }
 
                 result.push_str("  }");
@@ -488,9 +487,9 @@ fn render_field_type(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderError
 
         Ty::List(inner) => {
             let inner_str = render_field_type(inner, ctx)?;
-            // If inner type is complex (contains newlines), wrap in array brackets on separate lines
-            if inner_str.contains('\n') {
-                Ok(format!("[\n    {}\n  ]", inner_str.replace('\n', "\n    ")))
+            // Always use postfix notation, parenthesize unions for clarity
+            if matches!(inner.as_ref(), Ty::Union(_)) {
+                Ok(format!("({})[]", inner_str))
             } else {
                 Ok(format!("{}[]", inner_str))
             }
@@ -526,9 +525,15 @@ fn render_enum(name: &str, ctx: &mut RenderContext, is_top_level: bool) -> Resul
 
         let prefix = ctx.enum_value_prefix();
         for variant in &enum_def.variants {
-            result.push_str(&format!("{}{}", prefix, variant.name.rendered_name()));
+            let rendered = variant.name.rendered_name();
+
+            result.push_str(&prefix);
             if let Some(desc) = &variant.description {
-                result.push_str(&format!(": {}", desc));
+                // Has description: show "alias: description" (matches old implementation)
+                result.push_str(&format!("{}: {}", rendered, desc.replace("\n", "\n  ")));
+            } else {
+                // No description: show just the rendered name (alias or actual)
+                result.push_str(rendered);
             }
             result.push('\n');
         }
@@ -652,5 +657,48 @@ mod tests {
         assert!(result.is_some());
         let rendered = result.unwrap();
         assert!(rendered.contains("'pending' | 'done'"), "Expected custom or_splitter but got: {}", rendered);
+    }
+
+    #[test]
+    fn test_union_in_list_uses_or_splitter() {
+        // Test: (float | bool)[] should render with "or" not "|"
+        let test_class = Class::new("TestClass")
+            .with_field("prop2", Ty::List(Box::new(
+                Ty::Union(vec![Ty::Float, Ty::Bool])
+            )), None, true);
+
+        let content = OutputFormatBuilder::new()
+            .with_class(test_class)
+            .with_target(Ty::Class(BaseName::from("TestClass")))
+            .build();
+
+        let result = render(&content, &OutputFormatOptions::default()).unwrap();
+        let rendered = result.unwrap();
+
+        // Should use "or" not "|"
+        assert!(rendered.contains("float or bool"), "Expected 'float or bool' but got: {}", rendered);
+        assert!(!rendered.contains(" | "), "Should not contain ' | ': {}", rendered);
+    }
+
+    #[test]
+    fn test_union_of_lists_uses_or_splitter() {
+        // Test: bool[] | int[] should render with "or" not "|"
+        let test_class = Class::new("TestClass")
+            .with_field("prop3", Ty::Union(vec![
+                Ty::List(Box::new(Ty::Bool)),
+                Ty::List(Box::new(Ty::Int)),
+            ]), None, true);
+
+        let content = OutputFormatBuilder::new()
+            .with_class(test_class)
+            .with_target(Ty::Class(BaseName::from("TestClass")))
+            .build();
+
+        let result = render(&content, &OutputFormatOptions::default()).unwrap();
+        let rendered = result.unwrap();
+
+        // Should use "or" not "|"
+        assert!(rendered.contains("bool[] or int[]"), "Expected 'bool[] or int[]' but got: {}", rendered);
+        assert!(!rendered.contains(" | "), "Should not contain ' | ': {}", rendered);
     }
 }

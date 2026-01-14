@@ -7,4 +7,4 @@ fixture: OutputTypeAliasReturnMerged.baml
 function: FnOutputTypeAliasReturnMerged
 prompt:
   type: Completion
-  text: "Return the given integer without additional context:\n\n\n\nAnswer in JSON using this schema:\nAmount"
+  text: "Return the given integer without additional context:\n\n\n\nAnswer as an int"

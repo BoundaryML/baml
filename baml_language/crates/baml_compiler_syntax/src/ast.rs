@@ -761,12 +761,47 @@ impl BlockAttribute {
 
     /// Get the first string argument value (unquoted).
     /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
+    /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
         let args = self
             .syntax
             .children()
             .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
 
+        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
+        for child in args.children() {
+            match child.kind() {
+                SyntaxKind::STRING_LITERAL => {
+                    // Get full text and strip quotes: "content" -> content
+                    let text = child.text().to_string();
+                    let trimmed = text.trim();
+                    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+                        return Some(trimmed[1..trimmed.len() - 1].to_string());
+                    }
+                }
+                SyntaxKind::RAW_STRING_LITERAL => {
+                    // Get full text and strip raw string delimiters: #"content"# -> content
+                    let text = child.text().to_string();
+                    let trimmed = text.trim();
+                    // Count leading hashes
+                    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
+                    if hash_count > 0 {
+                        // Strip #..."..."#
+                        let inner = &trimmed[hash_count..];
+                        if inner.starts_with('"') {
+                            if let Some(end_pos) = inner.rfind('"') {
+                                if end_pos > 0 {
+                                    return Some(inner[1..end_pos].to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Fallback: collect non-structural tokens (for unquoted strings)
         let result: String = args
             .descendants_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
@@ -922,14 +957,47 @@ impl Attribute {
     /// Get the first string argument value (unquoted).
     /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
     /// For @alias("foo") returns Some("foo").
+    /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
         let args = self
             .syntax
             .children()
             .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
 
-        // Look for STRING_LITERAL or RAW_STRING_LITERAL tokens inside the args
-        // Similar to ConfigItem::value_str() but simpler - we just want the string content
+        // First, try to find a STRING_LITERAL or RAW_STRING_LITERAL node and extract its content
+        for child in args.children() {
+            match child.kind() {
+                SyntaxKind::STRING_LITERAL => {
+                    // Get full text and strip quotes: "content" -> content
+                    let text = child.text().to_string();
+                    let trimmed = text.trim();
+                    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+                        return Some(trimmed[1..trimmed.len() - 1].to_string());
+                    }
+                }
+                SyntaxKind::RAW_STRING_LITERAL => {
+                    // Get full text and strip raw string delimiters: #"content"# -> content
+                    let text = child.text().to_string();
+                    let trimmed = text.trim();
+                    // Count leading hashes
+                    let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
+                    if hash_count > 0 {
+                        // Strip #..."..."#
+                        let inner = &trimmed[hash_count..];
+                        if inner.starts_with('"') {
+                            if let Some(end_pos) = inner.rfind('"') {
+                                if end_pos > 0 {
+                                    return Some(inner[1..end_pos].to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Fallback: collect non-structural tokens (for unquoted strings)
         let result: String = args
             .descendants_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)

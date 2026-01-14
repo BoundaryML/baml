@@ -7,4 +7,4 @@ fixture: OutputTypeAliasPrimitive.baml
 function: FnOutputTypeAliasPrimitive
 prompt:
   type: Completion
-  text: "Return the given value back: \n\nAnswer in JSON using this schema:\nPrimitive"
+  text: "Return the given value back: \n\nAnswer in JSON using any of these schemas:\nint or string or bool or float"

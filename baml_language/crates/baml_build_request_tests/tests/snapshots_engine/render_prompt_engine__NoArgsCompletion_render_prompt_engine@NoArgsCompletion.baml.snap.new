@@ -1,5 +1,6 @@
 ---
 source: crates/baml_build_request_tests/tests/render_prompt_engine.rs
+assertion_line: 59
 expression: "&result"
 input_file: crates/baml_build_request_tests/testdata/NoArgsCompletion.baml
 ---
