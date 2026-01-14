@@ -725,6 +725,11 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 seen_fields.insert(field_name.clone(), field_span);
             }
 
+            // Extract field attributes
+            let mut field_alias = Attribute::Unset;
+            let mut field_description = Attribute::Unset;
+            let mut field_skip = Attribute::Unset;
+
             // Validate field attributes for duplicates and constraint syntax
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in field_node.attributes() {
@@ -739,25 +744,65 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                                     .unwrap_or_default()
                             });
 
-                    // @check and @assert can be defined multiple times
-                    if attr_name != "check" && attr_name != "assert" {
-                        if let Some(first_span) = seen_field_attrs.get(&attr_name) {
-                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                                container_kind: "class",
-                                container_name: name.to_string(),
-                                field_name: field_name.to_string(),
-                                attr_name: attr_name.clone(),
-                                first_span: *first_span,
-                                second_span: attr_span,
-                            });
-                        } else {
-                            seen_field_attrs.insert(attr_name.clone(), attr_span);
-                        }
+                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "class",
+                            container_name: name.to_string(),
+                            field_name: field_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_field_attrs.insert(attr_name.clone(), attr_span);
                     }
 
-                    // Validate constraint attribute syntax (@check, @assert)
-                    if attr_name == "check" || attr_name == "assert" {
-                        validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
+                    // Extract and validate attribute values
+                    match attr_name.as_str() {
+                        "alias" | "description" => {
+                            // These require exactly one string literal argument
+                            if attr.has_single_string_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    if attr_name == "alias" {
+                                        field_alias = Attribute::Explicit(value);
+                                    } else {
+                                        field_description = Attribute::Explicit(value);
+                                    }
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span = attr
+                                    .args_span()
+                                    .map(|r| ctx.span(r))
+                                    .unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "skip" => {
+                            // @skip takes no arguments
+                            if attr.has_args() {
+                                let arg_span = attr
+                                    .args_span()
+                                    .map(|r| ctx.span(r))
+                                    .unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            field_skip = Attribute::Explicit(());
+                        }
+                        "check" | "assert" => {
+                            // Validate constraint attribute syntax
+                            validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
+                        }
+                        _ => {
+                            // Other attributes (stream.done, etc.) - just validate duplicates
+                        }
                     }
                 }
             }
@@ -770,13 +815,18 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
             fields.push(crate::Field {
                 name: field_name,
                 type_ref,
+                alias: field_alias,
+                description: field_description,
+                skip: field_skip,
             });
         }
     }
 
     // Track seen block attributes for duplicate detection
     let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
-    let mut is_dynamic = false;
+    let mut class_is_dynamic = Attribute::Unset;
+    let mut class_alias = Attribute::Unset;
+    let mut class_description = Attribute::Unset;
 
     // Validate block attributes
     for attr in class.block_attributes() {
@@ -805,9 +855,42 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 seen_attrs.insert(attr_name.clone(), attr_span);
             }
 
-            // Track is_dynamic
-            if attr_name == "dynamic" {
-                is_dynamic = true;
+            // Extract and validate attribute values
+            match attr_name.as_str() {
+                "dynamic" => {
+                    // @@dynamic takes no arguments
+                    if attr.has_args() {
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                        });
+                    }
+                    class_is_dynamic = Attribute::Explicit(());
+                }
+                "alias" | "description" => {
+                    // These require exactly one string literal argument
+                    if attr.has_single_string_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            if attr_name == "alias" {
+                                class_alias = Attribute::Explicit(value);
+                            } else {
+                                class_description = Attribute::Explicit(value);
+                            }
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                _ => {
+                    // Other attributes - just validate duplicates
+                }
             }
         }
     }
@@ -815,7 +898,9 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
     Some(Class {
         name,
         fields,
-        is_dynamic,
+        is_dynamic: class_is_dynamic,
+        alias: class_alias,
+        description: class_description,
     })
 }
 
@@ -882,6 +967,11 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                 seen_variants.insert(variant_name.clone(), variant_span);
             }
 
+            // Extract variant attributes
+            let mut variant_alias = Attribute::Unset;
+            let mut variant_description = Attribute::Unset;
+            let mut variant_skip = Attribute::Unset;
+
             // Validate variant attributes for duplicates
             let mut seen_variant_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in variant.attributes() {
@@ -896,30 +986,77 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                                     .unwrap_or_default()
                             });
 
-                    // @check and @assert can be defined multiple times
-                    if attr_name != "check" && attr_name != "assert" {
-                        if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
-                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                                container_kind: "enum",
-                                container_name: name.to_string(),
-                                field_name: variant_name.to_string(),
-                                attr_name: attr_name.clone(),
-                                first_span: *first_span,
-                                second_span: attr_span,
-                            });
-                        } else {
-                            seen_variant_attrs.insert(attr_name, attr_span);
+                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                            container_kind: "enum",
+                            container_name: name.to_string(),
+                            field_name: variant_name.to_string(),
+                            attr_name: attr_name.clone(),
+                            first_span: *first_span,
+                            second_span: attr_span,
+                        });
+                    } else {
+                        seen_variant_attrs.insert(attr_name.clone(), attr_span);
+                    }
+
+                    // Extract and validate attribute values
+                    match attr_name.as_str() {
+                        "alias" | "description" => {
+                            // These require exactly one string literal argument
+                            if attr.has_single_string_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    if attr_name == "alias" {
+                                        variant_alias = Attribute::Explicit(value);
+                                    } else {
+                                        variant_description = Attribute::Explicit(value);
+                                    }
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span = attr
+                                    .args_span()
+                                    .map(|r| ctx.span(r))
+                                    .unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "skip" => {
+                            // @skip takes no arguments
+                            if attr.has_args() {
+                                let arg_span = attr
+                                    .args_span()
+                                    .map(|r| ctx.span(r))
+                                    .unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            variant_skip = Attribute::Explicit(());
+                        }
+                        _ => {
+                            // Other attributes - just validate duplicates
                         }
                     }
                 }
             }
 
-            variants.push(crate::EnumVariant { name: variant_name });
+            variants.push(crate::EnumVariant {
+                name: variant_name,
+                alias: variant_alias,
+                description: variant_description,
+                skip: variant_skip,
+            });
         }
     }
 
     // Track seen block attributes for duplicate detection
     let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+    let mut enum_alias = Attribute::Unset;
 
     // Validate block attributes
     for attr in enum_def.block_attributes() {
@@ -945,12 +1082,39 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                     second_span: attr_span,
                 });
             } else {
-                seen_attrs.insert(attr_name, attr_span);
+                seen_attrs.insert(attr_name.clone(), attr_span);
+            }
+
+            // Extract and validate attribute values
+            match attr_name.as_str() {
+                "alias" => {
+                    // @@alias requires exactly one string literal argument
+                    if attr.has_single_string_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            enum_alias = Attribute::Explicit(value);
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                _ => {
+                    // Other attributes - just validate duplicates
+                }
             }
         }
     }
 
-    Some(Enum { name, variants })
+    Some(Enum {
+        name,
+        variants,
+        alias: enum_alias,
+    })
 }
 
 /// Extract function definition from CST - MINIMAL VERSION.
@@ -1229,6 +1393,76 @@ fn validate_constraint_attribute(
             attr_name: attr_name.to_string(),
             span,
         });
+    }
+}
+
+/// Describe what was received in an attribute's arguments.
+///
+/// Used to produce error messages like "Expected @alias("..."), but got ..."
+fn describe_attribute_args(attr: &baml_compiler_syntax::Attribute) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let arg_count = attr.arg_count();
+
+    match arg_count {
+        0 => "no arguments".to_string(),
+        1 => {
+            // Single argument - describe its type
+            if let Some(arg) = attr.args().next() {
+                match arg.kind() {
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        // This shouldn't happen if we're calling this function,
+                        // but handle it gracefully
+                        format!("`{}`", arg.text())
+                    }
+                    SyntaxKind::EXPR => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    SyntaxKind::UNQUOTED_STRING => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    _ => "an unknown value".to_string(),
+                }
+            } else {
+                "an unknown value".to_string()
+            }
+        }
+        n => format!("{n} arguments"),
+    }
+}
+
+/// Describe what was received in a block attribute's arguments.
+fn describe_block_attribute_args(attr: &baml_compiler_syntax::ast::BlockAttribute) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let arg_count = attr.arg_count();
+
+    match arg_count {
+        0 => "no arguments".to_string(),
+        1 => {
+            // Single argument - describe its type
+            if let Some(arg) = attr.args().next() {
+                match arg.kind() {
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        format!("`{}`", arg.text())
+                    }
+                    SyntaxKind::EXPR => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    SyntaxKind::UNQUOTED_STRING => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    _ => "an unknown value".to_string(),
+                }
+            } else {
+                "an unknown value".to_string()
+            }
+        }
+        n => format!("{n} arguments"),
     }
 }
 
