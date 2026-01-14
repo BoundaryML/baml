@@ -16,15 +16,18 @@
 //! - **Code Lens**: Inline actions like "Run" buttons
 //! - **Code Actions**: Quick fixes and refactorings
 //! - **Document Symbols**: File outline/structure
+//! - **Completion**: Context-aware autocomplete suggestions
 
 pub mod code_action;
 pub mod code_lens;
+pub mod completion;
 pub mod document_symbols;
 pub mod goto_definition;
 pub mod hover;
 
 pub use code_action::{CodeAction, CodeActionKind};
 pub use code_lens::{CodeLens, CodeLensKind};
+pub use completion::{CompletionItem, CompletionKind, CompletionContext, complete};
 pub use document_symbols::{DocumentSymbol, SymbolKind};
 pub use goto_definition::{NavigationTarget, find_word_at_offset};
 pub use hover::{Hover, HoverContent, hover};

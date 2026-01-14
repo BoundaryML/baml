@@ -46,11 +46,23 @@ pub struct ParsedTestFile {
     /// Expected hover section (raw text after `//- on_hover expressions`).
     /// None if section is omitted.
     pub expected_hovers: Option<String>,
+    /// Expected completions section (after `//- completions`).
+    /// None if section is omitted.
+    pub expected_completions: Option<CompletionExpectation>,
     /// User comments in the diagnostics section that should be preserved.
     /// Lines starting with `// (` are treated as preserved comments.
     pub diagnostics_comments: Vec<String>,
     /// User comments in the hovers section that should be preserved.
     pub hovers_comments: Vec<String>,
+    /// User comments in the completions section that should be preserved.
+    pub completions_comments: Vec<String>,
+}
+
+/// Expected completions for a cursor position.
+#[derive(Debug, Clone, Default)]
+pub struct CompletionExpectation {
+    /// Completion labels that MUST be present.
+    pub should_contain: Vec<String>,
 }
 
 /// A virtual file within the test.
@@ -89,17 +101,25 @@ pub fn parse_test_file(content: &str, default_filename: &str) -> ParsedTestFile 
     // Parse source section for `// file:` markers and cursor markers
     let (files, cursor_markers) = parse_source_section(source, default_filename);
 
-    // Parse expectations section for `//- diagnostics` and `//- on_hover expressions`
-    let (expected_diagnostics, expected_hovers, diagnostics_comments, hovers_comments) =
-        parse_expectations_section(expectations);
+    // Parse expectations section for `//- diagnostics`, `//- on_hover expressions`, and `//- completions`
+    let (
+        expected_diagnostics,
+        expected_hovers,
+        expected_completions,
+        diagnostics_comments,
+        hovers_comments,
+        completions_comments,
+    ) = parse_expectations_section(expectations);
 
     ParsedTestFile {
         files,
         cursor_markers,
         expected_diagnostics,
         expected_hovers,
+        expected_completions,
         diagnostics_comments,
         hovers_comments,
+        completions_comments,
     }
 }
 
@@ -248,16 +268,35 @@ pub fn is_preserved_comment(line: &str) -> bool {
 }
 
 /// Parse the expectations section (after `//----`).
-/// Returns (diagnostics, hovers, diagnostics_comments, hovers_comments).
-fn parse_expectations_section(section: &str) -> (String, Option<String>, Vec<String>, Vec<String>) {
+/// Returns (diagnostics, hovers, completions, diagnostics_comments, hovers_comments, completions_comments).
+#[allow(clippy::type_complexity)]
+fn parse_expectations_section(
+    section: &str,
+) -> (
+    String,
+    Option<String>,
+    Option<CompletionExpectation>,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+) {
     if section.is_empty() {
-        return (String::new(), None, Vec::new(), Vec::new());
+        return (
+            String::new(),
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        );
     }
 
     let mut diagnostics = String::new();
     let mut hovers: Option<String> = None;
+    let mut completions: Option<CompletionExpectation> = None;
     let mut diagnostics_comments: Vec<String> = Vec::new();
     let mut hovers_comments: Vec<String> = Vec::new();
+    let mut completions_comments: Vec<String> = Vec::new();
 
     // Find the subsection markers
     let lines: Vec<&str> = section.lines().collect();
@@ -278,8 +317,10 @@ fn parse_expectations_section(section: &str) -> (String, Option<String>, Vec<Str
                     &current_comments,
                     &mut diagnostics,
                     &mut hovers,
+                    &mut completions,
                     &mut diagnostics_comments,
                     &mut hovers_comments,
+                    &mut completions_comments,
                 );
             }
             current_section = Some("diagnostics");
@@ -297,11 +338,34 @@ fn parse_expectations_section(section: &str) -> (String, Option<String>, Vec<Str
                     &current_comments,
                     &mut diagnostics,
                     &mut hovers,
+                    &mut completions,
                     &mut diagnostics_comments,
                     &mut hovers_comments,
+                    &mut completions_comments,
                 );
             }
             current_section = Some("hovers");
+            current_content = String::new();
+            current_comments = Vec::new();
+            continue;
+        }
+
+        if trimmed == "//- completions" {
+            // Save previous section if any
+            if let Some(section_name) = current_section {
+                save_section_with_comments(
+                    section_name,
+                    &current_content,
+                    &current_comments,
+                    &mut diagnostics,
+                    &mut hovers,
+                    &mut completions,
+                    &mut diagnostics_comments,
+                    &mut hovers_comments,
+                    &mut completions_comments,
+                );
+            }
+            current_section = Some("completions");
             current_content = String::new();
             current_comments = Vec::new();
             continue;
@@ -335,37 +399,74 @@ fn parse_expectations_section(section: &str) -> (String, Option<String>, Vec<Str
             &current_comments,
             &mut diagnostics,
             &mut hovers,
+            &mut completions,
             &mut diagnostics_comments,
             &mut hovers_comments,
+            &mut completions_comments,
         );
     }
 
     (
         diagnostics.trim().to_string(),
         hovers.map(|s| s.trim().to_string()),
+        completions,
         diagnostics_comments,
         hovers_comments,
+        completions_comments,
     )
 }
 
+/// Parse completion expectations from the raw section content.
+/// Format: `// SHOULD_CONTAIN: item1, item2, item3`
+fn parse_completion_content(content: &str) -> CompletionExpectation {
+    let mut expectation = CompletionExpectation::default();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        // Strip leading `// ` if present
+        let stripped = trimmed
+            .strip_prefix("// ")
+            .or_else(|| trimmed.strip_prefix("//"))
+            .unwrap_or(trimmed);
+
+        if let Some(items) = stripped.strip_prefix("SHOULD_CONTAIN:") {
+            let items: Vec<String> = items
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            expectation.should_contain.extend(items);
+        }
+    }
+
+    expectation
+}
+
+#[allow(clippy::too_many_arguments)]
 fn save_section_with_comments(
     section_name: &str,
     content: &str,
     comments: &[String],
     diagnostics: &mut String,
     hovers: &mut Option<String>,
+    completions: &mut Option<CompletionExpectation>,
     diagnostics_comments: &mut Vec<String>,
     hovers_comments: &mut Vec<String>,
+    completions_comments: &mut Vec<String>,
 ) {
-    let content = content.trim().to_string();
+    let content_trimmed = content.trim().to_string();
     match section_name {
         "diagnostics" => {
-            *diagnostics = content;
+            *diagnostics = content_trimmed;
             *diagnostics_comments = comments.to_vec();
         }
         "hovers" => {
-            *hovers = Some(content);
+            *hovers = Some(content_trimmed);
             *hovers_comments = comments.to_vec();
+        }
+        "completions" => {
+            *completions = Some(parse_completion_content(&content_trimmed));
+            *completions_comments = comments.to_vec();
         }
         _ => {}
     }
@@ -644,5 +745,74 @@ class Person<[CURSOR] {
         // Verify content is clean
         assert!(!parsed.files["main.baml"].content.contains("<[CURSOR]"));
         assert!(!parsed.files["types.baml"].content.contains("<[CURSOR]"));
+    }
+
+    #[test]
+    fn test_parse_completions_section() {
+        let content = r#"<[CURSOR]
+
+//----
+//- diagnostics
+// <no-diagnostics-expected>
+//
+//- completions
+// SHOULD_CONTAIN: function, class, enum"#;
+
+        let parsed = parse_test_file(content, "test.baml");
+
+        assert!(parsed.expected_completions.is_some());
+        let completions = parsed.expected_completions.unwrap();
+        assert_eq!(completions.should_contain.len(), 3);
+        assert!(completions.should_contain.contains(&"function".to_string()));
+        assert!(completions.should_contain.contains(&"class".to_string()));
+        assert!(completions.should_contain.contains(&"enum".to_string()));
+    }
+
+    #[test]
+    fn test_parse_completions_multiple_lines() {
+        let content = r#"<[CURSOR]
+
+//----
+//- diagnostics
+// <no-diagnostics-expected>
+//
+//- completions
+// SHOULD_CONTAIN: function, class
+// SHOULD_CONTAIN: enum, client"#;
+
+        let parsed = parse_test_file(content, "test.baml");
+
+        assert!(parsed.expected_completions.is_some());
+        let completions = parsed.expected_completions.unwrap();
+        assert_eq!(completions.should_contain.len(), 4);
+        assert!(completions.should_contain.contains(&"function".to_string()));
+        assert!(completions.should_contain.contains(&"class".to_string()));
+        assert!(completions.should_contain.contains(&"enum".to_string()));
+        assert!(completions.should_contain.contains(&"client".to_string()));
+    }
+
+    #[test]
+    fn test_parse_completions_with_preserved_comment() {
+        let content = r#"<[CURSOR]
+
+//----
+//- diagnostics
+// <no-diagnostics-expected>
+//
+//- completions
+// (testing top-level keywords)
+// SHOULD_CONTAIN: function, class"#;
+
+        let parsed = parse_test_file(content, "test.baml");
+
+        assert!(parsed.expected_completions.is_some());
+        assert_eq!(parsed.completions_comments.len(), 1);
+        assert_eq!(
+            parsed.completions_comments[0],
+            "// (testing top-level keywords)"
+        );
+
+        let completions = parsed.expected_completions.unwrap();
+        assert_eq!(completions.should_contain.len(), 2);
     }
 }
