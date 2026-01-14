@@ -59,6 +59,15 @@ pub const RESERVED_NAMES_GO: &[&str] = &[
     "var",
 ];
 
+/// Rust reserved keywords.
+/// Includes strict keywords and reserved keywords (for future use).
+/// See: <https://doc.rust-lang.org/reference/keywords.html>
+/// TODO: Add more reserved keywords as they are used.
+pub const RESERVED_NAMES_RUST: &[&str] = &[
+    // Strict keywords
+    "as", "async", "await", "break", "const", "continue",
+];
+
 /// Mode for reserved names checking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReservedNamesMode {
@@ -170,6 +179,13 @@ pub fn reserved_names_for_outputs(
     if output_types.contains(&OutputType::Go) {
         for keyword in RESERVED_NAMES_GO {
             keywords.entry(keyword).or_default().push(OutputType::Go);
+        }
+    }
+
+    // Rust keywords
+    if output_types.contains(&OutputType::Rust) {
+        for keyword in RESERVED_NAMES_RUST {
+            keywords.entry(keyword).or_default().push(OutputType::Rust);
         }
     }
 
