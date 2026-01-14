@@ -1792,11 +1792,24 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
 
-            // Client name: either an identifier (Word) or a shorthand string like "provider/model"
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else if p.at(TokenKind::Quote) {
+            // Client name can be:
+            // - A simple identifier: MyClient
+            // - A quoted string: "openai/gpt-4o"
+            // - An unquoted shorthand: openai/gpt-4o-mini (contains slashes)
+            if p.at(TokenKind::Quote) {
                 p.parse_string();
+            } else if p.at(TokenKind::Word) {
+                // Parse unquoted client value - consume tokens until newline or brace
+                // This handles cases like: openai/gpt-4o-mini
+                while !p.at_end() {
+                    if p.at(TokenKind::RBrace)
+                        || p.at(TokenKind::LBrace)
+                        || p.has_newline_ahead()
+                    {
+                        break;
+                    }
+                    p.bump();
+                }
             } else {
                 p.error_unexpected_token("client name".to_string());
             }

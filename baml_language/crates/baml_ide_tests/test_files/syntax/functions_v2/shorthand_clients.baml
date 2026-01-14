@@ -58,6 +58,15 @@ function InputImage(img: image) -> string {
   prompt #" image {{ img }} "#
 }
 
+// Test unquoted client string (no quotes around the client name)
+function ExtractName(text: string) -> string {
+  client openai/gpt-4o-mini
+  prompt #"
+    Extract the person's name from this text: {{ text }}
+    Return only the name, nothing else.
+  "#
+}
+
 //----
 //- diagnostics
 // <no-diagnostics-expected>
