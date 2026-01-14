@@ -27,18 +27,13 @@ use crate::{
 /// This generic type captures whether an attribute was present in the BAML source.
 /// `T` is the value type: `String` for attributes like `@alias("name")`,
 /// or `()` for presence-only attributes like `@@dynamic`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum Attribute<T> {
     /// Attribute was not present in source.
+    #[default]
     Unset,
     /// Attribute was explicitly set with the given value.
     Explicit(T),
-}
-
-impl<T> Default for Attribute<T> {
-    fn default() -> Self {
-        Attribute::Unset
-    }
 }
 
 impl<T> Attribute<T> {

@@ -760,7 +760,7 @@ impl BlockAttribute {
     }
 
     /// Get the first string argument value (unquoted).
-    /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
+    /// Returns None if no `ATTRIBUTE_ARGS` or no string literal found.
     /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
         let args = self
@@ -878,6 +878,31 @@ impl BlockAttribute {
     /// Check if this attribute has exactly one argument that is a string literal.
     pub fn has_single_string_arg(&self) -> bool {
         self.arg_count() == 1 && self.arg_is_string_literal()
+    }
+
+    /// Check if the argument is a string literal or unquoted string (not an expression).
+    pub fn arg_is_string_or_unquoted(&self) -> bool {
+        let Some(args) = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        else {
+            return false;
+        };
+
+        args.descendants_with_tokens().any(|child| {
+            matches!(
+                child.kind(),
+                SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::UNQUOTED_STRING
+            )
+        })
+    }
+
+    /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
+    pub fn has_single_string_or_unquoted_arg(&self) -> bool {
+        self.arg_count() == 1 && self.arg_is_string_or_unquoted()
     }
 }
 
@@ -955,7 +980,7 @@ impl Attribute {
     }
 
     /// Get the first string argument value (unquoted).
-    /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
+    /// Returns None if no `ATTRIBUTE_ARGS` or no string literal found.
     /// For @alias("foo") returns Some("foo").
     /// Preserves internal whitespace within the string.
     pub fn string_arg(&self) -> Option<String> {
@@ -1025,7 +1050,7 @@ impl Attribute {
     }
 
     /// Check if the argument is a valid string literal (not an expression or identifier).
-    /// Returns true if the argument contains STRING_LITERAL or RAW_STRING_LITERAL.
+    /// Returns true if the argument contains `STRING_LITERAL` or `RAW_STRING_LITERAL`.
     pub fn arg_is_string_literal(&self) -> bool {
         let Some(args) = self
             .syntax
@@ -1076,6 +1101,31 @@ impl Attribute {
     /// Check if this attribute has exactly one argument that is a string literal.
     pub fn has_single_string_arg(&self) -> bool {
         self.arg_count() == 1 && self.arg_is_string_literal()
+    }
+
+    /// Check if the argument is a string literal or unquoted string (not an expression).
+    pub fn arg_is_string_or_unquoted(&self) -> bool {
+        let Some(args) = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        else {
+            return false;
+        };
+
+        args.descendants_with_tokens().any(|child| {
+            matches!(
+                child.kind(),
+                SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::UNQUOTED_STRING
+            )
+        })
+    }
+
+    /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
+    pub fn has_single_string_or_unquoted_arg(&self) -> bool {
+        self.arg_count() == 1 && self.arg_is_string_or_unquoted()
     }
 }
 

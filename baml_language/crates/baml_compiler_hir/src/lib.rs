@@ -744,37 +744,51 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "class",
-                            container_name: name.to_string(),
-                            field_name: field_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_field_attrs.insert(attr_name.clone(), attr_span);
+                    // check and assert are allowed multiple times on a field
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "class",
+                                container_name: name.to_string(),
+                                field_name: field_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_field_attrs.insert(attr_name.clone(), attr_span);
+                        }
                     }
 
                     // Extract and validate attribute values
                     match attr_name.as_str() {
-                        "alias" | "description" => {
-                            // These require exactly one string literal argument
+                        "alias" => {
+                            // @alias requires exactly one string literal argument
                             if attr.has_single_string_arg() {
                                 if let Some(value) = attr.string_arg() {
-                                    if attr_name == "alias" {
-                                        field_alias = Attribute::Explicit(value);
-                                    } else {
-                                        field_description = Attribute::Explicit(value);
-                                    }
+                                    field_alias = Attribute::Explicit(value);
                                 }
                             } else {
                                 // Invalid: wrong number of args or wrong type
-                                let arg_span = attr
-                                    .args_span()
-                                    .map(|r| ctx.span(r))
-                                    .unwrap_or(attr_span);
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "description" => {
+                            // @description accepts quoted or unquoted strings
+                            if attr.has_single_string_or_unquoted_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    field_description = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
                                 ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
                                     attr_name: attr_name.clone(),
                                     span: arg_span,
@@ -785,10 +799,8 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                         "skip" => {
                             // @skip takes no arguments
                             if attr.has_args() {
-                                let arg_span = attr
-                                    .args_span()
-                                    .map(|r| ctx.span(r))
-                                    .unwrap_or(attr_span);
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
                                 ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
                                     attr_name: attr_name.clone(),
                                     span: arg_span,
@@ -868,15 +880,27 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                     }
                     class_is_dynamic = Attribute::Explicit(());
                 }
-                "alias" | "description" => {
-                    // These require exactly one string literal argument
+                "alias" => {
+                    // @@alias requires exactly one string literal argument
                     if attr.has_single_string_arg() {
                         if let Some(value) = attr.string_arg() {
-                            if attr_name == "alias" {
-                                class_alias = Attribute::Explicit(value);
-                            } else {
-                                class_description = Attribute::Explicit(value);
-                            }
+                            class_alias = Attribute::Explicit(value);
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                "description" => {
+                    // @@description accepts quoted or unquoted strings
+                    if attr.has_single_string_or_unquoted_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            class_description = Attribute::Explicit(value);
                         }
                     } else {
                         // Invalid: wrong number of args or wrong type
@@ -986,37 +1010,51 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "enum",
-                            container_name: name.to_string(),
-                            field_name: variant_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_variant_attrs.insert(attr_name.clone(), attr_span);
+                    // check and assert are allowed multiple times on a variant
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "enum",
+                                container_name: name.to_string(),
+                                field_name: variant_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_variant_attrs.insert(attr_name.clone(), attr_span);
+                        }
                     }
 
                     // Extract and validate attribute values
                     match attr_name.as_str() {
-                        "alias" | "description" => {
-                            // These require exactly one string literal argument
+                        "alias" => {
+                            // @alias requires exactly one string literal argument
                             if attr.has_single_string_arg() {
                                 if let Some(value) = attr.string_arg() {
-                                    if attr_name == "alias" {
-                                        variant_alias = Attribute::Explicit(value);
-                                    } else {
-                                        variant_description = Attribute::Explicit(value);
-                                    }
+                                    variant_alias = Attribute::Explicit(value);
                                 }
                             } else {
                                 // Invalid: wrong number of args or wrong type
-                                let arg_span = attr
-                                    .args_span()
-                                    .map(|r| ctx.span(r))
-                                    .unwrap_or(attr_span);
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "description" => {
+                            // @description accepts quoted or unquoted strings
+                            if attr.has_single_string_or_unquoted_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    variant_description = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
                                 ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
                                     attr_name: attr_name.clone(),
                                     span: arg_span,
@@ -1027,10 +1065,8 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                         "skip" => {
                             // @skip takes no arguments
                             if attr.has_args() {
-                                let arg_span = attr
-                                    .args_span()
-                                    .map(|r| ctx.span(r))
-                                    .unwrap_or(attr_span);
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
                                 ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
                                     attr_name: attr_name.clone(),
                                     span: arg_span,
