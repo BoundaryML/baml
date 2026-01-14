@@ -1802,10 +1802,7 @@ impl<'a> Parser<'a> {
                 // Parse unquoted client value - consume tokens until newline or brace
                 // This handles cases like: openai/gpt-4o-mini
                 while !p.at_end() {
-                    if p.at(TokenKind::RBrace)
-                        || p.at(TokenKind::LBrace)
-                        || p.has_newline_ahead()
-                    {
+                    if p.at(TokenKind::RBrace) || p.at(TokenKind::LBrace) || p.has_newline_ahead() {
                         break;
                     }
                     p.bump();

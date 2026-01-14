@@ -144,66 +144,12 @@ function Foo6(arg: int) -> float {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     ╭─[ functions_v2_invalid2.baml:23:10 ]
-//     │
-//  23 │   prompt #"..."#
-//     │          ┬  
-//     │          ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     ╭─[ functions_v2_invalid2.baml:23:11 ]
-//     │
-//  23 │   prompt #"..."#
-//     │           ┬  
-//     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found '...'
-//     ╭─[ functions_v2_invalid2.baml:23:12 ]
-//     │
-//  23 │   prompt #"..."#
-//     │            ─┬─  
-//     │             ╰─── Expected Only 'client' and 'prompt' allowed in LLM function, found '...', found '...'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     ╭─[ functions_v2_invalid2.baml:23:15 ]
-//     │
-//  23 │   prompt #"..."#
-//     │               ┬  
-//     │               ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '"', found '"'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     ╭─[ functions_v2_invalid2.baml:23:16 ]
-//     │
-//  23 │   prompt #"..."#
-//     │                ┬  
-//     │                ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '#', found '#'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected LLM function missing 'prompt' field, found '}'
-//     ╭─[ functions_v2_invalid2.baml:24:1 ]
-//     │
-//  24 │ }
-//     │ ┬  
-//     │ ╰── Expected LLM function missing 'prompt' field, found '}'
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
-// Error: Expected LLM function missing 'prompt' field, found '}'
+// Error: Expected prompt string, found '}'
 //     ╭─[ functions_v2_invalid2.baml:30:1 ]
 //     │
 //  30 │ }
 //     │ ┬  
-//     │ ╰── Expected LLM function missing 'prompt' field, found '}'
+//     │ ╰── Expected prompt string, found '}'
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
