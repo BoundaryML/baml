@@ -676,6 +676,8 @@ fn tir_ty_to_base_ty_with_alias_ctx(
     alias_ctx: &TypeAliasContext,
     visited: &mut HashSet<String>,
 ) -> baml_base::Ty {
+    // Debug: trace type conversion
+    eprintln!("[DEBUG type_conversion] TirTy input: {:?}", ty);
     match ty {
         TirTy::Int => baml_base::Ty::Int,
         TirTy::Float => baml_base::Ty::Float,

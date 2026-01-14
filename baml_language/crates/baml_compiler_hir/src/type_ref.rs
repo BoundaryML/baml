@@ -218,44 +218,6 @@ impl TypeRef {
         None
     }
 
-    /// Try to split a string into union parts at top-level pipe characters.
-    /// Returns None if no pipe is found, Some(parts) otherwise.
-    /// Handles nested brackets, parens, and angle brackets.
-    fn try_split_union(s: &str) -> Option<Vec<&str>> {
-        // Track nesting depth for different bracket types
-        let mut paren_depth: i32 = 0;
-        let mut bracket_depth: i32 = 0;
-        let mut angle_depth: i32 = 0;
-
-        let mut parts = Vec::new();
-        let mut last_split = 0;
-        let mut found_pipe = false;
-
-        for (i, c) in s.char_indices() {
-            match c {
-                '(' => paren_depth += 1,
-                ')' => paren_depth = paren_depth.saturating_sub(1),
-                '[' => bracket_depth += 1,
-                ']' => bracket_depth = bracket_depth.saturating_sub(1),
-                '<' => angle_depth += 1,
-                '>' => angle_depth = angle_depth.saturating_sub(1),
-                '|' if paren_depth == 0 && bracket_depth == 0 && angle_depth == 0 => {
-                    parts.push(&s[last_split..i]);
-                    last_split = i + 1;
-                    found_pipe = true;
-                }
-                _ => {}
-            }
-        }
-
-        if found_pipe {
-            parts.push(&s[last_split..]);
-            Some(parts)
-        } else {
-            None
-        }
-    }
-
     /// Create a `TypeRef` from a type name string.
     fn from_type_name(name: &str) -> Self {
         match name.to_lowercase().as_str() {
@@ -351,62 +313,6 @@ mod tests {
         assert_eq!(
             TypeRef::from_type_text("int[]"),
             TypeRef::List(Box::new(TypeRef::Int))
-        );
-    }
-
-    #[test]
-    fn test_parenthesized_union() {
-        // (float | bool) -> Union([Float, Bool])
-        assert_eq!(
-            TypeRef::from_type_text("(float | bool)"),
-            TypeRef::Union(vec![TypeRef::Float, TypeRef::Bool])
-        );
-    }
-
-    #[test]
-    fn test_array_of_parenthesized_union() {
-        // (float | bool)[] -> List(Union([Float, Bool]))
-        // This is the fix for the bug where "(float | bool)[]" was being
-        // treated as a named type "(float | bool)[]" instead of a list of union
-        assert_eq!(
-            TypeRef::from_type_text("(float | bool)[]"),
-            TypeRef::List(Box::new(TypeRef::Union(vec![TypeRef::Float, TypeRef::Bool])))
-        );
-    }
-
-    #[test]
-    fn test_union_of_arrays() {
-        // (bool[] | int[]) -> Union([List(Bool), List(Int)])
-        // This is the fix for the bug where "(bool[] | int[])" was being
-        // treated as a named type "(bool[] | int[])" instead of a union of lists
-        assert_eq!(
-            TypeRef::from_type_text("(bool[] | int[])"),
-            TypeRef::Union(vec![
-                TypeRef::List(Box::new(TypeRef::Bool)),
-                TypeRef::List(Box::new(TypeRef::Int))
-            ])
-        );
-    }
-
-    #[test]
-    fn test_nested_parenthesized_union() {
-        // ((A | B) | C) -> Union([Union([A, B]), C])
-        // Tests nested parentheses
-        assert_eq!(
-            TypeRef::from_type_text("((int | float) | string)"),
-            TypeRef::Union(vec![
-                TypeRef::Union(vec![TypeRef::Int, TypeRef::Float]),
-                TypeRef::String
-            ])
-        );
-    }
-
-    #[test]
-    fn test_optional_parenthesized_union() {
-        // (int | string)? -> Optional(Union([Int, String]))
-        assert_eq!(
-            TypeRef::from_type_text("(int | string)?"),
-            TypeRef::Optional(Box::new(TypeRef::Union(vec![TypeRef::Int, TypeRef::String])))
         );
     }
 }

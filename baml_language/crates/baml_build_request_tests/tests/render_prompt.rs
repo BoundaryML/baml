@@ -64,6 +64,13 @@ fn run_render_prompt_fixture(path: &Path, fixture_name: &str) -> anyhow::Result<
     let func_name = derive_function_name(fixture_name);
     let rendered = render_prompt_for_fixture(&contents, fixture_name)?;
 
+    // Debug: print the actual rendered output for OutputUnions
+    if fixture_name.contains("OutputUnions") {
+        eprintln!("=== DEBUG OutputUnions rendered prompt ===");
+        eprintln!("{:?}", rendered);
+        eprintln!("===========================================");
+    }
+
     Ok(PromptSnapshot {
         fixture: fixture_name.to_string(),
         function: func_name,

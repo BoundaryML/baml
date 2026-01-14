@@ -674,6 +674,7 @@ mod tests {
 
         let result = render(&content, &OutputFormatOptions::default()).unwrap();
         let rendered = result.unwrap();
+        eprintln!("Rendered: {}", rendered);
 
         // Should use "or" not "|"
         assert!(rendered.contains("float or bool"), "Expected 'float or bool' but got: {}", rendered);
@@ -696,6 +697,7 @@ mod tests {
 
         let result = render(&content, &OutputFormatOptions::default()).unwrap();
         let rendered = result.unwrap();
+        eprintln!("Rendered: {}", rendered);
 
         // Should use "or" not "|"
         assert!(rendered.contains("bool[] or int[]"), "Expected 'bool[] or int[]' but got: {}", rendered);
