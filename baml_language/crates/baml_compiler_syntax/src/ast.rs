@@ -743,6 +743,107 @@ impl BlockAttribute {
             last.text_range().end(),
         ))
     }
+
+    /// Check if block attribute has arguments (parentheses with content).
+    pub fn has_args(&self) -> bool {
+        self.syntax
+            .children()
+            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+    }
+
+    /// Get the text range of the argument node (for error reporting).
+    pub fn args_span(&self) -> Option<rowan::TextRange> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+            .map(|args| args.text_range())
+    }
+
+    /// Get the first string argument value (unquoted).
+    /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
+    pub fn string_arg(&self) -> Option<String> {
+        let args = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
+
+        let result: String = args
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                !matches!(
+                    token.kind(),
+                    SyntaxKind::WHITESPACE
+                        | SyntaxKind::NEWLINE
+                        | SyntaxKind::LINE_COMMENT
+                        | SyntaxKind::BLOCK_COMMENT
+                        | SyntaxKind::QUOTE
+                        | SyntaxKind::L_PAREN
+                        | SyntaxKind::R_PAREN
+                        | SyntaxKind::COMMA
+                )
+            })
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
+    }
+
+    /// Check if the argument is a valid string literal (not an expression or identifier).
+    pub fn arg_is_string_literal(&self) -> bool {
+        let Some(args) = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        else {
+            return false;
+        };
+
+        args.descendants_with_tokens().any(|child| {
+            matches!(
+                child.kind(),
+                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+            )
+        })
+    }
+
+    /// Get all argument nodes in this attribute.
+    ///
+    /// Each argument is one of:
+    /// - `STRING_LITERAL` for `"quoted"`
+    /// - `RAW_STRING_LITERAL` for `#"raw"#`
+    /// - `EXPR` for `{{ jinja }}`
+    /// - `UNQUOTED_STRING` for bare words
+    pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+            .into_iter()
+            .flat_map(|args| args.children())
+            .filter(|child| {
+                matches!(
+                    child.kind(),
+                    SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::EXPR
+                        | SyntaxKind::UNQUOTED_STRING
+                )
+            })
+    }
+
+    /// Count the number of arguments.
+    pub fn arg_count(&self) -> usize {
+        self.args().count()
+    }
+
+    /// Check if this attribute has exactly one argument that is a string literal.
+    pub fn has_single_string_arg(&self) -> bool {
+        self.arg_count() == 1 && self.arg_is_string_literal()
+    }
 }
 
 impl Attribute {
@@ -801,6 +902,112 @@ impl Attribute {
             first.text_range().start(),
             last.text_range().end(),
         ))
+    }
+
+    /// Check if attribute has arguments (parentheses with content).
+    pub fn has_args(&self) -> bool {
+        self.syntax
+            .children()
+            .any(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+    }
+
+    /// Get the text range of the argument node (for error reporting).
+    pub fn args_span(&self) -> Option<rowan::TextRange> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+            .map(|args| args.text_range())
+    }
+
+    /// Get the first string argument value (unquoted).
+    /// Returns None if no ATTRIBUTE_ARGS or no string literal found.
+    /// For @alias("foo") returns Some("foo").
+    pub fn string_arg(&self) -> Option<String> {
+        let args = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)?;
+
+        // Look for STRING_LITERAL or RAW_STRING_LITERAL tokens inside the args
+        // Similar to ConfigItem::value_str() but simpler - we just want the string content
+        let result: String = args
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                !matches!(
+                    token.kind(),
+                    SyntaxKind::WHITESPACE
+                        | SyntaxKind::NEWLINE
+                        | SyntaxKind::LINE_COMMENT
+                        | SyntaxKind::BLOCK_COMMENT
+                        | SyntaxKind::QUOTE
+                        | SyntaxKind::L_PAREN
+                        | SyntaxKind::R_PAREN
+                        | SyntaxKind::COMMA
+                )
+            })
+            .map(|token| token.text().to_string())
+            .collect();
+
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
+    }
+
+    /// Check if the argument is a valid string literal (not an expression or identifier).
+    /// Returns true if the argument contains STRING_LITERAL or RAW_STRING_LITERAL.
+    pub fn arg_is_string_literal(&self) -> bool {
+        let Some(args) = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+        else {
+            return false;
+        };
+
+        // Check if we have a STRING_LITERAL or RAW_STRING_LITERAL node/token
+        args.descendants_with_tokens().any(|child| {
+            matches!(
+                child.kind(),
+                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+            )
+        })
+    }
+
+    /// Get all argument nodes in this attribute.
+    ///
+    /// Each argument is one of:
+    /// - `STRING_LITERAL` for `"quoted"`
+    /// - `RAW_STRING_LITERAL` for `#"raw"#`
+    /// - `EXPR` for `{{ jinja }}`
+    /// - `UNQUOTED_STRING` for bare words
+    pub fn args(&self) -> impl Iterator<Item = SyntaxNode> + '_ {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
+            .into_iter()
+            .flat_map(|args| args.children())
+            .filter(|child| {
+                matches!(
+                    child.kind(),
+                    SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::EXPR
+                        | SyntaxKind::UNQUOTED_STRING
+                )
+            })
+    }
+
+    /// Count the number of arguments.
+    pub fn arg_count(&self) -> usize {
+        self.args().count()
+    }
+
+    /// Check if this attribute has exactly one argument that is a string literal.
+    pub fn has_single_string_arg(&self) -> bool {
+        self.arg_count() == 1 && self.arg_is_string_literal()
     }
 }
 

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -169,6 +169,61 @@ SOURCE_FILE
           R_PAREN ")"
     ENUM_VARIANT "INACTIVE"
       WORD "INACTIVE"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "BadAliasValue"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "some_var"
+            WORD "some_var"
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "BadDynamicArg"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+      ATTRIBUTE_ARGS
+        L_PAREN "("
+        STRING_LITERAL "unexpected"
+          QUOTE """
+          WORD "unexpected"
+          QUOTE """
+        R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "BadSkipArg"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "skip"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "reason"
+            QUOTE """
+            WORD "reason"
+            QUOTE """
+          R_PAREN ")"
     R_BRACE "}"
 
 === ERRORS ===

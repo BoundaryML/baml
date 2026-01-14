@@ -34,3 +34,19 @@ enum HasDuplicateVariantAttr {
   ACTIVE @alias("a") @alias("active")
   INACTIVE
 }
+
+// Test: @alias requires a string literal, not an identifier/expression
+class BadAliasValue {
+  name string @alias(some_var)
+}
+
+// Test: @@dynamic takes no arguments
+class BadDynamicArg {
+  name string
+  @@dynamic("unexpected")
+}
+
+// Test: @skip takes no arguments
+class BadSkipArg {
+  name string @skip("reason")
+}
