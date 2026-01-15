@@ -10,12 +10,12 @@ generator quoted_invalid {
 
 //----
 //- diagnostics
-// Error: Invalid value `invalid_output` for property `output_type` in generator `quoted_invalid`. Valid values: python/pydantic, python/pydantic/v1, typescript, typescript/react, ruby/sorbet, go, rest/openapi, boundary-cloud
+// Error: Invalid value `invalid_output` for property `output_type` in generator `quoted_invalid`. Valid values: python/pydantic, python/pydantic/v1, typescript, typescript/react, ruby/sorbet, go, rest/openapi, boundary-cloud, rust
 //    ╭─[ generators_quoted_invalid_value.baml:6:14 ]
 //    │
 //  6 │   output_type "invalid_output"
 //    │              ────────┬────────  
-//    │                      ╰────────── Invalid value `invalid_output` for property `output_type` in generator `quoted_invalid`. Valid values: python/pydantic, python/pydantic/v1, typescript, typescript/react, ruby/sorbet, go, rest/openapi, boundary-cloud
+//    │                      ╰────────── Invalid value `invalid_output` for property `output_type` in generator `quoted_invalid`. Valid values: python/pydantic, python/pydantic/v1, typescript, typescript/react, ruby/sorbet, go, rest/openapi, boundary-cloud, rust
 //    │ 
 //    │ Note: Error code: E0019
 // ───╯

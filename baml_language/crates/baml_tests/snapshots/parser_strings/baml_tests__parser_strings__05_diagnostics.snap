@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -582,5 +582,15 @@ expression: output
   [parse] Error: Expected top-level declaration, found '#'
 
   [parse] Error: Expected top-level declaration, found '}'
+
+  [hir] Error: Expected @alias("..."), but got no arguments
+   ╭─[ nested_quotes.baml:4:33 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                 ┬  
+   │                                 ╰── Expected @alias("..."), but got no arguments
+   │ 
+   │ Note: Error code: E0037
+───╯
 
   [hir] Error: Missing `provider` field in client. e.g. `provider openai`
