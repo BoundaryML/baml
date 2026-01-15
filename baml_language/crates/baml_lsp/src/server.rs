@@ -76,7 +76,6 @@ struct PortNotificationParams {
 
 impl Server {
     pub fn new(worker_threads: NonZeroUsize, args: ServerArgs) -> anyhow::Result<Self> {
-        eprintln!("HERE!!!!!");
         let connection = ConnectionInitializer::stdio();
         let (id, init_params) = connection.initialize_start()?;
 

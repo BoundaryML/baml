@@ -1,9 +1,9 @@
 ---
-source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+source: target/debug/build/baml_tests-512cc176589834ed/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function BadReturnType:
-    Return: Map { key: String, value: Named("int>") }
+    Return: Map { key: String, value: TypeAlias(FullyQualifiedName { namespace: Local, name: "int>" }) }
   Function BadParam:
     Return: String

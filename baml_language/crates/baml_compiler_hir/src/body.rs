@@ -1218,12 +1218,16 @@ impl LoweringContext {
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
                                 let range = token.text_range();
-                                scrutinee = Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), range));
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Int(value)), range),
+                                );
                             }
                             SyntaxKind::FLOAT_LITERAL => {
                                 let text = token.text().to_string();
                                 let range = token.text_range();
-                                scrutinee = Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), range));
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Float(text)), range),
+                                );
                             }
                             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                                 let text = token.text().to_string();
@@ -1235,7 +1239,9 @@ impl LoweringContext {
                                     text
                                 };
                                 let range = token.text_range();
-                                scrutinee = Some(self.alloc_expr(Expr::Literal(Literal::String(content)), range));
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::String(content)), range),
+                                );
                             }
                             SyntaxKind::WORD => {
                                 let text = token.text();

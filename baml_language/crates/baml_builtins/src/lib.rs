@@ -307,14 +307,20 @@ mod tests {
         use std::borrow::Cow;
 
         // No change needed
-        assert!(matches!(normalize_baml_prefix("baml.Array"), Cow::Borrowed(_)));
+        assert!(matches!(
+            normalize_baml_prefix("baml.Array"),
+            Cow::Borrowed(_)
+        ));
         assert!(matches!(normalize_baml_prefix("env.get"), Cow::Borrowed(_)));
         assert!(matches!(normalize_baml_prefix("foo.bar"), Cow::Borrowed(_)));
 
         // Normalization happens
         assert_eq!(normalize_baml_prefix("baaml.Array"), "baml.Array");
         assert_eq!(normalize_baml_prefix("baaaml.deep_copy"), "baml.deep_copy");
-        assert_eq!(normalize_baml_prefix("baaaaaaaaml.unstable.string"), "baml.unstable.string");
+        assert_eq!(
+            normalize_baml_prefix("baaaaaaaaml.unstable.string"),
+            "baml.unstable.string"
+        );
 
         // Edge cases that should NOT normalize
         assert_eq!(normalize_baml_prefix("bml.Array"), "bml.Array"); // missing 'a'

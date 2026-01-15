@@ -20,8 +20,7 @@ function Foo(r SentimentResponse) -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("-> r"),
-            "Should navigate to parameter 'r', got: {}",
-            result
+            "Should navigate to parameter 'r', got: {result}"
         );
     }
 
@@ -40,8 +39,7 @@ function Test() -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("-> x"),
-            "Should navigate to variable 'x', got: {}",
-            result
+            "Should navigate to variable 'x', got: {result}"
         );
     }
 
@@ -62,8 +60,7 @@ function Main() -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("-> Helper"),
-            "Should navigate to function 'Helper', got: {}",
-            result
+            "Should navigate to function 'Helper', got: {result}"
         );
     }
 
@@ -84,8 +81,7 @@ function CreatePerson() -> Person {
         let result = test.goto_definition();
         assert!(
             result.contains("-> Person"),
-            "Should navigate to class 'Person', got: {}",
-            result
+            "Should navigate to class 'Person', got: {result}"
         );
     }
 
@@ -108,8 +104,7 @@ function GetStatus() -> Status {
         // For now, enum variants navigate to the enum itself
         assert!(
             result.contains("-> Status") || result.contains("-> Active"),
-            "Should navigate to enum or variant, got: {}",
-            result
+            "Should navigate to enum or variant, got: {result}"
         );
     }
 
@@ -132,8 +127,7 @@ function GetName(p Person) -> string {
         // Should navigate to the field definition, not the class
         assert!(
             result.contains("test.baml:3:5 -> name"),
-            "Should navigate to name field in Person class, got: {}",
-            result
+            "Should navigate to name field in Person class, got: {result}"
         );
     }
 
@@ -153,8 +147,7 @@ function Test() -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("-> inner"),
-            "Should navigate to inner variable, got: {}",
-            result
+            "Should navigate to inner variable, got: {result}"
         );
     }
 
@@ -179,9 +172,8 @@ function HandleResult(r Result) -> string {
         let result = test.goto_definition();
         // Pattern bindings should be resolvable
         assert!(
-            result.contains("e") || result.contains("No definition"),
-            "Pattern binding navigation, got: {}",
-            result
+            result.contains('e') || result.contains("No definition"),
+            "Pattern binding navigation, got: {result}"
         );
     }
 
@@ -198,8 +190,7 @@ function Test() -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("No definition"),
-            "Should not find definition for undefined variable, got: {}",
-            result
+            "Should not find definition for undefined variable, got: {result}"
         );
     }
 
@@ -227,8 +218,7 @@ function CreatePerson() -> Person {
         let result = test.goto_definition();
         assert!(
             result.contains("types.baml") || result.contains("-> Person"),
-            "Should navigate to Person in types.baml, got: {}",
-            result
+            "Should navigate to Person in types.baml, got: {result}"
         );
     }
 
@@ -253,8 +243,7 @@ function Foo(x: int) -> int {
         let result = test.goto_definition();
         assert!(
             result.contains("-> Foo"),
-            "Should navigate to Foo function, got: {}",
-            result
+            "Should navigate to Foo function, got: {result}"
         );
     }
 
@@ -287,8 +276,7 @@ function Foo(r: Result) -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("main.baml:6:7 -> Failure"),
-            "Should navigate to Failure class, got: {}",
-            result
+            "Should navigate to Failure class, got: {result}"
         );
     }
 
@@ -312,8 +300,7 @@ function Foo(s: Success) -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("main.baml:3:3 -> data"),
-            "Should navigate to data field of Success class, got: {}",
-            result
+            "Should navigate to data field of Success class, got: {result}"
         );
     }
 
@@ -337,8 +324,7 @@ function Foo() -> Success {
         let result = test.goto_definition();
         assert!(
             result.contains("main.baml:3:3 -> data"),
-            "Should navigate to data field of Success class, got: {}",
-            result
+            "Should navigate to data field of Success class, got: {result}"
         );
     }
 
@@ -362,8 +348,7 @@ function Foo(s: Success) -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("main.baml:6:14 -> s"),
-            "Should navigate to s parameter in type signature, got: {}",
-            result
+            "Should navigate to s parameter in type signature, got: {result}"
         );
     }
 
@@ -390,8 +375,7 @@ function Foo(s: Success) -> string {
         let result = test.goto_definition();
         assert!(
             result.contains("main.baml:4:12 -> Celebrate"),
-            "Should navigate to Celebrate method, got: {}",
-            result
+            "Should navigate to Celebrate method, got: {result}"
         );
     }
 }

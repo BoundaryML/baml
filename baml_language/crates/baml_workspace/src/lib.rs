@@ -22,9 +22,10 @@
 //! - `ty_project` provides high-level `ProjectDatabase` and operations
 //! - The `Program` singleton (compiler settings) lives in the semantic crate
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU32;
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU32},
+};
 
 use baml_base::{FileId, SourceFile};
 

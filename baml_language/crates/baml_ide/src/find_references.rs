@@ -6,11 +6,12 @@
 use std::path::PathBuf;
 
 use baml_db::{
-    Span, FileId,
-    baml_compiler_hir::{ExprId, FunctionLoc, ExprBody},
+    FileId, Span,
+    baml_compiler_hir::{ExprBody, ExprId, FunctionLoc},
     baml_compiler_tir::ResolvedValue,
 };
 use baml_project::ProjectDatabase;
+use rowan::ast::AstNode;
 use text_size::TextSize;
 
 /// A reference location in source code.
@@ -69,7 +70,7 @@ fn find_symbol_at_position(
     let text = source_file.text(db);
 
     // Find the word at the cursor position
-    let word_range = crate::goto_definition::find_word_at_offset(&text, position)?;
+    let word_range = crate::goto_definition::find_word_at_offset(text, position)?;
     let word = &text[word_range.start().into()..word_range.end().into()];
 
     // First, check if we're on a top-level definition (class, enum, function)
@@ -81,15 +82,15 @@ fn find_symbol_at_position(
     if let Some(function_loc) = find_function_at_position(db, file_id, position) {
         // Get the function body
         let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
-        let expr_body = match &*body {
-            baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => expr_body,
-            _ => return None,
+        let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) = &*body else {
+            return None;
         };
 
         // Find the expression at this position
         if let Some(expr_id) = find_expr_at_position(expr_body, position) {
             // Get the type inference results
-            let inference_result = baml_db::baml_compiler_tir::function_type_inference(db, function_loc);
+            let inference_result =
+                baml_db::baml_compiler_tir::function_type_inference(db, function_loc);
 
             // Look up the resolution for this expression
             if let Some(resolution) = inference_result.expr_resolutions.get(&expr_id) {
@@ -99,7 +100,9 @@ fn find_symbol_at_position(
 
         // Check if we're on a local variable definition (let statement)
         // or a parameter definition
-        if let Some(resolution) = find_local_definition_at_position(db, function_loc, position, word) {
+        if let Some(resolution) =
+            find_local_definition_at_position(db, function_loc, position, word)
+        {
             return Some(resolution);
         }
     }
@@ -117,8 +120,6 @@ fn find_definition_at_position(
     use baml_db::baml_compiler_hir::FullyQualifiedName;
     use rowan::ast::AstNode;
 
-    // eprintln!("find_definition_at_position: position={:?}, word='{}'", position, word);
-
     // Get the syntax tree
     let tree = baml_db::baml_compiler_parser::syntax_tree(db, source_file);
     let ast_file = baml_db::baml_compiler_syntax::ast::SourceFile::cast(tree)?;
@@ -126,7 +127,6 @@ fn find_definition_at_position(
     // Check each top-level item
     for item in ast_file.items() {
         let item_range = item.syntax().text_range();
-        // eprintln!("  Item range: {:?}", item_range);
         if !item_range.contains(position) {
             continue;
         }
@@ -134,7 +134,6 @@ fn find_definition_at_position(
         match item {
             baml_db::baml_compiler_syntax::ast::Item::Class(class_node) => {
                 if let Some(name_token) = class_node.name() {
-                    // eprintln!("    Class name: '{}', range: {:?}", name_token.text(), name_token.text_range());
                     if name_token.text_range().contains(position) && name_token.text() == word {
                         return Some(ResolvedValue::Class(FullyQualifiedName::local(
                             baml_db::Name::new(word),
@@ -144,12 +143,7 @@ fn find_definition_at_position(
             }
             baml_db::baml_compiler_syntax::ast::Item::Enum(enum_node) => {
                 if let Some(name_token) = enum_node.name() {
-                    // eprintln!("    Enum name: '{}', range: {:?}", name_token.text(), name_token.text_range());
-                    let range_contains = name_token.text_range().contains(position);
-                    let text_matches = name_token.text() == word;
-                    // eprintln!("    range_contains={}, text_matches={}", range_contains, text_matches);
-                    if range_contains && text_matches {
-                        // eprintln!("    -> Returning Enum resolution");
+                    if name_token.text_range().contains(position) && name_token.text() == word {
                         return Some(ResolvedValue::Enum(FullyQualifiedName::local(
                             baml_db::Name::new(word),
                         )));
@@ -158,7 +152,6 @@ fn find_definition_at_position(
             }
             baml_db::baml_compiler_syntax::ast::Item::Function(func_node) => {
                 if let Some(name_token) = func_node.name() {
-                    // eprintln!("    Function name: '{}', range: {:?}", name_token.text(), name_token.text_range());
                     if name_token.text_range().contains(position) && name_token.text() == word {
                         return Some(ResolvedValue::Function(FullyQualifiedName::local(
                             baml_db::Name::new(word),
@@ -224,7 +217,7 @@ fn find_local_definition_at_position(
     None
 }
 
-/// Find the function containing the given position (reusing logic from goto_definition).
+/// Find the function containing the given position (reusing logic from `goto_definition`).
 fn find_function_at_position(
     db: &ProjectDatabase,
     file_id: FileId,
@@ -239,7 +232,6 @@ fn find_function_at_position(
 
     // Get the syntax tree to check text ranges
     let tree = baml_db::baml_compiler_parser::syntax_tree(db, *source_file);
-    use rowan::ast::AstNode;
     let ast_file = baml_db::baml_compiler_syntax::ast::SourceFile::cast(tree)?;
 
     // Iterate through items to find functions
@@ -284,25 +276,18 @@ fn find_expr_at_position(body: &ExprBody, position: TextSize) -> Option<ExprId> 
 }
 
 /// Find all references to a specific symbol.
-fn find_references_to_symbol(
-    db: &ProjectDatabase,
-    target: &ResolvedValue,
-) -> Vec<Reference> {
+fn find_references_to_symbol(db: &ProjectDatabase, target: &ResolvedValue) -> Vec<Reference> {
     let mut references = Vec::new();
-
-    // eprintln!("find_references_to_symbol: target={:?}", target);
 
     // Get all files in the project
     let source_files = db.get_source_files();
 
-    for source_file in source_files.iter() {
+    for source_file in &source_files {
         let file_id = source_file.file_id(db);
         let file_path = match db.file_id_to_path(file_id) {
             Some(path) => path.clone(),
             None => continue,
         };
-
-        // eprintln!("  Checking file: {:?}", file_path);
 
         // Get all items in the file
         let file_items = baml_db::baml_compiler_hir::file_items(db, *source_file);
@@ -310,27 +295,19 @@ fn find_references_to_symbol(
         // Check each function in the file
         for item_id in file_items.items(db) {
             if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
-                // eprintln!("    Checking function...");
-
                 // Get the function body
                 let body = baml_db::baml_compiler_hir::function_body(db, *func_loc);
-                let expr_body = match &*body {
-                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => expr_body,
-                    _ => {
-                        // eprintln!("      Not an expr body, skipping");
-                        continue;
-                    }
+                let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) = &*body else {
+                    continue;
                 };
 
                 // Get the type inference results
-                let inference_result = baml_db::baml_compiler_tir::function_type_inference(db, *func_loc);
-                // eprintln!("      {} resolutions in function", inference_result.expr_resolutions.len());
+                let inference_result =
+                    baml_db::baml_compiler_tir::function_type_inference(db, *func_loc);
 
                 // Search for matching resolutions
                 for (expr_id, resolution) in &inference_result.expr_resolutions {
-                    // eprintln!("        Resolution: {:?}", resolution);
                     if is_same_resolution(target, resolution) {
-                        // eprintln!("          -> MATCH!");
                         // Get the span for this expression
                         if let Some(span) = expr_body.get_expr_span(*expr_id) {
                             references.push(Reference::new(
@@ -345,7 +322,6 @@ fn find_references_to_symbol(
         }
     }
 
-    // eprintln!("  Found {} references", references.len());
     references
 }
 
@@ -355,8 +331,14 @@ fn find_references_to_symbol(
 fn is_same_resolution(a: &ResolvedValue, b: &ResolvedValue) -> bool {
     match (a, b) {
         (
-            ResolvedValue::Local { name: n1, definition_site: d1 },
-            ResolvedValue::Local { name: n2, definition_site: d2 },
+            ResolvedValue::Local {
+                name: n1,
+                definition_site: d1,
+            },
+            ResolvedValue::Local {
+                name: n2,
+                definition_site: d2,
+            },
         ) => n1 == n2 && d1 == d2,
 
         (ResolvedValue::Function(f1), ResolvedValue::Function(f2)) => f1 == f2,
@@ -365,23 +347,45 @@ fn is_same_resolution(a: &ResolvedValue, b: &ResolvedValue) -> bool {
         (ResolvedValue::TypeAlias(t1), ResolvedValue::TypeAlias(t2)) => t1 == t2,
 
         (
-            ResolvedValue::EnumVariant { enum_fqn: e1, variant: v1 },
-            ResolvedValue::EnumVariant { enum_fqn: e2, variant: v2 },
+            ResolvedValue::EnumVariant {
+                enum_fqn: e1,
+                variant: v1,
+            },
+            ResolvedValue::EnumVariant {
+                enum_fqn: e2,
+                variant: v2,
+            },
         ) => e1 == e2 && v1 == v2,
 
         // When searching for an enum, also match enum variants using that enum
-        (ResolvedValue::Enum(enum_fqn), ResolvedValue::EnumVariant { enum_fqn: variant_enum, .. }) |
-        (ResolvedValue::EnumVariant { enum_fqn: variant_enum, .. }, ResolvedValue::Enum(enum_fqn)) => {
-            enum_fqn == variant_enum
-        }
+        (
+            ResolvedValue::Enum(enum_fqn),
+            ResolvedValue::EnumVariant {
+                enum_fqn: variant_enum,
+                ..
+            },
+        )
+        | (
+            ResolvedValue::EnumVariant {
+                enum_fqn: variant_enum,
+                ..
+            },
+            ResolvedValue::Enum(enum_fqn),
+        ) => enum_fqn == variant_enum,
 
         // When searching for a class, also match object instantiations
-        (ResolvedValue::Class(c1), ResolvedValue::Field { class_fqn: c2, .. }) |
-        (ResolvedValue::Field { class_fqn: c2, .. }, ResolvedValue::Class(c1)) => c1 == c2,
+        (ResolvedValue::Class(c1), ResolvedValue::Field { class_fqn: c2, .. })
+        | (ResolvedValue::Field { class_fqn: c2, .. }, ResolvedValue::Class(c1)) => c1 == c2,
 
         (
-            ResolvedValue::Field { class_fqn: c1, field: f1 },
-            ResolvedValue::Field { class_fqn: c2, field: f2 },
+            ResolvedValue::Field {
+                class_fqn: c1,
+                field: f1,
+            },
+            ResolvedValue::Field {
+                class_fqn: c2,
+                field: f2,
+            },
         ) => c1 == c2 && f1 == f2,
 
         (

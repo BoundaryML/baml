@@ -86,7 +86,9 @@ impl CursorTest {
         let file_id = self.cursor.file.file_id(&self.db);
         match goto_definition(&self.db, file_id, self.cursor.offset) {
             Some(nav_target) => {
-                let filename = self.db.file_id_to_path(nav_target.span.file_id)
+                let filename = self
+                    .db
+                    .file_id_to_path(nav_target.span.file_id)
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown");
@@ -98,9 +100,10 @@ impl CursorTest {
                     .find(|f| f.file_id(&self.db) == nav_target.span.file_id)
                     .map(|source_file| {
                         let text = source_file.text(&self.db);
-                        let line_index = LineIndex::new(&text);
+                        let line_index = LineIndex::new(text);
                         let start_offset: u32 = nav_target.span.range.start().into();
-                        line_index.offset_to_position(start_offset)
+                        line_index
+                            .offset_to_position(start_offset)
                             .map(|pos| format!("{}:{}", pos.line + 1, pos.character + 1))
                             .unwrap_or_else(|| "?:?".to_string())
                     })
@@ -124,15 +127,20 @@ impl CursorTest {
         if references.is_empty() {
             vec!["No references found".to_string()]
         } else {
-            references.into_iter().map(|reference| {
-                // For simplicity, just return the filename
-                let filename = self.db.file_id_to_path(reference.span.file_id)
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown");
+            references
+                .into_iter()
+                .map(|reference| {
+                    // For simplicity, just return the filename
+                    let filename = self
+                        .db
+                        .file_id_to_path(reference.span.file_id)
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
 
-                filename.to_string()
-            }).collect()
+                    filename.to_string()
+                })
+                .collect()
         }
     }
 }

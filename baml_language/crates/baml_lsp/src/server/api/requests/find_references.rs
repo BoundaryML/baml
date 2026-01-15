@@ -1,9 +1,6 @@
 //! Find all references implementation for BAML LSP.
 
-use lsp_types::{
-    self, Location, Position, Range, ReferenceParams, Url,
-    request as req,
-};
+use lsp_types::{self, Location, Position, Range, ReferenceParams, Url, request as req};
 
 use crate::{
     Session,
@@ -63,13 +60,13 @@ impl SyncRequestHandler for FindReferences {
 
         // Get the source text and create a LineIndex
         let text = source_file.text(db);
-        let line_index = crate::baml_source_file::LineIndex::from_source_text(&text);
+        let line_index = crate::baml_source_file::LineIndex::from_source_text(text);
 
         // Convert LSP position to TextSize using LineIndex
         let text_position = line_index.offset(
             crate::baml_source_file::OneIndexed::from_zero_indexed(position.line as usize),
             crate::baml_source_file::OneIndexed::from_zero_indexed(position.character as usize),
-            &text,
+            text,
         );
 
         // Call the baml_ide find_all_references function (convert TextSize types)
@@ -87,7 +84,7 @@ impl SyncRequestHandler for FindReferences {
                 let ref_file_id = db.path_to_file_id(&reference.file_path)?;
                 let ref_source = db.get_file_by_id(ref_file_id)?;
                 let ref_text = ref_source.text(db);
-                let ref_line_index = crate::baml_source_file::LineIndex::from_source_text(&ref_text);
+                let ref_line_index = crate::baml_source_file::LineIndex::from_source_text(ref_text);
 
                 // Convert the span to LSP range using LineIndex
                 let start_u32: u32 = reference.span.range.start().into();
@@ -97,7 +94,7 @@ impl SyncRequestHandler for FindReferences {
                     crate::baml_text_size::TextSize::from(end_u32),
                 );
                 let range = local_text_range.to_range(
-                    &ref_text,
+                    ref_text,
                     &ref_line_index,
                     crate::edit::PositionEncoding::UTF8,
                 );

@@ -64,7 +64,11 @@ impl SyncRequestHandler for GotoDefinition {
 
         // Get the position in the document
         let position = params.text_document_position_params.position;
-        tracing::debug!("Position in document - line: {}, character: {}", position.line, position.character);
+        tracing::debug!(
+            "Position in document - line: {}, character: {}",
+            position.line,
+            position.character
+        );
 
         // Get the database and find the file ID
         let guard = project.lock();
@@ -76,7 +80,7 @@ impl SyncRequestHandler for GotoDefinition {
             Some(id) => {
                 tracing::debug!("Got FileId for path");
                 id
-            },
+            }
             None => {
                 tracing::debug!("Could not get FileId for path: {:?}", path);
                 return Ok(None);
@@ -88,7 +92,7 @@ impl SyncRequestHandler for GotoDefinition {
             Some(f) => {
                 tracing::debug!("Got source file");
                 f
-            },
+            }
             None => {
                 tracing::debug!("Could not get source file for FileId");
                 return Ok(None);
@@ -98,19 +102,25 @@ impl SyncRequestHandler for GotoDefinition {
         // Get the source text and create a LineIndex
         let text = source_file.text(db);
         tracing::debug!("Source file text length: {} chars", text.len());
-        let line_index = crate::baml_source_file::LineIndex::from_source_text(&text);
+        let line_index = crate::baml_source_file::LineIndex::from_source_text(text);
 
         // Convert LSP position to TextSize using LineIndex
         let text_position = line_index.offset(
             crate::baml_source_file::OneIndexed::from_zero_indexed(position.line as usize),
             crate::baml_source_file::OneIndexed::from_zero_indexed(position.character as usize),
-            &text,
+            text,
         );
-        tracing::debug!("Converted position to text offset: {}", text_position.as_u32());
+        tracing::debug!(
+            "Converted position to text offset: {}",
+            text_position.as_u32()
+        );
 
         // Call the baml_ide goto_definition function (convert TextSize types)
         let text_size_position = text_size::TextSize::from(text_position.as_u32());
-        tracing::debug!("Calling baml_ide::goto_definition with position: {:?}", text_size_position);
+        tracing::debug!(
+            "Calling baml_ide::goto_definition with position: {:?}",
+            text_size_position
+        );
         match baml_ide::goto_definition(db, file_id, text_size_position) {
             Some(nav_target) => {
                 tracing::debug!("Got navigation target!");
@@ -133,7 +143,8 @@ impl SyncRequestHandler for GotoDefinition {
                     None => return Ok(None),
                 };
                 let target_text = target_source.text(db);
-                let target_line_index = crate::baml_source_file::LineIndex::from_source_text(&target_text);
+                let target_line_index =
+                    crate::baml_source_file::LineIndex::from_source_text(target_text);
 
                 // Convert the span to LSP range using LineIndex
                 let start_u32: u32 = nav_target.span.range.start().into();
@@ -143,12 +154,16 @@ impl SyncRequestHandler for GotoDefinition {
                     crate::baml_text_size::TextSize::from(end_u32),
                 );
                 let range = local_text_range.to_range(
-                    &target_text,
+                    target_text,
                     &target_line_index,
                     crate::edit::PositionEncoding::UTF8,
                 );
 
-                tracing::debug!("Returning LSP Location - uri: {}, range: {:?}", target_uri, range);
+                tracing::debug!(
+                    "Returning LSP Location - uri: {}, range: {:?}",
+                    target_uri,
+                    range
+                );
                 Ok(Some(GotoDefinitionResponse::Scalar(Location {
                     uri: target_uri,
                     range,
@@ -157,7 +172,7 @@ impl SyncRequestHandler for GotoDefinition {
             None => {
                 tracing::debug!("goto_definition returned None - no target found");
                 Ok(None)
-            },
+            }
         }
 
         // TODO: Original implementation commented out below

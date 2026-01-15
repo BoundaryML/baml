@@ -137,7 +137,7 @@ impl ProjectDatabase {
         self.file_map.values().copied().collect()
     }
 
-    /// Get the file path for a FileId.
+    /// Get the file path for a `FileId`.
     pub fn file_id_to_path(&self, file_id: FileId) -> Option<&PathBuf> {
         self.file_id_to_path.get(&file_id)
     }

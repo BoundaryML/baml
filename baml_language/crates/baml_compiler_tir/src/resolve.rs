@@ -87,9 +87,9 @@ pub enum ResolvedValue {
     /// Builtin free function (e.g., `env.get`, `baml.deep_copy`).
     ///
     /// These are functions provided by the runtime, not user-defined.
-    /// Path is normalized (e.g., "baaml.deep_copy" becomes "baml.deep_copy").
+    /// Path is normalized (e.g., "`baaml.deep_copy`" becomes "`baml.deep_copy`").
     BuiltinFunction {
-        /// The normalized builtin path (e.g., "env.get", "baml.deep_copy").
+        /// The normalized builtin path (e.g., "env.get", "`baml.deep_copy`").
         path: String,
     },
 
@@ -128,7 +128,10 @@ impl ResolvedValue {
     /// Get the local variable info if this is a local.
     pub fn as_local(&self) -> Option<(&Name, Option<crate::DefinitionSite>)> {
         match self {
-            ResolvedValue::Local { name, definition_site } => Some((name, *definition_site)),
+            ResolvedValue::Local {
+                name,
+                definition_site,
+            } => Some((name, *definition_site)),
             _ => None,
         }
     }
@@ -196,7 +199,9 @@ impl ResolvedMethod {
 }
 
 use std::collections::HashMap;
+
 use baml_compiler_hir::ExprId;
+
 use crate::{Ty, builtins};
 
 /// Resolution map for all expressions in a function body.

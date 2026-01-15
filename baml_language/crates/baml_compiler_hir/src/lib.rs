@@ -314,7 +314,6 @@ fn lower_method_signature(
                 };
 
                 // Get the span of the entire parameter
-                use rowan::ast::AstNode;
                 let span = Some(param_node.syntax().text_range());
 
                 params.push(Param {
@@ -1994,37 +1993,72 @@ pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
         Definition::Function(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "function", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "function",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::Class(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "class", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "class",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::Enum(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "enum", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "enum",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::TypeAlias(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "type alias", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "type alias",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::Client(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "client", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "client",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::Generator(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "generator", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "generator",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
         Definition::Test(loc) => {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
-            (file, "test", item_tree[loc.id(db)].name.clone(), loc.id(db).index())
+            (
+                file,
+                "test",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
         }
     };
 
@@ -2036,7 +2070,11 @@ pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
 ///
 /// Walks the AST to find the class definition and then the field within it.
 /// Returns the text range of the field's name token.
-pub fn class_field_name_span(db: &dyn Db, class_loc: ClassLoc<'_>, field_name: &str) -> Option<Span> {
+pub fn class_field_name_span(
+    db: &dyn Db,
+    class_loc: ClassLoc<'_>,
+    field_name: &str,
+) -> Option<Span> {
     use baml_compiler_syntax::{SyntaxKind, ast::ClassDef};
 
     let file = class_loc.file(db);
@@ -2059,7 +2097,10 @@ pub fn class_field_name_span(db: &dyn Db, class_loc: ClassLoc<'_>, field_name: &
                             for field in class.fields() {
                                 if let Some(field_name_token) = field.name() {
                                     if field_name_token.text() == field_name {
-                                        return Some(Span::new(file_id, field_name_token.text_range()));
+                                        return Some(Span::new(
+                                            file_id,
+                                            field_name_token.text_range(),
+                                        ));
                                     }
                                 }
                             }
