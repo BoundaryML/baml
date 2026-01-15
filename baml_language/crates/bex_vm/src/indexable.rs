@@ -1,4 +1,4 @@
-use baml_vm_types::{
+use bex_vm_types::{
     Object, ObjectIndex, ObjectPool, ObjectType, StackIndex, Value,
     indexable::{Pool, StackKind},
     types::Type,
@@ -18,8 +18,8 @@ pub(crate) trait ObjectPoolTrait {
     fn as_media(
         &self,
         value: &Value,
-        media_kind: baml_vm_types::types::MediaKind,
-    ) -> Result<&baml_vm_types::types::MediaValue, InternalError>;
+        media_kind: bex_vm_types::types::MediaKind,
+    ) -> Result<&bex_vm_types::types::MediaValue, InternalError>;
     fn as_array(&self, value: &Value) -> Result<&[Value], InternalError>;
     fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, InternalError>;
     fn as_map(&self, value: &Value) -> Result<&indexmap::IndexMap<String, Value>, InternalError>;
@@ -65,8 +65,8 @@ impl ObjectPoolTrait for ObjectPool<NativeFunction> {
     fn as_media(
         &self,
         value: &Value,
-        media_kind: baml_vm_types::types::MediaKind,
-    ) -> Result<&baml_vm_types::types::MediaValue, InternalError> {
+        media_kind: bex_vm_types::types::MediaKind,
+    ) -> Result<&bex_vm_types::types::MediaValue, InternalError> {
         let object_index = self.as_object(value, ObjectType::Media(media_kind))?;
 
         let Object::Media(media) = &self[object_index] else {

@@ -4,7 +4,7 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
-use baml_vm_types::bytecode::{BinOp, CmpOp};
+use bex_vm_types::bytecode::{BinOp, CmpOp};
 
 // ============================================================================
 // For-in loops

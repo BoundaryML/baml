@@ -22,7 +22,7 @@
 mod analysis;
 mod emit;
 
-use baml_vm_types::ObjectPool;
+use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
 
 /// Context for MIR codegen.
@@ -50,7 +50,7 @@ use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
-pub use baml_vm_types::{
+pub use bex_vm_types::{
     BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, Program, UnaryOp, Value, type_tags,
 };

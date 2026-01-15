@@ -11,7 +11,7 @@ use baml_compiler_mir::{
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
 use baml_compiler_tir::Ty;
-use baml_vm_types::{
+use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
     ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
     bytecode::{BlockNotification, BlockNotificationType, JumpTableData},
@@ -208,7 +208,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let viz_nodes = mir
             .viz_nodes
             .iter()
-            .map(|node| baml_vm_types::VizNodeMeta {
+            .map(|node| bex_vm_types::VizNodeMeta {
                 node_id: node.node_id,
                 log_filter_key: node.log_filter_key.clone(),
                 parent_log_filter_key: node.parent_log_filter_key.clone(),
@@ -234,18 +234,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Convert MIR `VizNodeType` to VM `VizNodeType`.
     fn convert_viz_node_type(
         mir_type: baml_compiler_mir::VizNodeType,
-    ) -> baml_vm_types::VizNodeType {
+    ) -> bex_vm_types::VizNodeType {
         match mir_type {
-            baml_compiler_mir::VizNodeType::FunctionRoot => {
-                baml_vm_types::VizNodeType::FunctionRoot
-            }
+            baml_compiler_mir::VizNodeType::FunctionRoot => bex_vm_types::VizNodeType::FunctionRoot,
             baml_compiler_mir::VizNodeType::HeaderContextEnter => {
-                baml_vm_types::VizNodeType::HeaderContextEnter
+                bex_vm_types::VizNodeType::HeaderContextEnter
             }
-            baml_compiler_mir::VizNodeType::BranchGroup => baml_vm_types::VizNodeType::BranchGroup,
-            baml_compiler_mir::VizNodeType::BranchArm => baml_vm_types::VizNodeType::BranchArm,
-            baml_compiler_mir::VizNodeType::Loop => baml_vm_types::VizNodeType::Loop,
-            baml_compiler_mir::VizNodeType::OtherScope => baml_vm_types::VizNodeType::OtherScope,
+            baml_compiler_mir::VizNodeType::BranchGroup => bex_vm_types::VizNodeType::BranchGroup,
+            baml_compiler_mir::VizNodeType::BranchArm => bex_vm_types::VizNodeType::BranchArm,
+            baml_compiler_mir::VizNodeType::Loop => bex_vm_types::VizNodeType::Loop,
+            baml_compiler_mir::VizNodeType::OtherScope => bex_vm_types::VizNodeType::OtherScope,
         }
     }
 

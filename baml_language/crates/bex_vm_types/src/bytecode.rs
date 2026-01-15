@@ -82,7 +82,7 @@ impl JumpTableData {
 /// }
 /// ```
 ///
-/// Instead store the state or complex structure in the `Vm` struct (in `baml_vm` crate) and
+/// Instead store the state or complex structure in the `Vm` struct (in `bex_vm` crate) and
 /// find a way to reference it with very simple instructions.
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -361,7 +361,7 @@ pub enum Instruction {
     /// it indicates a bug in the compiler or type system (e.g., a non-exhaustive
     /// match expression that the compiler incorrectly marked as exhaustive).
     ///
-    /// Throws `RuntimeError::Unreachable` (in `baml_vm` crate).
+    /// Throws `RuntimeError::Unreachable` (in `bex_vm` crate).
     Unreachable,
 }
 

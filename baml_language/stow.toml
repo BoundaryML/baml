@@ -1,17 +1,63 @@
-# Stow configuration
-approved_prefixes = ["lsp", "tools", "compiler", "builtins", "vm", "ide", "playground"]
-test_crate_exceptions = ["baml_tests"]
+# Stow Configuration
+# ==================
+#
+# Stow validates crate naming conventions and dependency rules in the workspace.
+# Install: cargo install --path crates/baml_tools_stow
+# Usage:   cargo stow --check    (validate)
+#          cargo stow --fix      (auto-fix sorting issues)
+#
+# Namespaces ([[namespaces]]):
+#   name                 - Crate prefix (e.g., "baml" for baml_* crates)
+#   approved_prefixes    - Valid sub-prefixes (e.g., "compiler" allows baml_compiler_*)
+#   test_crate_exceptions - Test crates exempt from "must have prefix crate" rule
+#   dependency_rules     - Rules that only apply to crates in this namespace
+#
+# Dependency Rules ([[dependency_rules]] or [[namespaces.dependency_rules]]):
+#   pattern              - Simple glob: "foo*", "*bar", or exact match
+#   pattern.select       - Glob pattern to match
+#   pattern.exclude      - List of patterns to exclude from the match
+#   allowed_prefixes     - Crate prefixes allowed to use this dependency
+#   allowed_crates       - Specific crates/patterns allowed (e.g., "*_cli")
+#   regular_deps_only    - If true, rule only applies to [dependencies], not dev/build
+#   reason               - Error message shown when rule is violated
+#
+# Auto-allowed naming suffixes: _types, _test, _tests (no prefix needed)
+# Auto-allowed dependency access: _test/_tests crates and *_tools_* crates
+#
+# ===========================================================================
 
+# Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
 allowed_prefixes = ["lsp"]
-allowed_crates = ["baml_cli"]
+allowed_crates = ["*_cli"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
-[[dependency_rules]]
+# baml namespace configuration
+[[namespaces]]
+name = "baml"
+approved_prefixes = ["tools", "compiler", "builtins", "playground"]
+test_crate_exceptions = ["baml_tests"]
+
+# baml-specific dependency rules
+[[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "lsp"]
 allowed_crates = ["baml_db", "baml_project"]
-regular_deps_only = true
 reason = "Use baml_db or baml_project to access compiler interfaces."
+
+[[namespaces.dependency_rules]]
+pattern.select = "bex_*"
+pattern.exclude = ["bex_vm_types"]
+reason = "baml_* crates should not depend on bex_* crates."
+
+[[namespaces.dependency_rules]]
+pattern.select = "bex_vm_types"
+allowed_crates = ["baml_compiler_emit"]
+reason = "baml_* crates should depend on bex_vm_types."
+
+
+# bex namespace configuration
+[[namespaces]]
+name = "bex"

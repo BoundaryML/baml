@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_vm_types::{
+use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureKind, GlobalPool, Instruction, Object, ObjectIndex,
     ObjectPool, ObjectType, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
@@ -36,7 +36,7 @@ pub struct Frame {
     /// Points to the next instruction that the VM will execute. It is of type
     /// [`isize`] because some jumps can create negative offsets (for loops)
     /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`baml_vm_types::Bytecode::instructions`]). However,
+    /// only once (when we index into [`bex_vm_types::Bytecode::instructions`]). However,
     /// this number should never be negative, otherwise indexing into the
     /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
     pub instruction_ptr: isize,
@@ -235,7 +235,7 @@ pub enum WatchNotification {
     Block(BlockNotification),
     Viz {
         function_name: String,
-        event: baml_vm_types::bytecode::VizExecEvent,
+        event: bex_vm_types::bytecode::VizExecEvent,
     },
 }
 
@@ -253,7 +253,7 @@ pub struct BamlVmProgram {
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
 fn value_type_tag(value: &Value, objects: &ObjectPool<NativeFunction>) -> i64 {
-    use baml_vm_types::types::type_tags;
+    use bex_vm_types::types::type_tags;
 
     match value {
         Value::Int(_) => type_tags::INT,
@@ -302,8 +302,8 @@ impl Vm {
         }
     }
 
-    /// Creates a VM from a compiled [`baml_vm_types::Program`].
-    pub fn from_program(program: baml_vm_types::Program<()>) -> Result<Self, VmError> {
+    /// Creates a VM from a compiled [`bex_vm_types::Program`].
+    pub fn from_program(program: bex_vm_types::Program<()>) -> Result<Self, VmError> {
         Ok(Self {
             frames: Vec::new(),
             stack: EvalStack::new(),

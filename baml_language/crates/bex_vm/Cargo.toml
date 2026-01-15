@@ -1,5 +1,5 @@
 [package]
-name = "baml_vm_types"
+name = "bex_vm"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -21,6 +21,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
+bex_vm_types = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
 paste = { workspace = true }
@@ -33,3 +34,6 @@ divan = { workspace = true }
 indexmap = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
+[[bench]]
+name = "fib"
+harness = false

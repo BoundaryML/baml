@@ -1,4 +1,4 @@
-use baml_vm_types::{BinOp, CmpOp, UnaryOp, Value, types::Type};
+use bex_vm_types::{BinOp, CmpOp, UnaryOp, Value, types::Type};
 
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///
@@ -53,7 +53,7 @@ pub enum RuntimeError {
     /// Ah yes, classic stack overflow.
     StackOverflow,
 
-    /// User code triggered an assertion failure via the [`baml_vm_types::Instruction::Assert`] opcode.
+    /// User code triggered an assertion failure via the [`bex_vm_types::Instruction::Assert`] opcode.
     AssertionError,
 
     /// Execution reached code that should be unreachable.

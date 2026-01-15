@@ -11,7 +11,7 @@
 
 use std::{collections::HashMap, fmt::Write};
 
-use baml_vm_types::{
+use bex_vm_types::{
     ObjectIndex,
     types::{
         Future, FutureKind, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value,
@@ -527,20 +527,20 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
     Ok(match object {
         Object::Function(function) => {
             let kind = match function.kind {
-                baml_vm_types::FunctionKind::Exec => baml_vm_types::FunctionKind::Exec,
-                baml_vm_types::FunctionKind::Llm => baml_vm_types::FunctionKind::Llm,
-                baml_vm_types::FunctionKind::Future => baml_vm_types::FunctionKind::Future,
-                baml_vm_types::FunctionKind::Native(()) => {
+                bex_vm_types::FunctionKind::Exec => bex_vm_types::FunctionKind::Exec,
+                bex_vm_types::FunctionKind::Llm => bex_vm_types::FunctionKind::Llm,
+                bex_vm_types::FunctionKind::Future => bex_vm_types::FunctionKind::Future,
+                bex_vm_types::FunctionKind::Native(()) => {
                     let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(
                             "Native function '{}' not found",
                             function.name
                         ))));
                     };
-                    baml_vm_types::FunctionKind::Native(native_function)
+                    bex_vm_types::FunctionKind::Native(native_function)
                 }
             };
-            Object::Function(baml_vm_types::Function {
+            Object::Function(bex_vm_types::Function {
                 name: function.name,
                 arity: function.arity,
                 bytecode: function.bytecode,

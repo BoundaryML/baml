@@ -1,4 +1,4 @@
-use baml_vm_types::types::{Function, FunctionType, Object, ObjectType};
+use bex_vm_types::types::{Function, FunctionType, Object, ObjectType};
 
 use crate::{InternalError, NativeFunction, errors::VmError};
 

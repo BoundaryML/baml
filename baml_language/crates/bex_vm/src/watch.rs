@@ -141,7 +141,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use baml_vm_types::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
+use bex_vm_types::{Object, ObjectIndex, ObjectPool, StackIndex, Value};
 
 use crate::NativeFunction;
 
@@ -542,7 +542,7 @@ mod tests {
 
     // TODO: fix this nonsense
     fn dummy_object_pool(n: usize) -> ObjectPool<NativeFunction> {
-        ObjectPool::from_vec(vec![baml_vm_types::Object::String(String::new()); n])
+        ObjectPool::from_vec(vec![bex_vm_types::Object::String(String::new()); n])
     }
 
     #[test]

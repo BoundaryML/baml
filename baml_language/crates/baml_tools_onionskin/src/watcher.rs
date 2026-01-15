@@ -22,7 +22,7 @@ const COMPILER_CRATES: &[&str] = &[
     "baml_compiler_vir",
     "baml_db",
     "baml_project",
-    "baml_vm",
+    "bex_vm",
     "baml_workspace",
 ];
 

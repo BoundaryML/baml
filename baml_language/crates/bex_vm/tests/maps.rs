@@ -3,7 +3,7 @@
 use baml_tests::bytecode::{
     ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails,
 };
-use baml_vm::RuntimeError;
+use bex_vm::RuntimeError;
 
 #[test]
 fn create_and_access() -> anyhow::Result<()> {

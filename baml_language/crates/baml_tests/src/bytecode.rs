@@ -1,7 +1,7 @@
 //! Shared test utilities for BAML bytecode testing.
 //!
 //! This module provides common infrastructure for testing bytecode compilation
-//! and execution in `baml_vm`.
+//! and execution in `bex_vm`.
 //!
 //! # Contents
 //!
@@ -30,8 +30,8 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-use baml_vm::{Vm, VmExecState};
-use baml_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
+use bex_vm::{Vm, VmExecState};
+use bex_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
 
 // Re-export test types from crate::vm
 pub use crate::vm::{
@@ -134,7 +134,7 @@ pub struct ProgramInput<Expect> {
 pub type Program = ProgramInput<ExecState>;
 
 /// Test input for VM execution that should fail.
-pub type FailingProgram = ProgramInput<baml_vm::errors::VmError>;
+pub type FailingProgram = ProgramInput<bex_vm::errors::VmError>;
 
 /// Test input for VM execution with watch/emit states.
 pub type WatchProgram = ProgramInput<Vec<Vec<Notification>>>;
@@ -257,7 +257,7 @@ pub fn assert_vm_emits_with_inspection(
 fn setup_and_exec_program(
     source: &'static str,
     function: &str,
-) -> Result<(Vm, Result<VmExecState, baml_vm::errors::VmError>), anyhow::Error> {
+) -> Result<(Vm, Result<VmExecState, bex_vm::errors::VmError>), anyhow::Error> {
     let program = compile_source(source);
 
     let function_index = program
@@ -277,7 +277,7 @@ fn setup_and_exec_program(
 /// Helper struct for testing VM execution with direct bytecode.
 pub struct BytecodeProgram {
     pub arity: usize,
-    pub instructions: Vec<baml_vm_types::Instruction>,
+    pub instructions: Vec<bex_vm_types::Instruction>,
     pub constants: Vec<VmValue>,
     pub expected: VmExecState,
 }
@@ -292,17 +292,17 @@ pub fn assert_vm_executes_bytecode_with_inspection(
     input: BytecodeProgram,
     inspect: impl FnOnce(&Vm, VmExecState) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    let function = baml_vm_types::Function {
+    let function = bex_vm_types::Function {
         name: "test_fn".to_string(),
         arity: input.arity,
-        bytecode: baml_vm_types::Bytecode {
+        bytecode: bex_vm_types::Bytecode {
             source_lines: vec![1; input.instructions.len()],
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
             jump_tables: Vec::new(),
         },
-        kind: baml_vm_types::FunctionKind::Exec,
+        kind: bex_vm_types::FunctionKind::Exec,
         locals_in_scope: {
             let mut names = Vec::with_capacity(input.arity + 1);
             names.push("<fn test_fn>".to_string());
@@ -315,7 +315,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
     };
 
     let mut program = VmProgram::new();
-    let fn_idx = program.add_object(baml_vm_types::Object::Function(function));
+    let fn_idx = program.add_object(bex_vm_types::Object::Function(function));
     program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
     program
         .function_indices

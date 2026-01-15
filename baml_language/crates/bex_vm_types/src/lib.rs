@@ -3,7 +3,7 @@
 //! This crate implements a stack based virtual machine similar to the `CPython`
 //! VM or Lox VM from [Crafting Interpreters](https://craftinginterpreters.com/).
 //!
-//! Main entry point is `Vm::exec` (in `baml_vm` crate) which runs the VM cycle:
+//! Main entry point is `Vm::exec` (in `bex_vm` crate) which runs the VM cycle:
 //! 1. Decode Instruction.
 //! 2. Execute Instruction.
 //! 3. Increment instruction pointer and repeat loop.

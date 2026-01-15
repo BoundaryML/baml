@@ -234,7 +234,7 @@ impl std::fmt::Display for Variant {
 /// Runtime values.
 ///
 /// This struct should not contain allocated objects and should be [`Copy`].
-/// Read the documentation of `Vm::objects` (in `baml_vm` crate) to understand how allocated
+/// Read the documentation of `Vm::objects` (in `bex_vm` crate) to understand how allocated
 /// objects work in the virtual machine.
 ///
 /// # On `Hash`
@@ -269,7 +269,7 @@ impl std::fmt::Display for Value {
 
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
-/// `Vm` (in `baml_vm` crate) should own objects and give references to them to the running Baml
+/// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
 /// program. Internally, in the `Vm` code, note that by reference I don't mean
 /// a Rust reference (& or &mut), but rather a [`usize`] that is used to index
 /// into the `Vm::objects` pool.

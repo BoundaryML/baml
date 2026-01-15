@@ -8,7 +8,7 @@
 //! 2. Execute Instruction.
 //! 3. Increment instruction pointer and repeat loop.
 //!
-//! The instructions that the VM runs are defined in [`baml_vm_types::bytecode::Instruction`] enum.
+//! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
 pub mod builtins;
 pub mod debug;

@@ -3,12 +3,16 @@
 //! Rules:
 //! 1. No nested crates (flat structure only)
 //! 2. Crate names must match folder names
-//! 3. Crate names must be `baml_<word>` or `baml_<approved_prefix>_<word>`
+//! 3. Crate names must be `<namespace>_<word>` or `<namespace>_<approved_prefix>_<word>`
+//!    - Auto-allowed suffixes: `_types`, `_test`, `_tests` (no prefix needed)
 //! 4. Crates ending in `_test` or `_tests` must have a corresponding prefix crate
 //! 5. All dependencies must use `{ workspace = true }` format
 //! 6. Dependency restrictions (configurable whitelist/blacklist per dependency)
-//! 7. Dependencies must be sorted: baml_* deps first (sorted), then external deps (sorted)
-//! 8. baml_* deps must be grouped together (not interleaved with external deps)
+//!    - Global rules apply to all namespaces
+//!    - Per-namespace rules apply only to crates in that namespace
+//!    - `_types` dependencies are auto-allowed (can be depended on by any crate)
+//! 7. Dependencies must be sorted: internal deps first (sorted), then external deps (sorted)
+//! 8. Internal deps must be grouped together (not interleaved with external deps)
 //!
 //! Usage:
 //!     cargo stow --check
@@ -30,48 +34,94 @@ use toml_edit::{DocumentMut, Formatted, InlineTable, Item, Table, Value};
 // CONFIGURATION
 // =============================================================================
 
+/// A namespace defines a crate prefix (e.g., "baml" or "bex") and its rules
+#[derive(Debug, Clone, Deserialize)]
+pub struct Namespace {
+    /// The namespace name (e.g., "baml" for baml_* crates)
+    pub name: String,
+    /// Approved multi-word prefixes (e.g., "compiler" for `baml_compiler`_*)
+    #[serde(default)]
+    pub approved_prefixes: Vec<String>,
+    /// Test crates exempt from "must have prefix crate" rule
+    #[serde(default)]
+    pub test_crate_exceptions: Vec<String>,
+    /// Dependency rules that only apply to crates in this namespace
+    #[serde(default)]
+    pub dependency_rules: Vec<DependencyRule>,
+}
+
 /// Stow configuration - can be loaded from stow.toml or [workspace.metadata.stow]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Approved multi-word prefixes (e.g., `baml_lsp_types` -> lsp is approved)
-    pub approved_prefixes: Vec<String>,
-    /// Test crates exempt from "must have prefix crate" rule
-    pub test_crate_exceptions: Vec<String>,
-    /// Dependency restriction rules
+    /// Crate namespaces (e.g., baml, bex)
+    pub namespaces: Vec<Namespace>,
+    /// Global dependency rules that apply to all namespaces
     #[serde(default)]
     pub dependency_rules: Vec<DependencyRule>,
+
+    // Legacy fields for backward compatibility (converted to single namespace)
+    #[serde(default)]
+    approved_prefixes: Vec<String>,
+    #[serde(default)]
+    test_crate_exceptions: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            approved_prefixes: vec![
-                "lsp".into(),
-                "tools".into(),
-                "compiler".into(),
-                "builtins".into(),
-                "vm".into(),
-                "ide".into(),
-                "playground".into(),
+            namespaces: vec![
+                Namespace {
+                    name: "baml".into(),
+                    // Note: lsp, vm, ide removed - auto-allowed via _types/_tests suffix
+                    approved_prefixes: vec![
+                        "tools".into(),
+                        "compiler".into(),
+                        "builtins".into(),
+                        "playground".into(),
+                    ],
+                    test_crate_exceptions: vec!["baml_tests".into()],
+                    dependency_rules: vec![
+                        DependencyRule {
+                            pattern: Pattern::Simple("baml_compiler*".into()),
+                            allowed_prefixes: vec!["compiler".into(), "lsp".into()],
+                            allowed_crates: vec!["baml_db".into(), "baml_project".into()],
+                            regular_deps_only: true,
+                            reason: "Use baml_db or baml_project to access compiler interfaces."
+                                .into(),
+                        },
+                        DependencyRule {
+                            pattern: Pattern::WithExclusions {
+                                select: "bex_*".into(),
+                                exclude: vec!["bex_vm_types".into()],
+                            },
+                            allowed_prefixes: vec![],
+                            allowed_crates: vec![],
+                            regular_deps_only: true,
+                            reason: "baml_* crates should not depend on bex_* crates.".into(),
+                        },
+                    ],
+                },
+                Namespace {
+                    name: "bex".into(),
+                    approved_prefixes: vec![], // bex_vm_types auto-allowed via _types suffix
+                    test_crate_exceptions: vec![],
+                    dependency_rules: vec![],
+                },
             ],
-            test_crate_exceptions: vec!["baml_tests".into()],
             dependency_rules: vec![
+                // Global rule: anyhow is only for CLI/LSP crates
                 DependencyRule {
-                    pattern: "anyhow".into(),
+                    pattern: Pattern::Simple("anyhow".into()),
                     allowed_prefixes: vec!["lsp".into()],
-                    allowed_crates: vec!["baml_cli".into()],
+                    allowed_crates: vec!["*_cli".into()],
                     regular_deps_only: true,
-                    reason: "Use thiserror for proper error types in library crates. anyhow is only allowed in CLI/test crates.".into(),
-                },
-                DependencyRule {
-                    pattern: "baml_compiler*".into(),
-                    allowed_prefixes: vec!["compiler".into(), "lsp".into()],
-                    allowed_crates: vec!["baml_db".into(), "baml_project".into()],
-                    regular_deps_only: true,
-                    reason: "Only baml_compiler_* crates, baml_db, and baml_project can depend directly on baml_compiler_* crates. To use compiler interfaces, use baml_db or baml_project.".into(),
+                    reason: "Use thiserror for proper error types in library crates.".into(),
                 },
             ],
+            // Legacy fields (empty when using namespaces)
+            approved_prefixes: vec![],
+            test_crate_exceptions: vec![],
         }
     }
 }
@@ -87,7 +137,7 @@ impl Config {
                 match toml::from_str::<Config>(&content) {
                     Ok(config) => {
                         eprintln!("Loaded config from {}", stow_toml.display());
-                        return config;
+                        return config.normalize();
                     }
                     Err(e) => {
                         eprintln!("Warning: Failed to parse {}: {}", stow_toml.display(), e);
@@ -111,7 +161,7 @@ impl Config {
                                             "Loaded config from [workspace.metadata.stow] in {}",
                                             cargo_toml.display()
                                         );
-                                        return config;
+                                        return config.normalize();
                                     }
                                     Err(e) => {
                                         eprintln!(
@@ -130,13 +180,74 @@ impl Config {
         eprintln!("Using default config (no stow.toml or [workspace.metadata.stow] found)");
         Config::default()
     }
+
+    /// Normalize config by converting legacy flat format to namespace format
+    fn normalize(mut self) -> Self {
+        // If legacy fields are set and namespaces is empty, convert to namespace format
+        if self.namespaces.is_empty() && !self.approved_prefixes.is_empty() {
+            self.namespaces = vec![Namespace {
+                name: "baml".into(),
+                approved_prefixes: std::mem::take(&mut self.approved_prefixes),
+                test_crate_exceptions: std::mem::take(&mut self.test_crate_exceptions),
+                dependency_rules: vec![],
+            }];
+        }
+        self
+    }
+
+    /// Get the namespace for a given crate name
+    pub fn get_namespace(&self, crate_name: &str) -> Option<&Namespace> {
+        self.namespaces
+            .iter()
+            .find(|ns| crate_name.starts_with(&format!("{}_", ns.name)))
+    }
+
+    /// Check if a crate name belongs to any known namespace
+    pub fn is_internal_crate(&self, crate_name: &str) -> bool {
+        self.get_namespace(crate_name).is_some()
+    }
+}
+
+/// Pattern for matching dependencies - can be a simple string or select/exclude
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum Pattern {
+    /// Simple glob pattern (e.g., "bex_*")
+    Simple(String),
+    /// Pattern with exclusions
+    WithExclusions {
+        select: String,
+        #[serde(default)]
+        exclude: Vec<String>,
+    },
+}
+
+impl Pattern {
+    fn matches(&self, dep_name: &str) -> bool {
+        match self {
+            Pattern::Simple(pattern) => glob_match(pattern, dep_name),
+            Pattern::WithExclusions { select, exclude } => {
+                // First check if it matches the select pattern
+                if !glob_match(select, dep_name) {
+                    return false;
+                }
+                // Then check if it's excluded
+                for excl in exclude {
+                    if glob_match(excl, dep_name) {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
+    }
 }
 
 /// Dependency rules configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct DependencyRule {
     /// Dependency name pattern (supports glob-style wildcards)
-    pub pattern: String,
+    pub pattern: Pattern,
     /// Allowed crate prefixes (e.g., "compiler" allows `baml_compiler`_*)
     #[serde(default)]
     pub allowed_prefixes: Vec<String>,
@@ -153,26 +264,30 @@ pub struct DependencyRule {
 
 impl DependencyRule {
     fn matches_dependency(&self, dep_name: &str) -> bool {
-        glob_match(&self.pattern, dep_name)
+        self.pattern.matches(dep_name)
     }
 
-    fn is_allowed(&self, crate_name: &str) -> bool {
-        // _test and _tests are allowed to depend on anything
+    fn is_allowed(&self, crate_name: &str, config: &Config) -> bool {
+        // _test and _tests crates are allowed to depend on anything
         if crate_name.ends_with("_test") || crate_name.ends_with("_tests") {
             return true;
         }
 
-        // tools are allowed to depend on anything
-        if crate_name.starts_with("baml_tools_") {
-            return true;
+        // tools crates (in any namespace) are allowed to depend on anything
+        for ns in &config.namespaces {
+            if crate_name.starts_with(&format!("{}_tools_", ns.name)) {
+                return true;
+            }
         }
 
-        // Check allowed prefixes
+        // Check allowed prefixes (relative to any namespace)
         for prefix in &self.allowed_prefixes {
-            let prefix_pattern = format!("baml_{prefix}_");
-            let exact_match = format!("baml_{prefix}");
-            if crate_name.starts_with(&prefix_pattern) || crate_name == exact_match {
-                return true;
+            for ns in &config.namespaces {
+                let prefix_pattern = format!("{}_{prefix}_", ns.name);
+                let exact_match = format!("{}_{prefix}", ns.name);
+                if crate_name.starts_with(&prefix_pattern) || crate_name == exact_match {
+                    return true;
+                }
             }
         }
 
@@ -251,8 +366,8 @@ fn glob_match(pattern: &str, text: &str) -> bool {
     pattern == text
 }
 
-fn is_internal_dep(name: &str) -> bool {
-    name.starts_with("baml_")
+fn is_internal_dep(name: &str, config: &Config) -> bool {
+    config.is_internal_crate(name)
 }
 
 fn find_workspace_root() -> Option<PathBuf> {
@@ -347,6 +462,9 @@ fn check_crate_name_matches_folder(
     errors
 }
 
+/// Auto-allowed suffixes for crate naming (no prefix needed)
+const AUTO_ALLOWED_SUFFIXES: &[&str] = &["types", "test", "tests"];
+
 fn check_crate_naming_convention(
     folder_name: &str,
     doc: &DocumentMut,
@@ -361,20 +479,26 @@ fn check_crate_naming_convention(
         .and_then(|n| n.as_str())
         .unwrap_or(folder_name);
 
-    if !crate_name.starts_with("baml_") {
+    // Find which namespace this crate belongs to
+    let Some(namespace) = config.get_namespace(crate_name) else {
+        let ns_names: Vec<_> = config.namespaces.iter().map(|ns| &ns.name).collect();
         errors.push(ValidationError {
             crate_name: crate_name.to_string(),
             file_path: cargo_path.to_path_buf(),
-            message: format!("Crate name must start with 'baml_', got '{crate_name}'"),
+            message: format!(
+                "Crate name must start with a known namespace prefix. Known namespaces: {ns_names:?}, got '{crate_name}'"
+            ),
         });
         return errors;
-    }
+    };
 
-    let suffix = &crate_name[5..]; // Remove 'baml_'
+    // Remove the namespace prefix (e.g., "baml_" or "bex_")
+    let suffix = &crate_name[namespace.name.len() + 1..];
     let parts: Vec<&str> = suffix.split('_').collect();
 
     match parts.len() {
         1 => {
+            // namespace_word (e.g., baml_cli)
             if !parts[0].chars().all(|c| c.is_ascii_lowercase()) {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
@@ -387,28 +511,43 @@ fn check_crate_naming_convention(
             }
         }
         2 => {
-            let (prefix, word) = (parts[0], parts[1]);
-            let prefix_approved = config.approved_prefixes.iter().any(|p| p == prefix);
-            if !prefix_approved && !["test", "tests"].contains(&word) {
-                errors.push(ValidationError {
-                    crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
-                    message: format!(
-                        "Crate name '{}' has unapproved prefix '{}'. Approved: {:?}",
-                        crate_name, prefix, config.approved_prefixes
-                    ),
-                });
+            // namespace_prefix_word (e.g., baml_compiler_emit)
+            // OR namespace_word_suffix (e.g., bex_vm_types - auto-allowed)
+            let (first, second) = (parts[0], parts[1]);
+
+            // Check if it's an auto-allowed suffix pattern (e.g., bex_vm_types)
+            if AUTO_ALLOWED_SUFFIXES.contains(&second) {
+                // Auto-allowed - no prefix validation needed
+            } else {
+                // Check if first part is an approved prefix
+                let prefix_approved = namespace.approved_prefixes.iter().any(|p| p == first);
+                if !prefix_approved {
+                    errors.push(ValidationError {
+                        crate_name: crate_name.to_string(),
+                        file_path: cargo_path.to_path_buf(),
+                        message: format!(
+                            "Crate name '{}' has unapproved prefix '{}'. Approved for {}: {:?}",
+                            crate_name, first, namespace.name, namespace.approved_prefixes
+                        ),
+                    });
+                }
             }
         }
         3 => {
-            let (prefix, _, test_suffix) = (parts[0], parts[1], parts[2]);
-            let prefix_approved = config.approved_prefixes.iter().any(|p| p == prefix);
-            if !prefix_approved || !["test", "tests"].contains(&test_suffix) {
+            // namespace_prefix_word_suffix (e.g., baml_ide_foo_tests)
+            let (prefix, _, last) = (parts[0], parts[1], parts[2]);
+
+            // Must have an approved prefix AND end with auto-allowed suffix
+            let prefix_approved = namespace.approved_prefixes.iter().any(|p| p == prefix);
+            let suffix_allowed = AUTO_ALLOWED_SUFFIXES.contains(&last);
+
+            if !prefix_approved || !suffix_allowed {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
                     file_path: cargo_path.to_path_buf(),
                     message: format!(
-                        "Crate name '{crate_name}' has unapproved structure. Expected baml_<word>, baml_<approved>_<word>, or ending in _test/_tests"
+                        "Crate name '{crate_name}' has unapproved structure. Expected {ns}_<word>, {ns}_<approved>_<word>, or ending in _types/_test/_tests",
+                        ns = namespace.name
                     ),
                 });
             }
@@ -435,8 +574,15 @@ fn check_test_crate_has_prefix(
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
 
-    if config.test_crate_exceptions.iter().any(|e| e == crate_name) {
-        return errors;
+    // Check namespace-specific exceptions first
+    if let Some(namespace) = config.get_namespace(crate_name) {
+        if namespace
+            .test_crate_exceptions
+            .iter()
+            .any(|e| e == crate_name)
+        {
+            return errors;
+        }
     }
 
     for suffix in ["_test", "_tests"] {
@@ -536,14 +682,22 @@ fn check_dependency_restrictions(
         }
     }
 
+    // Collect all applicable rules: global rules + namespace-specific rules
+    let mut applicable_rules: Vec<&DependencyRule> = config.dependency_rules.iter().collect();
+
+    // Add namespace-specific rules if crate belongs to a namespace
+    if let Some(namespace) = config.get_namespace(crate_name) {
+        applicable_rules.extend(namespace.dependency_rules.iter());
+    }
+
     for (dep_name, section) in all_deps {
-        for rule in &config.dependency_rules {
+        for rule in &applicable_rules {
             // Skip if rule only applies to regular deps and this is dev/build deps
             if rule.regular_deps_only && section != "dependencies" {
                 continue;
             }
 
-            if rule.matches_dependency(dep_name) && !rule.is_allowed(crate_name) {
+            if rule.matches_dependency(dep_name) && !rule.is_allowed(crate_name, config) {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
                     file_path: cargo_path.to_path_buf(),
@@ -563,76 +717,68 @@ fn check_dependencies_sorted(
     crate_name: &str,
     doc: &DocumentMut,
     cargo_path: &Path,
+    config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     let dep_sections = ["dependencies", "dev-dependencies", "build-dependencies"];
 
-    #[allow(clippy::items_after_statements)]
-    fn check_section(
-        deps: &dyn toml_edit::TableLike,
-        section_name: &str,
-        crate_name: &str,
-        cargo_path: &Path,
-        errors: &mut Vec<ValidationError>,
-    ) {
-        let dep_names: Vec<&str> = deps.iter().map(|(k, _)| k).collect();
-        if dep_names.is_empty() {
-            return;
-        }
-
-        // Get expected order: internal first (sorted), then external (sorted)
-        let mut internal: Vec<&str> = dep_names
-            .iter()
-            .copied()
-            .filter(|n| is_internal_dep(n))
-            .collect();
-        let mut external: Vec<&str> = dep_names
-            .iter()
-            .copied()
-            .filter(|n| !is_internal_dep(n))
-            .collect();
-        internal.sort_by_key(|s| s.to_lowercase());
-        external.sort_by_key(|s| s.to_lowercase());
-        let expected: Vec<&str> = internal.into_iter().chain(external).collect();
-
-        if dep_names != expected {
-            // Check for grouping issue
-            let mut seen_external = false;
-            let mut has_grouping_issue = false;
-            for name in &dep_names {
-                if is_internal_dep(name) {
-                    if seen_external {
-                        has_grouping_issue = true;
-                        break;
-                    }
-                } else {
-                    seen_external = true;
-                }
-            }
-
-            if has_grouping_issue {
-                errors.push(ValidationError {
-                    crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
-                    message: format!(
-                        "Dependencies in [{section_name}] have baml_* deps interleaved with external deps. baml_* deps should come first."
-                    ),
-                });
-            } else {
-                errors.push(ValidationError {
-                    crate_name: crate_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
-                    message: format!(
-                        "Dependencies in [{section_name}] are not sorted. Expected baml_* first (sorted), then external (sorted)."
-                    ),
-                });
-            }
-        }
-    }
-
     for section in dep_sections {
         if let Some(deps) = doc.get(section).and_then(|d| d.as_table_like()) {
-            check_section(deps, section, crate_name, cargo_path, &mut errors);
+            let dep_names: Vec<&str> = deps.iter().map(|(k, _)| k).collect();
+            if dep_names.is_empty() {
+                continue;
+            }
+
+            // Separate internal and external deps
+            let mut internal: Vec<&str> = dep_names
+                .iter()
+                .copied()
+                .filter(|n| is_internal_dep(n, config))
+                .collect();
+            let mut external: Vec<&str> = dep_names
+                .iter()
+                .copied()
+                .filter(|n| !is_internal_dep(n, config))
+                .collect();
+
+            // Get expected order: internal first (sorted), then external (sorted)
+            internal.sort_by_key(|s| s.to_lowercase());
+            external.sort_by_key(|s| s.to_lowercase());
+            let expected: Vec<&str> = internal.into_iter().chain(external).collect();
+
+            if dep_names != expected {
+                // Check for grouping issue
+                let mut seen_external = false;
+                let mut has_grouping_issue = false;
+                for name in &dep_names {
+                    if is_internal_dep(name, config) {
+                        if seen_external {
+                            has_grouping_issue = true;
+                            break;
+                        }
+                    } else {
+                        seen_external = true;
+                    }
+                }
+
+                if has_grouping_issue {
+                    errors.push(ValidationError {
+                        crate_name: crate_name.to_string(),
+                        file_path: cargo_path.to_path_buf(),
+                        message: format!(
+                            "Dependencies in [{section}] have internal deps interleaved with external deps. Internal deps should come first."
+                        ),
+                    });
+                } else {
+                    errors.push(ValidationError {
+                        crate_name: crate_name.to_string(),
+                        file_path: cargo_path.to_path_buf(),
+                        message: format!(
+                            "Dependencies in [{section}] are not sorted. Expected internal first (sorted), then external (sorted)."
+                        ),
+                    });
+                }
+            }
         }
     }
 
@@ -643,7 +789,7 @@ fn check_dependencies_sorted(
 // FIX FUNCTIONS
 // =============================================================================
 
-fn sort_dependencies_table(table: &mut Table) {
+fn sort_dependencies_table(table: &mut Table, config: &Config) {
     // Collect all entries with normalized values
     let entries: Vec<(String, Item)> = table
         .iter()
@@ -661,12 +807,12 @@ fn sort_dependencies_table(table: &mut Table) {
     // Separate internal and external
     let mut internal: Vec<(String, Item)> = entries
         .iter()
-        .filter(|(k, _)| is_internal_dep(k))
+        .filter(|(k, _)| is_internal_dep(k, config))
         .cloned()
         .collect();
     let mut external: Vec<(String, Item)> = entries
         .iter()
-        .filter(|(k, _)| !is_internal_dep(k))
+        .filter(|(k, _)| !is_internal_dep(k, config))
         .cloned()
         .collect();
 
@@ -713,7 +859,11 @@ fn convert_to_workspace_dep(item: &Item) -> Item {
     Item::Value(Value::InlineTable(new_table))
 }
 
-fn fix_cargo_toml(cargo_path: &Path, workspace_deps: &HashSet<String>) -> std::io::Result<bool> {
+fn fix_cargo_toml(
+    cargo_path: &Path,
+    workspace_deps: &HashSet<String>,
+    config: &Config,
+) -> std::io::Result<bool> {
     let content = std::fs::read_to_string(cargo_path)?;
     let mut doc: DocumentMut = content.parse().map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Parse error: {e}"))
@@ -741,7 +891,7 @@ fn fix_cargo_toml(cargo_path: &Path, workspace_deps: &HashSet<String>) -> std::i
             }
 
             // Sort dependencies
-            sort_dependencies_table(deps);
+            sort_dependencies_table(deps, config);
         }
     }
 
@@ -881,7 +1031,7 @@ fn main() {
             let cargo_path = crate_dir.join("Cargo.toml");
             let crate_name = crate_dir.file_name().unwrap_or_default().to_string_lossy();
 
-            match fix_cargo_toml(&cargo_path, &workspace_deps) {
+            match fix_cargo_toml(&cargo_path, &workspace_deps, &config) {
                 Ok(true) => {
                     println!("Fixed {crate_name}");
                     total_fixed += 1;
@@ -980,7 +1130,9 @@ fn main() {
         all_errors.extend(check_dependency_restrictions(
             crate_name, doc, cargo_path, &config,
         ));
-        all_errors.extend(check_dependencies_sorted(crate_name, doc, cargo_path));
+        all_errors.extend(check_dependencies_sorted(
+            crate_name, doc, cargo_path, &config,
+        ));
     }
 
     if all_errors.is_empty() {

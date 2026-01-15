@@ -3,8 +3,8 @@
 //! Do not measure compilation here, only VM execution time.
 
 use baml_tests::bytecode::TestDatabase;
-use baml_vm::Vm;
-use baml_vm_types::Value;
+use bex_vm::Vm;
+use bex_vm_types::Value;
 
 struct Program {
     source: &'static str,

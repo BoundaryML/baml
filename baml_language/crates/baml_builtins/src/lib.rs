@@ -2,7 +2,7 @@
 //!
 //! This crate provides compile-time type information for built-in functions,
 //! used by the type checker (`baml_compiler_tir`). It does NOT include
-//! runtime implementations - those live in `baml_vm`.
+//! runtime implementations - those live in `bex_vm`.
 //!
 //! This separation allows the type checker to avoid depending on the VM.
 //!
@@ -79,7 +79,7 @@ impl BuiltinSignature {
 
 /// Macro containing all builtin definitions.
 ///
-/// This is used by both `baml_builtins` and `baml_vm` to ensure consistency.
+/// This is used by both `baml_builtins` and `bex_vm` to ensure consistency.
 /// The macro takes a callback that will receive the definitions.
 #[macro_export]
 macro_rules! with_builtins {

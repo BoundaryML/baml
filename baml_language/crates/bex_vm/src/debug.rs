@@ -24,7 +24,7 @@
 
 use std::io::IsTerminal;
 
-use baml_vm_types::{
+use bex_vm_types::{
     ObjectIndex, ObjectPool, StackIndex,
     bytecode::Instruction,
     indexable::GlobalPool,

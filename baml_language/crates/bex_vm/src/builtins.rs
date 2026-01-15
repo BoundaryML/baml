@@ -16,7 +16,7 @@
 use std::sync::LazyLock;
 
 // Re-export type signatures from baml_builtins.
-// Type checker uses these directly without depending on baml_vm.
+// Type checker uses these directly without depending on bex_vm.
 pub use baml_builtins::{BuiltinSignature, TypePattern, paths};
 use indexmap::IndexMap;
 use paste::paste;
