@@ -7,8 +7,10 @@ use once_cell::sync::Lazy;
 use prost::Message;
 
 use super::*;
-use crate::baml::cffi::{invocation_response::Response as CResponse, InvocationResponse};
-use crate::ffi::callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback};
+use crate::{
+    baml::cffi::{invocation_response::Response as CResponse, InvocationResponse},
+    ffi::callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
+};
 
 /// Encode a success response (task spawned successfully, no return value)
 fn encode_success_response() -> Buffer {

@@ -1,10 +1,11 @@
-use libc::size_t;
 use std::{
     fs::OpenOptions,
     io::Write,
     sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use libc::size_t;
 
 use super::*;
 use crate::{
