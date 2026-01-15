@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -37,15 +37,15 @@ fn NestedLiteralUnions(code: Int) -> String {
 
 }
 
-fn ExhaustiveEnumWithTypedPattern(s: Enum("Status")) -> String {
+fn ExhaustiveEnumWithTypedPattern(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
-    let _3: Named("Status") // x
+    let _3: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // x
 
     bb0: {
-        _2 = is_type(copy _1, Named("Status"));
+        _2 = is_type(copy _1, Enum(FullyQualifiedName { namespace: Local, name: "Status" }));
         branch copy _2 -> [bb5, bb3];
     }
 
@@ -114,10 +114,10 @@ fn ParenthesizedSingleLiteral(b: Bool) -> String {
 
 }
 
-fn DuplicateEnumVariant(s: Enum("Status")) -> String {
+fn DuplicateEnumVariant(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -269,18 +269,18 @@ fn UnreachableMultiple(x: Int) -> String {
 
 }
 
-fn OverlappingWithBindings(r: Named("Result")) -> String {
+fn OverlappingWithBindings(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Union([Named("Success"), Named("Failure")]) // x
+    let _6: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // x
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -299,7 +299,7 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        _5 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -324,10 +324,10 @@ fn OverlappingWithBindings(r: Named("Result")) -> String {
 
 }
 
-fn ExhaustiveNullableEnum(s: Optional(Enum("Status"))) -> String {
+fn ExhaustiveNullableEnum(s: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" }))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Enum("Status")) // s // param
+    let _1: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" })) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -417,10 +417,10 @@ fn NonExhaustiveBoolMissingTrue(b: Bool) -> String {
 
 }
 
-fn ExhaustiveEnumAllVariants(s: Enum("Status")) -> String {
+fn ExhaustiveEnumAllVariants(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -469,19 +469,19 @@ fn ExhaustiveEnumAllVariants(s: Enum("Status")) -> String {
 
 }
 
-fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
+fn ExhaustiveTypeAlias(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Named("Failure") // f
-    let _7: Named("Failure")
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Failure" })
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -500,7 +500,7 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Named("Failure"));
+        _5 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -526,16 +526,16 @@ fn ExhaustiveTypeAlias(r: Named("Result")) -> String {
 
 }
 
-fn EnumVariantAfterTypedEnum(s: Enum("Status")) -> String {
+fn EnumVariantAfterTypedEnum(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
-    let _3: Named("Status") // x
+    let _3: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // x
     let _4: Bool
 
     bb0: {
-        _2 = is_type(copy _1, Named("Status"));
+        _2 = is_type(copy _1, Enum(FullyQualifiedName { namespace: Local, name: "Status" }));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -654,10 +654,10 @@ fn LiteralUnionWithCatchAll(code: Int) -> String {
 
 }
 
-fn ExhaustiveIntLiterals(code: Named("SuccessCode")) -> String {
+fn ExhaustiveIntLiterals(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessCode") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb4, 204: bb5, otherwise: bb6];
@@ -692,10 +692,10 @@ fn ExhaustiveIntLiterals(code: Named("SuccessCode")) -> String {
 
 }
 
-fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
+fn ExhaustiveStringLiterals(role: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Role") // role // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -744,17 +744,17 @@ fn ExhaustiveStringLiterals(role: Named("Role")) -> String {
 
 }
 
-fn ExhaustiveTypeAliasWithCatchAll(r: Named("Result")) -> String {
+fn ExhaustiveTypeAliasWithCatchAll(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
-    let _5: Named("Result") // _
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
+    let _5: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // _
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -827,17 +827,17 @@ fn DuplicateIntLiteral(x: Int) -> String {
 
 }
 
-fn ExhaustiveClassPlusLiteral(x: Named("SuccessOr200")) -> String {
+fn ExhaustiveClassPlusLiteral(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessOr200") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" }) // x // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -923,10 +923,10 @@ fn ExhaustiveLiteralWithBaseType(x: Int) -> String {
 
 }
 
-fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum("Status"))) -> String {
+fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" }))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Enum("Status")) // s // param
+    let _1: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" })) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -975,16 +975,16 @@ fn NonExhaustiveNullableEnumMissingNull(s: Optional(Enum("Status"))) -> String {
 
 }
 
-fn NonExhaustiveTypeAliasMissingOne(r: Named("Result")) -> String {
+fn NonExhaustiveTypeAliasMissingOne(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1049,10 +1049,10 @@ fn BoolUnionPattern(b: Bool) -> String {
 
 }
 
-fn StringLiteralUnionPattern(role: Named("Role")) -> String {
+fn StringLiteralUnionPattern(role: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Role") // role // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -1137,19 +1137,19 @@ fn ExhaustiveBool(b: Bool) -> String {
 
 }
 
-fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
+fn NonExhaustiveDoubleMaybeMissingNull(dm: TypeAlias(FullyQualifiedName { namespace: Local, name: "DoubleMaybe" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("DoubleMaybe") // dm // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "DoubleMaybe" }) // dm // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Named("Failure") // f
-    let _7: Named("Failure")
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Failure" })
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1168,7 +1168,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Named("Failure"));
+        _5 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -1194,20 +1194,20 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Named("DoubleMaybe")) -> String {
 
 }
 
-fn ExhaustiveDoubleMaybe(dm: Named("DoubleMaybe")) -> String {
+fn ExhaustiveDoubleMaybe(dm: TypeAlias(FullyQualifiedName { namespace: Local, name: "DoubleMaybe" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("DoubleMaybe") // dm // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "DoubleMaybe" }) // dm // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Named("Failure") // f
-    let _7: Named("Failure")
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Failure" })
     let _8: Bool
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1226,7 +1226,7 @@ fn ExhaustiveDoubleMaybe(dm: Named("DoubleMaybe")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Named("Failure"));
+        _5 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -1262,10 +1262,10 @@ fn ExhaustiveDoubleMaybe(dm: Named("DoubleMaybe")) -> String {
 
 }
 
-fn ExhaustiveOptionalSingleton(code: Named("MaybeOk")) -> String {
+fn ExhaustiveOptionalSingleton(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MaybeOk") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" }) // code // param
     let _2: Bool
     let _3: Bool
 
@@ -1457,10 +1457,10 @@ fn NonExhaustiveBoolMissingFalse(b: Bool) -> String {
 
 }
 
-fn IntLiteralUnionPattern(code: Named("SuccessCode")) -> String {
+fn IntLiteralUnionPattern(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessCode") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb3, 204: bb4, otherwise: bb5];
@@ -1547,10 +1547,10 @@ fn ThreeLevelNestedMatch(x: Int, y: Int, z: Int) -> String {
 
 }
 
-fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
+fn MultipleUnreachableSpans(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -1621,10 +1621,10 @@ fn MultipleUnreachableSpans(s: Enum("Status")) -> String {
 
 }
 
-fn ExhaustiveCustomBool(b: Named("CustomBool")) -> String {
+fn ExhaustiveCustomBool(b: TypeAlias(FullyQualifiedName { namespace: Local, name: "CustomBool" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("CustomBool") // b // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "CustomBool" }) // b // param
     let _2: Bool
     let _3: Bool
 
@@ -1662,11 +1662,11 @@ fn ExhaustiveCustomBool(b: Named("CustomBool")) -> String {
 
 }
 
-fn NestedEnumMatch(s1: Enum("Status"), s2: Enum("Status")) -> String {
+fn NestedEnumMatch(s1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }), s2: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s1 // param
-    let _2: Enum("Status") // s2 // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s1 // param
+    let _2: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s2 // param
     let _3: Bool
     let _4: Bool
     let _5: Bool
@@ -1751,10 +1751,10 @@ fn NestedEnumMatch(s1: Enum("Status"), s2: Enum("Status")) -> String {
 
 }
 
-fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
+fn ExhaustiveMixedLiterals(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "MixedLiterals" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MixedLiterals") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MixedLiterals" }) // x // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -1803,17 +1803,17 @@ fn ExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
 
 }
 
-fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
+fn PartialUnionPlusCatchAll(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("FullResult") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" }) // r // param
     let _2: Bool
-    let _3: Union([Named("Success"), Named("Failure")]) // x
+    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // x
     let _4: Bool
-    let _5: Named("Pending") // _
+    let _5: Class(FullyQualifiedName { namespace: Local, name: "Pending" }) // _
 
     bb0: {
-        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1831,7 +1831,7 @@ fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
     }
 
     bb4: {
-        _4 = is_type(copy _1, Named("Pending"));
+        _4 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Pending" }));
         branch copy _4 -> [bb8, bb7];
     }
 
@@ -1856,10 +1856,10 @@ fn PartialUnionPlusCatchAll(r: Named("FullResult")) -> String {
 
 }
 
-fn ExhaustiveTrueType(t: Named("AlwaysTrue")) -> String {
+fn ExhaustiveTrueType(t: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysTrue" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("AlwaysTrue") // t // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysTrue" }) // t // param
     let _2: Bool
 
     bb0: {
@@ -1952,10 +1952,10 @@ fn NestedMatchSpans(x: Int, y: Bool) -> String {
 
 }
 
-fn NonExhaustiveOptionalMissingValue(code: Named("MaybeOk")) -> String {
+fn NonExhaustiveOptionalMissingValue(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MaybeOk") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" }) // code // param
     let _2: Bool
 
     bb0: {
@@ -1982,9 +1982,9 @@ fn NonExhaustiveOptionalMissingValue(code: Named("MaybeOk")) -> String {
 
 }
 
-fn GetStatus() -> Enum("Status") {
+fn GetStatus() -> Enum(FullyQualifiedName { namespace: Local, name: "Status" }) {
     // Locals:
-    let _0: Enum("Status") // return
+    let _0: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // return
 
     bb0: {
         _0 = const fn Status.Active;
@@ -1997,10 +1997,10 @@ fn GetStatus() -> Enum("Status") {
 
 }
 
-fn EnumVariantUnion(s: Enum("Status")) -> String {
+fn EnumVariantUnion(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -2044,20 +2044,20 @@ fn EnumVariantUnion(s: Enum("Status")) -> String {
 
 }
 
-fn NestedTypeAlias(mr: Named("MaybeResult")) -> String {
+fn NestedTypeAlias(mr: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeResult" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MaybeResult") // mr // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeResult" }) // mr // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Named("Failure") // f
-    let _7: Named("Failure")
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Failure" })
     let _8: Bool
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2076,7 +2076,7 @@ fn NestedTypeAlias(mr: Named("MaybeResult")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Named("Failure"));
+        _5 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -2112,10 +2112,10 @@ fn NestedTypeAlias(mr: Named("MaybeResult")) -> String {
 
 }
 
-fn ExhaustiveFalseType(f: Named("AlwaysFalse")) -> String {
+fn ExhaustiveFalseType(f: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysFalse" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("AlwaysFalse") // f // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysFalse" }) // f // param
     let _2: Bool
 
     bb0: {
@@ -2142,10 +2142,10 @@ fn ExhaustiveFalseType(f: Named("AlwaysFalse")) -> String {
 
 }
 
-fn NonExhaustiveOptionalMissingNull(code: Named("MaybeOk")) -> String {
+fn NonExhaustiveOptionalMissingNull(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MaybeOk") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MaybeOk" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, otherwise: bb4];
@@ -2170,10 +2170,10 @@ fn NonExhaustiveOptionalMissingNull(code: Named("MaybeOk")) -> String {
 
 }
 
-fn NonExhaustiveTrueTypeWrongLiteral(t: Named("AlwaysTrue")) -> String {
+fn NonExhaustiveTrueTypeWrongLiteral(t: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysTrue" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("AlwaysTrue") // t // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "AlwaysTrue" }) // t // param
     let _2: Bool
 
     bb0: {
@@ -2235,17 +2235,17 @@ fn ExhaustiveWithNamedCatchAll(x: Int) -> Int {
 
 }
 
-fn NestedTypeBindings(r: Named("Result")) -> Int {
+fn NestedTypeBindings(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> Int {
     // Locals:
     let _0: Int // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Union([Named("Success"), Error]) // s
+    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Error]) // s
     let _4: Bool
-    let _5: Named("Failure") // f
+    let _5: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
 
     bb0: {
-        _2 = is_type(copy _1, Union([Named("Success"), Error]));
+        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Error]));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2263,7 +2263,7 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
     }
 
     bb4: {
-        _4 = is_type(copy _1, Named("Failure"));
+        _4 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _4 -> [bb8, bb7];
     }
 
@@ -2288,10 +2288,10 @@ fn NestedTypeBindings(r: Named("Result")) -> Int {
 
 }
 
-fn NonExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
+fn NonExhaustiveAliasOfLiterals(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "OkOrCreated" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("OkOrCreated") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "OkOrCreated" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, otherwise: bb4];
@@ -2316,10 +2316,10 @@ fn NonExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
 
 }
 
-fn ExhaustiveAliasOfLiterals(code: Named("OkOrCreated")) -> String {
+fn ExhaustiveAliasOfLiterals(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "OkOrCreated" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("OkOrCreated") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "OkOrCreated" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb4, otherwise: bb5];
@@ -2379,12 +2379,12 @@ fn WrongLiteralTypeIntWithString(x: Int) -> String {
 
 }
 
-fn ExhaustiveEnumWithCatchAll(s: Enum("Status")) -> String {
+fn ExhaustiveEnumWithCatchAll(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
-    let _3: Named("Status") // _
+    let _3: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // _
 
     bb0: {
         _2 = copy _1 == const Status.Active;
@@ -2522,10 +2522,10 @@ fn MatchArithmeticScrutinee(a: Int, b: Int) -> String {
 
 }
 
-fn HighLineNumberNonExhaustive(s: Enum("Status")) -> String {
+fn HighLineNumberNonExhaustive(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
 
     bb0: {
@@ -2552,10 +2552,10 @@ fn HighLineNumberNonExhaustive(s: Enum("Status")) -> String {
 
 }
 
-fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum("Status"))) -> String {
+fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" }))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Enum("Status")) // s // param
+    let _1: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" })) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -2604,10 +2604,10 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Optional(Enum("Status"))) -> Strin
 
 }
 
-fn DeeplyNestedLiterals(x: Named("SuccessCode")) -> String {
+fn DeeplyNestedLiterals(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessCode") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" }) // x // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb3, 204: bb3, otherwise: bb4];
@@ -2632,19 +2632,19 @@ fn DeeplyNestedLiterals(x: Named("SuccessCode")) -> String {
 
 }
 
-fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
+fn NonExhaustiveFullResultMissingOne(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("FullResult") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
     let _5: Bool
-    let _6: Named("Failure") // f
-    let _7: Named("Failure")
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Failure" })
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2663,7 +2663,7 @@ fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Named("Failure"));
+        _5 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Failure" }));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -2689,10 +2689,10 @@ fn NonExhaustiveFullResultMissingOne(r: Named("FullResult")) -> String {
 
 }
 
-fn ExhaustiveSingletonInt(code: Named("HttpOk")) -> String {
+fn ExhaustiveSingletonInt(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "HttpOk" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("HttpOk") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "HttpOk" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, otherwise: bb4];
@@ -2717,16 +2717,16 @@ fn ExhaustiveSingletonInt(code: Named("HttpOk")) -> String {
 
 }
 
-fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> String {
+fn NonExhaustiveClassPlusLiteralMissingLiteral(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessOr200") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" }) // x // param
     let _2: Bool
-    let _3: Named("Success") // s
-    let _4: Named("Success")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2755,16 +2755,16 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Named("SuccessOr200")) -> Stri
 
 }
 
-fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum("Status"))) -> String {
+fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" }))) -> String {
     // Locals:
     let _0: String // return
-    let _1: Optional(Enum("Status")) // s // param
+    let _1: Optional(Enum(FullyQualifiedName { namespace: Local, name: "Status" })) // s // param
     let _2: Bool
-    let _3: Named("Status") // x
+    let _3: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // x
     let _4: Bool
 
     bb0: {
-        _2 = is_type(copy _1, Named("Status"));
+        _2 = is_type(copy _1, Enum(FullyQualifiedName { namespace: Local, name: "Status" }));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -2802,10 +2802,10 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Optional(Enum("Status"))) -> String
 
 }
 
-fn DuplicateStringLiteral(role: Named("Role")) -> String {
+fn DuplicateStringLiteral(role: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Role") // role // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -2865,10 +2865,10 @@ fn DuplicateStringLiteral(role: Named("Role")) -> String {
 
 }
 
-fn NonExhaustiveEnumMissingOne(s: Enum("Status")) -> String {
+fn NonExhaustiveEnumMissingOne(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
 
@@ -2997,10 +2997,10 @@ fn ExhaustiveOptional(x: Optional(Int)) -> String {
 
 }
 
-fn NonExhaustiveCustomBoolMissing(b: Named("CustomBool")) -> String {
+fn NonExhaustiveCustomBoolMissing(b: TypeAlias(FullyQualifiedName { namespace: Local, name: "CustomBool" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("CustomBool") // b // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "CustomBool" }) // b // param
     let _2: Bool
 
     bb0: {
@@ -3027,10 +3027,10 @@ fn NonExhaustiveCustomBoolMissing(b: Named("CustomBool")) -> String {
 
 }
 
-fn NonExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
+fn NonExhaustiveMixedLiterals(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "MixedLiterals" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("MixedLiterals") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "MixedLiterals" }) // x // param
     let _2: Bool
     let _3: Bool
 
@@ -3068,10 +3068,10 @@ fn NonExhaustiveMixedLiterals(x: Named("MixedLiterals")) -> String {
 
 }
 
-fn NonExhaustiveClassPlusLiteralMissingClass(x: Named("SuccessOr200")) -> String {
+fn NonExhaustiveClassPlusLiteralMissingClass(x: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessOr200") // x // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessOr200" }) // x // param
 
     bb0: {
         switch copy _1 [200: bb3, otherwise: bb4];
@@ -3236,17 +3236,17 @@ fn DuplicateBoolLiteral(b: Bool) -> String {
 
 }
 
-fn OverlappingTypedPatterns(r: Named("Result")) -> String {
+fn OverlappingTypedPatterns(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Named("Success") // _
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // _
     let _4: Bool
-    let _5: Union([Named("Success"), Named("Failure")]) // _
+    let _5: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // _
 
     bb0: {
-        _2 = is_type(copy _1, Named("Success"));
+        _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -3264,7 +3264,7 @@ fn OverlappingTypedPatterns(r: Named("Result")) -> String {
     }
 
     bb4: {
-        _4 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        _4 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _4 -> [bb8, bb7];
     }
 
@@ -3336,10 +3336,10 @@ fn StringLiteralAfterStringType(s: String) -> String {
 
 }
 
-fn NestedEnumVariantUnions(s: Enum("Status")) -> String {
+fn NestedEnumVariantUnions(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
     let _4: Bool
@@ -3378,15 +3378,15 @@ fn NestedEnumVariantUnions(s: Enum("Status")) -> String {
 
 }
 
-fn UnionPatternCoversAll(r: Named("Result")) -> String {
+fn UnionPatternCoversAll(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Result") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Union([Named("Success"), Named("Failure")]) // x
+    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // x
 
     bb0: {
-        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -3448,15 +3448,15 @@ fn ExhaustiveWithUnderscore(x: Int) -> Int {
 
 }
 
-fn PartialUnionPatternCoverage(r: Named("FullResult")) -> String {
+fn PartialUnionPatternCoverage(r: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("FullResult") // r // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "FullResult" }) // r // param
     let _2: Bool
-    let _3: Union([Named("Success"), Named("Failure")]) // x
+    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // x
 
     bb0: {
-        _2 = is_type(copy _1, Union([Named("Success"), Named("Failure")]));
+        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -3484,10 +3484,10 @@ fn PartialUnionPatternCoverage(r: Named("FullResult")) -> String {
 
 }
 
-fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
+fn NonExhaustiveStringLiteral(role: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Role") // role // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
 
@@ -3528,8 +3528,8 @@ fn NonExhaustiveStringLiteral(role: Named("Role")) -> String {
 fn MatchFunctionCallScrutinee() -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Status")
-    let _2: Function { params: [], ret: Named("Status") }
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" })
+    let _2: Function { params: [], ret: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) }
     let _3: Bool
     let _4: Bool
     let _5: Bool
@@ -3583,13 +3583,13 @@ fn MatchFunctionCallScrutinee() -> String {
 
 }
 
-fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
+fn StringLiteralWithCatchAll(role: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("Role") // role // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
-    let _4: Named("Role") // _
+    let _4: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // _
 
     bb0: {
         _2 = copy _1 == const "user";
@@ -3635,10 +3635,10 @@ fn StringLiteralWithCatchAll(role: Named("Role")) -> String {
 
 }
 
-fn NonExhaustiveEnumMissingMultiple(s: Enum("Status")) -> String {
+fn NonExhaustiveEnumMissingMultiple(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
 
     bb0: {
@@ -3744,10 +3744,10 @@ fn MixedPatterns(x: Int) -> String {
 
 }
 
-fn NonExhaustiveIntLiteral(code: Named("SuccessCode")) -> String {
+fn NonExhaustiveIntLiteral(code: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Named("SuccessCode") // code // param
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "SuccessCode" }) // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb4, otherwise: bb5];
@@ -3824,13 +3824,13 @@ fn LiteralAfterTypedPattern(x: Int) -> String {
 
 }
 
-fn EnumVariantUnionWithCatchAll(s: Enum("Status")) -> String {
+fn EnumVariantUnionWithCatchAll(s: Enum(FullyQualifiedName { namespace: Local, name: "Status" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Enum("Status") // s // param
+    let _1: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // s // param
     let _2: Bool
     let _3: Bool
-    let _4: Named("Status") // _
+    let _4: Enum(FullyQualifiedName { namespace: Local, name: "Status" }) // _
 
     bb0: {
         _2 = copy _1 == const Status.Active;

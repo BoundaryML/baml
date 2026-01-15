@@ -73,6 +73,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
         request::CodeLensResolve::METHOD => local_request_task::<request::CodeLensResolve>(req),
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
+        request::FindReferences::METHOD => local_request_task::<request::FindReferences>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
             // tracing::info!("diagnostic notif");

@@ -180,16 +180,46 @@ pub fn find_method(method_name: &str) -> impl Iterator<Item = &'static BuiltinSi
 
 /// Find a free function by path (functions without a receiver).
 pub fn find_function(path: &str) -> Option<&'static BuiltinSignature> {
+    let normalized = normalize_baml_prefix(path);
     builtins()
         .iter()
-        .find(|def| def.receiver.is_none() && def.path == path)
+        .find(|def| def.receiver.is_none() && def.path == normalized)
 }
 
 /// Find any builtin by path (including methods).
 ///
 /// This is useful for direct builtin calls like `baml.Array.length(arr)`.
 pub fn find_builtin_by_path(path: &str) -> Option<&'static BuiltinSignature> {
-    builtins().iter().find(|def| def.path == path)
+    let normalized = normalize_baml_prefix(path);
+    builtins().iter().find(|def| def.path == normalized)
+}
+
+/// Normalize the `baml` prefix, allowing any number of a's.
+///
+/// This is an easter egg: `baml`, `baaml`, `baaaml`, etc. all resolve
+/// to the `baml` namespace.
+fn normalize_baml_prefix(path: &str) -> std::borrow::Cow<'_, str> {
+    // Check if path starts with "ba"
+    let Some(after_ba) = path.strip_prefix("ba") else {
+        return std::borrow::Cow::Borrowed(path);
+    };
+
+    // Count consecutive 'a's after "ba"
+    let extra_a_count = after_ba.chars().take_while(|&c| c == 'a').count();
+
+    // Check if followed by "ml"
+    let after_as = &after_ba[extra_a_count..];
+    if !after_as.starts_with("ml") {
+        return std::borrow::Cow::Borrowed(path);
+    }
+
+    // If there are extra a's, normalize to "baml"
+    if extra_a_count > 0 {
+        let rest = &after_as[2..]; // skip "ml"
+        std::borrow::Cow::Owned(format!("baml{rest}"))
+    } else {
+        std::borrow::Cow::Borrowed(path)
+    }
 }
 
 #[cfg(test)]
@@ -254,5 +284,48 @@ mod tests {
         assert_eq!(paths::ENV_GET, "env.get");
         assert_eq!(paths::BAML_DEEP_COPY, "baml.deep_copy");
         assert_eq!(paths::BAML_UNSTABLE_STRING, "baml.unstable.string");
+    }
+
+    #[test]
+    fn test_baaml_easter_egg() {
+        // Easter egg: any number of a's in "baml" should work
+        assert!(find_builtin_by_path("baaml.Array.length").is_some());
+        assert!(find_builtin_by_path("baaaml.Array.length").is_some());
+        assert!(find_builtin_by_path("baaaaaaaaml.deep_copy").is_some());
+
+        // Original still works
+        assert!(find_builtin_by_path("baml.Array.length").is_some());
+
+        // But not other variations
+        assert!(find_builtin_by_path("bml.Array.length").is_none()); // no 'a'
+        assert!(find_builtin_by_path("bamll.Array.length").is_none()); // extra 'l'
+        assert!(find_builtin_by_path("bbaml.Array.length").is_none()); // extra 'b'
+    }
+
+    #[test]
+    fn test_normalize_baml_prefix() {
+        use std::borrow::Cow;
+
+        // No change needed
+        assert!(matches!(
+            normalize_baml_prefix("baml.Array"),
+            Cow::Borrowed(_)
+        ));
+        assert!(matches!(normalize_baml_prefix("env.get"), Cow::Borrowed(_)));
+        assert!(matches!(normalize_baml_prefix("foo.bar"), Cow::Borrowed(_)));
+
+        // Normalization happens
+        assert_eq!(normalize_baml_prefix("baaml.Array"), "baml.Array");
+        assert_eq!(normalize_baml_prefix("baaaml.deep_copy"), "baml.deep_copy");
+        assert_eq!(
+            normalize_baml_prefix("baaaaaaaaml.unstable.string"),
+            "baml.unstable.string"
+        );
+
+        // Edge cases that should NOT normalize
+        assert_eq!(normalize_baml_prefix("bml.Array"), "bml.Array"); // missing 'a'
+        assert_eq!(normalize_baml_prefix("ba"), "ba"); // incomplete
+        assert_eq!(normalize_baml_prefix("bam"), "bam"); // incomplete
+        assert_eq!(normalize_baml_prefix("banal"), "banal"); // different word
     }
 }

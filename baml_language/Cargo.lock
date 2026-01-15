@@ -393,6 +393,7 @@ dependencies = [
  "rowan 0.16.1",
  "rustc-hash 2.1.1",
  "salsa",
+ "smol_str",
 ]
 
 [[package]]
@@ -499,8 +500,10 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_project",
+ "rowan 0.16.1",
  "smol_str",
  "text-size",
+ "tracing",
 ]
 
 [[package]]

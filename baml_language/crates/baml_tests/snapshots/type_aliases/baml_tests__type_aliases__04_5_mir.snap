@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Bar() -> Named("foo") {
+fn Bar() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) {
     // Locals:
-    let _0: Named("foo") // return
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) // return
 
     bb0: {
         _0 = const true;
@@ -18,9 +18,9 @@ fn Bar() -> Named("foo") {
 
 }
 
-fn Foo() -> Named("foo") {
+fn Foo() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) {
     // Locals:
-    let _0: Named("foo") // return
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) // return
 
     bb0: {
         _0 = const 1_i64;
@@ -33,9 +33,9 @@ fn Foo() -> Named("foo") {
 
 }
 
-fn Baz() -> Named("Json") {
+fn Baz() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "Json" }) {
     // Locals:
-    let _0: Named("Json") // return
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "Json" }) // return
 
     bb0: {
         _0 = const "hello";
@@ -48,10 +48,10 @@ fn Baz() -> Named("Json") {
 
 }
 
-fn EchoJSON(i: Named("JSON")) -> Named("JSON") {
+fn EchoJSON(i: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" })) -> TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) {
     // Locals:
-    let _0: Named("JSON") // return
-    let _1: Named("JSON") // i // param
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // return
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // i // param
     let _2: String
 
     bb0: {
@@ -66,11 +66,11 @@ fn EchoJSON(i: Named("JSON")) -> Named("JSON") {
 
 }
 
-fn MakeJSON(i: Class("NotJSON")) -> Named("JSON") {
+fn MakeJSON(i: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" })) -> TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) {
     // Locals:
-    let _0: Named("JSON") // return
-    let _1: Class("NotJSON") // i // param
-    let _2: Named("NotJSON")
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // return
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" }) // i // param
+    let _2: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" })
 
     bb0: {
         _2 = copy _1;

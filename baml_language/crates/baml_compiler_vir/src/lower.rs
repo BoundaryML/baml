@@ -736,11 +736,11 @@ impl<'a> LoweringContext<'a> {
             baml_compiler_tir::Ty::Bool => Ty::Bool,
             baml_compiler_tir::Ty::Null => Ty::Null,
             baml_compiler_tir::Ty::Media(kind) => Ty::Media(kind.clone()),
-            baml_compiler_tir::Ty::Named(name) => Ty::Class(name.clone()),
+            baml_compiler_tir::Ty::TypeAlias(fqn) => Ty::TypeAlias(fqn.clone()),
 
-            baml_compiler_tir::Ty::Class(name) => Ty::Class(name.clone()),
+            baml_compiler_tir::Ty::Class(fqn) => Ty::Class(fqn.clone()),
 
-            baml_compiler_tir::Ty::Enum(name) => Ty::Enum(name.clone()),
+            baml_compiler_tir::Ty::Enum(fqn) => Ty::Enum(fqn.clone()),
 
             baml_compiler_tir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_ty(inner))),
 

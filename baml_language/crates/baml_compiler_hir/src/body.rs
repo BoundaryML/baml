@@ -1217,13 +1217,17 @@ impl LoweringContext {
                         match token.kind() {
                             SyntaxKind::INTEGER_LITERAL => {
                                 let value = token.text().parse::<i64>().unwrap_or(0);
-                                scrutinee =
-                                    Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                                let range = token.text_range();
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Int(value)), range),
+                                );
                             }
                             SyntaxKind::FLOAT_LITERAL => {
                                 let text = token.text().to_string();
-                                scrutinee =
-                                    Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))));
+                                let range = token.text_range();
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::Float(text)), range),
+                                );
                             }
                             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                                 let text = token.text().to_string();
@@ -1234,20 +1238,21 @@ impl LoweringContext {
                                 } else {
                                     text
                                 };
-                                scrutinee =
-                                    Some(self.exprs.alloc(Expr::Literal(Literal::String(content))));
+                                let range = token.text_range();
+                                scrutinee = Some(
+                                    self.alloc_expr(Expr::Literal(Literal::String(content)), range),
+                                );
                             }
                             SyntaxKind::WORD => {
                                 let text = token.text();
+                                let range = token.text_range();
                                 let expr = match text {
-                                    "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                    "false" => {
-                                        self.exprs.alloc(Expr::Literal(Literal::Bool(false)))
-                                    }
-                                    "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                    _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                    "true" => Expr::Literal(Literal::Bool(true)),
+                                    "false" => Expr::Literal(Literal::Bool(false)),
+                                    "null" => Expr::Literal(Literal::Null),
+                                    _ => Expr::Path(vec![Name::new(text)]),
                                 };
-                                scrutinee = Some(expr);
+                                scrutinee = Some(self.alloc_expr(expr, range));
                             }
                             _ => {}
                         }
@@ -1256,7 +1261,10 @@ impl LoweringContext {
             }
         }
 
-        let scrutinee = scrutinee.unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+        let scrutinee = scrutinee.unwrap_or_else(|| {
+            // If we couldn't find a scrutinee, create a missing expression with an empty range
+            self.alloc_expr(Expr::Missing, TextRange::default())
+        });
 
         let expr_id = self.exprs.alloc(Expr::Match { scrutinee, arms });
 

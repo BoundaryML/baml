@@ -10,7 +10,10 @@
 //!
 //! This follows patterns from rust-analyzer and ruff for incremental type checking.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
@@ -24,6 +27,7 @@ mod exhaustiveness;
 mod lower;
 mod normalize;
 pub mod pretty;
+mod resolve;
 mod types;
 
 pub use builtins::{
@@ -33,6 +37,7 @@ pub use builtins::{
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
+pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
 pub use types::*;
 
@@ -244,7 +249,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
         }
     }
 
-    TypingContextMap::new(db, context)
+    TypingContextMap::new(db, context /* functions */)
 }
 
 /// Query: Get class field types for a project.
@@ -432,11 +437,23 @@ pub struct InferenceResult {
     pub exhaustive_matches: HashSet<ExprId>,
     /// Type checking errors.
     pub errors: Vec<TypeError<Ty>>,
+    /// Resolution information for IDE features (go-to-definition, find-references).
+    /// Maps expression IDs to what they resolve to.
+    pub expr_resolutions: ResolutionMap,
 }
 
 // ============================================================================
 // Type Context
 // ============================================================================
+
+/// Where a local variable was defined (for go-to-definition).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionSite {
+    /// Defined in a let statement.
+    Statement(StmtId),
+    /// Defined as a function parameter (with its index).
+    Parameter(usize),
+}
 
 /// Context for type inference, tracking scopes and accumulated results.
 pub struct TypeContext<'db> {
@@ -472,6 +489,10 @@ pub struct TypeContext<'db> {
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
     watched_vars: HashSet<Name>,
+    /// Resolution map for expressions (for IDE features).
+    expr_resolutions: ResolutionMap,
+    /// Track where local variables were defined (for go-to-definition).
+    local_definitions: HashMap<Name, DefinitionSite>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -505,6 +526,8 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
+            expr_resolutions: HashMap::new(),
+            local_definitions: HashMap::new(),
         }
     }
 
@@ -579,6 +602,25 @@ impl<'db> TypeContext<'db> {
         self.watched_vars.contains(name)
     }
 
+    /// Set the resolution for an expression.
+    pub fn set_expr_resolution(&mut self, expr_id: ExprId, resolution: ResolvedValue) {
+        self.expr_resolutions.insert(expr_id, resolution);
+    }
+
+    /// Define a local variable and track its definition site.
+    pub fn define_with_site(&mut self, name: Name, ty: Ty, definition_site: DefinitionSite) {
+        // Get the current scope (last in the stack)
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name.clone(), ty);
+        }
+        self.local_definitions.insert(name, definition_site);
+    }
+
+    /// Get the definition site for a local variable.
+    pub fn get_definition_site(&self, name: &Name) -> Option<DefinitionSite> {
+        self.local_definitions.get(name).copied()
+    }
+
     /// Get the database reference.
     pub fn db(&self) -> &'db dyn Db {
         self.db
@@ -615,16 +657,17 @@ impl<'db> TypeContext<'db> {
 
     /// Resolve a named type to its proper Ty representation.
     ///
-    /// This resolves class and enum names to `Ty::Class` and `Ty::Enum` with their names,
-    /// while type aliases and unknown types stay as `Ty::Named`.
+    /// This resolves class and enum names to `Ty::Class` and `Ty::Enum` with FQNs,
+    /// while type aliases and unknown types stay as `Ty::TypeAlias`.
     pub fn resolve_named_type(&self, name: &Name) -> Ty {
+        use baml_compiler_hir::FullyQualifiedName;
         if self.class_names.contains(name) {
-            Ty::Class(name.clone())
+            Ty::Class(FullyQualifiedName::local(name.clone()))
         } else if self.enum_names.contains(name) {
-            Ty::Enum(name.clone())
+            Ty::Enum(FullyQualifiedName::local(name.clone()))
         } else {
-            // Type alias or unknown type - stays as Named, will be resolved during normalization
-            Ty::Named(name.clone())
+            // Type alias or unknown type - stays as TypeAlias, will be resolved during normalization
+            Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
         }
     }
 
@@ -722,8 +765,9 @@ pub fn infer_function_body<'db>(
     );
 
     // Add parameters to the current scope (on top of globals)
-    for (name, ty) in &param_types {
-        ctx.define(name.clone(), ty.clone());
+    // Track their index in the parameter list for go-to-definition
+    for (index, (name, ty)) in param_types.iter().enumerate() {
+        ctx.define_with_site(name.clone(), ty.clone(), DefinitionSite::Parameter(index));
     }
 
     // Type check the body against the expected return type (checking mode for bidirectional typing)
@@ -797,7 +841,55 @@ pub fn infer_function_body<'db>(
         enum_variant_exprs: ctx.enum_variant_exprs,
         exhaustive_matches: ctx.exhaustive_matches,
         errors: ctx.errors,
+        expr_resolutions: ctx.expr_resolutions,
     }
+}
+
+/// Salsa tracked query for function type inference.
+///
+/// This caches the type inference results for a function, enabling
+/// incremental recomputation when dependencies change.
+#[salsa::tracked]
+pub fn function_type_inference<'db>(
+    db: &'db dyn Db,
+    function: FunctionLoc<'db>,
+) -> Arc<InferenceResult> {
+    // Get the function signature and body
+    let signature = baml_compiler_hir::function_signature(db, function);
+    let body = baml_compiler_hir::function_body(db, function);
+
+    // Get the project context
+    let project = db.project();
+
+    // Build global context from the project
+    // Get function signatures as global types (for function calls)
+    let typing_ctx = typing_context(db, project);
+    let globals = Some(typing_ctx.functions(db).clone());
+
+    // Get class field types
+    let class_field_types = class_field_types(db, project);
+    let class_fields = Some(class_field_types.classes(db).clone());
+
+    // Get type aliases
+    let type_aliases_map = type_aliases(db, project);
+    let type_aliases = Some(type_aliases_map.aliases(db).clone());
+
+    // Get enum variants
+    let enum_variants_map = enum_variants(db, project);
+    let enum_variants = Some(enum_variants_map.enums(db).clone());
+
+    let result = infer_function(
+        db,
+        &signature,
+        &body,
+        globals,
+        class_fields,
+        type_aliases,
+        enum_variants,
+        function,
+    );
+
+    Arc::new(result)
 }
 
 /// Infer types for a function given its signature and body.
@@ -909,10 +1001,39 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             if segments.is_empty() {
                 Ty::Unknown
             } else if segments.len() == 1 {
-                // Single segment: simple variable lookup
+                // Single segment: variable, function, class, or enum lookup
                 let name = &segments[0];
                 if let Some(ty) = ctx.lookup(name) {
-                    ty.clone()
+                    let ty = ty.clone();
+
+                    // Determine the resolution based on what kind of entity this is
+                    let resolution = if let Some(definition_site) = ctx.get_definition_site(name) {
+                        // Has a definition site -> it's a local variable or parameter
+                        ResolvedValue::Local {
+                            name: name.clone(),
+                            definition_site: Some(definition_site),
+                        }
+                    } else if ctx.class_names.contains(name) {
+                        // Class name
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone()))
+                    } else if ctx.enum_names.contains(name) {
+                        // Enum name
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Enum(FullyQualifiedName::local(name.clone()))
+                    } else if ctx.type_aliases.contains_key(name) {
+                        // Type alias
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::TypeAlias(FullyQualifiedName::local(name.clone()))
+                    } else {
+                        // Must be a function in globals
+                        use baml_compiler_hir::FullyQualifiedName;
+                        ResolvedValue::Function(FullyQualifiedName::local(name.clone()))
+                    };
+
+                    // Store resolution for IDE features
+                    ctx.set_expr_resolution(expr_id, resolution);
+                    ty
                 } else {
                     ctx.push_error(TypeError::UnknownVariable {
                         name: name.to_string(),
@@ -932,6 +1053,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     .collect::<Vec<_>>()
                     .join(".");
                 if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
+                    // Store resolution for builtin function
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::BuiltinFunction {
+                            // Use normalized path (baaml -> baml)
+                            path: def.path.to_string(),
+                        },
+                    );
+
                     // It's a builtin function - return its function type
                     let mut param_types: Vec<Ty> = Vec::new();
                     if let Some(ref receiver_pattern) = def.receiver {
@@ -954,10 +1084,22 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                     if let Some(variants) = ctx.lookup_enum_variants(enum_name) {
                         if variants.contains(variant_name) {
+                            use baml_compiler_hir::FullyQualifiedName;
+                            let enum_fqn = FullyQualifiedName::local(enum_name.clone());
+
+                            // Store resolution for enum variant
+                            ctx.set_expr_resolution(
+                                expr_id,
+                                ResolvedValue::EnumVariant {
+                                    enum_fqn: enum_fqn.clone(),
+                                    variant: variant_name.clone(),
+                                },
+                            );
+
                             // This is a valid enum variant - record it and return the enum type
                             ctx.enum_variant_exprs
                                 .insert(expr_id, (enum_name.clone(), variant_name.clone()));
-                            return Ty::Named(enum_name.clone());
+                            return Ty::Enum(enum_fqn);
                         }
                         // Enum exists but variant doesn't
                         ctx.push_error(TypeError::UnknownEnumVariant {
@@ -986,6 +1128,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                 // Apply field accesses for remaining segments
                 for field in &segments[1..] {
+                    // Before updating ty, check if we're accessing a field on a class
+                    // This is for IDE resolution of field access paths
+                    if let Ty::Class(class_fqn) = &ty {
+                        ctx.set_expr_resolution(
+                            expr_id,
+                            ResolvedValue::Field {
+                                class_fqn: class_fqn.clone(),
+                                field: field.clone(),
+                            },
+                        );
+                    }
                     ty = infer_field_access(ctx, &ty, field, span);
                     segment_types.push(ty.clone());
                 }
@@ -1276,6 +1429,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 Ty::Unknown
             };
+
+            // Store resolution for IDE features if this is a class instantiation
+            if let Some(name) = type_name {
+                if ctx.class_names.contains(name) {
+                    use baml_compiler_hir::FullyQualifiedName;
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone())),
+                    );
+                }
+            }
 
             // Type check spread expressions - they must be the same type as the object
             for spread in spreads {
@@ -1606,13 +1770,26 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             fields,
             spreads: _,
         } => {
+            // Store resolution for IDE features if this is a class instantiation
+            if let Some(name) = type_name {
+                if ctx.class_names.contains(name) {
+                    use baml_compiler_hir::FullyQualifiedName;
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Class(FullyQualifiedName::local(name.clone())),
+                    );
+                }
+            }
+
             // If we expect a specific class type, we can use its field types
-            if let Ty::Class(expected_name) = expected {
+            if let Ty::Class(expected_fqn) = expected {
+                use baml_compiler_hir::FullyQualifiedName;
                 // Check field types against the expected class fields
                 for (field_name, value_expr) in fields {
                     // Clone the field type to avoid borrow issues
-                    let expected_field_ty =
-                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    let expected_field_ty = ctx
+                        .lookup_class_field(&expected_fqn.name, field_name)
+                        .cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -1622,18 +1799,20 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 }
 
                 // Return the expected type if type_name matches
-                if type_name.as_ref() == Some(expected_name) {
+                if type_name.as_ref() == Some(&expected_fqn.name) {
                     expected.clone()
                 } else if let Some(name) = type_name {
-                    Ty::Class(name.clone())
+                    Ty::Class(FullyQualifiedName::local(name.clone()))
                 } else {
                     Ty::Unknown
                 }
-            } else if let Ty::Named(expected_name) = expected {
-                // Similar handling for Named types (type aliases)
+            } else if let Ty::TypeAlias(expected_fqn) = expected {
+                use baml_compiler_hir::FullyQualifiedName;
+                // Similar handling for TypeAlias types
                 for (field_name, value_expr) in fields {
-                    let expected_field_ty =
-                        ctx.lookup_class_field(expected_name, field_name).cloned();
+                    let expected_field_ty = ctx
+                        .lookup_class_field(&expected_fqn.name, field_name)
+                        .cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -1641,10 +1820,10 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     }
                 }
 
-                if type_name.as_ref() == Some(expected_name) {
+                if type_name.as_ref() == Some(&expected_fqn.name) {
                     expected.clone()
                 } else if let Some(name) = type_name {
-                    Ty::Named(name.clone())
+                    Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
                 } else {
                     Ty::Unknown
                 }
@@ -1944,10 +2123,14 @@ fn extract_instanceof_narrowing(
                     // RHS should be a simple path (type name)
                     if let Expr::Path(type_segments) = &body.exprs[*rhs] {
                         if type_segments.len() == 1 {
+                            use baml_compiler_hir::FullyQualifiedName;
                             let type_name = type_segments[0].clone();
                             // Return the variable name and the narrowed type
-                            // We use Ty::Named here since user-defined types are represented this way
-                            return Some((var_name, Ty::Named(type_name)));
+                            // Use TypeAlias as a fallback - will be resolved during normalization
+                            return Some((
+                                var_name,
+                                Ty::TypeAlias(FullyQualifiedName::local(type_name)),
+                            ));
                         }
                     }
                 }
@@ -2171,17 +2354,17 @@ fn infer_field_access(ctx: &mut TypeContext<'_>, base: &Ty, field: &Name, span: 
 
     // First, try class field lookup for named types
     let found_field = match base {
-        Ty::Named(class_name) => ctx
+        Ty::TypeAlias(fqn) => ctx
             .lookup(field)
-            .or(ctx.lookup_class_field(class_name, field))
+            .or(ctx.lookup_class_field(&fqn.name, field))
             .cloned(),
-        Ty::Class(class_name) => {
+        Ty::Class(fqn) => {
             // First try to find a method (global function lookup)
             if let Some(method_ty) = ctx.lookup(field) {
                 return method_ty.clone();
             }
             // Check the context's class_fields for this class name
-            ctx.lookup_class_field(class_name, field).cloned()
+            ctx.lookup_class_field(&fqn.name, field).cloned()
         }
         Ty::Unknown => return Ty::Unknown,
         _ => None,
@@ -2322,14 +2505,14 @@ fn check_stmt_with_return(
             let pat = &body.patterns[*pattern];
             match pat {
                 Pattern::Binding(name) => {
-                    ctx.define(name.clone(), ty);
+                    ctx.define_with_site(name.clone(), ty, DefinitionSite::Statement(stmt_id));
                     if *is_watched {
                         ctx.mark_watched(name.clone());
                     }
                 }
                 Pattern::TypedBinding { name, ty: _ } => {
                     // TODO: Check declared type matches inferred type
-                    ctx.define(name.clone(), ty);
+                    ctx.define_with_site(name.clone(), ty, DefinitionSite::Statement(stmt_id));
                     if *is_watched {
                         ctx.mark_watched(name.clone());
                     }

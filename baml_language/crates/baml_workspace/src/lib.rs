@@ -22,7 +22,10 @@
 //! - `ty_project` provides high-level `ProjectDatabase` and operations
 //! - The `Program` singleton (compiler settings) lives in the semantic crate
 
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicU32},
+};
 
 use baml_base::{FileId, SourceFile};
 
@@ -63,3 +66,15 @@ pub fn create_source_file(
 ) -> SourceFile {
     SourceFile::new(db, text, path, file_id)
 }
+
+/// Minimal test database for compilation tests.
+#[salsa::db]
+#[derive(Clone)]
+pub struct TestDatabase {
+    pub storage: salsa::Storage<Self>,
+    pub next_file_id: Arc<AtomicU32>,
+    pub project: Option<Project>,
+}
+
+#[salsa::db]
+impl salsa::Database for TestDatabase {}

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -985,14 +985,14 @@ fn let_statements() -> Int {
     let _4: Int
     let _5: Int
     let _6: Int
-    let _7: Named("Point") // point
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Point" }) // point
     let _8: Int
     let _9: Int
     let _10: Void
     let _11: Int
-    let _12: Named("Point")
+    let _12: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _13: Int
-    let _14: Named("Point")
+    let _14: Class(FullyQualifiedName { namespace: Local, name: "Point" })
 
     bb0: {
         _1 = const 1_i64;

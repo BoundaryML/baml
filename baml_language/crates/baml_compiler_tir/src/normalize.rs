@@ -226,14 +226,15 @@ fn normalize_impl(
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(name) => StructuralTy::Class(name.clone()),
-        Ty::Enum(name) => StructuralTy::Enum(name.clone()),
+        Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),
+        Ty::Enum(fqn) => StructuralTy::Enum(fqn.name.clone()),
         Ty::WatchAccessor(inner) => StructuralTy::WatchAccessor(Box::new(normalize_impl(
             inner, aliases, recursive, expanding,
         ))),
 
-        // Named: resolve alias
-        Ty::Named(name) => {
+        // TypeAlias: resolve alias
+        Ty::TypeAlias(fqn) => {
+            let name = &fqn.name;
             if expanding.contains(name) {
                 // Back-reference in recursive expansion
                 return StructuralTy::TyVar(name.clone());
@@ -254,8 +255,7 @@ fn normalize_impl(
                     normalize_impl(alias_ty, aliases, recursive, expanding)
                 }
             } else {
-                // Not an alias - this shouldn't happen if TIR lowering is correct.
-                // Classes/enums should be Ty::Class/Ty::Enum, not Ty::Named.
+                // Not a known alias - this shouldn't happen if TIR lowering is correct.
                 // Treat as error for now (error recovery will handle it).
                 StructuralTy::Error
             }
@@ -333,7 +333,9 @@ fn ty_has_cycle(
     stack: &mut HashSet<Name>,
 ) -> bool {
     match ty {
-        Ty::Named(name) if aliases.contains_key(name) => has_cycle(name, aliases, visited, stack),
+        Ty::TypeAlias(fqn) if aliases.contains_key(&fqn.name) => {
+            has_cycle(&fqn.name, aliases, visited, stack)
+        }
         Ty::Optional(inner) | Ty::List(inner) => ty_has_cycle(inner, aliases, visited, stack),
         Ty::Map { key, value } => {
             ty_has_cycle(key, aliases, visited, stack)
@@ -354,7 +356,14 @@ fn ty_has_cycle(
 
 #[cfg(test)]
 mod tests {
+    use baml_compiler_hir::FullyQualifiedName;
+
     use super::*;
+
+    /// Helper to create a type alias type
+    fn type_alias(name: &str) -> Ty {
+        Ty::TypeAlias(FullyQualifiedName::local(Name::new(name)))
+    }
 
     #[test]
     fn test_simple_alias() {
@@ -362,37 +371,25 @@ mod tests {
         aliases.insert(Name::new("MyInt"), Ty::Int);
 
         // MyInt <: int should be true
-        assert!(is_subtype_of(
-            &Ty::Named(Name::new("MyInt")),
-            &Ty::Int,
-            &aliases
-        ));
+        assert!(is_subtype_of(&type_alias("MyInt"), &Ty::Int, &aliases));
 
         // int <: MyInt should also be true (same structural type)
-        assert!(is_subtype_of(
-            &Ty::Int,
-            &Ty::Named(Name::new("MyInt")),
-            &aliases
-        ));
+        assert!(is_subtype_of(&Ty::Int, &type_alias("MyInt"), &aliases));
     }
 
     #[test]
     fn test_transitive_alias() {
         let mut aliases = HashMap::new();
         aliases.insert(Name::new("MyInt"), Ty::Int);
-        aliases.insert(Name::new("AnotherInt"), Ty::Named(Name::new("MyInt")));
+        aliases.insert(Name::new("AnotherInt"), type_alias("MyInt"));
 
         // AnotherInt <: int
-        assert!(is_subtype_of(
-            &Ty::Named(Name::new("AnotherInt")),
-            &Ty::Int,
-            &aliases
-        ));
+        assert!(is_subtype_of(&type_alias("AnotherInt"), &Ty::Int, &aliases));
 
         // AnotherInt <: MyInt
         assert!(is_subtype_of(
-            &Ty::Named(Name::new("AnotherInt")),
-            &Ty::Named(Name::new("MyInt")),
+            &type_alias("AnotherInt"),
+            &type_alias("MyInt"),
             &aliases
         ));
     }
@@ -408,21 +405,21 @@ mod tests {
         // int <: IntOrString
         assert!(is_subtype_of(
             &Ty::Int,
-            &Ty::Named(Name::new("IntOrString")),
+            &type_alias("IntOrString"),
             &aliases
         ));
 
         // string <: IntOrString
         assert!(is_subtype_of(
             &Ty::String,
-            &Ty::Named(Name::new("IntOrString")),
+            &type_alias("IntOrString"),
             &aliases
         ));
 
         // bool NOT <: IntOrString
         assert!(!is_subtype_of(
             &Ty::Bool,
-            &Ty::Named(Name::new("IntOrString")),
+            &type_alias("IntOrString"),
             &aliases
         ));
     }
@@ -433,7 +430,7 @@ mod tests {
         // type List = int | List (simplified recursive type)
         aliases.insert(
             Name::new("List"),
-            Ty::Union(vec![Ty::Null, Ty::Named(Name::new("List"))]),
+            Ty::Union(vec![Ty::Null, type_alias("List")]),
         );
 
         let recursive = find_recursive_aliases(&aliases);

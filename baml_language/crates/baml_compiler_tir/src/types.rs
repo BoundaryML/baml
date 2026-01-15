@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use baml_base::Name;
+use baml_compiler_hir::FullyQualifiedName;
 
 /// The value component of a literal type.
 ///
@@ -56,13 +56,16 @@ pub enum Ty {
     /// for convenience, since null is fundamental to optional types.
     Literal(LiteralValue),
 
-    // User-defined types (resolved by name)
-    Class(Name),
-    Enum(Name),
-
-    /// Named type (unresolved class/enum by name).
-    /// Used when we know the type name but haven't resolved it to an ID yet.
-    Named(Name),
+    // User-defined types (resolved with fully-qualified names)
+    /// A class type with its fully-qualified name.
+    Class(FullyQualifiedName),
+    /// An enum type with its fully-qualified name.
+    Enum(FullyQualifiedName),
+    /// A type alias with its fully-qualified name.
+    /// Type aliases are NOT expanded during resolution - they stay as `TypeAlias(FQN)`.
+    /// Expansion happens later during normalization when needed for subtype checks.
+    /// This preserves user spelling for error messages and handles recursive types.
+    TypeAlias(FullyQualifiedName),
 
     // Type constructors
     Optional(Box<Ty>),
@@ -197,9 +200,9 @@ impl fmt::Display for Ty {
             Ty::Null => write!(f, "null"),
             Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Literal(val) => write!(f, "{val}"),
-            Ty::Class(name) => write!(f, "{name}"),
-            Ty::Enum(name) => write!(f, "{name}"),
-            Ty::Named(name) => write!(f, "{name}"),
+            Ty::Class(fqn) => write!(f, "{fqn}"),
+            Ty::Enum(fqn) => write!(f, "{fqn}"),
+            Ty::TypeAlias(fqn) => write!(f, "{fqn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),

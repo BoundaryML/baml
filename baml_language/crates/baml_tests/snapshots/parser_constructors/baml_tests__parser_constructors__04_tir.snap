@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9ec98c83ec13521d/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -8,15 +8,15 @@ expression: output
   Function stringArray:
     Return: List(String)
   Function pointArray:
-    Return: List(Class("Point"))
+    Return: List(Class(FullyQualifiedName { namespace: Local, name: "Point" }))
   Function boolArray:
     Return: List(Bool)
   Function intArray:
     Return: List(Int)
   Function point:
-    Return: Class("Point")
+    Return: Class(FullyQualifiedName { namespace: Local, name: "Point" })
   Function vec2d:
-    Return: Class("Vec2D")
+    Return: Class(FullyQualifiedName { namespace: Local, name: "Vec2D" })
   Function boolValues:
     Return: Map { key: String, value: Bool }
   Function intValues:
