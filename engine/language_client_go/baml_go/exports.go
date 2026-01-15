@@ -3,6 +3,9 @@ package baml_go
 import (
 	"fmt"
 	"unsafe"
+
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	"google.golang.org/protobuf/proto"
 )
 
 /*
@@ -38,7 +41,12 @@ func DestroyBamlRuntime(runtime unsafe.Pointer) error {
 }
 
 func BamlVersion() string {
-	return C.GoString(C.WrapVersion())
+	buf := C.WrapVersion()
+	defer C.WrapFreeBuffer(buf)
+	if buf.ptr == nil || buf.len == 0 {
+		return ""
+	}
+	return string(C.GoBytes(unsafe.Pointer(buf.ptr), C.int32_t(buf.len)))
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
@@ -63,7 +71,34 @@ func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer, onTick
 	return nil
 }
 
-func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
+// decodeAsyncResponse decodes a Buffer containing an InvocationResponse.
+// Returns nil on success, or an error if the response contains an error.
+func decodeAsyncResponse(buf C.Buffer) error {
+	defer C.WrapFreeBuffer(buf)
+
+	// Empty buffer means success (task was spawned)
+	if buf.ptr == nil || buf.len == 0 {
+		return nil
+	}
+
+	content_bytes := C.GoBytes(unsafe.Pointer(buf.ptr), C.int32_t(buf.len))
+
+	var response cffi.InvocationResponse
+	if err := proto.Unmarshal(content_bytes, &response); err != nil {
+		return fmt.Errorf("failed to unmarshal FFI response: %w", err)
+	}
+
+	// Check if response contains an error
+	switch response.GetResponse().(type) {
+	case *cffi.InvocationResponse_Error:
+		return fmt.Errorf("%s", response.GetError())
+	default:
+		// Success or nil response means success
+		return nil
+	}
+}
+
+func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) error {
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
@@ -71,10 +106,10 @@ func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs 
 
 	result := C.WrapCallFunctionFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
-	return result, nil
+	return decodeAsyncResponse(result)
 }
 
-func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
+func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) error {
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
@@ -82,10 +117,10 @@ func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encode
 
 	result := C.WrapCallFunctionStreamFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
-	return result, nil
+	return decodeAsyncResponse(result)
 }
 
-func CallFunctionParseFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
+func CallFunctionParseFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) error {
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
@@ -93,9 +128,10 @@ func CallFunctionParseFromC(runtime unsafe.Pointer, functionName string, encoded
 
 	result := C.WrapCallFunctionParseFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
-	return result, nil
+	return decodeAsyncResponse(result)
 }
 
-func CancelFunctionCall(id uint32) {
-	C.WrapCancelFunctionCall(C.uint32_t(id))
+func CancelFunctionCall(id uint32) error {
+	result := C.WrapCancelFunctionCall(C.uint32_t(id))
+	return decodeAsyncResponse(result)
 }

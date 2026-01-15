@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 use std::{
     collections::HashMap,
-    ffi::{c_void, CStr, CString},
+    ffi::{c_void, CString},
 };
 
 use prost::Message;
@@ -83,7 +83,7 @@ impl BamlRuntime {
         let (id, receiver) = callbacks::create_callback();
 
         #[allow(unsafe_code)]
-        let error_ptr = unsafe {
+        let buf = unsafe {
             ffi::call_function_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
@@ -97,16 +97,11 @@ impl BamlRuntime {
             })?
         };
 
-        // Check for immediate error
-        if !error_ptr.is_null() {
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
-            #[allow(unsafe_code)]
-            let error_msg = unsafe {
-                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
-                cstr.to_string_lossy().into_owned()
-            };
-            return Err(BamlError::internal(error_msg));
-        }
+            BamlError::internal(e)
+        })?;
 
         // Set up cancellation callback if token provided
         // Guard is dropped when function returns, stopping the watcher
@@ -152,7 +147,7 @@ impl BamlRuntime {
         let (id, receiver) = callbacks::create_callback();
 
         #[allow(unsafe_code)]
-        let error_ptr = unsafe {
+        let buf = unsafe {
             ffi::call_function_stream_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
@@ -166,15 +161,11 @@ impl BamlRuntime {
             })?
         };
 
-        if !error_ptr.is_null() {
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
-            #[allow(unsafe_code)]
-            let error_msg = unsafe {
-                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
-                cstr.to_string_lossy().into_owned()
-            };
-            return Err(BamlError::internal(error_msg));
-        }
+            BamlError::internal(e)
+        })?;
 
         // Set up cancellation callback if token provided
         let cancel_guard = args.cancellation_token.as_ref().map(|token| {
@@ -202,7 +193,7 @@ impl BamlRuntime {
         let (id, receiver) = callbacks::create_async_callback();
 
         #[allow(unsafe_code)]
-        let error_ptr = unsafe {
+        let buf = unsafe {
             ffi::call_function_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
@@ -216,16 +207,11 @@ impl BamlRuntime {
             })?
         };
 
-        // Check for immediate error
-        if !error_ptr.is_null() {
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
-            #[allow(unsafe_code)]
-            let error_msg = unsafe {
-                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
-                cstr.to_string_lossy().into_owned()
-            };
-            return Err(BamlError::internal(error_msg));
-        }
+            BamlError::internal(e)
+        })?;
 
         // Set up cancellation callback if token provided
         // Guard is dropped when function returns, stopping the watcher
@@ -270,7 +256,7 @@ impl BamlRuntime {
         let (id, receiver) = callbacks::create_async_callback();
 
         #[allow(unsafe_code)]
-        let error_ptr = unsafe {
+        let buf = unsafe {
             ffi::call_function_stream_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
@@ -284,15 +270,11 @@ impl BamlRuntime {
             })?
         };
 
-        if !error_ptr.is_null() {
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
-            #[allow(unsafe_code)]
-            let error_msg = unsafe {
-                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
-                cstr.to_string_lossy().into_owned()
-            };
-            return Err(BamlError::internal(error_msg));
-        }
+            BamlError::internal(e)
+        })?;
 
         // Set up cancellation callback if token provided
         let cancel_guard = args.cancellation_token.as_ref().map(|token| {
@@ -342,7 +324,7 @@ impl BamlRuntime {
         let (id, receiver) = callbacks::create_callback();
 
         #[allow(unsafe_code)]
-        let error_ptr = unsafe {
+        let buf = unsafe {
             ffi::call_function_parse_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
@@ -356,18 +338,11 @@ impl BamlRuntime {
             })?
         };
 
-        // Check for immediate error
-        if !error_ptr.is_null() {
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
             callbacks::remove_callback(id);
-            #[allow(unsafe_code)]
-            let error_msg = unsafe {
-                let cstr = CStr::from_ptr(error_ptr.cast::<i8>());
-                cstr.to_string_lossy().into_owned()
-            };
-            return Err(BamlError::internal(format!(
-                "function parse error: {error_msg}"
-            )));
-        }
+            BamlError::internal(format!("function parse error: {e}"))
+        })?;
 
         // Wait for result
         match receiver.recv() {

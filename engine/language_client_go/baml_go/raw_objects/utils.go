@@ -4,8 +4,11 @@ package raw_objects
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
+	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
@@ -22,6 +25,48 @@ import (
 #include <string.h>
 */
 import "C"
+
+var (
+	ffiLogFile     *os.File
+	ffiLogFileMu   sync.Mutex
+	ffiLogFileOnce sync.Once
+)
+
+// getFfiLogFile returns the log file for client FFI events, or nil if logging is disabled
+func getFfiLogFile() *os.File {
+	ffiLogFileOnce.Do(func() {
+		if path := os.Getenv("BAML_FFI_CLIENT_LOG"); path != "" {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				ffiLogFile = f
+			}
+		}
+	})
+	return ffiLogFile
+}
+
+// ffiLog writes a log message to the Go FFI log file with timestamp
+func ffiLog(format string, args ...any) {
+	if f := getFfiLogFile(); f != nil {
+		ffiLogFileMu.Lock()
+		defer ffiLogFileMu.Unlock()
+		ts := time.Now().UnixMicro()
+		msg := fmt.Sprintf(format, args...)
+		// Insert timestamp after the opening bracket
+		if len(msg) > 0 && msg[0] == '[' {
+			bracketEnd := 0
+			for i, c := range msg {
+				if c == ']' {
+					bracketEnd = i
+					break
+				}
+			}
+			fmt.Fprintf(f, "%s ts=%d%s\n", msg[:bracketEnd], ts, msg[bracketEnd:])
+		} else {
+			fmt.Fprintf(f, "ts=%d %s\n", ts, msg)
+		}
+	}
+}
 
 var _decodeRawObjectImpl func(rt unsafe.Pointer, cRaw *cffi.BamlObjectHandle) (RawPointer, error)
 
@@ -207,10 +252,18 @@ func decodeRawObject(rt unsafe.Pointer, cRaw *cffi.BamlObjectHandle) (RawPointer
 	if err != nil {
 		return nil, err
 	}
+
+	// Log when Go receives an object from Rust
+	ffiLog("[CLIENT_GO_RECEIVE] type=%s ptr=0x%x", raw.ObjectType(), raw.pointer())
+
 	// on finalization, we need to call the destructor
 	runtime.SetFinalizer(raw, func(r RawPointer) {
+		ffiLog("[CLIENT_GO_DESTRUCTOR_START] type=%s ptr=0x%x", r.ObjectType(), r.pointer())
 		if err := destructor(r); err != nil {
-			fmt.Printf("Error during finalization of raw object (%s): %v\n", r.ObjectType(), err)
+			// Always log errors (even if general logging disabled)
+			ffiLog("[CLIENT_GO_DESTRUCTOR_ERROR] type=%s ptr=0x%x error=%v", r.ObjectType(), r.pointer(), err)
+		} else {
+			ffiLog("[CLIENT_GO_DESTRUCTOR_OK] type=%s ptr=0x%x", r.ObjectType(), r.pointer())
 		}
 	})
 

@@ -13,3 +13,6 @@ pub use libc::c_char;
 pub use value::*;
 
 pub use crate::ctypes::*;
+
+// Re-export Buffer for use across FFI modules
+pub use objects::Buffer;

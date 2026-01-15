@@ -1,7 +1,5 @@
 //! FFI symbol loading and storage.
 
-use std::ffi::CStr;
-
 use libc::{c_char, c_int, c_void, size_t};
 use libloading::Symbol;
 use once_cell::sync::OnceCell;
@@ -29,15 +27,15 @@ pub struct Buffer {
 }
 
 // Type aliases for FFI function signatures
-type VersionFn = unsafe extern "C" fn() -> *const c_char;
+type VersionFn = unsafe extern "C" fn() -> Buffer;
 type RegisterCallbacksFn = unsafe extern "C" fn(CallbackFn, CallbackFn, OnTickCallbackFn);
 type CreateBamlRuntimeFn =
     unsafe extern "C" fn(*const c_char, *const c_char, *const c_char) -> *const c_void;
 type DestroyBamlRuntimeFn = unsafe extern "C" fn(*const c_void);
 type InvokeRuntimeCliFn = unsafe extern "C" fn(*const *const c_char) -> c_int;
 type CallFunctionFromCFn =
-    unsafe extern "C" fn(*const c_void, *const c_char, *const c_char, size_t, u32) -> *const c_void;
-type CancelFunctionCallFn = unsafe extern "C" fn(u32) -> *const c_void;
+    unsafe extern "C" fn(*const c_void, *const c_char, *const c_char, size_t, u32) -> Buffer;
+type CancelFunctionCallFn = unsafe extern "C" fn(u32) -> Buffer;
 type CallObjectConstructorFn = unsafe extern "C" fn(*const c_char, size_t) -> Buffer;
 type CallObjectMethodFn = unsafe extern "C" fn(*const c_void, *const c_char, size_t) -> Buffer;
 type FreeBufferFn = unsafe extern "C" fn(Buffer);
@@ -76,13 +74,19 @@ fn load_symbols(lib: &'static LoadedLibrary) -> Result<Symbols> {
     // have been built with the matching C ABI.
     #[allow(unsafe_code)]
     unsafe {
+        // Load free_buffer first so we can clean up the version buffer
+        let free_buffer: Symbol<FreeBufferFn> = load_symbol(&lib.library, "free_buffer")?;
         let version: Symbol<VersionFn> = load_symbol(&lib.library, "version")?;
 
-        // Verify version matches
-        let lib_version_ptr = version();
-        let lib_version = CStr::from_ptr(lib_version_ptr)
-            .to_str()
-            .unwrap_or("unknown");
+        // Verify version matches - version() now returns Buffer
+        let version_buf = version();
+        let lib_version = if !version_buf.ptr.is_null() && version_buf.len > 0 {
+            let bytes = std::slice::from_raw_parts(version_buf.ptr as *const u8, version_buf.len);
+            String::from_utf8_lossy(bytes).into_owned()
+        } else {
+            "unknown".to_string()
+        };
+        free_buffer(version_buf); // Clean up immediately
 
         if lib_version != VERSION {
             return Err(BamlSysError::VersionMismatch {
@@ -103,7 +107,7 @@ fn load_symbols(lib: &'static LoadedLibrary) -> Result<Symbols> {
             cancel_function_call: load_symbol(&lib.library, "cancel_function_call")?,
             call_object_constructor: load_symbol(&lib.library, "call_object_constructor")?,
             call_object_method: load_symbol(&lib.library, "call_object_method")?,
-            free_buffer: load_symbol(&lib.library, "free_buffer")?,
+            free_buffer,
         })
     }
 }

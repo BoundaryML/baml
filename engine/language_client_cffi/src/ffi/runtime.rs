@@ -4,16 +4,15 @@ use baml_runtime::BamlRuntime;
 use internal_baml_core::feature_flags::FeatureFlags;
 
 use super::*;
-use crate::panic::ffi_safe::{ffi_safe_cstring, ffi_safe_ptr};
+use crate::panic::ffi_safe::ffi_safe_ptr;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Returns the BAML version as a Buffer containing raw UTF-8 bytes.
+/// Caller must free with free_buffer().
 #[no_mangle]
-pub extern "C" fn version() -> *const libc::c_char {
-    ffi_safe_cstring(|| match CString::new(VERSION) {
-        Ok(version) => Ok(version.into_raw() as *const libc::c_char),
-        Err(_) => Err("Version string contains null bytes".to_string()),
-    })
+pub extern "C" fn version() -> Buffer {
+    Buffer::from(VERSION.as_bytes().to_vec())
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
