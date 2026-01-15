@@ -7,6 +7,8 @@ on:
   push:
     branches: [main, canary]
   pull_request:
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 concurrency:
@@ -278,7 +280,9 @@ jobs:
     name: "benchmarks instrumented (baml)"
     runs-on: ubuntu-latest
     needs: determine_changes
+    # Skip benchmarks in merge_group - they already ran in the PR
     if: |
+      github.event_name != 'merge_group' &&
       (
         github.ref == 'refs/heads/main' ||
         github.ref == 'refs/heads/canary' ||

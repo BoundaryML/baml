@@ -516,6 +516,22 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary(*span, "missing Jinja expression {{ }}"),
 
+            HirDiagnostic::InvalidAttributeArg {
+                attr_name,
+                span,
+                received,
+            } => Diagnostic::error(
+                DiagnosticId::InvalidAttributeArg,
+                format!("Expected @{attr_name}(\"...\"), but got {received}"),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::UnexpectedAttributeArg { attr_name, span } => Diagnostic::error(
+                DiagnosticId::UnexpectedAttributeArg,
+                format!("@{attr_name} does not take any arguments."),
+            )
+            .with_primary(*span, "unexpected argument"),
+
             HirDiagnostic::UnsupportedFloatLiteral { value, span } => Diagnostic::error(
                 DiagnosticId::UnsupportedFloatLiteral,
                 format!("Float literal values are not supported: {value}"),

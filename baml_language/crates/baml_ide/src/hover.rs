@@ -284,7 +284,7 @@ fn format_class_definition(class: &baml_compiler_hir::Class) -> String {
 
     lines.push("}".to_string());
 
-    if class.is_dynamic {
+    if class.is_dynamic.is_explicit() {
         lines.push("// @@dynamic".to_string());
     }
 

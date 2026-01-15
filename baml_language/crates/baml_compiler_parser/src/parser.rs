@@ -193,6 +193,12 @@ impl<'a> Parser<'a> {
         self.current_impl(true)
     }
 
+    /// Get current token (skipping only basic trivia: whitespace and newlines, NOT comments)
+    /// Use this inside string parsing where // should not be treated as comment start.
+    fn current_raw(&self) -> Option<&Token> {
+        self.current_impl(false)
+    }
+
     /// Peek ahead n tokens (skipping all trivia: whitespace, newlines, and comments)
     fn peek(&self, n: usize) -> Option<&Token> {
         self.peek_impl(n, true)
@@ -279,6 +285,12 @@ impl<'a> Parser<'a> {
     /// Check if current token matches the given kind
     fn at(&self, kind: TokenKind) -> bool {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
+    }
+
+    /// Check if current token matches the given kind (without skipping comments)
+    /// Use this inside string parsing where // should not be treated as comment start.
+    fn at_raw(&self, kind: TokenKind) -> bool {
+        self.current_raw().map(|t| t.kind == kind).unwrap_or(false)
     }
 
     /// Check if the current token can start a type expression.
@@ -1065,8 +1077,9 @@ impl<'a> Parser<'a> {
                 }
 
                 // Check if next token is the closing quote
-                if p.at(TokenKind::Quote) {
-                    p.bump(); // Consume closing quote
+                // Use at_raw to avoid skipping // as comments - we want the actual next token
+                if p.at_raw(TokenKind::Quote) {
+                    p.bump_raw(); // Consume closing quote
                     return;
                 }
                 // Not a quote - consume as string content
@@ -1779,11 +1792,21 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
 
-            // Client name: either an identifier (Word) or a shorthand string like "provider/model"
-            if p.at(TokenKind::Word) {
-                p.bump();
-            } else if p.at(TokenKind::Quote) {
+            // Client name can be:
+            // - A simple identifier: MyClient
+            // - A quoted string: "openai/gpt-4o"
+            // - An unquoted shorthand: openai/gpt-4o-mini (contains slashes)
+            if p.at(TokenKind::Quote) {
                 p.parse_string();
+            } else if p.at(TokenKind::Word) {
+                // Parse unquoted client value - consume tokens until newline or brace
+                // This handles cases like: openai/gpt-4o-mini
+                while !p.at_end() {
+                    if p.at(TokenKind::RBrace) || p.at(TokenKind::LBrace) || p.has_newline_ahead() {
+                        break;
+                    }
+                    p.bump();
+                }
             } else {
                 p.error_unexpected_token("client name".to_string());
             }
@@ -3084,14 +3107,18 @@ impl<'a> Parser<'a> {
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace.
-                // Exceptions:
-                // - RetryPolicy can appear as a config key (e.g., `retry_policy MyPolicy` inside client blocks)
-                // - TypeBuilder can appear as a config key (e.g., `type_builder { ... }` inside test blocks)
-                // - Dynamic can appear inside type_builder blocks (e.g., `dynamic class Foo { ... }`)
+                // Exceptions - these keywords can appear as config keys:
+                // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
+                // - TypeBuilder: `type_builder { ... }` inside test blocks
+                // - Dynamic: `dynamic class Foo { ... }` inside type_builder blocks
+                // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
+                // - Class: `class "MyClass"` inside nested option maps
                 if p.at_top_level_keyword()
                     && !p.at(TokenKind::RetryPolicy)
                     && !p.at(TokenKind::TypeBuilder)
                     && !p.at(TokenKind::Dynamic)
+                    && !p.at(TokenKind::Enum)
+                    && !p.at(TokenKind::Class)
                 {
                     break;
                 }
@@ -3123,23 +3150,23 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Special handling for class/enum definitions inside type_builder blocks
-        if self.at(TokenKind::Class) {
-            self.parse_class();
-            return;
-        }
-        if self.at(TokenKind::Enum) {
-            self.parse_enum();
-            return;
-        }
+        // Note: type_builder blocks handle class/enum declarations in their own loop
+        // (see parse_type_builder_block). In regular config blocks, "class" and "enum"
+        // should be treated as config keys (e.g., `enum ["celsius", "fahrenheit"]`).
 
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
             // Config key: identifier, keyword-as-identifier, or quoted/raw string
-            // Note: RetryPolicy is a top-level keyword (for `retry_policy MyPolicy { ... }` declarations)
-            // but it's also used as a config key inside client blocks (e.g., `retry_policy MyPolicy`).
-            // We explicitly allow it here so it parses as a config item rather than triggering
-            // error recovery that would break out of the config block.
-            if p.at(TokenKind::Word) || p.at(TokenKind::RetryPolicy) {
+            // Note: Some top-level keywords are also valid as config keys:
+            // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
+            // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
+            // - Class: `class "MyClass"` inside nested option maps
+            // We explicitly allow them here so they parse as config items rather than
+            // triggering error recovery that would break out of the config block.
+            if p.at(TokenKind::Word)
+                || p.at(TokenKind::RetryPolicy)
+                || p.at(TokenKind::Enum)
+                || p.at(TokenKind::Class)
+            {
                 p.bump();
             } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
                 // Quoted or raw string key (e.g., "string key" or #"raw key"#)

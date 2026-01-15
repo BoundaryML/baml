@@ -26,9 +26,9 @@ pub const RESERVED_NAMES_TYPESCRIPT: &[&str] = &[];
 /// Ruby reserved keywords that might cause issues.
 pub const RESERVED_NAMES_RUBY: &[&str] = &[
     "alias", "and", "begin", "break", "case", "class", "def", "defined?", "do", "else", "elsif",
-    "end", "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo",
-    "rescue", "retry", "return", "self", "super", "then", "true", "undef", "unless", "until",
-    "when", "while", "yield",
+    "end", "ensure", "false", "for", "if", "in", "module", "nil", "not", "or", "redo", "rescue",
+    "retry", "return", "self", "super", "then", "true", "undef", "unless", "until", "when",
+    "while", "yield",
 ];
 
 /// Go reserved keywords.
@@ -56,8 +56,16 @@ pub const RESERVED_NAMES_GO: &[&str] = &[
     "select",
     "struct",
     "switch",
-    "type",
     "var",
+];
+
+/// Rust reserved keywords.
+/// Includes strict keywords and reserved keywords (for future use).
+/// See: <https://doc.rust-lang.org/reference/keywords.html>
+/// TODO: Add more reserved keywords as they are used.
+pub const RESERVED_NAMES_RUST: &[&str] = &[
+    // Strict keywords
+    "as", "async", "await", "break", "const", "continue",
 ];
 
 /// Mode for reserved names checking.
@@ -78,6 +86,7 @@ pub enum OutputType {
     Go,
     Rest,
     BoundaryCloud,
+    Rust,
 }
 
 impl OutputType {
@@ -90,6 +99,7 @@ impl OutputType {
             "go" => Some(OutputType::Go),
             "rest/openapi" => Some(OutputType::Rest),
             "boundary-cloud" => Some(OutputType::BoundaryCloud),
+            "rust" => Some(OutputType::Rust),
             _ => None,
         }
     }
@@ -103,6 +113,7 @@ impl OutputType {
             OutputType::Go => "Go",
             OutputType::Rest => "REST",
             OutputType::BoundaryCloud => "Boundary Cloud",
+            OutputType::Rust => "Rust",
         }
     }
 }
@@ -168,6 +179,13 @@ pub fn reserved_names_for_outputs(
     if output_types.contains(&OutputType::Go) {
         for keyword in RESERVED_NAMES_GO {
             keywords.entry(keyword).or_default().push(OutputType::Go);
+        }
+    }
+
+    // Rust keywords
+    if output_types.contains(&OutputType::Rust) {
+        for keyword in RESERVED_NAMES_RUST {
+            keywords.entry(keyword).or_default().push(OutputType::Rust);
         }
     }
 
