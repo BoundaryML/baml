@@ -70,7 +70,7 @@ The repository includes a pre-commit hook that automatically runs `bep:readme` t
 
 Setup hooks:
 ```bash
-./scripts/setup-hooks.sh
+prek install
 ```
 
 ## Requirements

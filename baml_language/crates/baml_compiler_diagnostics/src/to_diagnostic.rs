@@ -580,6 +580,18 @@ impl ToDiagnostic for HirDiagnostic {
                 ),
             )
             .with_primary_span(*span),
+
+            HirDiagnostic::InvalidMapArity {
+                expected,
+                found,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InvalidMapArity,
+                format!(
+                    "map<K, V> requires exactly {expected} type parameters, found {found}"
+                ),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

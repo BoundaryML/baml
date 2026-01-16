@@ -15,6 +15,7 @@ java = "temurin-23"
 "cargo:wasm-pack" = "0.13.1"
 "cargo:ripgrep" = "latest"
 "cargo:just" = "latest"
+"cargo:prek" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml

@@ -1,10 +1,16 @@
-use std::path::PathBuf;
+//! LSP completion request handler.
+//!
+//! Provides autocomplete suggestions for BAML files.
 
-use lsp_types::{CompletionItem, CompletionList, CompletionParams, CompletionResponse, request};
+use baml_project::position::lsp_position_to_offset;
+use lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionList, CompletionParams, CompletionResponse,
+    request,
+};
+use text_size::TextSize;
 
 use crate::{
-    DocumentKey, Session,
-    baml_project::{position_utils::get_word_at_position, trim_line},
+    Session,
     server::{
         Result,
         api::{
@@ -14,6 +20,7 @@ use crate::{
         client::{Notifier, Requester},
     },
 };
+
 pub(crate) struct Completion;
 
 impl RequestHandler for Completion {
@@ -26,68 +33,84 @@ impl SyncRequestHandler for Completion {
         _notifier: Notifier,
         _requester: &mut Requester,
         params: CompletionParams,
-    ) -> Result<Option<lsp_types::CompletionResponse>> {
-        let url = params.text_document_position.text_document.uri;
+    ) -> Result<Option<CompletionResponse>> {
+        let url = &params.text_document_position.text_document.uri;
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let Ok(project) = session.get_or_create_project(&path) else {
+        let position = &params.text_document_position.position;
+
+        // Get the project to access the LspDatabase
+        let Ok(project_handle) = session.get_or_create_project(&path) else {
             return Ok(None);
         };
 
-        // TODO: Enable this only if you
-        // 1. test on windows, with chinese characters
-        // 2. Modify position_utils.rs to use byte offsets to account for chinese/multibyte characters
-        // 3. Don't crash if you index into a string with a byte offset that is out of bounds
-        // let url = params.text_document_position.text_document.uri;
-        // let path = url
-        //     .to_file_path()
-        //     .internal_error_msg("Could not convert URL to path")?;
+        let guard = project_handle.lock();
+        let lsp_db = guard.lsp_db();
 
-        // // Use the unified method to get or create the project
-        // let project = session
-        //     .get_or_create_project(&path)
-        //     .expect("Failed to get or create project");
+        // Get the SourceFile for this path
+        let Some(source_file) = lsp_db.get_file(&path) else {
+            tracing::debug!("Completion: file not found in LspDatabase: {:?}", path);
+            return Ok(None);
+        };
 
-        // let guard = project.lock();
-        // let document_key =
-        //     DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
-        // let doc = guard
-        //     .baml_project
-        //     .files
-        //     .get(&document_key)
-        //     .ok_or(anyhow::anyhow!(
-        //         "File {} was not present in the project",
-        //         document_key
-        //     ))
-        //     .internal_error()?;
-        // let word = get_word_at_position(&doc.contents, &params.text_document_position.position);
-        // let cleaned_word = trim_line(&word);
-        // // let cleaned_word = word;
-        // let completions = match cleaned_word.as_str() {
-        //     "_." => Some(vec![
-        //         r#"role("system")"#,
-        //         r#"role("assistant")"#,
-        //         r#"role("user")"#,
-        //     ]),
-        //     "ctx." => Some(vec![r#"output_format"#, r#"client"#]),
-        //     "ctx.client." => Some(vec![r#"name"#, r#"provider"#]),
-        //     _ => None,
-        // };
-        // Ok(completions.map(|completions| {
-        //     let completion_list = CompletionList {
-        //         is_incomplete: false,
-        //         items: completions
-        //             .into_iter()
-        //             .map(|completion| CompletionItem {
-        //                 label: completion.to_string(),
-        //                 ..CompletionItem::default()
-        //             })
-        //             .collect(),
-        //         ..CompletionList::default()
-        //     };
-        //     CompletionResponse::List(completion_list)
-        // }))
-        Ok(None)
+        // Get the project for completion lookup
+        let Some(project) = lsp_db.project() else {
+            return Ok(None);
+        };
+
+        // Convert LSP position to byte offset (properly handles multibyte characters)
+        let text = source_file.text(lsp_db.db());
+        let offset = TextSize::from(lsp_position_to_offset(text, position) as u32);
+
+        // Use baml_ide completion
+        let completions = baml_ide::complete(lsp_db.db(), source_file, project, offset);
+
+        // Convert to LSP types
+        let items: Vec<CompletionItem> = completions
+            .into_iter()
+            .map(to_lsp_completion_item)
+            .collect();
+
+        if items.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(CompletionResponse::List(CompletionList {
+            is_incomplete: false,
+            items,
+        })))
+    }
+}
+
+/// Convert a baml_ide CompletionItem to an LSP CompletionItem.
+fn to_lsp_completion_item(item: baml_ide::CompletionItem) -> CompletionItem {
+    CompletionItem {
+        label: item.label,
+        kind: Some(to_lsp_completion_kind(item.kind)),
+        detail: item.detail,
+        insert_text: item.insert_text,
+        sort_text: item.sort_text,
+        documentation: item.documentation.map(lsp_types::Documentation::String),
+        ..Default::default()
+    }
+}
+
+/// Convert a baml_ide CompletionKind to an LSP CompletionItemKind.
+fn to_lsp_completion_kind(kind: baml_ide::CompletionKind) -> CompletionItemKind {
+    match kind {
+        baml_ide::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+        baml_ide::CompletionKind::Function => CompletionItemKind::FUNCTION,
+        baml_ide::CompletionKind::Class => CompletionItemKind::CLASS,
+        baml_ide::CompletionKind::Enum => CompletionItemKind::ENUM,
+        baml_ide::CompletionKind::EnumVariant => CompletionItemKind::ENUM_MEMBER,
+        baml_ide::CompletionKind::Field => CompletionItemKind::FIELD,
+        baml_ide::CompletionKind::Client => CompletionItemKind::MODULE,
+        baml_ide::CompletionKind::TypeAlias => CompletionItemKind::TYPE_PARAMETER,
+        baml_ide::CompletionKind::Property => CompletionItemKind::PROPERTY,
+        baml_ide::CompletionKind::Snippet => CompletionItemKind::SNIPPET,
+        baml_ide::CompletionKind::Generator => CompletionItemKind::MODULE,
+        baml_ide::CompletionKind::Test => CompletionItemKind::METHOD,
+        baml_ide::CompletionKind::Type => CompletionItemKind::TYPE_PARAMETER,
     }
 }

@@ -2,6 +2,9 @@ function Factorial(limit: int) -> int {
 
 	let result = 1;
 
+    let res = [1, 2, 3];
+    res.push("hi");
+
 
 	while (true) {
 		if (limit == 0) {
@@ -36,11 +39,19 @@ function Nested() -> int {
 
 // error: Error validating: 'break' cannot be used outside of a loop
 //   -->  loops/break.baml:19
-//    | 
-// 18 | 
+//    |
+// 18 |
 // 19 |     break;
 //    |
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Expected `int`, found `string`
+//    ╭─[ loops_break.baml:6:14 ]
+//    │
+//  6 │     res.push("hi");
+//    │              ──┬─  
+//    │                ╰─── Expected `int`, found `string`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

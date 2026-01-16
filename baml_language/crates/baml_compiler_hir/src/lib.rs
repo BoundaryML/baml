@@ -827,6 +827,11 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 }
             }
 
+            // Validate map type arity before converting to TypeRef
+            if let Some(type_expr) = field_node.ty() {
+                validate_map_type_arity(&type_expr, ctx);
+            }
+
             let type_ref = field_node
                 .ty()
                 .map(|t| TypeRef::from_ast(&t))
@@ -1508,6 +1513,95 @@ fn describe_block_attribute_args(attr: &baml_compiler_syntax::ast::BlockAttribut
         }
         n => format!("{n} arguments"),
     }
+}
+
+/// Count the number of top-level generic parameters in a map type.
+///
+/// For `string, int` returns 2 (correct for map).
+/// For `string, string, string` returns 3 (error: too many params).
+/// For `string` returns 1 (error: too few params).
+fn count_generic_params(s: &str) -> usize {
+    if s.trim().is_empty() {
+        return 0;
+    }
+    let mut depth = 0;
+    let mut count = 1; // Start at 1 because we count separators + 1
+    for c in s.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => count += 1,
+            _ => {}
+        }
+    }
+    count
+}
+
+/// Validate map type arity in a type expression.
+///
+/// Maps require exactly 2 type parameters: `map<K, V>`.
+/// This function checks for cases like `map<string, string, string>` (3 params).
+fn validate_map_type_arity(
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    // Get all parts (handles union types like `string | map<...>`)
+    for part in type_expr.parts() {
+        validate_map_type_in_text(&part, type_expr, ctx);
+    }
+}
+
+/// Recursively validate map types in a type text string.
+fn validate_map_type_in_text(
+    text: &str,
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    // Check if this is a map type
+    if let Some(rest) = text.strip_prefix("map<") {
+        if let Some(inner) = rest.strip_suffix('>') {
+            let param_count = count_generic_params(inner);
+            if param_count != 2 {
+                ctx.push_diagnostic(HirDiagnostic::InvalidMapArity {
+                    expected: 2,
+                    found: param_count,
+                    span: ctx.span(type_expr.syntax().text_range()),
+                });
+            } else {
+                // Recursively check nested types in both key and value
+                if let Some(comma_idx) = find_top_level_comma(inner) {
+                    let key_text = inner[..comma_idx].trim();
+                    let value_text = inner[comma_idx + 1..].trim();
+                    validate_map_type_in_text(key_text, type_expr, ctx);
+                    validate_map_type_in_text(value_text, type_expr, ctx);
+                }
+            }
+        }
+    }
+
+    // Also check for nested maps in array types (e.g., `map<string, string, string>[]`)
+    if let Some(inner_text) = text.strip_suffix("[]") {
+        validate_map_type_in_text(inner_text, type_expr, ctx);
+    }
+
+    // Check for nested maps in optional types (e.g., `map<string, string, string>?`)
+    if let Some(inner_text) = text.strip_suffix('?') {
+        validate_map_type_in_text(inner_text, type_expr, ctx);
+    }
+}
+
+/// Find the index of the first top-level comma in a string.
+fn find_top_level_comma(s: &str) -> Option<usize> {
+    let mut depth = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Helper to check for duplicate names and record errors.

@@ -21,12 +21,27 @@ pub struct TestResult {
     pub actual_diagnostics: String,
     /// Actual hover output (collected from cursor markers).
     pub actual_hovers: Option<String>,
+    /// Completion test result (if completions were expected).
+    pub completion_result: Option<CompletionTestResult>,
     /// Diff between expected and actual (if failed).
     pub diff: Option<String>,
     /// Preserved comments from diagnostics section.
     pub diagnostics_comments: Vec<String>,
     /// Preserved comments from hovers section.
     pub hovers_comments: Vec<String>,
+    /// Preserved comments from completions section.
+    pub completions_comments: Vec<String>,
+}
+
+/// Result of completion testing.
+#[derive(Debug)]
+pub struct CompletionTestResult {
+    /// Completion labels that were found.
+    pub found_labels: Vec<String>,
+    /// Expected labels that were missing.
+    pub missing_labels: Vec<String>,
+    /// Whether the completion test passed.
+    pub passed: bool,
 }
 
 /// Result of hover at a cursor position.
@@ -74,7 +89,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     };
 
     // 4. Handle cursor-based hovers
-    let actual_hovers = if !parsed.cursor_markers.is_empty() {
+    let actual_hovers = if !parsed.cursor_markers.is_empty() && parsed.expected_hovers.is_some() {
         let db = lsp_db.db();
         let project = lsp_db.project().expect("Project should be set");
 
@@ -104,16 +119,61 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         None
     };
 
-    // 5. Compare against expectations
-    let passed = parsed.expected_diagnostics == actual_diagnostics
-        && parsed.expected_hovers == actual_hovers;
+    // 5. Handle cursor-based completions
+    let completion_result = if !parsed.cursor_markers.is_empty()
+        && parsed.expected_completions.is_some()
+    {
+        let db = lsp_db.db();
+        let project = lsp_db.project().expect("Project should be set");
+        let expected = parsed.expected_completions.as_ref().unwrap();
+
+        // Collect all completion labels from all cursor positions
+        let mut all_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        for marker in &parsed.cursor_markers {
+            let source_file = file_map[&marker.file];
+            let offset = TextSize::from(marker.offset as u32);
+            let completions = baml_ide::complete(db, source_file, project, offset);
+
+            for item in completions {
+                all_labels.insert(item.label);
+            }
+        }
+
+        // Check which expected items are missing
+        let found_labels: Vec<String> = all_labels.into_iter().collect();
+        let missing_labels: Vec<String> = expected
+            .should_contain
+            .iter()
+            .filter(|label| !found_labels.contains(label))
+            .cloned()
+            .collect();
+
+        let passed = missing_labels.is_empty();
+
+        Some(CompletionTestResult {
+            found_labels,
+            missing_labels,
+            passed,
+        })
+    } else {
+        None
+    };
+
+    // 6. Compare against expectations
+    let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
+    let hovers_passed = parsed.expected_hovers == actual_hovers;
+    let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
+
+    let passed = diagnostics_passed && hovers_passed && completions_passed;
 
     let diff = if !passed {
-        Some(generate_full_diff(
+        Some(generate_full_diff_with_completions(
             &parsed.expected_diagnostics,
             &actual_diagnostics,
             parsed.expected_hovers.as_deref(),
             actual_hovers.as_deref(),
+            completion_result.as_ref(),
         ))
     } else {
         None
@@ -123,9 +183,11 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         passed,
         actual_diagnostics,
         actual_hovers,
+        completion_result,
         diff,
         diagnostics_comments: parsed.diagnostics_comments.clone(),
         hovers_comments: parsed.hovers_comments.clone(),
+        completions_comments: parsed.completions_comments.clone(),
     }
 }
 
@@ -169,12 +231,13 @@ fn format_as_comment(text: &str) -> String {
         .join("\n")
 }
 
-/// Generate a full diff including diagnostics and hovers.
-fn generate_full_diff(
+/// Generate a full diff including diagnostics, hovers, and completions.
+fn generate_full_diff_with_completions(
     expected_diag: &str,
     actual_diag: &str,
     expected_hovers: Option<&str>,
     actual_hovers: Option<&str>,
+    completion_result: Option<&CompletionTestResult>,
 ) -> String {
     let mut diff = String::new();
 
@@ -190,6 +253,22 @@ fn generate_full_diff(
         diff.push_str(expected_hovers.unwrap_or("<none>"));
         diff.push_str("\n\nActual:\n");
         diff.push_str(actual_hovers.unwrap_or("<none>"));
+    }
+
+    if let Some(result) = completion_result
+        && !result.passed
+    {
+        diff.push_str("\n\n=== COMPLETIONS ===\n");
+        diff.push_str("Missing expected completions:\n");
+        for label in &result.missing_labels {
+            diff.push_str(&format!("  - {label}\n"));
+        }
+        diff.push_str("\nFound completions:\n");
+        let mut found: Vec<_> = result.found_labels.iter().collect();
+        found.sort();
+        for label in found {
+            diff.push_str(&format!("  - {label}\n"));
+        }
     }
 
     diff
@@ -261,5 +340,31 @@ mod tests {
         let hovers = result.actual_hovers.unwrap();
         assert!(hovers.contains("class Person"));
         assert!(hovers.contains("name string"));
+    }
+
+    #[test]
+    fn test_completion_top_level() {
+        let content = r#"<[CURSOR]
+
+//----
+//- diagnostics
+// <no-diagnostics-expected>
+//
+//- completions
+// SHOULD_CONTAIN: function, class, enum"#;
+
+        let parsed = parse_test_file(content, "test.baml");
+        let result = run_test(&parsed);
+
+        assert!(
+            result.completion_result.is_some(),
+            "Should have completion result"
+        );
+        let comp = result.completion_result.unwrap();
+        assert!(
+            comp.passed,
+            "Completion test should pass. Missing: {:?}, Found: {:?}",
+            comp.missing_labels, comp.found_labels
+        );
     }
 }

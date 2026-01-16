@@ -352,22 +352,135 @@ impl std::fmt::Display for ValidationError {
 // HELPER FUNCTIONS
 // =============================================================================
 
-/// Simple glob matching (supports * wildcard)
+/// Glob matching with support for wildcards at any position.
+/// Supports:
+/// - `*` matches everything
+/// - `prefix*` matches strings starting with prefix
+/// - `*suffix` matches strings ending with suffix
+/// - `*middle*` matches strings containing middle
+/// - `pre*suf` matches strings starting with pre and ending with suf
 fn glob_match(pattern: &str, text: &str) -> bool {
+    // Fast path: exact match or match-all
     if pattern == "*" {
         return true;
     }
-    if let Some(suffix) = pattern.strip_prefix('*') {
-        return text.ends_with(suffix);
+    if !pattern.contains('*') {
+        return pattern == text;
     }
-    if let Some(prefix) = pattern.strip_suffix('*') {
-        return text.starts_with(prefix);
+
+    // Split on wildcards and match segments
+    let parts: Vec<&str> = pattern.split('*').collect();
+
+    match parts.as_slice() {
+        // Single wildcard cases (most common)
+        [prefix, ""] => text.starts_with(prefix),
+        ["", suffix] => text.ends_with(suffix),
+        ["", middle, ""] => text.contains(middle),
+        [prefix, suffix] => {
+            text.starts_with(prefix)
+                && text.ends_with(suffix)
+                && text.len() >= prefix.len() + suffix.len()
+        }
+        // Multiple wildcards - use recursive matching
+        _ => glob_match_recursive(text, &parts, 0),
     }
-    pattern == text
+}
+
+/// Recursive glob matching for complex patterns with multiple wildcards.
+fn glob_match_recursive(text: &str, parts: &[&str], part_idx: usize) -> bool {
+    if part_idx >= parts.len() {
+        return text.is_empty();
+    }
+
+    let part = parts[part_idx];
+    let is_last = part_idx == parts.len() - 1;
+    let is_first = part_idx == 0;
+
+    if part.is_empty() {
+        // Empty part means wildcard - skip to next part
+        if is_last {
+            return true; // Trailing wildcard matches everything
+        }
+        // Find next part anywhere in remaining text
+        let next_part = parts[part_idx + 1];
+        if next_part.is_empty() {
+            return glob_match_recursive(text, parts, part_idx + 1);
+        }
+        // Try matching next_part at every position
+        for i in 0..=text.len().saturating_sub(next_part.len()) {
+            if text[i..].starts_with(next_part)
+                && glob_match_recursive(&text[i + next_part.len()..], parts, part_idx + 2)
+            {
+                return true;
+            }
+        }
+        false
+    } else if is_first {
+        // First part must match at start
+        text.starts_with(part) && glob_match_recursive(&text[part.len()..], parts, part_idx + 1)
+    } else if is_last {
+        // Last part must match at end
+        text.ends_with(part)
+    } else {
+        // Middle part - find it and continue
+        if let Some(pos) = text.find(part) {
+            glob_match_recursive(&text[pos + part.len()..], parts, part_idx + 1)
+        } else {
+            false
+        }
+    }
 }
 
 fn is_internal_dep(name: &str, config: &Config) -> bool {
     config.is_internal_crate(name)
+}
+
+/// Extract crate name from a parsed Cargo.toml document.
+/// Falls back to `folder_name` if `[package.name]` is not found.
+#[inline]
+fn extract_crate_name<'a>(doc: &'a DocumentMut, folder_name: &'a str) -> &'a str {
+    doc.get("package")
+        .and_then(|p| p.as_table())
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or(folder_name)
+}
+
+/// Parsed crate data for validation.
+struct CrateInfo {
+    cargo_path: PathBuf,
+    folder_name: String,
+    crate_name: String,
+    doc: DocumentMut,
+}
+
+impl CrateInfo {
+    /// Load crate info from a directory containing Cargo.toml.
+    fn load(crate_dir: &Path) -> Option<Self> {
+        let cargo_path = crate_dir.join("Cargo.toml");
+        let folder_name = crate_dir.file_name()?.to_string_lossy().into_owned();
+
+        let content = std::fs::read_to_string(&cargo_path).ok()?;
+        let doc: DocumentMut = content.parse().ok()?;
+        let crate_name = extract_crate_name(&doc, &folder_name).to_owned();
+
+        Some(CrateInfo {
+            cargo_path,
+            folder_name,
+            crate_name,
+            doc,
+        })
+    }
+
+    /// Reload the document from disk (after fixes).
+    fn reload(&mut self) -> std::io::Result<()> {
+        let content = std::fs::read_to_string(&self.cargo_path)?;
+        self.doc = content.parse().map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Parse error: {e}"))
+        })?;
+        self.crate_name = extract_crate_name(&self.doc, &self.folder_name).to_owned();
+        Ok(())
+    }
 }
 
 fn find_workspace_root() -> Option<PathBuf> {
@@ -869,7 +982,7 @@ fn fix_cargo_toml(
         std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Parse error: {e}"))
     })?;
 
-    let mut has_deps = false;
+    let mut modified = false;
     let dep_sections = ["dependencies", "dev-dependencies", "build-dependencies"];
 
     for section in dep_sections {
@@ -877,7 +990,6 @@ fn fix_cargo_toml(
             if deps.is_empty() {
                 continue;
             }
-            has_deps = true;
 
             // Convert non-workspace deps
             let keys: Vec<String> = deps.iter().map(|(k, _)| k.to_string()).collect();
@@ -890,16 +1002,23 @@ fn fix_cargo_toml(
                 }
             }
 
-            // Sort dependencies
+            // Sort dependencies - always mark as modified since we may reorder
             sort_dependencies_table(deps, config);
+            modified = true;
         }
     }
 
-    if has_deps {
-        std::fs::write(cargo_path, doc.to_string())?;
+    if modified {
+        // Write and sync to ensure data is flushed to disk before re-reading
+        use std::io::Write;
+        let file = std::fs::File::create(cargo_path)?;
+        let mut writer = std::io::BufWriter::new(file);
+        writer.write_all(doc.to_string().as_bytes())?;
+        writer.flush()?;
+        writer.into_inner()?.sync_all()?;
     }
 
-    Ok(has_deps)
+    Ok(modified)
 }
 
 fn format_toml_file(path: &Path) -> std::io::Result<bool> {
@@ -931,7 +1050,13 @@ fn format_toml_file(path: &Path) -> std::io::Result<bool> {
     );
 
     if formatted != content {
-        std::fs::write(path, &formatted)?;
+        // Write and sync to ensure data is flushed to disk
+        use std::io::Write;
+        let file = std::fs::File::create(path)?;
+        let mut writer = std::io::BufWriter::new(file);
+        writer.write_all(formatted.as_bytes())?;
+        writer.flush()?;
+        writer.into_inner()?.sync_all()?;
         Ok(true)
     } else {
         Ok(false)
@@ -965,6 +1090,19 @@ fn format_all_cargo_tomls(crates_dir: &Path, workspace_cargo: &Path) -> std::io:
 // MAIN
 // =============================================================================
 
+/// Load all crate info from the crates directory.
+fn load_crates(crate_dirs: &[PathBuf]) -> Vec<CrateInfo> {
+    crate_dirs
+        .iter()
+        .filter_map(|dir| {
+            CrateInfo::load(dir).or_else(|| {
+                eprintln!("Warning: Failed to load crate at {}", dir.display());
+                None
+            })
+        })
+        .collect()
+}
+
 fn main() {
     let Cargo::Stow(args) = Cargo::parse();
 
@@ -982,63 +1120,26 @@ fn main() {
     let workspace_deps = get_workspace_dependencies(&workspace_cargo);
     let crate_dirs = find_crate_dirs(&crates_dir);
 
-    // Collect all crate names
-    let mut all_crate_names: HashSet<String> = HashSet::new();
-    let mut crate_data: BTreeMap<PathBuf, (String, DocumentMut)> = BTreeMap::new();
+    // Load all crate data
+    let mut crates = load_crates(&crate_dirs);
 
-    for crate_dir in &crate_dirs {
-        let cargo_path = crate_dir.join("Cargo.toml");
-        let folder_name = crate_dir
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-
-        let content = match std::fs::read_to_string(&cargo_path) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("Error reading {}: {}", cargo_path.display(), e);
-                continue;
-            }
-        };
-
-        let doc: DocumentMut = match content.parse() {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("Error parsing {}: {}", cargo_path.display(), e);
-                continue;
-            }
-        };
-
-        let crate_name = doc
-            .get("package")
-            .and_then(|p| p.as_table())
-            .and_then(|p| p.get("name"))
-            .and_then(|n| n.as_str())
-            .unwrap_or(&folder_name)
-            .to_string();
-
-        all_crate_names.insert(crate_name.clone());
-        crate_data.insert(cargo_path, (crate_name, doc));
-    }
+    // Collect all crate names for cross-crate validation
+    let all_crate_names: HashSet<String> = crates.iter().map(|c| c.crate_name.clone()).collect();
 
     // Run fix mode first if requested
     if args.fix {
         println!("🔧 Fixing crates...\n");
         let mut total_fixed = 0;
 
-        for crate_dir in &crate_dirs {
-            let cargo_path = crate_dir.join("Cargo.toml");
-            let crate_name = crate_dir.file_name().unwrap_or_default().to_string_lossy();
-
-            match fix_cargo_toml(&cargo_path, &workspace_deps, &config) {
+        for crate_info in &crates {
+            match fix_cargo_toml(&crate_info.cargo_path, &workspace_deps, &config) {
                 Ok(true) => {
-                    println!("Fixed {crate_name}");
+                    println!("Fixed {}", crate_info.crate_name);
                     total_fixed += 1;
                 }
                 Ok(false) => {}
                 Err(e) => {
-                    eprintln!("Error fixing {crate_name}: {e}");
+                    eprintln!("Error fixing {}: {e}", crate_info.crate_name);
                 }
             }
         }
@@ -1061,27 +1162,10 @@ fn main() {
 
             println!("\nRe-running validation...\n");
 
-            // Re-read crate data after fixes
-            crate_data.clear();
-            for crate_dir in &crate_dirs {
-                let cargo_path = crate_dir.join("Cargo.toml");
-                let folder_name = crate_dir
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-
-                if let Ok(content) = std::fs::read_to_string(&cargo_path) {
-                    if let Ok(doc) = content.parse::<DocumentMut>() {
-                        let crate_name = doc
-                            .get("package")
-                            .and_then(|p| p.as_table())
-                            .and_then(|p| p.get("name"))
-                            .and_then(|n| n.as_str())
-                            .unwrap_or(&folder_name)
-                            .to_string();
-                        crate_data.insert(cargo_path, (crate_name, doc));
-                    }
+            // Reload crate data after fixes
+            for crate_info in &mut crates {
+                if let Err(e) = crate_info.reload() {
+                    eprintln!("Warning: Failed to reload {}: {e}", crate_info.crate_name);
                 }
             }
         } else {
@@ -1098,40 +1182,44 @@ fn main() {
     }
 
     // Per-crate validation
-    for (cargo_path, (crate_name, doc)) in &crate_data {
-        let folder_name = cargo_path
-            .parent()
-            .and_then(|p| p.file_name())
-            .unwrap_or_default()
-            .to_string_lossy();
-
+    for crate_info in &crates {
         if args.verbose {
-            println!("Checking crate: {crate_name}");
+            println!("Checking crate: {}", crate_info.crate_name);
         }
 
         all_errors.extend(check_crate_name_matches_folder(
-            &folder_name,
-            doc,
-            cargo_path,
+            &crate_info.folder_name,
+            &crate_info.doc,
+            &crate_info.cargo_path,
         ));
         all_errors.extend(check_crate_naming_convention(
-            &folder_name,
-            doc,
-            cargo_path,
+            &crate_info.folder_name,
+            &crate_info.doc,
+            &crate_info.cargo_path,
             &config,
         ));
         all_errors.extend(check_test_crate_has_prefix(
-            crate_name,
+            &crate_info.crate_name,
             &all_crate_names,
-            cargo_path,
+            &crate_info.cargo_path,
             &config,
         ));
-        all_errors.extend(check_workspace_dependencies(crate_name, doc, cargo_path));
+        all_errors.extend(check_workspace_dependencies(
+            &crate_info.crate_name,
+            &crate_info.doc,
+            &crate_info.cargo_path,
+        ));
         all_errors.extend(check_dependency_restrictions(
-            crate_name, doc, cargo_path, &config,
+            &crate_info.crate_name,
+            &crate_info.doc,
+            &crate_info.cargo_path,
+            &config,
         ));
         all_errors.extend(check_dependencies_sorted(
-            crate_name, doc, cargo_path, &config,
+            &crate_info.crate_name,
+            &crate_info.doc,
+            &crate_info.cargo_path,
+            &config,
         ));
     }
 

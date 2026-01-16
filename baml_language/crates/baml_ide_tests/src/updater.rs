@@ -20,12 +20,17 @@ pub fn update_test_file(
         original_content
     };
 
+    // Extract completion section from original if it exists (we don't auto-generate completions)
+    let completion_section = extract_completion_section(original_content);
+
     // Generate new expectations section, preserving user comments
     let expectations = generate_expectations_section(
         &result.actual_diagnostics,
         result.actual_hovers.as_deref(),
+        completion_section.as_deref(),
         &result.diagnostics_comments,
         &result.hovers_comments,
+        &result.completions_comments,
     );
 
     // Combine source and new expectations
@@ -35,13 +40,46 @@ pub fn update_test_file(
     std::fs::write(path, new_content)
 }
 
+/// Extract the completion section from original content.
+/// Returns the raw content after `//- completions` marker (excluding comments).
+fn extract_completion_section(content: &str) -> Option<String> {
+    let marker = "//- completions";
+    let marker_pos = content.find(marker)?;
+    let after_marker = &content[marker_pos + marker.len()..];
+
+    // Find where the next section starts (or end of file)
+    let section_end = after_marker
+        .find("//- diagnostics")
+        .or_else(|| after_marker.find("//- on_hover"))
+        .unwrap_or(after_marker.len());
+
+    let section = &after_marker[..section_end];
+
+    // Parse out just the SHOULD_CONTAIN lines (skip empty lines and preserved comments)
+    let lines: Vec<&str> = section
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty() && trimmed != "//" && !trimmed.starts_with("// (") // Skip preserved comments (added separately)
+        })
+        .collect();
+
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
+}
+
 /// Generate the expectations section from actual output.
 /// Preserves user comments (lines starting with `// (`) from the original file.
 fn generate_expectations_section(
     diagnostics: &str,
     hovers: Option<&str>,
+    completions: Option<&str>,
     diagnostics_comments: &[String],
     hovers_comments: &[String],
+    completions_comments: &[String],
 ) -> String {
     let mut section = String::new();
     section.push_str("\n\n//----\n");
@@ -70,6 +108,20 @@ fn generate_expectations_section(
         section.push('\n');
     }
 
+    if let Some(completions) = completions {
+        section.push_str("//\n");
+        section.push_str("//- completions\n");
+
+        // Add preserved completions comments first
+        for comment in completions_comments {
+            section.push_str(comment);
+            section.push('\n');
+        }
+
+        section.push_str(completions);
+        section.push('\n');
+    }
+
     section
 }
 
@@ -80,7 +132,7 @@ mod tests {
     #[test]
     fn test_generate_expectations_section() {
         let diagnostics = "// <no-diagnostics-expected>";
-        let section = generate_expectations_section(diagnostics, None, &[], &[]);
+        let section = generate_expectations_section(diagnostics, None, None, &[], &[], &[]);
 
         assert!(section.contains("//----"));
         assert!(section.contains("//- diagnostics"));
@@ -92,7 +144,7 @@ mod tests {
     fn test_generate_expectations_with_hovers() {
         let diagnostics = "// <no-diagnostics-expected>";
         let hovers = "// `Foo` at test.baml:1:1\n// class Foo {}";
-        let section = generate_expectations_section(diagnostics, Some(hovers), &[], &[]);
+        let section = generate_expectations_section(diagnostics, Some(hovers), None, &[], &[], &[]);
 
         assert!(section.contains("//----"));
         assert!(section.contains("//- diagnostics"));
@@ -104,7 +156,8 @@ mod tests {
     fn test_generate_expectations_with_preserved_comments() {
         let diagnostics = "// Error: something went wrong";
         let diagnostics_comments = vec!["// (expect one error here)".to_string()];
-        let section = generate_expectations_section(diagnostics, None, &diagnostics_comments, &[]);
+        let section =
+            generate_expectations_section(diagnostics, None, None, &diagnostics_comments, &[], &[]);
 
         assert!(section.contains("//- diagnostics"));
         assert!(section.contains("// (expect one error here)"));
@@ -121,8 +174,14 @@ mod tests {
         let diagnostics = "// <no-diagnostics-expected>";
         let hovers = "// `Foo` at test.baml:1";
         let hovers_comments = vec!["// (testing hover on Foo class)".to_string()];
-        let section =
-            generate_expectations_section(diagnostics, Some(hovers), &[], &hovers_comments);
+        let section = generate_expectations_section(
+            diagnostics,
+            Some(hovers),
+            None,
+            &[],
+            &hovers_comments,
+            &[],
+        );
 
         assert!(section.contains("//- on_hover expressions"));
         assert!(section.contains("// (testing hover on Foo class)"));
@@ -132,5 +191,16 @@ mod tests {
         let comment_pos = section.find("// (testing hover on Foo class)").unwrap();
         let hover_pos = section.find("// `Foo` at test.baml:1").unwrap();
         assert!(comment_pos < hover_pos);
+    }
+
+    #[test]
+    fn test_generate_expectations_with_completions() {
+        let diagnostics = "// <no-diagnostics-expected>";
+        let completions = "// SHOULD_CONTAIN: function, class, enum";
+        let section =
+            generate_expectations_section(diagnostics, None, Some(completions), &[], &[], &[]);
+
+        assert!(section.contains("//- completions"));
+        assert!(section.contains("// SHOULD_CONTAIN: function, class, enum"));
     }
 }
