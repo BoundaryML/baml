@@ -223,7 +223,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::Llm,
+                            kind: FunctionKind::External,
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -243,7 +243,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::Exec,
+                            kind: FunctionKind::Bytecode,
                             locals_in_scope: vec![
                                 params
                                     .iter()

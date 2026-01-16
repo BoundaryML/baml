@@ -1,46 +1,42 @@
 use bex_vm_types::{BinOp, CmpOp, UnaryOp, Value, types::Type};
+use thiserror::Error;
 
 /// Bug in the VM or somehow invalid source code got compiled and executed.
 ///
 /// If the VM throws this it's either a bug in the compiler or in the VM itself.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Error, PartialEq, Clone)]
 pub enum InternalError {
-    /// The number of arguments passed to a function doesn't match the function
-    /// arity.
+    #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
 
-    /// Attempt to access the top of the stack but it's empty.
+    #[error("unexpected empty eval stack")]
     UnexpectedEmptyStack,
 
-    /// Attempt to access a stack slot from the top of the stack,
-    /// and stack doesn't have enough items.
-    /// Argument is the amount of slots from the top of the stack (inclusive - 0 is top itself)
-    /// that were queried.
+    #[error("not enough items on stack: {0}")]
     NotEnoughItemsOnStack(usize),
 
-    /// Reference an object that does not exist in the object pool.
-    /// Argument is the reference index.
+    #[error("invalid object reference: {0}")]
     InvalidObjectRef(usize),
 
-    /// Attempt to use a value but it's not the expected type.
+    #[error("type error: expected {expected}, got {got}")]
     TypeError { expected: Type, got: Type },
 
-    /// Attempt to apply a binary operation to two values of different types.
+    #[error("cannot apply binary operation: {left} {op} {right}")]
     CannotApplyBinOp { left: Type, right: Type, op: BinOp },
 
-    /// Attempt to apply a comparison operation to two values of different types.
+    #[error("cannot apply comparison operation: {left} {op} {right}")]
     CannotApplyCmpOp { left: Type, right: Type, op: CmpOp },
 
-    /// Attempt to apply a unary operation to a value of the wrong type.
+    #[error("cannot apply unary operation: {op} {value}")]
     CannotApplyUnaryOp { op: UnaryOp, value: Type },
 
-    /// Array index out of bounds.
+    #[error("array index out of bounds: {index} of {length}")]
     ArrayIndexOutOfBounds { index: usize, length: usize },
 
-    /// Array index is negative.
+    #[error("array index is negative: {0}")]
     ArrayIndexIsNegative(i64),
 
-    /// Instruction pointer is negative.
+    #[error("negative instruction pointer: {0}")]
     NegativeInstructionPtr(isize),
 }
 
@@ -48,59 +44,40 @@ pub enum InternalError {
 ///
 /// Either logic errors in the user's source code or bugs in our compiler/VM
 /// stack.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Error, PartialEq, Clone)]
 pub enum RuntimeError {
-    /// Ah yes, classic stack overflow.
+    #[error("stack overflow")]
     StackOverflow,
 
-    /// User code triggered an assertion failure via the [`bex_vm_types::Instruction::Assert`] opcode.
+    #[error("assertion failed")]
     AssertionError,
 
-    /// Execution reached code that should be unreachable.
-    ///
-    /// This indicates a bug in the compiler or type system - exhaustive match
-    /// expressions should never fall through to unreachable code.
+    #[error("unreachable code executed")]
     Unreachable,
 
-    /// VM internal error.
-    InternalError(InternalError),
+    #[error("{0}")]
+    InternalError(#[from] InternalError),
 
-    /// Map does not contain the requested key.
+    #[error("key not found in map")]
     NoSuchKeyInMap,
 
-    /// Right hand side of division operation is zero.
+    #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
-    /// Any error, provide a custom message for this one.
+    #[error("{0}")]
     Other(String),
 }
 
 /// Any kind of virtual machine error.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmError {
-    RuntimeError(RuntimeError),
-}
-
-impl From<RuntimeError> for VmError {
-    fn from(error: RuntimeError) -> Self {
-        VmError::RuntimeError(error)
-    }
+    #[error("{0}")]
+    RuntimeError(#[from] RuntimeError),
 }
 
 impl From<InternalError> for VmError {
     fn from(error: InternalError) -> Self {
         VmError::RuntimeError(RuntimeError::InternalError(error))
-    }
-}
-
-impl std::error::Error for VmError {}
-
-impl std::fmt::Display for VmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Figure out something nicer here.
-        match self {
-            VmError::RuntimeError(error) => write!(f, "{error:?}"),
-        }
     }
 }
 
@@ -119,9 +96,7 @@ pub struct StackTrace {
 
 impl std::fmt::Display for StackTrace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Figure out something nicer here.
-        f.write_str("Traceback (most recent call last):\n")?;
-
+        writeln!(f, "Traceback (most recent call last):")?;
         for location in &self.trace {
             writeln!(
                 f,
@@ -129,54 +104,8 @@ impl std::fmt::Display for StackTrace {
                 location.function_span.file_id, location.error_line, location.function_name
             )?;
         }
-
-        writeln!(f, "{}", self.error)
-    }
-}
-
-impl std::fmt::Display for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Internal VM Erorr: ")?;
-
-        match self {
-            InternalError::InvalidArgumentCount { expected, got } => {
-                write!(
-                    f,
-                    "invalid argument count: expected {expected} arguments, got {got}"
-                )
-            }
-            InternalError::UnexpectedEmptyStack => write!(f, "unexpected empty eval stack"),
-            InternalError::NotEnoughItemsOnStack(count) => {
-                write!(f, "not enough items on stack: {count}")
-            }
-            InternalError::InvalidObjectRef(index) => {
-                write!(f, "invalid object reference: {index}")
-            }
-            InternalError::TypeError { expected, got } => {
-                write!(f, "type error: expected {expected}, got {got}")
-            }
-            InternalError::CannotApplyBinOp { left, right, op } => {
-                write!(f, "cannot apply binary operation: {left} {op} {right}")
-            }
-            InternalError::CannotApplyCmpOp { left, right, op } => {
-                write!(f, "cannot apply comparison operation: {left} {op} {right}")
-            }
-            InternalError::CannotApplyUnaryOp { op, value } => {
-                write!(f, "cannot apply unary operation: {op} {value}")
-            }
-            InternalError::ArrayIndexOutOfBounds { index, length } => {
-                write!(f, "array index out of bounds: {index} of {length}")
-            }
-            InternalError::ArrayIndexIsNegative(index) => {
-                write!(f, "array index is negative: {index}")
-            }
-            InternalError::NegativeInstructionPtr(ptr) => {
-                write!(f, "negative instruction pointer: {ptr}")
-            }
-        }
+        write!(f, "{}", self.error)
     }
 }
 
 impl std::error::Error for StackTrace {}
-
-impl std::error::Error for InternalError {}

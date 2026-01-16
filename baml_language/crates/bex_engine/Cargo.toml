@@ -1,0 +1,17 @@
+[package]
+name = "bex_engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+baml_snapshot = { workspace = true }
+bex_vm = { workspace = true }
+bex_vm_types = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

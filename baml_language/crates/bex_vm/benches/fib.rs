@@ -3,7 +3,7 @@
 //! Do not measure compilation here, only VM execution time.
 
 use baml_tests::bytecode::TestDatabase;
-use bex_vm::Vm;
+use bex_vm::BexVm;
 use bex_vm_types::Value;
 
 struct Program {
@@ -12,7 +12,7 @@ struct Program {
     args: Vec<Value>,
 }
 
-fn bootstrap_vm(input: &Program) -> Vm {
+fn bootstrap_vm(input: &Program) -> BexVm {
     let mut db = TestDatabase::new();
     let file = db.add_file("bench.baml", input.source);
     let program = baml_compiler_emit::compile_files(&db, &[file])
@@ -22,7 +22,7 @@ fn bootstrap_vm(input: &Program) -> Vm {
         .function_index(input.function)
         .expect("function not found");
 
-    let mut vm = Vm::from_program(program).expect("All native functions should be attached");
+    let mut vm = BexVm::from_program(program).expect("All native functions should be attached");
     vm.set_entry_point(function_index, &input.args);
     vm
 }

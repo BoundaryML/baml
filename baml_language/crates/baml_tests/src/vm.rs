@@ -5,7 +5,7 @@
 //! order of globals, constants, and objects.
 
 use bex_vm::{
-    Vm, VmExecState,
+    BexVm, VmExecState,
     vm::WatchNotification as VmWatchNotification,
     watch::{self},
 };
@@ -31,7 +31,7 @@ pub enum Value {
 
 impl Value {
     /// Convert a VM Value to a test Value by following object references.
-    pub fn from_vm_value(value: &VmValue, vm: &Vm) -> anyhow::Result<Self> {
+    pub fn from_vm_value(value: &VmValue, vm: &BexVm) -> anyhow::Result<Self> {
         match value {
             VmValue::Null => Ok(Value::Null),
             VmValue::Int(i) => Ok(Value::Int(*i)),
@@ -80,7 +80,7 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn from_vm_object(index: ObjectIndex, vm: &Vm) -> anyhow::Result<Self> {
+    pub fn from_vm_object(index: ObjectIndex, vm: &BexVm) -> anyhow::Result<Self> {
         let obj = &vm.objects[index];
         match obj {
             VmObject::String(s) => Ok(Object::String(s.clone())),
@@ -235,7 +235,7 @@ impl Notification {
 
 impl Notification {
     /// Convert from VM `NodeId` to test Node by resolving indices to names/objects.
-    pub fn from_node_id(node_id: &watch::NodeId, vm: &Vm) -> anyhow::Result<Self> {
+    pub fn from_node_id(node_id: &watch::NodeId, vm: &BexVm) -> anyhow::Result<Self> {
         match node_id {
             watch::NodeId::LocalVar(stack_index) => vm
                 .watch
@@ -266,7 +266,7 @@ pub enum ExecState {
 
 impl ExecState {
     /// Convert from `VmExecState`, converting Value to test Value for Complete case.
-    pub fn from_vm_exec_state(state: VmExecState, vm: &Vm) -> anyhow::Result<Self> {
+    pub fn from_vm_exec_state(state: VmExecState, vm: &BexVm) -> anyhow::Result<Self> {
         match state {
             VmExecState::Await(index) => Ok(ExecState::Await(Object::from_vm_object(index, vm)?)),
             VmExecState::ScheduleFuture(index) => Ok(ExecState::ScheduleFuture(

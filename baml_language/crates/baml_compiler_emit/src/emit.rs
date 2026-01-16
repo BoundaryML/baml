@@ -223,7 +223,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             name: mir.name.clone(),
             arity: mir.arity,
             bytecode: self.bytecode,
-            kind: FunctionKind::Exec,
+            kind: FunctionKind::Bytecode,
             locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
             span: baml_base::Span::fake(),
             block_notifications: self.block_notifications,

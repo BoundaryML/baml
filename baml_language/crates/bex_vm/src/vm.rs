@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, FutureKind, GlobalPool, Instruction, Object, ObjectIndex,
-    ObjectPool, ObjectType, StackIndex, UnaryOp, Value, Variant,
+    BinOp, CmpOp, FunctionKind, GlobalPool, Instruction, Object, ObjectIndex, ObjectPool,
+    ObjectType, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
 };
@@ -152,7 +152,7 @@ pub struct Frame {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
-pub struct Vm {
+pub struct BexVm {
     /// Call stack.
     ///
     /// On each function call we create a new [`Frame`] and push it on this
@@ -240,7 +240,7 @@ pub enum WatchNotification {
 }
 
 #[derive(Clone, Debug)]
-pub struct BamlVmProgram {
+pub struct BytecodeProgram {
     pub objects: ObjectPool<NativeFunction>,
     pub globals: GlobalPool,
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind<NativeFunction>)>,
@@ -282,11 +282,11 @@ fn value_type_tag(value: &Value, objects: &ObjectPool<NativeFunction>) -> i64 {
     }
 }
 
-impl Vm {
+impl BexVm {
     pub fn new(
-        BamlVmProgram {
+        BytecodeProgram {
             objects, globals, ..
-        }: BamlVmProgram,
+        }: BytecodeProgram,
         env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
@@ -1543,7 +1543,7 @@ impl Vm {
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
-                    let expected_type = FunctionType::Llm;
+                    let expected_type = FunctionType::External;
 
                     let index = self
                         .objects
@@ -1567,29 +1567,23 @@ impl Vm {
                         }));
                     }
 
-                    // Not a future.
-                    if !matches!(
-                        callable_future.kind,
-                        FunctionKind::Llm | FunctionKind::Future
-                    ) {
+                    // Must be an external operation.
+                    if !matches!(callable_future.kind, FunctionKind::External) {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: FunctionType::Llm.into(), // TODO: Fix this
+                            expected: FunctionType::External.into(),
                             got: FunctionType::from(&callable_future.kind).into(),
                         }));
                     }
 
                     // Collect the function call args and cleanup the call.
-                    let future_args = self.stack.drain(args_offset..).skip(1).collect();
+                    let future_args: Vec<Value> = self.stack.drain(args_offset..).skip(1).collect();
 
                     // Create the pending future.
+                    // The operation name is the function name - all external operations
+                    // (LLM, Net, etc.) are registered and looked up the same way.
                     let pending_future = PendingFuture {
-                        function: callable_future.name.clone(),
+                        operation: callable_future.name.clone(),
                         args: future_args,
-                        kind: match callable_future.kind {
-                            FunctionKind::Llm => FutureKind::Llm,
-                            FunctionKind::Future => FutureKind::Net,
-                            _ => unreachable!(),
-                        },
                     };
 
                     // Allocate the future.
@@ -1807,7 +1801,7 @@ impl Vm {
                             function = self.objects[frame.function].as_function()?;
                         }
 
-                        FunctionKind::Exec => {
+                        FunctionKind::Bytecode => {
                             // Otherwise push the new frame.
                             self.frames.push(Frame {
                                 function: index,
@@ -1825,7 +1819,7 @@ impl Vm {
                             function = self.objects[frame.function].as_function()?;
                         }
 
-                        FunctionKind::Llm | FunctionKind::Future => {
+                        FunctionKind::External => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
                                 got: FunctionType::from(&callee.kind).into(),

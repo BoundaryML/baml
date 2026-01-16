@@ -25,6 +25,7 @@ bex_vm_types = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
 paste = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 baml_compiler_emit = { workspace = true }

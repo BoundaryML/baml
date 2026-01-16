@@ -234,7 +234,7 @@ impl<'a, T, K> std::iter::IntoIterator for &'a mut Pool<T, K> {
 }
 
 pub type GlobalPool = Pool<Value, GlobalKind>;
-pub type ObjectPool<NativeFunction> = Pool<Object<NativeFunction>, ObjectKind>;
+pub type ObjectPool<F> = Pool<Object<F>, ObjectKind>;
 
 pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;

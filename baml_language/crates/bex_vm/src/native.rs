@@ -13,14 +13,12 @@ use std::{collections::HashMap, fmt::Write};
 
 use bex_vm_types::{
     ObjectIndex,
-    types::{
-        Future, FutureKind, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value,
-    },
+    types::{Future, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value},
 };
 use indexmap::IndexMap;
 
 use crate::{
-    Vm,
+    BexVm,
     errors::{InternalError, RuntimeError, VmError},
     indexable::ObjectPoolTrait,
 };
@@ -29,7 +27,7 @@ use crate::{
 pub type NativeFunctionResult = Result<Value, VmError>;
 
 /// Native function type alias.
-pub type NativeFunction = fn(&mut Vm, &[Value]) -> NativeFunctionResult;
+pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
 // Generate the NativeFunctions trait from builtin definitions
 baml_builtins::with_builtins!(baml_builtins_macros::generate_native_trait);
@@ -97,7 +95,7 @@ impl NativeFunctions for VmNatives {
         string.ends_with(suffix)
     }
 
-    fn baml_string_split(vm: &mut Vm, string: &str, delimiter: &str) -> Vec<Value> {
+    fn baml_string_split(vm: &mut BexVm, string: &str, delimiter: &str) -> Vec<Value> {
         string
             .split(delimiter)
             .map(|s| vm.alloc_string(s.to_string()))
@@ -134,17 +132,17 @@ impl NativeFunctions for VmNatives {
     // Free functions
     // =========================================================================
 
-    fn baml_deep_copy(vm: &mut Vm, value: &Value) -> Result<Value, VmError> {
+    fn baml_deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmError> {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
     }
 
-    fn baml_deep_equals(vm: &mut Vm, a: &Value, b: &Value) -> bool {
+    fn baml_deep_equals(vm: &mut BexVm, a: &Value, b: &Value) -> bool {
         let mut visited = HashMap::new();
         deep_equals_recursive(vm, *a, *b, &mut visited)
     }
 
-    fn baml_unstable_string(vm: &mut Vm, value: &Value) -> Result<String, VmError> {
+    fn baml_unstable_string(vm: &mut BexVm, value: &Value) -> Result<String, VmError> {
         format_value_recursive(vm, value, 0)
     }
 
@@ -189,7 +187,7 @@ impl NativeFunctions for VmNatives {
     // Env functions
     // =========================================================================
 
-    fn env_get(vm: &mut Vm, key: &str) -> Result<String, VmError> {
+    fn env_get(vm: &mut BexVm, key: &str) -> Result<String, VmError> {
         vm.env_vars.get(key).cloned().ok_or_else(|| {
             VmError::RuntimeError(RuntimeError::Other(format!(
                 "Environment variable '{key}' not found",
@@ -204,7 +202,7 @@ impl NativeFunctions for VmNatives {
 
 /// Recursively deep copy a value, handling nested objects.
 fn deep_copy_value_recursive(
-    vm: &mut Vm,
+    vm: &mut BexVm,
     value: Value,
     copied_objects: &mut HashMap<ObjectIndex, ObjectIndex>,
 ) -> NativeFunctionResult {
@@ -304,7 +302,7 @@ fn deep_copy_value_recursive(
 /// Recursively compare two values for deep equality
 #[allow(clippy::float_cmp)]
 fn deep_equals_recursive(
-    vm: &Vm,
+    vm: &BexVm,
     a: Value,
     b: Value,
     visited: &mut HashMap<(ObjectIndex, ObjectIndex), bool>,
@@ -392,12 +390,7 @@ fn deep_equals_recursive(
                         deep_equals_recursive(vm, *a_val, *b_val, visited)
                     }
                     (Future::Pending(a_pend), Future::Pending(b_pend)) => {
-                        a_pend.function == b_pend.function
-                            && matches!(
-                                (&a_pend.kind, &b_pend.kind),
-                                (FutureKind::Llm, FutureKind::Llm)
-                                    | (FutureKind::Net, FutureKind::Net)
-                            )
+                        a_pend.operation == b_pend.operation
                             && a_pend.args.len() == b_pend.args.len()
                             && a_pend
                                 .args
@@ -422,7 +415,7 @@ fn deep_equals_recursive(
     }
 }
 
-fn format_value_recursive(vm: &mut Vm, value: &Value, depth: usize) -> Result<String, VmError> {
+fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result<String, VmError> {
     // Check available stack space
     let available_frames = crate::vm::MAX_FRAMES.saturating_sub(vm.frames.len());
 
@@ -527,9 +520,8 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
     Ok(match object {
         Object::Function(function) => {
             let kind = match function.kind {
-                bex_vm_types::FunctionKind::Exec => bex_vm_types::FunctionKind::Exec,
-                bex_vm_types::FunctionKind::Llm => bex_vm_types::FunctionKind::Llm,
-                bex_vm_types::FunctionKind::Future => bex_vm_types::FunctionKind::Future,
+                bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
+                bex_vm_types::FunctionKind::External => bex_vm_types::FunctionKind::External,
                 bex_vm_types::FunctionKind::Native(()) => {
                     let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(

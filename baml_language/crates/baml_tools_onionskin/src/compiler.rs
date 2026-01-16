@@ -1427,7 +1427,7 @@ impl CompilerRunner {
         let mut exec_functions: Vec<(String, usize)> = Vec::new();
         for (name, &idx) in &program.function_indices {
             if let Some(Object::Function(func)) = program.objects.get(idx)
-                && matches!(func.kind, FunctionKind::Exec)
+                && matches!(func.kind, FunctionKind::Bytecode)
             {
                 exec_functions.push((name.clone(), func.arity));
             }
@@ -1545,7 +1545,7 @@ impl CompilerRunner {
 
     /// Execute the selected function in the VM
     pub(crate) fn execute_selected_function(&mut self) {
-        use bex_vm::{Vm, VmExecState};
+        use bex_vm::{BexVm, VmExecState};
         use bex_vm_types::Object;
 
         let files: Vec<_> = self.source_files.values().copied().collect();
@@ -1588,7 +1588,7 @@ impl CompilerRunner {
         }
 
         // Create VM and run
-        let mut vm = match Vm::from_program(program) {
+        let mut vm = match BexVm::from_program(program) {
             Ok(vm) => vm,
             Err(err) => {
                 self.vm_runner_state.execution_result =

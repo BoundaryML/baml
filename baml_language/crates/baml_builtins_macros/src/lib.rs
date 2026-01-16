@@ -830,7 +830,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
             // - Receiver is not mutable (mutable receivers can't have vm due to borrow checker)
             if d.uses_vm && !has_mut_receiver {
                 quote! {
-                    fn #fn_name(vm: &mut Vm, #params) -> #return_type;
+                    fn #fn_name(vm: &mut BexVm, #params) -> #return_type;
                 }
             } else {
                 quote! {
@@ -865,7 +865,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
             };
 
             quote! {
-                fn #glue_fn_name(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+                fn #glue_fn_name(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {
                     #extract_args
                     let result = #call_expr;
                     #convert_result
@@ -894,7 +894,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
             let fn_name = &d.fn_name;
             let glue_fn_name = format_ident!("__{}", d.fn_name);
             quote! {
-                pub fn #fn_name(vm: &mut Vm, args: &[Value]) -> NativeFunctionResult {
+                pub fn #fn_name(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {
                     VmNatives::#glue_fn_name(vm, args)
                 }
             }

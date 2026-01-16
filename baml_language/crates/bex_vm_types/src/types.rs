@@ -51,9 +51,9 @@ pub mod type_tags {
 /// This is what `baml_compiler_emit` produces. It contains all the objects and globals
 /// needed to run a BAML program.
 #[derive(Clone, Debug)]
-pub struct Program<NativeFunction> {
+pub struct Program<F> {
     /// Object pool containing functions, classes, strings, etc.
-    pub objects: ObjectPool<NativeFunction>,
+    pub objects: ObjectPool<F>,
 
     /// Global variables (typically function references).
     pub globals: GlobalPool,
@@ -62,7 +62,7 @@ pub struct Program<NativeFunction> {
     pub function_indices: HashMap<String, usize>,
 }
 
-impl<NativeFunction> Default for Program<NativeFunction> {
+impl<F> Default for Program<F> {
     fn default() -> Self {
         Self {
             objects: ObjectPool::new(),
@@ -72,13 +72,13 @@ impl<NativeFunction> Default for Program<NativeFunction> {
     }
 }
 
-impl<NativeFunction> Program<NativeFunction> {
+impl<F> Program<F> {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Add an object to the pool and return its index.
-    pub fn add_object(&mut self, object: Object<NativeFunction>) -> usize {
+    pub fn add_object(&mut self, object: Object<F>) -> usize {
         let idx = self.objects.len();
         self.objects.push(object);
         idx
@@ -98,31 +98,53 @@ impl<NativeFunction> Program<NativeFunction> {
 }
 
 /// Function type.
+///
+/// # Generic Parameter `F`
+///
+/// The `F` parameter represents the native function implementation type. This is
+/// generic to avoid a circular dependency between crates:
+///
+/// - `baml_vm` defines `NativeFunction = fn(&mut Vm, &[Value]) -> Result<...>`
+/// - This type references `Vm`, which is defined in `baml_vm`
+/// - `baml_vm_types` cannot depend on `baml_vm` (that would be circular)
+///
+/// The generic allows different instantiations at different compilation stages:
+///
+/// - **Compile time**: `FunctionKind<()>` — the compiler (`baml_compiler_emit`) uses
+///   `()` as a placeholder since it doesn't know about native function implementations.
+/// - **Runtime**: `FunctionKind<NativeFunction>` — the VM (`baml_vm`) substitutes the
+///   actual function pointer type when loading a program via `Vm::from_program()`.
+///
+/// The conversion from `FunctionKind<()>` to `FunctionKind<NativeFunction>` happens
+/// in `baml_vm::native::attach_builtins()`, which resolves native function names to
+/// their actual function pointers.
 #[derive(Clone, Copy, Debug)]
-pub enum FunctionKind<NativeFunction> {
+pub enum FunctionKind<F> {
     /// Regular executable function.
     ///
     /// The VM pushes a call frame onto the call stack and runs the bytecode.
-    Exec,
+    Bytecode,
 
-    /// LLM function.
+    /// External operation (LLM calls, HTTP requests, file I/O, etc.).
     ///
-    /// The VM will handle control flow to the Baml runtime to produce the
-    /// result and then push it on top of the eval stack.
-    Llm,
+    /// The VM yields control to the engine which looks up the operation
+    /// in the external operation registry and executes it asynchronously.
+    External,
 
-    /// Built-in `baml.fetch_as` function.
-    Future,
-
-    /// Builtin functions.
+    /// Rust native functions.
     ///
     /// Contains a Rust function pointer that implements the actual logic.
-    Native(NativeFunction),
+    /// Used mostly for built-in functions.
+    Native(F),
 }
 
 /// Represents any Baml function.
+///
+/// # Generic Parameter `F`
+///
+/// See [`FunctionKind`] for why this type is generic.
 #[derive(Clone, Debug)]
-pub struct Function<NativeFunction> {
+pub struct Function<F> {
     /// Function name.
     pub name: String,
 
@@ -135,7 +157,7 @@ pub struct Function<NativeFunction> {
     pub bytecode: Bytecode,
 
     /// Type of function.
-    pub kind: FunctionKind<NativeFunction>,
+    pub kind: FunctionKind<F>,
 
     /// Local variable names.
     ///
@@ -157,7 +179,7 @@ pub struct Function<NativeFunction> {
     pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
 }
 
-impl<NativeFunction> std::fmt::Display for Function<NativeFunction> {
+impl<F> std::fmt::Display for Function<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
     }
@@ -276,9 +298,9 @@ impl std::fmt::Display for Value {
 ///
 /// Read `Vm::objects` for more information.
 #[derive(Clone, Debug)]
-pub enum Object<NativeFunction> {
+pub enum Object<F> {
     /// Function object.
-    Function(Function<NativeFunction>),
+    Function(Function<F>),
 
     /// Class object.
     Class(Class),
@@ -318,7 +340,7 @@ pub enum Object<NativeFunction> {
     // BamlType(TypeIR),
 }
 
-impl<NativeFunction> std::fmt::Display for Object<NativeFunction> {
+impl<F> std::fmt::Display for Object<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
@@ -332,7 +354,7 @@ impl<NativeFunction> std::fmt::Display for Object<NativeFunction> {
             Object::Media(media) => media.fmt(f),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
-                    write!(f, "<pending: {}>", future.function)
+                    write!(f, "<pending: {}>", future.operation)
                 }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
@@ -352,16 +374,15 @@ pub enum Future {
     Ready(Value),
 }
 
-#[derive(Clone, Debug)]
-pub enum FutureKind {
-    Llm,
-    Net,
-}
-
+/// A pending external operation.
+///
+/// External operations are async functions that run outside the VM, such as
+/// LLM calls, HTTP requests, file I/O, or shell commands.
 #[derive(Clone, Debug)]
 pub struct PendingFuture {
-    pub function: String,
-    pub kind: FutureKind,
+    /// The external operation to execute (e.g., "baml.http.get", "baml.fs.read").
+    pub operation: String,
+    /// Arguments to the operation.
     pub args: Vec<Value>,
 }
 
@@ -475,7 +496,7 @@ pub enum ObjectType {
 }
 
 impl ObjectType {
-    pub fn of<NativeFunction>(ob: &Object<NativeFunction>) -> Self {
+    pub fn of<F>(ob: &Object<F>) -> Self {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Class(_) => Self::Class,
@@ -527,7 +548,7 @@ pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
     Callable,
-    Llm,
+    External,
 }
 
 impl std::fmt::Display for FunctionType {
@@ -535,15 +556,15 @@ impl std::fmt::Display for FunctionType {
         match self {
             FunctionType::Any => write!(f, "any"),
             FunctionType::Callable => write!(f, "callable"),
-            FunctionType::Llm => write!(f, "llm"),
+            FunctionType::External => write!(f, "external"),
         }
     }
 }
 
-impl<NativeFunction> From<&FunctionKind<NativeFunction>> for FunctionType {
-    fn from(value: &FunctionKind<NativeFunction>) -> Self {
-        if matches!(value, FunctionKind::Llm) {
-            FunctionType::Llm
+impl<F> From<&FunctionKind<F>> for FunctionType {
+    fn from(value: &FunctionKind<F>) -> Self {
+        if matches!(value, FunctionKind::External) {
+            FunctionType::External
         } else {
             FunctionType::Callable
         }

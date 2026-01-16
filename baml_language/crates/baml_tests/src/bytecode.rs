@@ -30,7 +30,7 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-use bex_vm::{Vm, VmExecState};
+use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
 
 // Re-export test types from crate::vm
@@ -147,7 +147,7 @@ pub fn assert_vm_fails(input: FailingProgram) -> anyhow::Result<()> {
 /// Assert that VM execution fails, with access to inspect the VM state.
 pub fn assert_vm_fails_with_inspection(
     input: FailingProgram,
-    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
+    inspect: impl FnOnce(&BexVm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let (vm, result) = setup_and_exec_program(input.source, input.function)?;
 
@@ -173,7 +173,7 @@ pub fn assert_vm_executes(input: Program) -> anyhow::Result<()> {
 #[track_caller]
 pub fn assert_vm_executes_with_inspection(
     input: Program,
-    inspect: impl FnOnce(&Vm) -> anyhow::Result<()>,
+    inspect: impl FnOnce(&BexVm) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let (vm, result) = setup_and_exec_program(input.source, input.function)?;
     let result = result?;
@@ -195,14 +195,14 @@ pub fn assert_vm_executes_with_inspection(
 pub fn collect_vm_exec_states(
     source: &'static str,
     function: &str,
-) -> anyhow::Result<(Vm, Vec<ExecState>)> {
+) -> anyhow::Result<(BexVm, Vec<ExecState>)> {
     let program = compile_source(source);
 
     let function_index = program
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm::from_program(program)?;
+    let mut vm = BexVm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
 
     let mut states = Vec::new();
@@ -231,7 +231,7 @@ pub fn assert_vm_emits(input: WatchProgram) -> anyhow::Result<()> {
 #[track_caller]
 pub fn assert_vm_emits_with_inspection(
     input: WatchProgram,
-    inspect: impl FnOnce(&Vm, &[ExecState]) -> anyhow::Result<()>,
+    inspect: impl FnOnce(&BexVm, &[ExecState]) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let (vm, states) = collect_vm_exec_states(input.source, input.function)?;
 
@@ -257,14 +257,14 @@ pub fn assert_vm_emits_with_inspection(
 fn setup_and_exec_program(
     source: &'static str,
     function: &str,
-) -> Result<(Vm, Result<VmExecState, bex_vm::errors::VmError>), anyhow::Error> {
+) -> Result<(BexVm, Result<VmExecState, bex_vm::errors::VmError>), anyhow::Error> {
     let program = compile_source(source);
 
     let function_index = program
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = Vm::from_program(program)?;
+    let mut vm = BexVm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
     let result = vm.exec();
     Ok((vm, result))
@@ -290,7 +290,7 @@ pub fn assert_vm_executes_bytecode(input: BytecodeProgram) -> anyhow::Result<()>
 /// Assert that direct bytecode execution succeeds, with access to inspect the VM state.
 pub fn assert_vm_executes_bytecode_with_inspection(
     input: BytecodeProgram,
-    inspect: impl FnOnce(&Vm, VmExecState) -> anyhow::Result<()>,
+    inspect: impl FnOnce(&BexVm, VmExecState) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let function = bex_vm_types::Function {
         name: "test_fn".to_string(),
@@ -302,7 +302,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             constants: input.constants,
             jump_tables: Vec::new(),
         },
-        kind: bex_vm_types::FunctionKind::Exec,
+        kind: bex_vm_types::FunctionKind::Bytecode,
         locals_in_scope: {
             let mut names = Vec::with_capacity(input.arity + 1);
             names.push("<fn test_fn>".to_string());
@@ -325,7 +325,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         .function_index("test_fn")
         .expect("test_fn should exist");
 
-    let mut vm = Vm::from_program(program)?;
+    let mut vm = BexVm::from_program(program)?;
     vm.set_entry_point(function_index, &[]);
 
     let result = vm.exec()?;
