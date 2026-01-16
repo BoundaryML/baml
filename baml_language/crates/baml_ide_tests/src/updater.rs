@@ -60,9 +60,7 @@ fn extract_completion_section(content: &str) -> Option<String> {
         .lines()
         .filter(|line| {
             let trimmed = line.trim();
-            !trimmed.is_empty()
-                && trimmed != "//"
-                && !trimmed.starts_with("// (") // Skip preserved comments (added separately)
+            !trimmed.is_empty() && trimmed != "//" && !trimmed.starts_with("// (") // Skip preserved comments (added separately)
         })
         .collect();
 

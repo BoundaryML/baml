@@ -64,16 +64,19 @@ function waitForOutput(
 
 /**
  * Start the Vite dev server and wait for it to be ready.
- * Uses a random available port.
+ * Uses a random port between 4900 and 4999.
  */
 async function startDevServer(): Promise<DevServer> {
   // Use --force to re-optimize deps and avoid 504 "Outdated Optimize Dep" errors
-  // Use --port 0 to let Vite pick a random available port
-  console.log(`[vite] Starting dev server in ${projectRoot}`)
-  const proc = spawn('pnpm', ['dev', '--force', '--port', '0'], {
+  // Use a random port between 4900 and 4999 to avoid conflicts
+  // Disable strictPort so Vite will try next available port if chosen port is in use
+  const randomPort = Math.floor(Math.random() * 100) + 4900
+  console.log(`[vite] Starting dev server in ${projectRoot} on port ${randomPort}`)
+  const proc = spawn('pnpm', ['dev', '--force', '--port', String(randomPort), '--strictPort', 'false'], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
+    env: { ...process.env, NO_COLOR: '1' },
   })
 
   // Collect output and parse port
@@ -93,12 +96,15 @@ async function startDevServer(): Promise<DevServer> {
       }
 
       // Parse port from Vite output: "Local: http://localhost:XXXX/"
-      const match = text.match(/Local:\s*http:\/\/localhost:(\d+)/)
-      if (match) {
-        port = parseInt(match[1], 10)
-        console.log(`[vite] Dev server running on port ${port}`)
-        clearTimeout(timeout)
-        resolve(port)
+      // Match against accumulated output in case the line arrives in multiple chunks
+      if (!port) {
+        const match = output.match(/Local:\s*http:\/\/localhost:(\d+)/)
+        if (match) {
+          port = parseInt(match[1], 10)
+          console.log(`[vite] Dev server running on port ${port}`)
+          clearTimeout(timeout)
+          resolve(port)
+        }
       }
     }
 

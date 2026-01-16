@@ -1353,9 +1353,9 @@ impl CompilerRunner {
                 writeln!(output, "{}", func_header).ok();
                 output_annotated.push((func_header, LineStatus::Unknown));
 
-                let bytecode_table = baml_vm::debug::display_bytecode(
+                let bytecode_table = bex_vm::debug::display_bytecode(
                     func,
-                    &baml_vm::EvalStack::new(),
+                    &bex_vm::EvalStack::new(),
                     &program.objects,
                     &program.globals,
                     false, // no colors for static display
@@ -1394,7 +1394,7 @@ impl CompilerRunner {
     }
 
     fn run_vm_runner(&mut self) {
-        use baml_vm_types::{FunctionKind, Object};
+        use bex_vm_types::{FunctionKind, Object};
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1545,8 +1545,8 @@ impl CompilerRunner {
 
     /// Execute the selected function in the VM
     pub(crate) fn execute_selected_function(&mut self) {
-        use baml_vm::{Vm, VmExecState};
-        use baml_vm_types::Object;
+        use bex_vm::{Vm, VmExecState};
+        use bex_vm_types::Object;
 
         let files: Vec<_> = self.source_files.values().copied().collect();
         let program = match baml_compiler_emit::compile_files(&self.db, &files) {
@@ -2372,10 +2372,10 @@ pub(crate) fn normalize_files_to_virtual_root(
 
 /// Format a VM value for display
 fn format_vm_value<T>(
-    value: &baml_vm_types::Value,
-    objects: &baml_vm_types::ObjectPool<T>,
+    value: &bex_vm_types::Value,
+    objects: &bex_vm_types::ObjectPool<T>,
 ) -> String {
-    use baml_vm_types::{Object, Value};
+    use bex_vm_types::{Object, Value};
 
     match value {
         Value::Null => "null".to_string(),

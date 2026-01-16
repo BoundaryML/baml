@@ -1,7 +1,7 @@
 name: Webview Tests (Reusable)
 
 on:
-  workflow_call: {}
+  workflow_call:
 
 permissions:
   contents: read
@@ -92,8 +92,6 @@ jobs:
   hmr-tests:
     name: "HMR Tests (Hot Reload)"
     runs-on: ubuntu-latest
-    # Only run on main/canary
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

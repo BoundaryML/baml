@@ -49,16 +49,33 @@ function IfThenOnlyHeader2() -> int {
 //----
 //- diagnostics
 // Error: Duplicate function `IfThenOnlyHeader2`
-//    ╭─[ headers_if_then_only_header.baml:1:1 ]
-//    │
-//  1 │ //# Case 1
-//    │ │ 
-//    │ ╰─ function `IfThenOnlyHeader2` redefined here
-//    │ │ 
-//    │ ╰─ `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
+//     ╭─[ headers_if_then_only_header.baml:15:10 ]
+//     │
+//  15 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── function `IfThenOnlyHeader2` redefined here
+//     │ 
+//  33 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
+// Error: Duplicate function `IfThenOnlyHeader2`
+//     ╭─[ headers_if_then_only_header.baml:33:10 ]
+//     │
+//  33 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── function `IfThenOnlyHeader2` redefined here
+//     │
+//     ├─[ headers_if_then_only_header.baml:33:10 ]
+//     │
+//  15 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
 // Error: Expected `int`, found `int | null`
 //     ╭─[ headers_if_then_only_header.baml:28:5 ]
 //     │

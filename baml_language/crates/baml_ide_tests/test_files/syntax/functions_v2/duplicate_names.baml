@@ -62,59 +62,40 @@ function Bar(a: string, b: int | bool) -> int {
 
 //----
 //- diagnostics
-// Error: Expected '(', found '{'
+// Error: Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
 //    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
 //  1 │ function Bar {
 //    │              ┬  
-//    │              ╰── Expected '(', found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected parameter name, found '{'
-//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
-//    │
-//  1 │ function Bar {
-//    │              ┬  
-//    │              ╰── Expected parameter name, found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected type annotation, found '{'
-//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
-//    │
-//  1 │ function Bar {
-//    │              ┬  
-//    │              ╰── Expected type annotation, found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected ')', found '{'
-//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
-//    │
-//  1 │ function Bar {
-//    │              ┬  
-//    │              ╰── Expected ')', found '{'
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected return type (->), found '{'
-//    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
-//    │
-//  1 │ function Bar {
-//    │              ┬  
-//    │              ╰── Expected return type (->), found '{'
+//    │              ╰── Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Duplicate function `Bar`
-//    ╭─[ functions_v2_duplicate_names.baml:1:1 ]
+//    ╭─[ functions_v2_duplicate_names.baml:1:10 ]
 //    │
 //  1 │ function Bar {
-//    │ │ 
-//    │ ╰─ function `Bar` redefined here
-//    │ │ 
-//    │ ╰─ `Bar` first defined in functions_v2_duplicate_names.baml
+//    │          ─┬─  
+//    │           ╰─── function `Bar` redefined here
+//    │ 
+//  6 │ function Bar(a: string, b: int | bool) -> int {
+//    │          ─┬─  
+//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯
+// Error: Duplicate function `Bar`
+//    ╭─[ functions_v2_duplicate_names.baml:6:10 ]
+//    │
+//  6 │ function Bar(a: string, b: int | bool) -> int {
+//    │          ─┬─  
+//    │           ╰─── function `Bar` redefined here
+//    │
+//    ├─[ functions_v2_duplicate_names.baml:6:10 ]
+//    │
+//  1 │ function Bar {
+//    │          ─┬─  
+//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
 //    │ 
 //    │ Note: Error code: E0011
 // ───╯

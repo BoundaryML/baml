@@ -50,8 +50,6 @@ mod error;
 mod loader;
 mod symbols;
 
-use std::ffi::CStr;
-
 pub use error::{BamlSysError, Result};
 use libc::{c_char, c_int, c_void, size_t};
 pub use loader::{
@@ -67,12 +65,25 @@ pub use symbols::{get_symbols, Buffer, CallbackFn, OnTickCallbackFn, Symbols};
 /// Get the BAML library version.
 pub fn version() -> Result<String> {
     let symbols = get_symbols()?;
-    // Safety: version() returns a valid C string from the library
+    // Safety: version() returns a Buffer containing the version string
     #[allow(unsafe_code)]
-    let ptr = unsafe { (symbols.version)() };
+    let buf = unsafe { (symbols.version)() };
+
+    let result = if !buf.ptr.is_null() && buf.len > 0 {
+        #[allow(unsafe_code)]
+        let bytes = unsafe { std::slice::from_raw_parts(buf.ptr as *const u8, buf.len) };
+        String::from_utf8_lossy(bytes).into_owned()
+    } else {
+        "unknown".to_string()
+    };
+
+    // Free the buffer
     #[allow(unsafe_code)]
-    let cstr = unsafe { CStr::from_ptr(ptr) };
-    Ok(cstr.to_string_lossy().into_owned())
+    unsafe {
+        (symbols.free_buffer)(buf);
+    }
+
+    Ok(result)
 }
 
 /// Register callbacks for FFI operations.
@@ -131,6 +142,9 @@ pub unsafe fn invoke_runtime_cli(args: *const *const c_char) -> Result<c_int> {
 
 /// Call a BAML function.
 ///
+/// Returns a Buffer containing the InvocationResponse protobuf.
+/// The caller is responsible for decoding the buffer and freeing it.
+///
 /// # Safety
 /// All pointers must be valid.
 #[allow(unsafe_code)]
@@ -140,12 +154,15 @@ pub unsafe fn call_function_from_c(
     encoded_args: *const c_char,
     length: size_t,
     id: u32,
-) -> Result<*const c_void> {
+) -> Result<Buffer> {
     let symbols = get_symbols()?;
     Ok(unsafe { (symbols.call_function_from_c)(runtime, function_name, encoded_args, length, id) })
 }
 
 /// Call a BAML function with streaming.
+///
+/// Returns a Buffer containing the InvocationResponse protobuf.
+/// The caller is responsible for decoding the buffer and freeing it.
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -156,7 +173,7 @@ pub unsafe fn call_function_stream_from_c(
     encoded_args: *const c_char,
     length: size_t,
     id: u32,
-) -> Result<*const c_void> {
+) -> Result<Buffer> {
     let symbols = get_symbols()?;
     Ok(unsafe {
         (symbols.call_function_stream_from_c)(runtime, function_name, encoded_args, length, id)
@@ -164,6 +181,9 @@ pub unsafe fn call_function_stream_from_c(
 }
 
 /// Call a BAML function for parsing.
+///
+/// Returns a Buffer containing the InvocationResponse protobuf.
+/// The caller is responsible for decoding the buffer and freeing it.
 ///
 /// # Safety
 /// All pointers must be valid.
@@ -174,7 +194,7 @@ pub unsafe fn call_function_parse_from_c(
     encoded_args: *const c_char,
     length: size_t,
     id: u32,
-) -> Result<*const c_void> {
+) -> Result<Buffer> {
     let symbols = get_symbols()?;
     Ok(unsafe {
         (symbols.call_function_parse_from_c)(runtime, function_name, encoded_args, length, id)
@@ -183,10 +203,13 @@ pub unsafe fn call_function_parse_from_c(
 
 /// Cancel a function call.
 ///
+/// Returns a Buffer containing the InvocationResponse protobuf.
+/// The caller is responsible for decoding the buffer and freeing it.
+///
 /// # Safety
 /// The id must be a valid call ID.
 #[allow(unsafe_code)]
-pub unsafe fn cancel_function_call(id: u32) -> Result<*const c_void> {
+pub unsafe fn cancel_function_call(id: u32) -> Result<Buffer> {
     let symbols = get_symbols()?;
     Ok(unsafe { (symbols.cancel_function_call)(id) })
 }

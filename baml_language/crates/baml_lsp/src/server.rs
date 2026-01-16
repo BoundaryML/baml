@@ -563,6 +563,7 @@ impl Server {
                 work_done_progress_options: Default::default(),
             }),
             definition_provider: Some(lsp_types::OneOf::Left(true)),
+            references_provider: Some(lsp_types::OneOf::Left(true)),
             document_formatting_provider: None,
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             rename_provider: Some(lsp_types::OneOf::Left(true)),

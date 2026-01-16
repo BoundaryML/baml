@@ -1,3 +1,10 @@
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    sync::{Mutex, OnceLock},
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use libc::size_t;
 
 use super::*;
@@ -9,6 +16,50 @@ use crate::{
     },
     raw_ptr_wrapper::{CallMethod, RawPtrType},
 };
+
+// Buffer tracking logging (uses same BAML_FFI_LOG env var as raw_ptr_wrapper)
+fn ffi_log_file() -> Option<&'static str> {
+    static FILE: OnceLock<Option<String>> = OnceLock::new();
+    FILE.get_or_init(|| std::env::var("BAML_FFI_LOG").ok())
+        .as_deref()
+}
+
+fn ffi_log_mutex() -> &'static Mutex<()> {
+    static MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+    MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+fn timestamp_micros() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_micros())
+        .unwrap_or(0)
+}
+
+fn write_ffi_log(msg: &str) {
+    if let Some(path) = ffi_log_file() {
+        let _guard = ffi_log_mutex().lock().unwrap();
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "{}", msg);
+        }
+    }
+}
+
+macro_rules! ffi_log {
+    ($($arg:tt)*) => {
+        if ffi_log_file().is_some() {
+            let ts = timestamp_micros();
+            let msg = format!($($arg)*);
+            let msg = if msg.starts_with('[') {
+                let bracket_end = msg.find(']').unwrap_or(0);
+                format!("{} ts={}{}", &msg[..bracket_end], ts, &msg[bracket_end..])
+            } else {
+                format!("ts={} {}", ts, msg)
+            };
+            write_ffi_log(&msg);
+        }
+    };
+}
 
 struct BasicLookup;
 impl baml_types::baml_value::TypeLookups for BasicLookup {
@@ -28,6 +79,7 @@ impl Buffer {
         let ptr = buf.as_ptr() as *const i8;
         let len = buf.len();
         std::mem::forget(buf); // Prevent Rust from freeing the buffer
+        ffi_log!("[FFI_BUF_ALLOC] ptr={:#x} len={}", ptr as usize, len);
         Buffer { ptr, len }
     }
 }
@@ -83,6 +135,7 @@ fn call_object_constructor_impl(
 
 #[no_mangle]
 pub extern "C" fn free_buffer(buf: Buffer) {
+    ffi_log!("[FFI_BUF_FREE] ptr={:#x} len={}", buf.ptr as usize, buf.len);
     // Rebuild the Vec so Rust can drop it safely
     unsafe { Vec::from_raw_parts(buf.ptr as *mut u8, buf.len, buf.len) };
 }

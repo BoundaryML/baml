@@ -1,15 +1,31 @@
-use std::{collections::HashMap, ops::Deref, ptr::null, sync::Arc};
+use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use baml_types::BamlValue;
 use once_cell::sync::Lazy;
+use prost::Message;
 
 use super::*;
-use crate::ffi::{
-    callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
-    utils::handle_ffi_error,
+use crate::{
+    baml::cffi::{invocation_response::Response as CResponse, InvocationResponse},
+    ffi::callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
 };
+
+/// Encode a success response (task spawned successfully, no return value)
+fn encode_success_response() -> Buffer {
+    // Empty response means success - task was spawned
+    let msg = InvocationResponse { response: None };
+    Buffer::from(msg.encode_to_vec())
+}
+
+/// Encode an error response (failed to spawn task)
+fn encode_error_response(error: anyhow::Error) -> Buffer {
+    let msg = InvocationResponse {
+        response: Some(CResponse::Error(error.to_string())),
+    };
+    Buffer::from(msg.encode_to_vec())
+}
 
 /// cbindgen:ignore
 static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
@@ -17,6 +33,8 @@ static RUNTIME: Lazy<Arc<tokio::runtime::Runtime>> =
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
+/// Returns Buffer with InvocationResponse (empty on success, error message on failure).
+/// Caller must free with free_buffer().
 #[no_mangle]
 pub extern "C" fn call_function_from_c(
     runtime: *const libc::c_void,
@@ -24,13 +42,15 @@ pub extern "C" fn call_function_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> Buffer {
     match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
-        Ok(_) => null(),
-        Err(e) => handle_ffi_error(e),
+        Ok(_) => encode_success_response(),
+        Err(e) => encode_error_response(e),
     }
 }
 
+/// Returns Buffer with InvocationResponse (empty on success, error message on failure).
+/// Caller must free with free_buffer().
 #[no_mangle]
 pub extern "C" fn call_function_parse_from_c(
     runtime: *const libc::c_void,
@@ -38,10 +58,10 @@ pub extern "C" fn call_function_parse_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> Buffer {
     match call_function_parse_from_c_inner(runtime, function_name, encoded_args, length, id) {
-        Ok(_) => null(),
-        Err(e) => handle_ffi_error(e),
+        Ok(_) => encode_success_response(),
+        Err(e) => encode_error_response(e),
     }
 }
 
@@ -204,6 +224,8 @@ fn call_function_parse_from_c_inner(
 
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
+/// Returns Buffer with InvocationResponse (empty on success, error message on failure).
+/// Caller must free with free_buffer().
 #[no_mangle]
 pub extern "C" fn call_function_stream_from_c(
     runtime: *const libc::c_void,
@@ -211,10 +233,10 @@ pub extern "C" fn call_function_stream_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-) -> *const libc::c_void {
+) -> Buffer {
     match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id) {
-        Ok(_) => null(),
-        Err(e) => handle_ffi_error(e),
+        Ok(_) => encode_success_response(),
+        Err(e) => encode_error_response(e),
     }
 }
 
@@ -302,8 +324,10 @@ fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
 }
 
 /// Cancel a function call by its ID
+/// Returns Buffer with InvocationResponse (empty = success).
+/// Caller must free with free_buffer().
 #[no_mangle]
-pub extern "C" fn cancel_function_call(id: u32) -> *const libc::c_void {
+pub extern "C" fn cancel_function_call(id: u32) -> Buffer {
     trip_wire::cancel(id);
-    std::ptr::null()
+    encode_success_response()
 }

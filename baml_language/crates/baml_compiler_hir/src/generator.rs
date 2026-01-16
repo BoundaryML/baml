@@ -34,6 +34,7 @@ pub(crate) const VALID_OUTPUT_TYPES: &[&str] = &[
     "go",
     "rest/openapi",
     "boundary-cloud",
+    "rust",
 ];
 
 /// Valid values for `default_client_mode`.

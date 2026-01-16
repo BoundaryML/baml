@@ -1,13 +1,13 @@
 # Git Hooks Setup
 
-This repository includes Git hooks to ensure code quality before commits.
+This repository uses [prek](https://prek.j178.dev/) for pre-commit hooks.
 
 ## Setup
 
-Run the setup script to install the hooks:
+Install hooks with prek:
 
 ```bash
-./scripts/setup-hooks.sh
+prek install
 ```
 
 ## What the pre-commit hook does
@@ -16,36 +16,52 @@ The pre-commit hook automatically runs before each commit and:
 
 1. **Runs `cargo fmt --all`** in the `baml_language` directory to automatically format code
 2. **Runs `cargo clippy --fix`** to automatically fix clippy warnings where possible
-3. **Stages any auto-fixed changes** to include them in your commit
-4. **Verifies all checks pass** after auto-fixes are applied
+3. **Runs `cargo stow --check`** to validate workspace crate organization
+4. **Updates BEP README** if any BEP files changed
 
-If there are clippy warnings that can't be auto-fixed, the commit will be aborted with instructions.
+If there are issues that can't be auto-fixed, the commit will be aborted with instructions.
 
-## Bypassing the hooks (escape hatches)
+**Note:** Unlike the old hooks, prek does not auto-stage fixed files. If files are modified by the hooks, you'll need to `git add` them and commit again.
 
-Sometimes you need to commit work-in-progress or have a valid reason to skip the checks. You have three options:
+## Bypassing the hooks
+
+Sometimes you need to commit work-in-progress or have a valid reason to skip the checks:
 
 ### Option 1: Use --no-verify flag
+
 ```bash
 git commit --no-verify -m "WIP: experimental changes"
 ```
 
-### Option 2: Add [skip-checks] to commit message
+### Option 2: Skip specific hooks
+
 ```bash
-git commit -m "WIP: testing something [skip-checks]"
+SKIP=cargo-clippy git commit -m "message"
+# or
+PREK_SKIP=cargo-clippy git commit -m "message"
+
+Supports comma-separated values for multiple hooks:
+SKIP=cargo-clippy,cargo-fmt git commit -m "message"
 ```
 
-### Option 3: Set environment variable
+## Running hooks manually
+
 ```bash
-SKIP_CHECKS=1 git commit -m "WIP: quick save"
+# Run all hooks on all files
+prek run --all-files
+
+# Run a specific hook
+prek run cargo-fmt --all-files
 ```
 
 ## Manual fixes
 
 The hook automatically fixes most issues, but if it fails on clippy warnings that can't be auto-fixed:
 
-### For remaining clippy warnings:
+### For remaining clippy warnings
+
 Review the clippy output and fix the warnings manually. Common issues that need manual fixes:
+
 - Logic errors or potential bugs
 - Performance issues that require refactoring
 - Missing documentation on public items
@@ -55,19 +71,22 @@ Review the clippy output and fix the warnings manually. Common issues that need 
 ## Troubleshooting
 
 If the hook isn't running:
-1. Make sure you've run `./scripts/setup-hooks.sh`
+
+1. Make sure you've run `prek install`
 2. Check that `.git/hooks/pre-commit` exists and is executable
 3. Ensure you're committing from the repository root
 
 ## Disabling hooks permanently (not recommended)
 
 If you need to disable hooks for your local development:
+
 ```bash
 git config core.hooksPath /dev/null
 ```
 
 To re-enable:
+
 ```bash
 git config --unset core.hooksPath
-./scripts/setup-hooks.sh
+prek install
 ```

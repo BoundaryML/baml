@@ -53,8 +53,17 @@ func (d *DynamicClass) Decode(holder *cffi.CFFIValueClass, typeMap TypeMap) {
 		}
 		key := field.Key
 		valueHolder := field.Value
-		value, _ := Decode(valueHolder, typeMap)
-		d.Fields[key] = value.Elem()
+		value, goType := Decode(valueHolder, typeMap)
+		switch goType {
+		case reflect.TypeOf(int64(0)):
+			d.Fields[key] = value.Int()
+		case reflect.TypeOf(float64(0)):
+			d.Fields[key] = value.Float()
+		case reflect.TypeOf(false):
+			d.Fields[key] = value.Bool()
+		default:
+			d.Fields[key] = value.Interface()
+		}
 	}
 }
 
@@ -78,8 +87,17 @@ type DynamicUnion struct {
 
 func (d *DynamicUnion) Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap) {
 	d.Variant = string(holder.ValueOptionName)
-	value, _ := Decode(holder.Value, typeMap)
-	d.Value = value.Elem()
+	value, goType := Decode(holder.Value, typeMap)
+	switch goType {
+	case reflect.TypeOf(int64(0)):
+		d.Value = value.Int()
+	case reflect.TypeOf(float64(0)):
+		d.Value = value.Float()
+	case reflect.TypeOf(false):
+		d.Value = value.Bool()
+	default:
+		d.Value = value.Interface()
+	}
 }
 
 func decodeListValue(valueList *cffi.CFFIValueList, typeMap TypeMap) (reflect.Value, reflect.Type) {
@@ -224,10 +242,20 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant, typeMap TypeMap) (
 				// This is a fully dynamic union, so we
 				// decode the value as the value and drop
 				// union type information
-				value, _ := Decode(valueUnion.Value, typeMap)
+				value, goType := Decode(valueUnion.Value, typeMap)
 				dynamicUnion := DynamicUnion{
 					Variant: valueUnion.Name.Name,
-					Value:   value.Elem(),
+				}
+
+				switch goType {
+				case reflect.TypeOf(int64(0)):
+					dynamicUnion.Value = value.Int()
+				case reflect.TypeOf(float64(0)):
+					dynamicUnion.Value = value.Float()
+				case reflect.TypeOf(false):
+					dynamicUnion.Value = value.Bool()
+				default:
+					dynamicUnion.Value = value.Interface()
 				}
 				value = reflect.ValueOf(dynamicUnion)
 				goType = reflect.TypeOf(DynamicUnion{})

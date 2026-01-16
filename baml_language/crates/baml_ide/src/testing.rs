@@ -6,7 +6,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use baml_db::{Setter, SourceFile, baml_workspace::Project};
-use baml_project::ProjectDatabase;
+use baml_project::{ProjectDatabase, position::LineIndex};
 use text_size::TextSize;
 
 /// The cursor marker used in test sources.
@@ -72,6 +72,75 @@ impl CursorTest {
                 buf
             }
             None => "No hover content".to_string(),
+        }
+    }
+
+    /// Get goto-definition result at the cursor position.
+    ///
+    /// Returns the location of the definition as a string in the format:
+    /// - `"file.baml:line:col -> TARGET_NAME"` if definition found
+    /// - `"No definition found"` if no definition found
+    pub fn goto_definition(&self) -> String {
+        use crate::goto_definition::goto_definition;
+
+        let file_id = self.cursor.file.file_id(&self.db);
+        match goto_definition(&self.db, file_id, self.cursor.offset) {
+            Some(nav_target) => {
+                let filename = self
+                    .db
+                    .file_id_to_path(nav_target.span.file_id)
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown");
+
+                // Get the source text for the target file to convert offset to line:col
+                let source_files = self.db.get_source_files();
+                let position_str = source_files
+                    .iter()
+                    .find(|f| f.file_id(&self.db) == nav_target.span.file_id)
+                    .map(|source_file| {
+                        let text = source_file.text(&self.db);
+                        let line_index = LineIndex::new(text);
+                        let start_offset: u32 = nav_target.span.range.start().into();
+                        line_index
+                            .offset_to_position(start_offset)
+                            .map(|pos| format!("{}:{}", pos.line + 1, pos.character + 1))
+                            .unwrap_or_else(|| "?:?".to_string())
+                    })
+                    .unwrap_or_else(|| "?:?".to_string());
+
+                format!("{}:{} -> {}", filename, position_str, nav_target.name)
+            }
+            None => "No definition found".to_string(),
+        }
+    }
+
+    /// Find all references to the symbol at the cursor position.
+    ///
+    /// Returns a list of locations where the symbol is referenced.
+    pub fn find_all_references(&self) -> Vec<String> {
+        use crate::find_references::find_all_references;
+
+        let file_id = self.cursor.file.file_id(&self.db);
+        let references = find_all_references(&self.db, file_id, self.cursor.offset);
+
+        if references.is_empty() {
+            vec!["No references found".to_string()]
+        } else {
+            references
+                .into_iter()
+                .map(|reference| {
+                    // For simplicity, just return the filename
+                    let filename = self
+                        .db
+                        .file_id_to_path(reference.span.file_id)
+                        .and_then(|p| p.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
+
+                    filename.to_string()
+                })
+                .collect()
         }
     }
 }

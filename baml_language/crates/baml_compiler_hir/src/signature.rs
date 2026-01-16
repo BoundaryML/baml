@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use rowan::TextRange;
+use rowan::{TextRange, ast::AstNode};
 
 use crate::{Name, type_ref::TypeRef};
 
@@ -30,6 +30,8 @@ pub struct FunctionSignature {
 pub struct Param {
     pub name: Name,
     pub type_ref: TypeRef,
+    /// Span of the parameter (for diagnostics and IDE features)
+    pub span: Option<TextRange>,
 }
 
 impl FunctionSignature {
@@ -50,9 +52,13 @@ impl FunctionSignature {
                         .map(|t| TypeRef::from_ast(&t))
                         .unwrap_or(TypeRef::Unknown);
 
+                    // Get the span of the entire parameter
+                    let span = Some(param_node.syntax().text_range());
+
                     params.push(Param {
                         name: Name::new(name_token.text()),
                         type_ref,
+                        span,
                     });
                 }
             }

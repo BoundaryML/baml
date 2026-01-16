@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -143,22 +143,22 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected ')', found identifier
+  [parse] Error: Unexpected 'string' in type expression
    ╭─[ partial_input.baml:7:10 ]
    │
  7 │   field5 string  // This should parse correctly
    │          ───┬──  
-   │             ╰──── Expected ')', found identifier
+   │             ╰──── Unexpected 'string' in type expression
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:7:10 ]
+  [parse] Error: Expected ')', found '}'
+   ╭─[ partial_input.baml:8:1 ]
    │
- 7 │   field5 string  // This should parse correctly
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected ')', found '}'
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -251,20 +251,4 @@ expression: output
    │  ╰── Expected '}', found EOF
    │ 
    │ Note: Error code: E0010
-───╯
-
-  [hir] Error: Duplicate field `string` in class `Partial`
-   ╭─[ partial_input.baml:7:10 ]
-   │
- 7 │   field5 string  // This should parse correctly
-   │          ───┬──  
-   │             ╰──── duplicate definition
-   │
-   ├─[ partial_input.baml:7:10 ]
-   │
- 6 │   field4 string @alias(  // Unclosed attribute
-   │          ───┬──  
-   │             ╰──── first definition here
-   │ 
-   │ Note: Error code: E0012
 ───╯

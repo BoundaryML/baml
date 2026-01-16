@@ -26,6 +26,7 @@ use rowan::{SyntaxToken, TextRange, ast::AstNode};
 // Module declarations
 mod body;
 mod client;
+pub mod fqn;
 mod generator;
 mod generics;
 mod ids;
@@ -35,11 +36,13 @@ mod path;
 pub mod pretty;
 pub mod reserved_names;
 mod signature;
+pub mod symbol_table;
 mod test;
 mod type_ref;
 
 // Re-exports
 pub use body::*;
+pub use fqn::*;
 pub use generics::*;
 pub use ids::*;
 pub use item_tree::*;
@@ -49,6 +52,7 @@ pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
 pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};
+pub use symbol_table::*;
 pub use type_ref::*;
 
 //
@@ -309,9 +313,13 @@ fn lower_method_signature(
                         .unwrap_or(TypeRef::Unknown)
                 };
 
+                // Get the span of the entire parameter
+                let span = Some(param_node.syntax().text_range());
+
                 params.push(Param {
                     name: Name::new(param_name),
                     type_ref,
+                    span,
                 });
             }
         }
@@ -725,6 +733,11 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 seen_fields.insert(field_name.clone(), field_span);
             }
 
+            // Extract field attributes
+            let mut field_alias = Attribute::Unset;
+            let mut field_description = Attribute::Unset;
+            let mut field_skip = Attribute::Unset;
+
             // Validate field attributes for duplicates and constraint syntax
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in field_node.attributes() {
@@ -739,24 +752,84 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_field_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "class",
-                            container_name: name.to_string(),
-                            field_name: field_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_field_attrs.insert(attr_name.clone(), attr_span);
+                    // check and assert are allowed multiple times on a field
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_field_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "class",
+                                container_name: name.to_string(),
+                                field_name: field_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_field_attrs.insert(attr_name.clone(), attr_span);
+                        }
                     }
 
-                    // Validate constraint attribute syntax (@check, @assert)
-                    if attr_name == "check" || attr_name == "assert" {
-                        validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
+                    // Extract and validate attribute values
+                    match attr_name.as_str() {
+                        "alias" => {
+                            // @alias requires exactly one string literal argument
+                            if attr.has_single_string_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    field_alias = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "description" => {
+                            // @description accepts quoted or unquoted strings
+                            if attr.has_single_string_or_unquoted_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    field_description = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "skip" => {
+                            // @skip takes no arguments
+                            if attr.has_args() {
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            field_skip = Attribute::Explicit(());
+                        }
+                        "check" | "assert" => {
+                            // Validate constraint attribute syntax
+                            validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
+                        }
+                        _ => {
+                            // Other attributes (stream.done, etc.) - just validate duplicates
+                        }
                     }
                 }
+            }
+
+            // Validate map type arity before converting to TypeRef
+            if let Some(type_expr) = field_node.ty() {
+                validate_map_type_arity(&type_expr, ctx);
             }
 
             let type_ref = field_node
@@ -767,13 +840,18 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
             fields.push(crate::Field {
                 name: field_name,
                 type_ref,
+                alias: field_alias,
+                description: field_description,
+                skip: field_skip,
             });
         }
     }
 
     // Track seen block attributes for duplicate detection
     let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
-    let mut is_dynamic = false;
+    let mut class_is_dynamic = Attribute::Unset;
+    let mut class_alias = Attribute::Unset;
+    let mut class_description = Attribute::Unset;
 
     // Validate block attributes
     for attr in class.block_attributes() {
@@ -802,9 +880,54 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 seen_attrs.insert(attr_name.clone(), attr_span);
             }
 
-            // Track is_dynamic
-            if attr_name == "dynamic" {
-                is_dynamic = true;
+            // Extract and validate attribute values
+            match attr_name.as_str() {
+                "dynamic" => {
+                    // @@dynamic takes no arguments
+                    if attr.has_args() {
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                        });
+                    }
+                    class_is_dynamic = Attribute::Explicit(());
+                }
+                "alias" => {
+                    // @@alias requires exactly one string literal argument
+                    if attr.has_single_string_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            class_alias = Attribute::Explicit(value);
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                "description" => {
+                    // @@description accepts quoted or unquoted strings
+                    if attr.has_single_string_or_unquoted_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            class_description = Attribute::Explicit(value);
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                _ => {
+                    // Other attributes - just validate duplicates
+                }
             }
         }
     }
@@ -812,7 +935,9 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
     Some(Class {
         name,
         fields,
-        is_dynamic,
+        is_dynamic: class_is_dynamic,
+        alias: class_alias,
+        description: class_description,
     })
 }
 
@@ -879,6 +1004,11 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                 seen_variants.insert(variant_name.clone(), variant_span);
             }
 
+            // Extract variant attributes
+            let mut variant_alias = Attribute::Unset;
+            let mut variant_description = Attribute::Unset;
+            let mut variant_skip = Attribute::Unset;
+
             // Validate variant attributes for duplicates
             let mut seen_variant_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in variant.attributes() {
@@ -893,27 +1023,89 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                                     .unwrap_or_default()
                             });
 
-                    if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
-                        ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
-                            container_kind: "enum",
-                            container_name: name.to_string(),
-                            field_name: variant_name.to_string(),
-                            attr_name: attr_name.clone(),
-                            first_span: *first_span,
-                            second_span: attr_span,
-                        });
-                    } else {
-                        seen_variant_attrs.insert(attr_name, attr_span);
+                    // check and assert are allowed multiple times on a variant
+                    if attr_name != "check" && attr_name != "assert" {
+                        if let Some(first_span) = seen_variant_attrs.get(&attr_name) {
+                            ctx.push_diagnostic(HirDiagnostic::DuplicateFieldAttribute {
+                                container_kind: "enum",
+                                container_name: name.to_string(),
+                                field_name: variant_name.to_string(),
+                                attr_name: attr_name.clone(),
+                                first_span: *first_span,
+                                second_span: attr_span,
+                            });
+                        } else {
+                            seen_variant_attrs.insert(attr_name.clone(), attr_span);
+                        }
+                    }
+
+                    // Extract and validate attribute values
+                    match attr_name.as_str() {
+                        "alias" => {
+                            // @alias requires exactly one string literal argument
+                            if attr.has_single_string_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    variant_alias = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "description" => {
+                            // @description accepts quoted or unquoted strings
+                            if attr.has_single_string_or_unquoted_arg() {
+                                if let Some(value) = attr.string_arg() {
+                                    variant_description = Attribute::Explicit(value);
+                                }
+                            } else {
+                                // Invalid: wrong number of args or wrong type
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                    received: describe_attribute_args(&attr),
+                                });
+                            }
+                        }
+                        "skip" => {
+                            // @skip takes no arguments
+                            if attr.has_args() {
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            variant_skip = Attribute::Explicit(());
+                        }
+                        _ => {
+                            // Other attributes - just validate duplicates
+                        }
                     }
                 }
             }
 
-            variants.push(crate::EnumVariant { name: variant_name });
+            variants.push(crate::EnumVariant {
+                name: variant_name,
+                alias: variant_alias,
+                description: variant_description,
+                skip: variant_skip,
+            });
         }
     }
 
     // Track seen block attributes for duplicate detection
     let mut seen_attrs: FxHashMap<String, Span> = FxHashMap::default();
+    let mut enum_alias = Attribute::Unset;
 
     // Validate block attributes
     for attr in enum_def.block_attributes() {
@@ -939,12 +1131,39 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                     second_span: attr_span,
                 });
             } else {
-                seen_attrs.insert(attr_name, attr_span);
+                seen_attrs.insert(attr_name.clone(), attr_span);
+            }
+
+            // Extract and validate attribute values
+            match attr_name.as_str() {
+                "alias" => {
+                    // @@alias requires exactly one string literal argument
+                    if attr.has_single_string_arg() {
+                        if let Some(value) = attr.string_arg() {
+                            enum_alias = Attribute::Explicit(value);
+                        }
+                    } else {
+                        // Invalid: wrong number of args or wrong type
+                        let arg_span = attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                        ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                            attr_name: attr_name.clone(),
+                            span: arg_span,
+                            received: describe_block_attribute_args(&attr),
+                        });
+                    }
+                }
+                _ => {
+                    // Other attributes - just validate duplicates
+                }
             }
         }
     }
 
-    Some(Enum { name, variants })
+    Some(Enum {
+        name,
+        variants,
+        alias: enum_alias,
+    })
 }
 
 /// Extract function definition from CST - MINIMAL VERSION.
@@ -989,6 +1208,9 @@ use rustc_hash::FxHashMap;
 struct ItemInfo {
     span: Span,
     path: String,
+    kind: &'static str,
+    /// Whether we've already emitted an error for this item as the "first definition".
+    first_error_emitted: bool,
 }
 
 /// Result of HIR validation.
@@ -1031,8 +1253,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Function(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let func = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let func = &item_tree[local_id];
+                let span =
+                    get_item_name_span(db, file, "function", func.name.as_str(), local_id.index())
+                        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1046,8 +1271,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Class(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let class = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let class = &item_tree[local_id];
+                let span =
+                    get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
+                        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1061,8 +1289,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let enum_def = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let enum_def = &item_tree[local_id];
+                let span =
+                    get_item_name_span(db, file, "enum", enum_def.name.as_str(), local_id.index())
+                        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1076,8 +1307,16 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let alias = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let alias = &item_tree[local_id];
+                let span = get_item_name_span(
+                    db,
+                    file,
+                    "type alias",
+                    alias.name.as_str(),
+                    local_id.index(),
+                )
+                .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1091,8 +1330,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Client(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let client = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let client = &item_tree[local_id];
+                let span =
+                    get_item_name_span(db, file, "client", client.name.as_str(), local_id.index())
+                        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1106,8 +1348,16 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
             ItemId::Generator(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let generator = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let generator = &item_tree[local_id];
+                let span = get_item_name_span(
+                    db,
+                    file,
+                    "generator",
+                    generator.name.as_str(),
+                    local_id.index(),
+                )
+                .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
                 check_duplicate(
                     &mut seen,
@@ -1122,8 +1372,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 // Tests are validated separately: only same name + same function is a duplicate
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
-                let test = &item_tree[loc.id(db)];
-                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+                let local_id = loc.id(db);
+                let test = &item_tree[local_id];
+                let span =
+                    get_item_name_span(db, file, "test", test.name.as_str(), local_id.index())
+                        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
 
                 // Check each function reference in the test
@@ -1144,6 +1397,8 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                             ItemInfo {
                                 span,
                                 path: path.clone(),
+                                kind: "test",
+                                first_error_emitted: false,
                             },
                         );
                     }
@@ -1190,6 +1445,165 @@ fn validate_constraint_attribute(
     }
 }
 
+/// Describe what was received in an attribute's arguments.
+///
+/// Used to produce error messages like "Expected @alias("..."), but got ..."
+fn describe_attribute_args(attr: &baml_compiler_syntax::Attribute) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let arg_count = attr.arg_count();
+
+    match arg_count {
+        0 => "no arguments".to_string(),
+        1 => {
+            // Single argument - describe its type
+            if let Some(arg) = attr.args().next() {
+                match arg.kind() {
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        // This shouldn't happen if we're calling this function,
+                        // but handle it gracefully
+                        format!("`{}`", arg.text())
+                    }
+                    SyntaxKind::EXPR => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    SyntaxKind::UNQUOTED_STRING => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    _ => "an unknown value".to_string(),
+                }
+            } else {
+                "an unknown value".to_string()
+            }
+        }
+        n => format!("{n} arguments"),
+    }
+}
+
+/// Describe what was received in a block attribute's arguments.
+fn describe_block_attribute_args(attr: &baml_compiler_syntax::ast::BlockAttribute) -> String {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let arg_count = attr.arg_count();
+
+    match arg_count {
+        0 => "no arguments".to_string(),
+        1 => {
+            // Single argument - describe its type
+            if let Some(arg) = attr.args().next() {
+                match arg.kind() {
+                    SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                        format!("`{}`", arg.text())
+                    }
+                    SyntaxKind::EXPR => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    SyntaxKind::UNQUOTED_STRING => {
+                        let text = arg.text().to_string();
+                        format!("an expression `{text}`")
+                    }
+                    _ => "an unknown value".to_string(),
+                }
+            } else {
+                "an unknown value".to_string()
+            }
+        }
+        n => format!("{n} arguments"),
+    }
+}
+
+/// Count the number of top-level generic parameters in a map type.
+///
+/// For `string, int` returns 2 (correct for map).
+/// For `string, string, string` returns 3 (error: too many params).
+/// For `string` returns 1 (error: too few params).
+fn count_generic_params(s: &str) -> usize {
+    if s.trim().is_empty() {
+        return 0;
+    }
+    let mut depth = 0;
+    let mut count = 1; // Start at 1 because we count separators + 1
+    for c in s.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => count += 1,
+            _ => {}
+        }
+    }
+    count
+}
+
+/// Validate map type arity in a type expression.
+///
+/// Maps require exactly 2 type parameters: `map<K, V>`.
+/// This function checks for cases like `map<string, string, string>` (3 params).
+fn validate_map_type_arity(
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    // Get all parts (handles union types like `string | map<...>`)
+    for part in type_expr.parts() {
+        validate_map_type_in_text(&part, type_expr, ctx);
+    }
+}
+
+/// Recursively validate map types in a type text string.
+fn validate_map_type_in_text(
+    text: &str,
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    // Check if this is a map type
+    if let Some(rest) = text.strip_prefix("map<") {
+        if let Some(inner) = rest.strip_suffix('>') {
+            let param_count = count_generic_params(inner);
+            if param_count != 2 {
+                ctx.push_diagnostic(HirDiagnostic::InvalidMapArity {
+                    expected: 2,
+                    found: param_count,
+                    span: ctx.span(type_expr.syntax().text_range()),
+                });
+            } else {
+                // Recursively check nested types in both key and value
+                if let Some(comma_idx) = find_top_level_comma(inner) {
+                    let key_text = inner[..comma_idx].trim();
+                    let value_text = inner[comma_idx + 1..].trim();
+                    validate_map_type_in_text(key_text, type_expr, ctx);
+                    validate_map_type_in_text(value_text, type_expr, ctx);
+                }
+            }
+        }
+    }
+
+    // Also check for nested maps in array types (e.g., `map<string, string, string>[]`)
+    if let Some(inner_text) = text.strip_suffix("[]") {
+        validate_map_type_in_text(inner_text, type_expr, ctx);
+    }
+
+    // Check for nested maps in optional types (e.g., `map<string, string, string>?`)
+    if let Some(inner_text) = text.strip_suffix('?') {
+        validate_map_type_in_text(inner_text, type_expr, ctx);
+    }
+}
+
+/// Find the index of the first top-level comma in a string.
+fn find_top_level_comma(s: &str) -> Option<usize> {
+    let mut depth = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth -= 1,
+            ',' if depth == 0 => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Helper to check for duplicate names and record errors.
 fn check_duplicate(
     seen: &mut FxHashMap<Name, ItemInfo>,
@@ -1199,7 +1613,21 @@ fn check_duplicate(
     span: Span,
     path: String,
 ) {
-    if let Some(existing) = seen.get(&name) {
+    if let Some(existing) = seen.get_mut(&name) {
+        // If this is the first duplicate we've seen, also emit an error for the first definition
+        if !existing.first_error_emitted {
+            errors.push(NameError::DuplicateName {
+                name: name.to_string(),
+                kind: existing.kind,
+                first: span,
+                first_path: path.clone(),
+                second: existing.span,
+                second_path: existing.path.clone(),
+            });
+            existing.first_error_emitted = true;
+        }
+
+        // Emit error for the current (duplicate) definition
         errors.push(NameError::DuplicateName {
             name: name.to_string(),
             kind,
@@ -1209,7 +1637,15 @@ fn check_duplicate(
             second_path: path,
         });
     } else {
-        seen.insert(name, ItemInfo { span, path });
+        seen.insert(
+            name,
+            ItemInfo {
+                span,
+                path,
+                kind,
+                first_error_emitted: false,
+            },
+        );
     }
 }
 
@@ -1318,6 +1754,137 @@ fn get_enum_variant_info(
     None
 }
 
+/// Look up the span of a top-level item's name from the syntax tree.
+///
+/// This is used to get accurate spans for duplicate name errors, since the
+/// `ItemTree` is position-independent and doesn't store spans.
+///
+/// The `occurrence` parameter specifies which occurrence to return (0 = first, 1 = second, etc.)
+/// when there are multiple items of the same kind with the same name in the file.
+/// This corresponds to the collision index in `LocalItemId`.
+fn get_item_name_span(
+    db: &dyn Db,
+    file: baml_base::files::SourceFile,
+    kind: &str,
+    name: &str,
+    occurrence: u16,
+) -> Option<Span> {
+    use baml_compiler_syntax::{
+        SyntaxKind,
+        ast::{ClassDef, ClientDef, EnumDef, FunctionDef, GeneratorDef, TestDef, TypeAliasDef},
+    };
+
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let file_id = file.file_id(db);
+    let mut matches_found: u16 = 0;
+
+    for node in tree.children() {
+        match kind {
+            "function" if node.kind() == SyntaxKind::FUNCTION_DEF => {
+                if let Some(func) = FunctionDef::cast(node) {
+                    if let Some(name_token) = func.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            // Also search for functions (methods) inside class definitions
+            "function" if node.kind() == SyntaxKind::CLASS_DEF => {
+                if let Some(class) = ClassDef::cast(node) {
+                    for method in class.methods() {
+                        if let Some(name_token) = method.name() {
+                            if name_token.text() == name {
+                                if matches_found == occurrence {
+                                    return Some(Span::new(file_id, name_token.text_range()));
+                                }
+                                matches_found += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            "class" if node.kind() == SyntaxKind::CLASS_DEF => {
+                if let Some(class) = ClassDef::cast(node) {
+                    if let Some(name_token) = class.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "enum" if node.kind() == SyntaxKind::ENUM_DEF => {
+                if let Some(enum_def) = EnumDef::cast(node) {
+                    if let Some(name_token) = enum_def.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "type alias" if node.kind() == SyntaxKind::TYPE_ALIAS_DEF => {
+                if let Some(alias) = TypeAliasDef::cast(node) {
+                    if let Some(name_token) = alias.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "client" if node.kind() == SyntaxKind::CLIENT_DEF => {
+                if let Some(client) = ClientDef::cast(node) {
+                    if let Some(name_token) = client.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "generator" if node.kind() == SyntaxKind::GENERATOR_DEF => {
+                if let Some(generator) = GeneratorDef::cast(node) {
+                    if let Some(name_token) = generator.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "test" if node.kind() == SyntaxKind::TEST_DEF => {
+                if let Some(test) = TestDef::cast(node) {
+                    if let Some(name_token) = test.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Validate that field names and function parameters don't use reserved keywords.
 ///
 /// This checks:
@@ -1409,8 +1976,8 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
                 // Skip if field has an @alias attribute
                 if has_python && !has_alias {
                     if let Some(type_name) = get_base_type_name(&field.type_ref) {
-                        // Compare case-insensitively for Python
-                        if field_name.to_lowercase() == type_name.to_lowercase() {
+                        // Compare case-sensitively - only error if exactly the same
+                        if field_name == type_name {
                             errors.push(HirDiagnostic::FieldNameMatchesTypeName {
                                 class_name: class_name.to_string(),
                                 field_name: field_name.to_string(),
@@ -1501,4 +2068,144 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
     }
 
     errors
+}
+
+//
+// ──────────────────────────────────────────────────── DEFINITION SPANS ─────
+//
+
+/// Returns the span of a definition's name in the source code.
+///
+/// Walks the AST to find the item definition and returns the text range of
+/// its name token. Used by IDE features like goto-definition.
+///
+/// Note: This is not a Salsa tracked function because `Definition` is a plain
+/// enum, not a Salsa struct. However, the underlying queries (item trees,
+/// syntax trees) are cached, so this is still efficient.
+pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
+    let (file, kind, name, index) = match def {
+        Definition::Function(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "function",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::Class(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "class",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::Enum(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "enum",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::TypeAlias(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "type alias",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::Client(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "client",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::Generator(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "generator",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::Test(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "test",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+    };
+
+    get_item_name_span(db, file, kind, name.as_str(), index)
+        .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())))
+}
+
+/// Returns the span of a class field's name in the source code.
+///
+/// Walks the AST to find the class definition and then the field within it.
+/// Returns the text range of the field's name token.
+pub fn class_field_name_span(
+    db: &dyn Db,
+    class_loc: ClassLoc<'_>,
+    field_name: &str,
+) -> Option<Span> {
+    use baml_compiler_syntax::{SyntaxKind, ast::ClassDef};
+
+    let file = class_loc.file(db);
+    let file_id = file.file_id(db);
+    let item_tree = file_item_tree(db, file);
+    let class_data = &item_tree[class_loc.id(db)];
+    let class_name = class_data.name.as_str();
+    let occurrence = class_loc.id(db).index();
+
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let mut matches_found: u16 = 0;
+
+    for node in tree.children() {
+        if node.kind() == SyntaxKind::CLASS_DEF {
+            if let Some(class) = ClassDef::cast(node) {
+                if let Some(name_token) = class.name() {
+                    if name_token.text() == class_name {
+                        if matches_found == occurrence {
+                            // Found the right class, now find the field
+                            for field in class.fields() {
+                                if let Some(field_name_token) = field.name() {
+                                    if field_name_token.text() == field_name {
+                                        return Some(Span::new(
+                                            file_id,
+                                            field_name_token.text_range(),
+                                        ));
+                                    }
+                                }
+                            }
+                            return None; // Class found but field not found
+                        }
+                        matches_found += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }

@@ -8,7 +8,7 @@
 // Function declarations for the wrapper functions
 
 void SetVersionFn(void *fn);
-const char *WrapVersion();
+Buffer WrapVersion();
 
 void SetCreateBamlRuntimeFn(void *fn);
 const void *WrapCreateBamlRuntime(const char *root_path, const char *src_files_json, const char *env_vars_json);
@@ -23,10 +23,10 @@ void SetRegisterCallbacksFn(void *fn);
 void WrapRegisterCallbacks(CallbackFn callback_fn, CallbackFn error_callback_fn, OnTickCallbackFn on_tick_callback_fn);
 
 void SetCallFunctionFromCFn(void *fn);
-const void *WrapCallFunctionFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
+Buffer WrapCallFunctionFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
 
 void SetCallFunctionStreamFromCFn(void *fn);
-const void *WrapCallFunctionStreamFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
+Buffer WrapCallFunctionStreamFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
 
 void SetCallObjectConstructorFn(void *fn);
 Buffer WrapCallObjectConstructor(const char *encoded_args, uintptr_t length);
@@ -35,10 +35,10 @@ void SetCallObjectMethodFunctionFn(void *fn);
 Buffer WrapCallObjectMethodFunction(const void *runtime, const char *encoded_args, uintptr_t length);
 
 void SetCallFunctionParseFromCFn(void *fn);
-const void *WrapCallFunctionParseFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
+Buffer WrapCallFunctionParseFromC(const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id);
 
 void SetCancelFunctionCallFn(void *fn);
-void WrapCancelFunctionCall(uint32_t id);
+Buffer WrapCancelFunctionCall(uint32_t id);
 
 void SetFreeBufferFn(void *fn);
 void WrapFreeBuffer(Buffer buffer);

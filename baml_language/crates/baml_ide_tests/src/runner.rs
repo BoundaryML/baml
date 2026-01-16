@@ -120,45 +120,45 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     };
 
     // 5. Handle cursor-based completions
-    let completion_result =
-        if !parsed.cursor_markers.is_empty() && parsed.expected_completions.is_some() {
-            let db = lsp_db.db();
-            let project = lsp_db.project().expect("Project should be set");
-            let expected = parsed.expected_completions.as_ref().unwrap();
+    let completion_result = if !parsed.cursor_markers.is_empty()
+        && parsed.expected_completions.is_some()
+    {
+        let db = lsp_db.db();
+        let project = lsp_db.project().expect("Project should be set");
+        let expected = parsed.expected_completions.as_ref().unwrap();
 
-            // Collect all completion labels from all cursor positions
-            let mut all_labels: std::collections::HashSet<String> =
-                std::collections::HashSet::new();
+        // Collect all completion labels from all cursor positions
+        let mut all_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-            for marker in &parsed.cursor_markers {
-                let source_file = file_map[&marker.file];
-                let offset = TextSize::from(marker.offset as u32);
-                let completions = baml_ide::complete(db, source_file, project, offset);
+        for marker in &parsed.cursor_markers {
+            let source_file = file_map[&marker.file];
+            let offset = TextSize::from(marker.offset as u32);
+            let completions = baml_ide::complete(db, source_file, project, offset);
 
-                for item in completions {
-                    all_labels.insert(item.label);
-                }
+            for item in completions {
+                all_labels.insert(item.label);
             }
+        }
 
-            // Check which expected items are missing
-            let found_labels: Vec<String> = all_labels.into_iter().collect();
-            let missing_labels: Vec<String> = expected
-                .should_contain
-                .iter()
-                .filter(|label| !found_labels.contains(label))
-                .cloned()
-                .collect();
+        // Check which expected items are missing
+        let found_labels: Vec<String> = all_labels.into_iter().collect();
+        let missing_labels: Vec<String> = expected
+            .should_contain
+            .iter()
+            .filter(|label| !found_labels.contains(label))
+            .cloned()
+            .collect();
 
-            let passed = missing_labels.is_empty();
+        let passed = missing_labels.is_empty();
 
-            Some(CompletionTestResult {
-                found_labels,
-                missing_labels,
-                passed,
-            })
-        } else {
-            None
-        };
+        Some(CompletionTestResult {
+            found_labels,
+            missing_labels,
+            passed,
+        })
+    } else {
+        None
+    };
 
     // 6. Compare against expectations
     let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
@@ -364,8 +364,7 @@ mod tests {
         assert!(
             comp.passed,
             "Completion test should pass. Missing: {:?}, Found: {:?}",
-            comp.missing_labels,
-            comp.found_labels
+            comp.missing_labels, comp.found_labels
         );
     }
 }

@@ -20,8 +20,10 @@ workspace = true
 [dependencies]
 baml_db = { workspace = true }
 baml_project = { workspace = true }
+rowan = { workspace = true }
 smol_str = { workspace = true }
 text-size = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 # Add dev dependencies if needed for tests

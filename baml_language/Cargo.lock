@@ -373,8 +373,8 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_tests",
- "baml_vm_types",
  "baml_workspace",
+ "bex_vm_types",
  "insta",
  "la-arena",
  "salsa",
@@ -393,6 +393,7 @@ dependencies = [
  "rowan 0.16.1",
  "rustc-hash 2.1.1",
  "salsa",
+ "smol_str",
 ]
 
 [[package]]
@@ -499,8 +500,10 @@ version = "0.0.0"
 dependencies = [
  "baml_db",
  "baml_project",
+ "rowan 0.16.1",
  "smol_str",
  "text-size",
+ "tracing",
 ]
 
 [[package]]
@@ -625,9 +628,9 @@ dependencies = [
  "baml_compiler_tir",
  "baml_db",
  "baml_project",
- "baml_vm",
- "baml_vm_types",
  "baml_workspace",
+ "bex_vm",
+ "bex_vm_types",
  "codspeed-divan-compat",
  "indexmap 2.13.0",
  "insta",
@@ -657,9 +660,9 @@ dependencies = [
  "baml_compiler_vir",
  "baml_db",
  "baml_project",
- "baml_vm",
- "baml_vm_types",
  "baml_workspace",
+ "bex_vm",
+ "bex_vm_types",
  "clap",
  "crossterm",
  "notify",
@@ -682,41 +685,6 @@ dependencies = [
  "thiserror 2.0.17",
  "toml",
  "toml_edit 0.22.27",
-]
-
-[[package]]
-name = "baml_vm"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "baml_base",
- "baml_builtins",
- "baml_builtins_macros",
- "baml_compiler_emit",
- "baml_tests",
- "baml_vm_types",
- "codspeed-divan-compat",
- "colored",
- "indexmap 2.13.0",
- "paste",
- "tokio",
-]
-
-[[package]]
-name = "baml_vm_types"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "baml_base",
- "baml_builtins",
- "baml_builtins_macros",
- "baml_compiler_emit",
- "baml_tests",
- "codspeed-divan-compat",
- "colored",
- "indexmap 2.13.0",
- "paste",
- "tokio",
 ]
 
 [[package]]
@@ -746,6 +714,41 @@ name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+
+[[package]]
+name = "bex_vm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_builtins",
+ "baml_builtins_macros",
+ "baml_compiler_emit",
+ "baml_tests",
+ "bex_vm_types",
+ "codspeed-divan-compat",
+ "colored",
+ "indexmap 2.13.0",
+ "paste",
+ "tokio",
+]
+
+[[package]]
+name = "bex_vm_types"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_builtins",
+ "baml_builtins_macros",
+ "baml_compiler_emit",
+ "baml_tests",
+ "codspeed-divan-compat",
+ "colored",
+ "indexmap 2.13.0",
+ "paste",
+ "tokio",
+]
 
 [[package]]
 name = "bitflags"

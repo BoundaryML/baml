@@ -11,7 +11,7 @@ use baml_compiler_syntax::SyntaxNode;
 use rowan::ast::AstNode;
 
 use crate::{
-    LoweringContext,
+    Attribute, LoweringContext,
     item_tree::{Test, TypeBuilderBlock, TypeBuilderEntry},
     lower_class, lower_enum, lower_type_alias,
 };
@@ -141,7 +141,7 @@ fn lower_type_builder_block(
         if let Some(class_def) = dynamic_def.class() {
             if let Some(mut class) = lower_class(class_def.syntax(), ctx) {
                 // Mark as dynamic (override the is_dynamic from parsing)
-                class.is_dynamic = true;
+                class.is_dynamic = Attribute::Explicit(());
                 entries.push(TypeBuilderEntry::DynamicClass(class));
             }
         } else if let Some(enum_def) = dynamic_def.enum_def() {

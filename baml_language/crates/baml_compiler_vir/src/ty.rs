@@ -1,11 +1,11 @@
 //! Type system for VIR.
 //!
 //! Types are fully resolved - no unresolved references. Class and Enum IDs
-//! from TIR are resolved to their names during lowering.
+//! from TIR are resolved to their fully-qualified names during lowering.
 
 use std::fmt;
 
-use baml_base::Name;
+use baml_compiler_hir::FullyQualifiedName;
 
 /// A resolved type in BAML.
 ///
@@ -23,11 +23,14 @@ pub enum Ty {
     // Media types
     Media(baml_base::MediaKind),
 
-    /// Class type with resolved name.
-    Class(Name),
+    /// Class type with resolved FQN.
+    Class(FullyQualifiedName),
 
-    /// Enum type with resolved name.
-    Enum(Name),
+    /// Enum type with resolved FQN.
+    Enum(FullyQualifiedName),
+
+    /// Type alias with resolved FQN.
+    TypeAlias(FullyQualifiedName),
 
     // Type constructors
     Optional(Box<Ty>),
@@ -146,8 +149,9 @@ impl fmt::Display for Ty {
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
             Ty::Media(kind) => write!(f, "{kind}"),
-            Ty::Class(name) => write!(f, "{name}"),
-            Ty::Enum(name) => write!(f, "{name}"),
+            Ty::Class(fqn) => write!(f, "{fqn}"),
+            Ty::Enum(fqn) => write!(f, "{fqn}"),
+            Ty::TypeAlias(fqn) => write!(f, "{fqn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),

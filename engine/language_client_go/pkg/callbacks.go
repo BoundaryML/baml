@@ -8,9 +8,12 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"os"
 	"reflect"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
@@ -55,10 +58,49 @@ type OnTickCallbackData interface {
 
 // Map to store callbacks by ID
 var (
-	dynamicCallbacks = make(map[uint32]CallbackData)
-	callbackMutex    sync.RWMutex
-	typeMap          serde.TypeMap
+	dynamicCallbacks   = make(map[uint32]CallbackData)
+	callbackMutex      sync.RWMutex
+	typeMap            serde.TypeMap
+	callbackLogFile    *os.File
+	callbackLogFileMu  sync.Mutex
+	callbackLogOnce    sync.Once
 )
+
+// getCallbackLogFile returns the log file for client callback events, or nil if logging is disabled
+func getCallbackLogFile() *os.File {
+	callbackLogOnce.Do(func() {
+		if path := os.Getenv("BAML_FFI_CLIENT_LOG"); path != "" {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				callbackLogFile = f
+			}
+		}
+	})
+	return callbackLogFile
+}
+
+// callbackLog writes a log message to the Go FFI log file with timestamp
+func callbackLog(format string, args ...any) {
+	if f := getCallbackLogFile(); f != nil {
+		callbackLogFileMu.Lock()
+		defer callbackLogFileMu.Unlock()
+		ts := time.Now().UnixMicro()
+		msg := fmt.Sprintf(format, args...)
+		// Insert timestamp after the opening bracket
+		if len(msg) > 0 && msg[0] == '[' {
+			bracketEnd := 0
+			for i, c := range msg {
+				if c == ']' {
+					bracketEnd = i
+					break
+				}
+			}
+			fmt.Fprintf(f, "%s ts=%d%s\n", msg[:bracketEnd], ts, msg[bracketEnd:])
+		} else {
+			fmt.Fprintf(f, "ts=%d %s\n", ts, msg)
+		}
+	}
+}
 
 func SetTypeMap(t map[string]reflect.Type) {
 	typeMap = serde.NewExternalTypeMap(t)
@@ -109,7 +151,7 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 		close(callback.channel)
 		callbackMutex.Lock()
 		defer callbackMutex.Unlock()
-		delete(dynamicCallbacks, id_uint)
+		deleteCallback(id_uint)
 	}
 }
 
@@ -130,7 +172,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
-			delete(dynamicCallbacks, id_uint)
+			deleteCallback(id_uint)
 			return
 		}
 
@@ -152,7 +194,7 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
-			delete(dynamicCallbacks, id_uint)
+			deleteCallback(id_uint)
 		}
 	}
 }
@@ -165,5 +207,12 @@ func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, c
 		id = uint32(rand.Intn(1000000))
 	}
 	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick}
+	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d map_size=%d", id, len(dynamicCallbacks))
 	return id, dynamicCallbacks[id].channel
+}
+
+// Helper to log callback removal
+func deleteCallback(id uint32) {
+	delete(dynamicCallbacks, id)
+	callbackLog("[CLIENT_GO_CALLBACK_DEL] id=%d map_size=%d", id, len(dynamicCallbacks))
 }

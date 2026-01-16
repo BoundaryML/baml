@@ -132,6 +132,16 @@ impl ProjectDatabase {
         self
     }
 
+    /// Get all source files in the database.
+    pub fn get_source_files(&self) -> Vec<SourceFile> {
+        self.file_map.values().copied().collect()
+    }
+
+    /// Get the file path for a `FileId`.
+    pub fn file_id_to_path(&self, file_id: FileId) -> Option<&PathBuf> {
+        self.file_id_to_path.get(&file_id)
+    }
+
     /// Add a file to the database (internal helper).
     fn add_file_internal(
         &mut self,
@@ -242,6 +252,11 @@ impl ProjectDatabase {
     pub fn get_file(&self, path: &Path) -> Option<SourceFile> {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         self.file_map.get(&canonical_path).copied()
+    }
+
+    /// Get a `FileId` by its path.
+    pub fn path_to_file_id(&self, path: &Path) -> Option<FileId> {
+        self.get_file(path).map(|file| file.file_id(self))
     }
 
     /// Get the file path for a `FileId`.

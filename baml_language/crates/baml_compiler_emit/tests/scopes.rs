@@ -80,7 +80,7 @@ fn get_locals_in_scope(source: &str, function_name: &str) -> Vec<Vec<String>> {
         .objects
         .get(*obj_idx)
         .and_then(|obj| {
-            if let baml_vm_types::Object::Function(f) = obj {
+            if let bex_vm_types::Object::Function(f) = obj {
                 Some(f)
             } else {
                 None

@@ -53,6 +53,9 @@ type TypeMap = serde.TypeMap
 type Checked[T any] = shared.Checked[T]
 type StreamState[T any] = shared.StreamState[T]
 type StreamingStateType = shared.StreamStateType
+type DynamicUnion = serde.DynamicUnion
+type DynamicClass = serde.DynamicClass
+type DynamicEnum = serde.DynamicEnum
 
 const (
 	StreamStatePending    = shared.StreamStatePending

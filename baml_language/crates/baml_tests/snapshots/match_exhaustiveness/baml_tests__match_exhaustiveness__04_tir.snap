@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -118,7 +118,7 @@ expression: output
     Errors:
       - Non-exhaustive match on MaybeOk: missing 200
   Function GetStatus:
-    Return: Named("Status")
+    Return: Enum(FullyQualifiedName { namespace: Local, name: "Status" })
   Function EnumVariantUnion:
     Return: Union([Literal(String("actionable")), Literal(String("inactive"))])
   Function NestedTypeAlias:

@@ -4,7 +4,7 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
-use baml_vm_types::bytecode::CmpOp;
+use bex_vm_types::bytecode::CmpOp;
 
 #[test]
 fn watch_primitive() -> anyhow::Result<()> {
@@ -111,7 +111,7 @@ fn viz_header_before_while_emits_viz_enter_exit() -> anyhow::Result<()> {
                 Instruction::Return,
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
-                Instruction::BinOp(baml_vm_types::bytecode::BinOp::Add),
+                Instruction::BinOp(bex_vm_types::bytecode::BinOp::Add),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::Jump(-12),
             ],

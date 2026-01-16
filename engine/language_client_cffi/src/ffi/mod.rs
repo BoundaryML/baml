@@ -10,6 +10,8 @@ pub mod value;
 pub use std::ffi::{CStr, CString};
 
 pub use libc::c_char;
+// Re-export Buffer for use across FFI modules
+pub use objects::Buffer;
 pub use value::*;
 
 pub use crate::ctypes::*;

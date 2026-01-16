@@ -18,6 +18,43 @@ use crate::{
     type_ref::TypeRef,
 };
 
+//
+// ──────────────────────────────────────────────────────── ATTRIBUTE TYPE ─────
+//
+
+/// Represents an attribute that may or may not be explicitly set in source.
+///
+/// This generic type captures whether an attribute was present in the BAML source.
+/// `T` is the value type: `String` for attributes like `@alias("name")`,
+/// or `()` for presence-only attributes like `@@dynamic`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum Attribute<T> {
+    /// Attribute was not present in source.
+    #[default]
+    Unset,
+    /// Attribute was explicitly set with the given value.
+    Explicit(T),
+}
+
+impl<T> Attribute<T> {
+    /// Returns the value if explicitly set, None otherwise.
+    pub fn value(&self) -> Option<&T> {
+        match self {
+            Attribute::Unset => None,
+            Attribute::Explicit(v) => Some(v),
+        }
+    }
+
+    /// Returns true if the attribute was explicitly set.
+    pub fn is_explicit(&self) -> bool {
+        matches!(self, Attribute::Explicit(_))
+    }
+}
+
+//
+// ──────────────────────────────────────────────────────── ITEM TREE ─────
+//
+
 /// Position-independent item storage for a container.
 ///
 /// This is the core HIR data structure. Items are stored in hash maps
@@ -145,8 +182,13 @@ pub struct Class {
     pub name: Name,
     pub fields: Vec<Field>,
 
-    /// Block attributes (@@dynamic, @@alias, etc.).
-    pub is_dynamic: bool,
+    // Block attributes (@@dynamic, @@alias, @@description)
+    /// @@dynamic - marks class as dynamically extensible
+    pub is_dynamic: Attribute<()>,
+    /// @@alias("name") - alternative name for serialization
+    pub alias: Attribute<String>,
+    /// @@description("text") - documentation for the class
+    pub description: Attribute<String>,
     // Note: Generic parameters are queried separately via generic_params()
     // for incrementality - changes to generics don't invalidate ItemTree
 }
@@ -156,6 +198,14 @@ pub struct Class {
 pub struct Field {
     pub name: Name,
     pub type_ref: TypeRef,
+
+    // Field attributes (@alias, @description, @skip)
+    /// @alias("name") - alternative name for serialization
+    pub alias: Attribute<String>,
+    /// @description("text") - documentation for the field
+    pub description: Attribute<String>,
+    /// @skip - exclude field from serialization
+    pub skip: Attribute<()>,
 }
 
 /// An enum definition.
@@ -163,6 +213,10 @@ pub struct Field {
 pub struct Enum {
     pub name: Name,
     pub variants: Vec<EnumVariant>,
+
+    // Block attributes (@@alias)
+    /// @@alias("name") - alternative name for serialization
+    pub alias: Attribute<String>,
     // Note: Generic parameters are queried separately via generic_params()
 }
 
@@ -170,6 +224,14 @@ pub struct Enum {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumVariant {
     pub name: Name,
+
+    // Variant attributes (@alias, @description, @skip)
+    /// @alias("name") - alternative name for serialization
+    pub alias: Attribute<String>,
+    /// @description("text") - documentation for the variant
+    pub description: Attribute<String>,
+    /// @skip - exclude variant from serialization
+    pub skip: Attribute<()>,
 }
 
 /// Type alias definition.

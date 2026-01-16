@@ -323,7 +323,8 @@ fn detect_from_ancestors(token: &SyntaxToken, text: &str, offset: TextSize) -> C
                 let start_usize: usize = ancestor.text_range().start().into();
                 let offset_in_field = offset_usize.saturating_sub(start_usize);
                 // If there's a space or we're past the first word, likely type position
-                if field_text[..offset_in_field.min(field_text.len())].contains(char::is_whitespace) {
+                if field_text[..offset_in_field.min(field_text.len())].contains(char::is_whitespace)
+                {
                     let partial = get_partial_word_at(text, offset);
                     return CompletionContext::TypeAnnotation { partial };
                 }
@@ -397,18 +398,12 @@ mod tests {
 
     #[test]
     fn test_get_base_before_dot() {
-        assert_eq!(
-            get_base_before_dot("user."),
-            Some("user".to_string())
-        );
+        assert_eq!(get_base_before_dot("user."), Some("user".to_string()));
         assert_eq!(
             get_base_before_dot("ctx.client."),
             Some("ctx.client".to_string())
         );
-        assert_eq!(
-            get_base_before_dot("  foo."),
-            Some("foo".to_string())
-        );
+        assert_eq!(get_base_before_dot("  foo."), Some("foo".to_string()));
         assert_eq!(get_base_before_dot("."), None);
     }
 

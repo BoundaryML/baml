@@ -4,12 +4,12 @@
 //! rely on indices, making tests more readable and resilient to changes in the
 //! order of globals, constants, and objects.
 
-use baml_vm::{
+use bex_vm::{
     Vm, VmExecState,
     vm::WatchNotification as VmWatchNotification,
     watch::{self},
 };
-use baml_vm_types::{
+use bex_vm_types::{
     Object as VmObject, ObjectIndex, Value as VmValue,
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
@@ -290,7 +290,7 @@ impl ExecState {
                     function_name,
                     event,
                 } => {
-                    let is_enter = event.delta == baml_vm_types::bytecode::VizExecDelta::Enter;
+                    let is_enter = event.delta == bex_vm_types::bytecode::VizExecDelta::Enter;
                     Ok(ExecState::Emit(vec![Notification::Viz(VizEvent {
                         function_name,
                         label: event.label,

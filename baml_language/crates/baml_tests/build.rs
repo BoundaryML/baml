@@ -681,9 +681,9 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                             && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
                         {
                             writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
-                            let bytecode_table = baml_vm::debug::display_bytecode(
+                            let bytecode_table = bex_vm::debug::display_bytecode(
                                 func,
-                                &baml_vm::EvalStack::new(),
+                                &bex_vm::EvalStack::new(),
                                 &program.objects,
                                 &program.globals,
                                 false,  // no colors

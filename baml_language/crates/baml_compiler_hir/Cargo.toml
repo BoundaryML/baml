@@ -26,4 +26,4 @@ la-arena = { workspace = true }
 rowan = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
-
+smol_str = { workspace = true }

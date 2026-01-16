@@ -96,8 +96,15 @@ pub enum DiagnosticId {
     // Constraint attribute errors (E0032)
     InvalidConstraintSyntax,
 
+    // Attribute value errors (E0037-E0038)
+    InvalidAttributeArg,
+    UnexpectedAttributeArg,
+
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
+
+    // Map type errors (E0039)
+    InvalidMapArity,
 
     // Test diagnostics (E0034-E0036)
     UnknownTestProperty,
@@ -163,8 +170,15 @@ impl DiagnosticId {
             // Constraint attribute errors
             DiagnosticId::InvalidConstraintSyntax => "E0032",
 
+            // Attribute value errors
+            DiagnosticId::InvalidAttributeArg => "E0037",
+            DiagnosticId::UnexpectedAttributeArg => "E0038",
+
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
+
+            // Map type errors
+            DiagnosticId::InvalidMapArity => "E0039",
 
             // Test diagnostics
             DiagnosticId::UnknownTestProperty => "E0034",

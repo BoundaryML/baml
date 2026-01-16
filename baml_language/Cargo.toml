@@ -36,8 +36,8 @@ baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_tests = { path = "crates/baml_tests" }
 baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
-baml_vm = { path = "crates/baml_vm" }
-baml_vm_types = { path = "crates/baml_vm_types" }
+bex_vm = { path = "crates/bex_vm" }
+bex_vm_types = { path = "crates/bex_vm_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies

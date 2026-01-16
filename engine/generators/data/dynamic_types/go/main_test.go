@@ -9,6 +9,7 @@ import (
 
 	b "dynamic_types/baml_client"
 
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -319,4 +320,77 @@ func TestFullyDynamicClassE2E(t *testing.T) {
 	// Note: Can't call a function that returns Product directly
 	// because it's not in the schema, but we verify the type exists
 	assert.NotNil(t, productType)
+}
+
+func TestUnionsE2E(t *testing.T) {
+	tb, err := b.NewTypeBuilder()
+	require.NoError(t, err)
+
+	stringType, err := tb.String()
+	require.NoError(t, err)
+	floatType, err := tb.Float()
+	require.NoError(t, err)
+
+	unionType, err := tb.Union([]baml.Type{stringType, floatType})
+	require.NoError(t, err)
+
+	personClass, err := tb.Person()
+	require.NoError(t, err)
+	dataProperty, err := personClass.AddProperty("data", unionType)
+	require.NoError(t, err)
+	person, err := b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': 1.0 }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, 1.0, person.DynamicProperties["data"].(baml.DynamicUnion).Value.(float64))
+
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': '1.0' }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, "1.0", person.DynamicProperties["data"].(baml.DynamicUnion).Value.(string))
+
+	unionTypeOptional, err := unionType.Optional()
+	require.NoError(t, err)
+	err = dataProperty.SetType(unionTypeOptional)
+	require.NoError(t, err)
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': null }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Nil(t, person.DynamicProperties["data"].(*baml.DynamicUnion))
+
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': '1.0' }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, "1.0", person.DynamicProperties["data"].(*baml.DynamicUnion).Value.(string))
+
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': 1.0 }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, 1.0, person.DynamicProperties["data"].(*baml.DynamicUnion).Value.(float64))
+
+	// add a custom class
+	customClass, err := tb.AddClass("CustomClass")
+	require.NoError(t, err)
+	_, err = customClass.AddProperty("name", stringType)
+	require.NoError(t, err)
+	customClassType, err := customClass.Type()
+	require.NoError(t, err)
+
+	err = dataProperty.SetType(customClassType)
+	require.NoError(t, err)
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': {'name': 'John Doe', 'age': 30} }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, "CustomClass", person.DynamicProperties["data"].(baml.DynamicClass).Name)
+	assert.Equal(t, "John Doe", person.DynamicProperties["data"].(baml.DynamicClass).Fields["name"].(string))
+	// Does not exist as its not in the schema
+	assert.Nil(t, person.DynamicProperties["data"].(baml.DynamicClass).Fields["age"])
+
+	optionalCustomClassType, err := customClassType.Optional()
+	require.NoError(t, err)
+	err = dataProperty.SetType(optionalCustomClassType)
+	require.NoError(t, err)
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': {'name': 'John Doe', 'age': 30} }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Equal(t, "CustomClass", person.DynamicProperties["data"].(*baml.DynamicClass).Name)
+	assert.Equal(t, "John Doe", person.DynamicProperties["data"].(*baml.DynamicClass).Fields["name"].(string))
+	// Does not exist as its not in the schema
+	assert.Nil(t, person.DynamicProperties["data"].(*baml.DynamicClass).Fields["age"])
+
+	person, err = b.Parse.GetPerson("{'name': 'John Doe', 'age': 30, 'data': null }", b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+	assert.Nil(t, person.DynamicProperties["data"].(*baml.DynamicClass))
 }

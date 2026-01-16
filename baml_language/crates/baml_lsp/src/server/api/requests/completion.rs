@@ -91,9 +91,7 @@ fn to_lsp_completion_item(item: baml_ide::CompletionItem) -> CompletionItem {
         detail: item.detail,
         insert_text: item.insert_text,
         sort_text: item.sort_text,
-        documentation: item.documentation.map(|doc| {
-            lsp_types::Documentation::String(doc)
-        }),
+        documentation: item.documentation.map(lsp_types::Documentation::String),
         ..Default::default()
     }
 }

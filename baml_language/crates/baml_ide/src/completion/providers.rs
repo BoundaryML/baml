@@ -7,26 +7,22 @@ use baml_db::{
     baml_workspace::Project,
 };
 
-use super::{CompletionItem, CompletionKind};
-use super::context::ConfigBlockType;
+use super::{CompletionItem, CompletionKind, context::ConfigBlockType};
 
 // ============================================================================
 // Helper functions for creating completion items
 // ============================================================================
 
 fn keyword(name: &str) -> CompletionItem {
-    CompletionItem::new(name, CompletionKind::Keyword)
-        .with_sort_text(format!("0{name}"))
+    CompletionItem::new(name, CompletionKind::Keyword).with_sort_text(format!("0{name}"))
 }
 
 fn type_item(name: &str) -> CompletionItem {
-    CompletionItem::new(name, CompletionKind::Type)
-        .with_sort_text(format!("1{name}"))
+    CompletionItem::new(name, CompletionKind::Type).with_sort_text(format!("1{name}"))
 }
 
 fn property(name: &str) -> CompletionItem {
-    CompletionItem::new(name, CompletionKind::Property)
-        .with_sort_text(format!("1{name}"))
+    CompletionItem::new(name, CompletionKind::Property).with_sort_text(format!("1{name}"))
 }
 
 fn snippet(label: &str, insert: &str) -> CompletionItem {
@@ -36,8 +32,7 @@ fn snippet(label: &str, insert: &str) -> CompletionItem {
 }
 
 fn attr(name: &str) -> CompletionItem {
-    CompletionItem::new(name, CompletionKind::Property)
-        .with_sort_text(format!("0{name}"))
+    CompletionItem::new(name, CompletionKind::Property).with_sort_text(format!("0{name}"))
 }
 
 // ============================================================================
@@ -64,7 +59,11 @@ pub(super) fn complete_top_level() -> Vec<CompletionItem> {
 // ============================================================================
 
 /// Completions for type annotation context.
-pub(super) fn complete_types(db: &dyn Db, project: Project, partial: Option<&str>) -> Vec<CompletionItem> {
+pub(super) fn complete_types(
+    db: &dyn Db,
+    project: Project,
+    partial: Option<&str>,
+) -> Vec<CompletionItem> {
     let mut items = vec![
         // Primitive types
         type_item("int").with_detail("Integer type"),
@@ -226,11 +225,7 @@ pub(super) fn complete_symbols(db: &dyn Db, project: Project) -> Vec<CompletionI
 
 /// Format a short function signature for completion detail.
 fn format_function_signature_short(sig: &baml_compiler_hir::FunctionSignature) -> String {
-    let params: Vec<String> = sig
-        .params
-        .iter()
-        .map(|p| p.name.to_string())
-        .collect();
+    let params: Vec<String> = sig.params.iter().map(|p| p.name.to_string()).collect();
     format!("fn({})", params.join(", "))
 }
 
@@ -409,9 +404,7 @@ pub(super) fn complete_field_attributes(partial: Option<&str>) -> Vec<Completion
 
 /// Completions for block attributes (after @@).
 pub(super) fn complete_block_attributes(partial: Option<&str>) -> Vec<CompletionItem> {
-    let mut items = vec![
-        attr("@@dynamic").with_detail("Mark this type as dynamic"),
-    ];
+    let mut items = vec![attr("@@dynamic").with_detail("Mark this type as dynamic")];
 
     // Filter by partial if provided
     if let Some(partial) = partial {

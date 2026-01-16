@@ -203,6 +203,7 @@ func (l *library) registerFunctions() error {
 		l.registerFn("cancel_function_call")
 		l.registerFn("call_object_constructor")
 		l.registerFn("call_object_method")
+		l.registerFn("free_buffer")
 	}()
 	return symbolLookupErr
 }
@@ -236,6 +237,8 @@ func (l *library) registerFn(fnName string) error {
 		C.SetCallObjectConstructorFn(fnPtr)
 	case "call_object_method":
 		C.SetCallObjectMethodFunctionFn(fnPtr)
+	case "free_buffer":
+		C.SetFreeBufferFn(fnPtr)
 	default:
 		panic(fmt.Sprintf("internal error: attempted to register unknown function '%s'", fnName))
 	}

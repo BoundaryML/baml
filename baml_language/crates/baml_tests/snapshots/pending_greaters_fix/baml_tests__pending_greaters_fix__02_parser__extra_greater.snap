@@ -1,0 +1,197 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MalformedClass"
+    L_BRACE "{"
+    FIELD
+      WORD "bad_field"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER_GREATER ">>"
+    FIELD
+      WORD "good_field"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+    FIELD
+      WORD "another_field"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NestedGenerics"
+    L_BRACE "{"
+    FIELD
+      WORD "nested"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int"
+                WORD "int"
+              GREATER_GREATER ">>"
+    FIELD
+      WORD "simple"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadParam"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER_GREATER ">>"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"test"#
+          HASH "#"
+          QUOTE """
+          KW_TEST "test"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "BadReturnType"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int"
+          WORD "int"
+        GREATER_GREATER ">>"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"test"#
+          HASH "#"
+          QUOTE """
+          KW_TEST "test"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "BadAlias"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int"
+          WORD "int"
+        GREATER_GREATER ">>"
+
+=== ERRORS ===
+Error: Unmatched '>' in type expression (found 1 extra)
+   ╭─[ extra_greater.baml:7:28 ]
+   │
+ 7 │   bad_field map<string, int>>
+   │                            ─┬  
+   │                             ╰── Unmatched '>' in type expression (found 1 extra)
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:23:37 ]
+    │
+ 23 │ function BadParam(x: map<string, int>>) -> string {
+    │                                     ─┬  
+    │                                      ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:29:44 ]
+    │
+ 29 │ function BadReturnType() -> map<string, int>> {
+    │                                            ─┬  
+    │                                             ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:35:32 ]
+    │
+ 35 │ type BadAlias = map<string, int>>
+    │                                ─┬  
+    │                                 ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯

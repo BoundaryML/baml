@@ -16,7 +16,6 @@ pub(crate) mod lsp;
 // pub(crate) mod api_client;
 // pub(crate) mod auth;
 // pub(crate) mod colordiff;
-// pub(crate) mod deploy;
 // pub(crate) mod format;
 // pub(crate) mod propelauth;
 // pub(crate) mod tui;

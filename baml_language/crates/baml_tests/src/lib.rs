@@ -216,7 +216,7 @@ fn format_hir_file(
                     )
                     .unwrap();
                 }
-                if class.is_dynamic {
+                if class.is_dynamic.is_explicit() {
                     writeln!(result, "  @@dynamic").unwrap();
                 }
                 writeln!(result, "}}").unwrap();

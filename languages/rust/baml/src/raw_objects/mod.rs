@@ -6,6 +6,61 @@
 
 #![allow(unsafe_code)]
 
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    sync::{Mutex, OnceLock},
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+/// Get the client FFI log file path from env, or None if logging is disabled
+fn client_log_file() -> Option<&'static str> {
+    static FILE: OnceLock<Option<String>> = OnceLock::new();
+    FILE.get_or_init(|| std::env::var("BAML_FFI_CLIENT_LOG").ok())
+        .as_deref()
+}
+
+/// Global mutex for client FFI log file access
+fn client_log_mutex() -> &'static Mutex<()> {
+    static MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+    MUTEX.get_or_init(|| Mutex::new(()))
+}
+
+/// Get current timestamp in microseconds since epoch
+fn timestamp_micros() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_micros())
+        .unwrap_or(0)
+}
+
+/// Write a log message to the client FFI log file
+fn write_client_log(msg: &str) {
+    if let Some(path) = client_log_file() {
+        let _guard = client_log_mutex().lock().unwrap();
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "{}", msg);
+        }
+    }
+}
+
+macro_rules! client_log {
+    ($($arg:tt)*) => {
+        if client_log_file().is_some() {
+            let ts = timestamp_micros();
+            let msg = format!($($arg)*);
+            // Insert timestamp after the opening bracket
+            let msg = if msg.starts_with('[') {
+                let bracket_end = msg.find(']').unwrap_or(0);
+                format!("{} ts={}{}", &msg[..bracket_end], ts, &msg[bracket_end..])
+            } else {
+                format!("ts={} {}", ts, msg)
+            };
+            write_client_log(&msg);
+        }
+    };
+}
+
 /// Macro to define a wrapper type around `RawObject`.
 ///
 /// This reduces boilerplate for all FFI-backed object types.
@@ -126,6 +181,7 @@ impl RawObject {
         runtime: *const c_void,
         object_type: BamlObjectType,
     ) -> Self {
+        client_log!("[CLIENT_RUST_RECEIVE] type={:?} ptr={:#x}", object_type, ptr);
         Self {
             inner: Arc::new(RawObjectInner {
                 ptr,
@@ -194,6 +250,7 @@ impl RawObject {
                     }
                 };
                 let ptr = extract_ptr_from_handle(&handle)?;
+                client_log!("[CLIENT_RUST_CREATE] type={:?} ptr={:#x}", object_type, ptr);
                 Ok(Self {
                     inner: Arc::new(RawObjectInner {
                         ptr,
@@ -446,9 +503,27 @@ impl Drop for RawObject {
         // Only call destructor if this is the last reference
         // This ensures the FFI destructor is called exactly once
         if Arc::strong_count(&self.inner) == 1 {
+            let ptr = self.inner.ptr;
+            let object_type = self.inner.object_type;
+            client_log!(
+                "[CLIENT_RUST_DESTRUCTOR_START] type={:?} ptr={:#x}",
+                object_type,
+                ptr
+            );
             // Call destructor via FFI
-            // Ignore errors during drop - we can't do much about them
-            let _ = self.try_call_method::<(), _>("~destructor", ());
+            match self.try_call_method::<(), _>("~destructor", ()) {
+                Ok(()) => {
+                    client_log!("[CLIENT_RUST_DESTRUCTOR_OK] type={:?} ptr={:#x}", object_type, ptr);
+                }
+                Err(e) => {
+                    client_log!(
+                        "[CLIENT_RUST_DESTRUCTOR_ERROR] type={:?} ptr={:#x} error={}",
+                        object_type,
+                        ptr,
+                        e
+                    );
+                }
+            }
         }
     }
 }

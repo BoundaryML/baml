@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -55,22 +55,22 @@ fn Calculate() -> Int {
 
 }
 
-fn FieldAccess(user: Class("User")) -> String {
+fn FieldAccess(user: Class(FullyQualifiedName { namespace: Local, name: "User" })) -> String {
     // Locals:
     let _0: String // return
-    let _1: Class("User") // user // param
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "User" }) // user // param
     let _2: String // name
-    let _3: Named("User")
+    let _3: Class(FullyQualifiedName { namespace: Local, name: "User" })
     let _4: String // bio
-    let _5: Named("Profile")
-    let _6: Named("User")
+    let _5: Class(FullyQualifiedName { namespace: Local, name: "Profile" })
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "User" })
     let _7: String // theme
-    let _8: Named("Settings")
-    let _9: Named("Profile")
-    let _10: Named("User")
+    let _8: Class(FullyQualifiedName { namespace: Local, name: "Settings" })
+    let _9: Class(FullyQualifiedName { namespace: Local, name: "Profile" })
+    let _10: Class(FullyQualifiedName { namespace: Local, name: "User" })
     let _11: String // firstTag
     let _12: List(String)
-    let _13: Named("User")
+    let _13: Class(FullyQualifiedName { namespace: Local, name: "User" })
     let _14: Int
     let _15: Void
 
@@ -102,25 +102,25 @@ fn FieldAccess(user: Class("User")) -> String {
 
 }
 
-fn IndexAccess(users: List(Class("IndexUser"))) -> String {
+fn IndexAccess(users: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))) -> String {
     // Locals:
     let _0: String // return
-    let _1: List(Class("IndexUser")) // users // param
-    let _2: Named("IndexUser") // first
-    let _3: List(Named("IndexUser"))
+    let _1: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })) // users // param
+    let _2: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }) // first
+    let _3: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
     let _4: Int
     let _5: Int // idx
-    let _6: Named("IndexUser") // second
-    let _7: List(Named("IndexUser"))
+    let _6: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }) // second
+    let _7: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
     let _8: Int
     let _9: String // firstName
-    let _10: Named("IndexUser")
-    let _11: List(Named("IndexUser"))
+    let _10: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })
+    let _11: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
     let _12: Int
     let _13: String // tag
     let _14: List(String)
-    let _15: Named("IndexUser")
-    let _16: List(Named("IndexUser"))
+    let _15: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })
+    let _16: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
     let _17: Int
     let _18: Int
     let _19: Void

@@ -172,9 +172,34 @@ pub enum HirDiagnostic {
     /// These require a Jinja expression block {{ }}.
     InvalidConstraintSyntax { attr_name: String, span: Span },
 
+    // ============ Attribute Value Diagnostics ============
+    /// Attribute requires a single string literal but received something else.
+    /// Covers cases like:
+    /// - `@alias(some_var)` - identifier instead of string
+    /// - `@alias("a", "b")` - multiple arguments
+    /// - `@alias()` - no arguments
+    /// - `@alias({{ expr }})` - expression instead of string
+    InvalidAttributeArg {
+        attr_name: String,
+        span: Span,
+        /// Human-readable description of what was received
+        received: String,
+    },
+
+    /// Attribute takes no arguments but received some (e.g., @@dynamic("unexpected")).
+    UnexpectedAttributeArg { attr_name: String, span: Span },
+
     // ============ Type Diagnostics ============
     /// Float literal used as a type, which is not supported.
     UnsupportedFloatLiteral { value: String, span: Span },
+
+    /// Invalid map type arity (wrong number of type parameters).
+    /// Maps require exactly 2 type parameters: `map<KeyType, ValueType>`
+    InvalidMapArity {
+        expected: usize,
+        found: usize,
+        span: Span,
+    },
 
     // ============ Test Diagnostics ============
     /// Unknown property in test block.

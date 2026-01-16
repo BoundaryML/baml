@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -45,16 +45,16 @@ fn stringArray() -> List(String) {
 
 }
 
-fn pointArray() -> List(Class("Point")) {
+fn pointArray() -> List(Class(FullyQualifiedName { namespace: Local, name: "Point" })) {
     // Locals:
-    let _0: List(Class("Point")) // return
-    let _1: Named("Point")
+    let _0: List(Class(FullyQualifiedName { namespace: Local, name: "Point" })) // return
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _2: Int
     let _3: Int
-    let _4: Named("Point")
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _5: Int
     let _6: Int
-    let _7: Named("Point")
+    let _7: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _8: Int
     let _9: Int
 
@@ -120,9 +120,9 @@ fn intArray() -> List(Int) {
 
 }
 
-fn point() -> Class("Point") {
+fn point() -> Class(FullyQualifiedName { namespace: Local, name: "Point" }) {
     // Locals:
-    let _0: Class("Point") // return
+    let _0: Class(FullyQualifiedName { namespace: Local, name: "Point" }) // return
     let _1: Int
     let _2: Int
 
@@ -139,13 +139,13 @@ fn point() -> Class("Point") {
 
 }
 
-fn vec2d() -> Class("Vec2D") {
+fn vec2d() -> Class(FullyQualifiedName { namespace: Local, name: "Vec2D" }) {
     // Locals:
-    let _0: Class("Vec2D") // return
-    let _1: Named("Point")
+    let _0: Class(FullyQualifiedName { namespace: Local, name: "Vec2D" }) // return
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _2: Int
     let _3: Int
-    let _4: Named("Point")
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Point" })
     let _5: Int
     let _6: Int
 
