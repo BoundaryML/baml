@@ -16,7 +16,7 @@ mod resource;
 
 pub mod ops;
 
-use std::sync::Mutex;
+use std::{future::Future, pin::Pin, sync::Mutex};
 
 pub use resource::{FileHandle, ResourceId, ResourceKind, ResourceRegistry, SocketHandle};
 
@@ -101,4 +101,22 @@ impl Default for OpContext {
 pub struct ResolvedArgs {
     /// Resolved arguments.
     pub args: Vec<ResolvedValue>,
+}
+
+// ============================================================================
+// Operation Results
+// ============================================================================
+
+/// A boxed future for async operations.
+pub type OpFuture = Pin<Box<dyn Future<Output = Result<ResolvedValue, OpError>> + Send>>;
+
+/// Result of a system operation - either immediate or async.
+///
+/// This allows sync operations (like `close`) to complete immediately without
+/// spawning a task, while async operations (like `open`, `read`) return futures.
+pub enum SysOpResult {
+    /// Operation completed synchronously with this result.
+    Ready(Result<ResolvedValue, OpError>),
+    /// Operation is async and needs to be awaited.
+    Async(OpFuture),
 }

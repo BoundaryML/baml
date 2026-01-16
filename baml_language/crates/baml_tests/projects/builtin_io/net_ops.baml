@@ -16,3 +16,10 @@ function MultipleConnections() -> string {
     let data2 = s2.read();
     data1 + data2
 }
+
+function ConnectReadAndClose() -> string {
+    let sock = baml.net.connect("127.0.0.1:8080");
+    let data = sock.read();
+    sock.close();
+    data
+}

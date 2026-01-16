@@ -3,6 +3,59 @@ source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
+fn ReadAndClose() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.fs.File") // f
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: String // content
+    let _6: Builtin("baml.fs.File")
+    let _7: Unknown
+    let _8: Null
+    let _9: Builtin("baml.fs.File")
+    let _10: Unknown
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "example.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = copy _1;
+        _7 = dispatch_future const fn baml.fs.File.read(copy _6) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _7 -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _1;
+        _10 = dispatch_future const fn baml.fs.File.close(copy _9) -> bb6;
+    }
+
+    bb6: {
+        _8 = await _10 -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _5;
+        goto -> bb1;
+    }
+
+}
+
 fn ReadMultipleFiles() -> String {
     // Locals:
     let _0: String // return
@@ -292,6 +345,59 @@ fn ConnectAndRead() -> String {
     }
 
     bb5: {
+        goto -> bb1;
+    }
+
+}
+
+fn ConnectReadAndClose() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.net.Socket") // sock
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: String // data
+    let _6: Builtin("baml.net.Socket")
+    let _7: Unknown
+    let _8: Null
+    let _9: Builtin("baml.net.Socket")
+    let _10: Unknown
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "127.0.0.1:8080";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = copy _1;
+        _7 = dispatch_future const fn baml.net.Socket.read(copy _6) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _7 -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _1;
+        _10 = dispatch_future const fn baml.net.Socket.close(copy _9) -> bb6;
+    }
+
+    bb6: {
+        _8 = await _10 -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _5;
         goto -> bb1;
     }
 

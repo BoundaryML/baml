@@ -379,9 +379,11 @@ fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
     match path {
         "baml.fs.open" => Some(ExternalOp::Sys(SysOp::FsOpen)),
         "baml.fs.File.read" => Some(ExternalOp::Sys(SysOp::FsRead)),
+        "baml.fs.File.close" => Some(ExternalOp::Sys(SysOp::FsClose)),
         "baml.sys.shell" => Some(ExternalOp::Sys(SysOp::Shell)),
         "baml.net.connect" => Some(ExternalOp::Sys(SysOp::NetConnect)),
         "baml.net.Socket.read" => Some(ExternalOp::Sys(SysOp::NetRead)),
+        "baml.net.Socket.close" => Some(ExternalOp::Sys(SysOp::NetClose)),
         _ => None,
     }
 }

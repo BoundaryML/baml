@@ -16,3 +16,10 @@ function ReadMultipleFiles() -> string {
     let content2 = f2.read();
     content1 + content2
 }
+
+function ReadAndClose() -> string {
+    let f = baml.fs.open("example.txt");
+    let content = f.read();
+    f.close();
+    content
+}

@@ -163,6 +163,8 @@ macro_rules! with_builtins {
                     struct File {
                         #[external]
                         fn read(self: File) -> String;
+                        #[external]
+                        fn close(self: File);
                     }
 
                     #[external]
@@ -187,6 +189,9 @@ macro_rules! with_builtins {
                         /// Read data from the socket as a string.
                         #[external]
                         fn read(self: Socket) -> String;
+                        /// Close the socket.
+                        #[external]
+                        fn close(self: Socket);
                     }
 
                     /// Connect to a TCP address (host:port).

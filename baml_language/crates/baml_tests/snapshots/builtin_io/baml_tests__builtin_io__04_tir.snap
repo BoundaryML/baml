@@ -3,6 +3,8 @@ source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function ReadAndClose:
+    Return: String
   Function ReadMultipleFiles:
     Return: String
   Function ReadFile:
@@ -14,6 +16,8 @@ expression: output
   Function ConnectAndReadInline:
     Return: String
   Function ConnectAndRead:
+    Return: String
+  Function ConnectReadAndClose:
     Return: String
   Function ChainCommands:
     Return: String

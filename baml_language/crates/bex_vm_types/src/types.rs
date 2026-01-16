@@ -123,12 +123,16 @@ pub enum SysOp {
     FsOpen,
     /// Read file contents: `File.read() -> String`
     FsRead,
+    /// Close a file: `File.close()`
+    FsClose,
     /// Execute a shell command: `baml.sys.shell(cmd: String) -> String`
     Shell,
     /// Connect to a TCP socket: `baml.net.connect(addr: String) -> Socket`
     NetConnect,
     /// Read from a socket: `Socket.read() -> String`
     NetRead,
+    /// Close a socket: `Socket.close()`
+    NetClose,
     // Future operations:
     // /// HTTP request
     // HttpRequest,
@@ -148,9 +152,11 @@ impl std::fmt::Display for SysOp {
         match self {
             SysOp::FsOpen => write!(f, "fs.open"),
             SysOp::FsRead => write!(f, "fs.read"),
+            SysOp::FsClose => write!(f, "fs.close"),
             SysOp::Shell => write!(f, "sys.shell"),
             SysOp::NetConnect => write!(f, "net.connect"),
             SysOp::NetRead => write!(f, "net.read"),
+            SysOp::NetClose => write!(f, "net.close"),
         }
     }
 }

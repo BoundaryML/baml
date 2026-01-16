@@ -3,6 +3,13 @@ source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+function ReadAndClose() -> string {
+      let f = baml.fs.open("example.txt");
+      let content = f.read();
+      f.close();
+      content
+}
+
 function ReadMultipleFiles() -> string {
       let f1 = baml.fs.open("file1.txt");
       let f2 = baml.fs.open("file2.txt");
@@ -35,6 +42,13 @@ function ConnectAndReadInline() -> string {
 function ConnectAndRead() -> string {
       let sock = baml.net.connect("127.0.0.1:8080");
       sock.read()
+}
+
+function ConnectReadAndClose() -> string {
+      let sock = baml.net.connect("127.0.0.1:8080");
+      let data = sock.read();
+      sock.close();
+      data
 }
 
 function ChainCommands() -> string {

@@ -27,7 +27,7 @@ use baml_snapshot::BamlSnapshot;
 // Re-export bex_sys types for convenience
 pub use bex_sys::{
     FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
-    ResourceRegistry, SocketHandle, ops,
+    ResourceRegistry, SocketHandle, SysOpResult, ops,
 };
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{ExternalOp, Object, ObjectIndex, SysOp, Value};
@@ -159,19 +159,44 @@ impl BexEngine {
                             .collect(),
                     };
 
-                    // Clone what we need for the spawned task
-                    let pending_futures = pending_futures.clone();
-                    let ctx = Arc::clone(&ctx);
-                    let operation = pending.operation;
-
-                    // Spawn the operation with static dispatch
-                    tokio::spawn(async move {
-                        let result = Self::execute_external_op(operation, ctx, resolved_args).await;
-                        let _ = pending_futures.send(FutureResult {
-                            id,
-                            result: result.map_err(EngineError::from),
-                        });
-                    });
+                    match pending.operation {
+                        ExternalOp::Llm => {
+                            // LLM operations are always async (not yet implemented)
+                            let pending_futures = pending_futures.clone();
+                            tokio::spawn(async move {
+                                let result = Err(OpError::Other(
+                                    "LLM operations not yet implemented".into(),
+                                ));
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
+                        }
+                        ExternalOp::Sys(sys_op) => {
+                            match Self::execute_sys_op(sys_op, Arc::clone(&ctx), resolved_args) {
+                                SysOpResult::Ready(result) => {
+                                    // Sync operation - fulfill immediately
+                                    let value = Self::unresolve_value(
+                                        vm,
+                                        result.map_err(EngineError::from)?,
+                                    );
+                                    vm.fulfil_future(id, value)?;
+                                }
+                                SysOpResult::Async(fut) => {
+                                    // Async operation - spawn task
+                                    let pending_futures = pending_futures.clone();
+                                    tokio::spawn(async move {
+                                        let result = fut.await;
+                                        let _ = pending_futures.send(FutureResult {
+                                            id,
+                                            result: result.map_err(EngineError::from),
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
 
                 VmExecState::Await(future_id) => {
@@ -212,33 +237,18 @@ impl BexEngine {
         }
     }
 
-    /// Execute an external operation via static dispatch.
-    async fn execute_external_op(
-        op: ExternalOp,
-        ctx: Arc<OpContext>,
-        args: ResolvedArgs,
-    ) -> Result<ResolvedValue, OpError> {
+    /// Execute a system operation, returning either an immediate result or a future.
+    fn execute_sys_op(op: SysOp, ctx: Arc<OpContext>, args: ResolvedArgs) -> SysOpResult {
         match op {
-            ExternalOp::Llm => {
-                // TODO: Implement LLM operations
-                Err(OpError::Other("LLM operations not yet implemented".into()))
-            }
-            ExternalOp::Sys(sys_op) => Self::execute_sys_op(sys_op, ctx, args).await,
-        }
-    }
-
-    /// Execute a system operation.
-    async fn execute_sys_op(
-        op: SysOp,
-        ctx: Arc<OpContext>,
-        args: ResolvedArgs,
-    ) -> Result<ResolvedValue, OpError> {
-        match op {
-            SysOp::FsOpen => ops::fs::open(ctx, args).await,
-            SysOp::FsRead => ops::fs::read(ctx, args).await,
-            SysOp::Shell => ops::sys::shell(ctx, args).await,
-            SysOp::NetConnect => ops::net::connect(ctx, args).await,
-            SysOp::NetRead => ops::net::read(ctx, args).await,
+            // Async operations - return boxed futures
+            SysOp::FsOpen => SysOpResult::Async(Box::pin(ops::fs::open(ctx, args))),
+            SysOp::FsRead => SysOpResult::Async(Box::pin(ops::fs::read(ctx, args))),
+            SysOp::Shell => SysOpResult::Async(Box::pin(ops::sys::shell(ctx, args))),
+            SysOp::NetConnect => SysOpResult::Async(Box::pin(ops::net::connect(ctx, args))),
+            SysOp::NetRead => SysOpResult::Async(Box::pin(ops::net::read(ctx, args))),
+            // Sync operations - return immediate results
+            SysOp::FsClose => SysOpResult::Ready(ops::fs::close(&ctx, args)),
+            SysOp::NetClose => SysOpResult::Ready(ops::net::close(&ctx, args)),
         }
     }
 

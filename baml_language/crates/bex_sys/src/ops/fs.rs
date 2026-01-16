@@ -1,6 +1,6 @@
 //! File system operations.
 //!
-//! Implements `baml.fs.open` and `baml.fs.File.read`.
+//! Implements `baml.fs.open`, `baml.fs.File.read`, and `baml.fs.File.close`.
 
 use std::sync::Arc;
 
@@ -74,4 +74,30 @@ pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedVal
         .map_err(|e| OpError::Other(format!("Failed to read file: {e}")))?;
 
     Ok(ResolvedValue::String(contents))
+}
+
+// ============================================================================
+// baml.fs.File.close
+// ============================================================================
+
+/// Closes a file, releasing the resource.
+///
+/// Signature: `fn close(self: File)`
+pub fn close(ctx: &Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
+    // Extract the file resource ID from the first argument
+    let file_id = match args.args.into_iter().next() {
+        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
+        Some(ResolvedValue::ResourceId(id)) => id,
+        other => {
+            let msg = format!("Expected file resource ID as first argument, got: {other:?}");
+            return Err(OpError::Other(msg));
+        }
+    };
+
+    // Remove the resource from the registry
+    // This drops the Arc<Mutex<File>>, closing it when the last reference is dropped
+    ctx.remove_resource(file_id)
+        .ok_or(OpError::ResourceNotFound(file_id))?;
+
+    Ok(ResolvedValue::Null)
 }

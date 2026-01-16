@@ -1,6 +1,6 @@
 //! Network operations.
 //!
-//! Implements `baml.net.connect` and `baml.net.Socket.read`.
+//! Implements `baml.net.connect`, `baml.net.Socket.read`, and `baml.net.Socket.close`.
 
 use std::sync::Arc;
 
@@ -76,4 +76,30 @@ pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedVal
     // Convert to string (lossy for non-UTF8 data)
     let contents = String::from_utf8_lossy(&buffer[..n]).into_owned();
     Ok(ResolvedValue::String(contents))
+}
+
+// ============================================================================
+// baml.net.Socket.close
+// ============================================================================
+
+/// Closes a socket, releasing the resource.
+///
+/// Signature: `fn close(self: Socket)`
+pub fn close(ctx: &Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
+    // Extract the socket resource ID from the first argument
+    let socket_id = match args.args.into_iter().next() {
+        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
+        Some(ResolvedValue::ResourceId(id)) => id,
+        other => {
+            let msg = format!("Expected socket resource ID as first argument, got: {other:?}");
+            return Err(OpError::Other(msg));
+        }
+    };
+
+    // Remove the resource from the registry
+    // This drops the Arc<Mutex<TcpStream>>, closing it when the last reference is dropped
+    ctx.remove_resource(socket_id)
+        .ok_or(OpError::ResourceNotFound(socket_id))?;
+
+    Ok(ResolvedValue::Null)
 }
