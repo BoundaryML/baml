@@ -6,24 +6,7 @@ use std::sync::Arc;
 
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
-use crate::{OpContext, OpError, ResolvedArgs, ResolvedValue};
-
-/// A socket handle stored in the resource registry.
-struct SocketHandle {
-    /// The stream, wrapped in Arc for cloning out of the resource registry.
-    stream: Arc<tokio::sync::Mutex<TcpStream>>,
-    #[allow(dead_code)]
-    addr: String,
-}
-
-impl SocketHandle {
-    fn new(stream: TcpStream, addr: String) -> Self {
-        Self {
-            stream: Arc::new(tokio::sync::Mutex::new(stream)),
-            addr,
-        }
-    }
-}
+use crate::{OpContext, OpError, ResolvedArgs, ResolvedValue, SocketHandle};
 
 // ============================================================================
 // baml.net.connect
@@ -73,14 +56,14 @@ pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedVal
     };
 
     // Get the socket handle from resources
-    // Clone the Arc<Mutex<TcpStream>> so we can release the RwLock before awaiting
+    // Clone the Arc<Mutex<TcpStream>> so we can release the lock before awaiting
     let stream_mutex = {
-        let guard = ctx.resources.read();
+        let guard = ctx.resources.lock().unwrap();
         let socket_handle = guard
-            .get::<SocketHandle>(socket_id)
+            .get_socket(socket_id)
             .ok_or(OpError::ResourceNotFound(socket_id))?;
         Arc::clone(&socket_handle.stream)
-    }; // RwLock guard dropped here
+    }; // lock guard dropped here
 
     // Read available data from the socket
     let mut stream = stream_mutex.lock().await;

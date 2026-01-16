@@ -8,10 +8,10 @@ license.workspace = true
 
 [dependencies]
 baml_snapshot = { workspace = true }
+bex_sys = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
-parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 

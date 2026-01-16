@@ -21,104 +21,18 @@
 //! External ops can store resources and return their ID to the VM. Later ops
 //! can retrieve resources by ID. The VM only sees integer IDs.
 
-mod resource;
-
 use std::{collections::HashMap, sync::Arc};
 
 use baml_snapshot::BamlSnapshot;
+// Re-export bex_sys types for convenience
+pub use bex_sys::{
+    FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
+    ResourceRegistry, SocketHandle, ops,
+};
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, ObjectIndex, SysOp, Value};
-use parking_lot::RwLock;
+use bex_vm_types::{ExternalOp, Object, ObjectIndex, SysOp, Value};
 use thiserror::Error;
 use tokio::sync::mpsc;
-
-pub mod ops;
-
-pub use resource::{Resource, ResourceId, ResourceRegistry};
-
-// ============================================================================
-// Resolved Values
-// ============================================================================
-
-/// A resolved value that external operations can work with directly.
-///
-/// Unlike `Value` which may contain object indices, `ResolvedValue` contains
-/// the actual data that external operations need.
-#[derive(Debug, Clone)]
-pub enum ResolvedValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
-    Array(Vec<ResolvedValue>),
-    Map(indexmap::IndexMap<String, ResolvedValue>),
-    /// An object index that couldn't be resolved (fallback).
-    Object(ObjectIndex),
-    /// A resource ID (for file handles, connections, etc.)
-    ResourceId(ResourceId),
-}
-
-// ============================================================================
-// Operation Context and Errors
-// ============================================================================
-
-/// Errors that can occur during external operation execution.
-#[derive(Debug, Error)]
-pub enum OpError {
-    #[error("{0}")]
-    Other(String),
-
-    #[error("Resource not found: {0}")]
-    ResourceNotFound(ResourceId),
-
-    #[error("Resource type mismatch")]
-    ResourceTypeMismatch,
-}
-
-/// Context passed to external operations.
-///
-/// Provides access to resources and other engine state.
-pub struct OpContext {
-    /// Registry for storing/retrieving resources.
-    pub resources: Arc<RwLock<ResourceRegistry>>,
-}
-
-impl OpContext {
-    /// Add a resource and return its ID.
-    pub fn add_resource<T: Resource>(&self, resource: T) -> ResourceId {
-        self.resources.write().add(resource)
-    }
-
-    /// Get a resource by ID and apply a function to it.
-    ///
-    /// This holds a read lock for the duration of the closure.
-    pub fn with_resource<T: 'static, R, F: FnOnce(&T) -> R>(
-        &self,
-        id: ResourceId,
-        f: F,
-    ) -> Option<R> {
-        let guard = self.resources.read();
-        guard.get::<T>(id).map(f)
-    }
-
-    /// Check if a resource exists.
-    pub fn has_resource(&self, id: ResourceId) -> bool {
-        self.resources.read().contains(id)
-    }
-
-    /// Remove a resource by ID.
-    pub fn remove_resource(&self, id: ResourceId) -> Option<Arc<dyn Resource>> {
-        self.resources.write().remove(id)
-    }
-}
-
-/// Resolved arguments for an external operation.
-#[derive(Debug, Clone)]
-pub struct ResolvedArgs {
-    /// Resolved arguments.
-    pub args: Vec<ResolvedValue>,
-}
 
 // ============================================================================
 // Engine Types
@@ -200,9 +114,7 @@ impl BexEngine {
         vm.set_entry_point(function_index, args);
 
         // Create a resource registry for this call
-        let ctx = Arc::new(OpContext {
-            resources: Arc::new(RwLock::new(ResourceRegistry::new())),
-        });
+        let ctx = Arc::new(OpContext::new());
 
         // Run the event loop
         self.run_event_loop(&mut vm, ctx).await
@@ -337,26 +249,24 @@ impl BexEngine {
             Value::Int(i) => ResolvedValue::Int(*i),
             Value::Float(f) => ResolvedValue::Float(*f),
             Value::Bool(b) => ResolvedValue::Bool(*b),
-            Value::Object(idx) => {
-                use bex_vm_types::Object;
-                match &vm.objects[*idx] {
-                    Object::String(s) => ResolvedValue::String(s.clone()),
-                    Object::Array(arr) => {
-                        let resolved: Vec<ResolvedValue> =
-                            arr.iter().map(|v| Self::resolve_value(vm, v)).collect();
-                        ResolvedValue::Array(resolved)
-                    }
-                    Object::Map(map) => {
-                        let resolved: indexmap::IndexMap<String, ResolvedValue> = map
-                            .iter()
-                            .map(|(k, v)| (k.clone(), Self::resolve_value(vm, v)))
-                            .collect();
-                        ResolvedValue::Map(resolved)
-                    }
-                    // For other objects, keep the index as a fallback
-                    _ => ResolvedValue::Object(*idx),
+            Value::Object(idx) => match &vm.objects[*idx] {
+                Object::String(s) => ResolvedValue::String(s.clone()),
+                Object::Array(arr) => {
+                    let resolved: Vec<ResolvedValue> =
+                        arr.iter().map(|v| Self::resolve_value(vm, v)).collect();
+                    ResolvedValue::Array(resolved)
                 }
-            }
+                Object::Map(map) => {
+                    let resolved: indexmap::IndexMap<String, ResolvedValue> = map
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Self::resolve_value(vm, v)))
+                        .collect();
+                    ResolvedValue::Map(resolved)
+                }
+                other => {
+                    panic!("Cannot resolve object type to ResolvedValue: {other:?}")
+                }
+            },
         }
     }
 
@@ -382,7 +292,6 @@ impl BexEngine {
                     .collect();
                 vm.alloc_map(values)
             }
-            ResolvedValue::Object(idx) => Value::Object(idx),
             ResolvedValue::ResourceId(id) => {
                 // Store resource ID as an integer value
                 Value::Int(id.cast_signed())

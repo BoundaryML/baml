@@ -31,6 +31,7 @@ baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 baml_snapshot = { path = "crates/baml_snapshot" }
 bex_engine = { path = "crates/bex_engine" }
+bex_sys = { path = "crates/bex_sys" }
 baml_db = { path = "crates/baml_db" }
 baml_ide = { path = "crates/baml_ide" }
 baml_lsp = { path = "crates/baml_lsp" }

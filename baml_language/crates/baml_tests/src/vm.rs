@@ -58,9 +58,6 @@ impl Value {
                     .map(|(k, v)| (k.clone(), Self::from_resolved(v)))
                     .collect(),
             )),
-            ResolvedValue::Object(idx) => {
-                Value::Object(Object::String(format!("<unresolved object {}>", idx)))
-            }
             ResolvedValue::ResourceId(id) => {
                 Value::Object(Object::String(format!("<resource {}>", id)))
             }

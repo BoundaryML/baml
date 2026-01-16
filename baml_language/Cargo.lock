@@ -733,11 +733,20 @@ dependencies = [
  "anyhow",
  "baml_snapshot",
  "baml_tests",
+ "bex_sys",
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
- "parking_lot",
  "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
+name = "bex_sys"
+version = "0.0.0"
+dependencies = [
+ "indexmap 2.13.0",
  "thiserror 2.0.17",
  "tokio",
 ]

@@ -6,24 +6,7 @@ use std::sync::Arc;
 
 use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::{OpContext, OpError, ResolvedArgs, ResolvedValue};
-
-/// A file handle stored in the resource registry.
-struct FileHandle {
-    /// The file, wrapped in Arc for cloning out of the resource registry.
-    file: Arc<tokio::sync::Mutex<File>>,
-    #[allow(dead_code)]
-    path: String,
-}
-
-impl FileHandle {
-    fn new(file: File, path: String) -> Self {
-        Self {
-            file: Arc::new(tokio::sync::Mutex::new(file)),
-            path,
-        }
-    }
-}
+use crate::{FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue};
 
 // ============================================================================
 // baml.fs.open
@@ -74,14 +57,14 @@ pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedVal
     };
 
     // Get the file handle from resources
-    // Clone the Arc<Mutex<File>> so we can release the RwLock before awaiting
+    // Clone the Arc<Mutex<File>> so we can release the lock before awaiting
     let file_mutex = {
-        let guard = ctx.resources.read();
+        let guard = ctx.resources.lock().unwrap();
         let file_handle = guard
-            .get::<FileHandle>(file_id)
+            .get_file(file_id)
             .ok_or(OpError::ResourceNotFound(file_id))?;
         Arc::clone(&file_handle.file)
-    }; // RwLock guard dropped here
+    }; // lock guard dropped here
 
     // Now we can safely await the file mutex
     let mut file = file_mutex.lock().await;
