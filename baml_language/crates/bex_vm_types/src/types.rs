@@ -221,7 +221,7 @@ pub struct Function<F> {
 
     /// Bytecode to execute.
     ///
-    /// Only relevant if [`Self::kind`] is [`FunctionKind::Exec`].
+    /// Only relevant if [`Self::kind`] is [`FunctionKind::Bytecode`].
     pub bytecode: Bytecode,
 
     /// Type of function.
