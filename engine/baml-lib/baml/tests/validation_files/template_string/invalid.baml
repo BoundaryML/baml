@@ -14,12 +14,6 @@ template_string FunctionWithBadParams(
 //  5 | ) #"
 //  6 |     {{ param.foo }}
 //    | 
-// warning: 'param' is undefined, expected class
-//   -->  template_string/invalid.baml:6
-//    | 
-//  5 | ) #"
-//  6 |     {{ param.foo }}
-//    | 
 // error: Type `Unknown` does not exist. Did you mean one of these: `int`, `float`, `bool`, `string`, `true`, `false`?
 //   -->  template_string/invalid.baml:2
 //    | 

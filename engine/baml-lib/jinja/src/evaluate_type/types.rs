@@ -288,6 +288,11 @@ impl BitOr for Type {
 enum Scope {
     CodeBlock(IndexMap<String, Type>),
     Branch(IndexMap<String, Type>, IndexMap<String, Type>, bool),
+    /// A scope for type narrowing (e.g., from type guards in if conditions).
+    /// Variables in this scope shadow outer variables but don't participate
+    /// in branch merging. When the scope ends, the narrowed types disappear
+    /// and the original types are restored.
+    Narrowing(IndexMap<String, Type>),
 }
 
 #[derive(Debug)]
@@ -324,6 +329,7 @@ impl PredefinedTypes {
                         on_false.keys()
                     }
                 }
+                Scope::Narrowing(vars) => vars.keys(),
             }))
             .map(String::to_owned)
             .collect()
@@ -456,6 +462,32 @@ impl PredefinedTypes {
         self.scopes.pop();
     }
 
+    /// Start a narrowing scope for type guards in if conditions.
+    /// Variables added via `add_narrowing` will shadow outer variables
+    /// but won't participate in branch merging.
+    pub fn start_narrowing_scope(&mut self) {
+        self.scopes.push(Scope::Narrowing(IndexMap::new()));
+    }
+
+    /// End the current narrowing scope, restoring original variable types.
+    pub fn end_narrowing_scope(&mut self) {
+        match self.scopes.pop() {
+            Some(Scope::Narrowing(_)) => {}
+            _ => panic!("Cannot end narrowing scope without starting one"),
+        }
+    }
+
+    /// Add a narrowed variable type to the current narrowing scope.
+    /// This should only be called after `start_narrowing_scope`.
+    pub fn add_narrowing(&mut self, name: &str, t: Type) {
+        match self.scopes.last_mut() {
+            Some(Scope::Narrowing(vars)) => {
+                vars.insert(name.to_string(), t);
+            }
+            _ => panic!("Cannot add narrowing without a Narrowing scope"),
+        }
+    }
+
     pub fn start_branch(&mut self) {
         self.scopes
             .push(Scope::Branch(IndexMap::new(), IndexMap::new(), true));
@@ -539,6 +571,7 @@ impl PredefinedTypes {
                         false_vars.get(name)
                     }
                 }
+                Scope::Narrowing(vars) => vars.get(name),
             })
             .or_else(|| self.variables.get(name))
     }
@@ -597,21 +630,28 @@ impl PredefinedTypes {
     }
 
     pub fn add_variable(&mut self, name: &str, t: Type) {
-        match self.scopes.last_mut() {
-            Some(Scope::Branch(true_vars, false_vars, branch_cond)) => {
-                if *branch_cond {
-                    true_vars.insert(name.to_string(), t);
-                } else {
-                    false_vars.insert(name.to_string(), t);
+        // Find the topmost non-Narrowing scope to add the variable to.
+        // Narrowing scopes are skipped so that assignments (e.g., {% set x = 1 %})
+        // go to the underlying Branch/CodeBlock scope for proper branch merging.
+        for scope in self.scopes.iter_mut().rev() {
+            match scope {
+                Scope::Narrowing(_) => continue, // Skip narrowing scopes
+                Scope::Branch(true_vars, false_vars, branch_cond) => {
+                    if *branch_cond {
+                        true_vars.insert(name.to_string(), t);
+                    } else {
+                        false_vars.insert(name.to_string(), t);
+                    }
+                    return;
+                }
+                Scope::CodeBlock(vars) => {
+                    vars.insert(name.to_string(), t);
+                    return;
                 }
             }
-            Some(Scope::CodeBlock(vars)) => {
-                vars.insert(name.to_string(), t);
-            }
-            None => {
-                self.variables.insert(name.to_string(), t);
-            }
         }
+        // No scope found, add to root variables
+        self.variables.insert(name.to_string(), t);
     }
 
     pub fn check_class_property(

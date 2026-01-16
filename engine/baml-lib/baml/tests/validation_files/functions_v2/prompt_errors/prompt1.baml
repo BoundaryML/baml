@@ -38,12 +38,6 @@ function Bar1(a: string) -> int {
   "#
 }
 
-// warning: Variable `b` does not exist. Did you mean one of these: `_`, `ctx`?
-//   -->  functions_v2/prompt_errors/prompt1.baml:6
-//    | 
-//  5 | template_string Foo() #"
-//  6 |   This! {{ b}}
-//    | 
 // warning: Function 'Foo' expects 0 arguments, but got 1
 //   -->  functions_v2/prompt_errors/prompt1.baml:24
 //    | 

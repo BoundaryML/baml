@@ -102,15 +102,27 @@ fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
 
             // Record variables in each branch and their types (fuse them if they are the same)
             state.start_branch();
+
+            // Use a narrowing scope for type guards in the true branch.
+            // This ensures narrowed types are visible in the branch body but don't
+            // participate in branch merging (they should revert after the branch).
+            state.start_narrowing_scope();
             true_bindings
                 .into_iter()
-                .for_each(|(k, v)| state.add_variable(k.as_str(), v));
+                .for_each(|(k, v)| state.add_narrowing(k.as_str(), v));
             stmt.true_body.iter().for_each(|x| track_walk(x, state));
+            state.end_narrowing_scope();
+
             state.start_else_branch();
+
+            // Same for the false/else branch
+            state.start_narrowing_scope();
             false_bindings
                 .into_iter()
-                .for_each(|(k, v)| state.add_variable(k.as_str(), v));
+                .for_each(|(k, v)| state.add_narrowing(k.as_str(), v));
             stmt.false_body.iter().for_each(|x| track_walk(x, state));
+            state.end_narrowing_scope();
+
             state.resolve_branch();
         }
         ast::Stmt::WithBlock(_) => todo!(),
