@@ -1,0 +1,18 @@
+// Test network operations typecheck correctly
+
+function ConnectAndRead() -> string {
+    let sock = baml.net.connect("127.0.0.1:8080");
+    sock.read()
+}
+
+function ConnectAndReadInline() -> string {
+    baml.net.connect("localhost:3000").read()
+}
+
+function MultipleConnections() -> string {
+    let s1 = baml.net.connect("server1:80");
+    let s2 = baml.net.connect("server2:80");
+    let data1 = s1.read();
+    let data2 = s2.read();
+    data1 + data2
+}

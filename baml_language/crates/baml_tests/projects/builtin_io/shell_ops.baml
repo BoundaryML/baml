@@ -1,0 +1,16 @@
+// Test shell operations typecheck correctly
+
+function RunCommand() -> string {
+    baml.sys.shell("echo hello")
+}
+
+function RunCommandWithVar() -> string {
+    let cmd = "ls -la";
+    baml.sys.shell(cmd)
+}
+
+function ChainCommands() -> string {
+    let result1 = baml.sys.shell("pwd");
+    let result2 = baml.sys.shell("whoami");
+    result1 + " - " + result2
+}
