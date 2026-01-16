@@ -103,6 +103,9 @@ pub enum DiagnosticId {
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
 
+    // Map type errors (E0039)
+    InvalidMapArity,
+
     // Test diagnostics (E0034-E0036)
     UnknownTestProperty,
     MissingTestProperty,
@@ -173,6 +176,9 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
+
+            // Map type errors
+            DiagnosticId::InvalidMapArity => "E0039",
 
             // Test diagnostics
             DiagnosticId::UnknownTestProperty => "E0034",

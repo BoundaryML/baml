@@ -68,3 +68,30 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: map<K, V> requires exactly 2 type parameters, found 0
+//     ╭─[ class_map_types2.baml:26:5 ]
+//     │
+//  26 │   d1 map<>
+//     │     ───┬──  
+//     │        ╰──── map<K, V> requires exactly 2 type parameters, found 0
+//     │ 
+//     │ Note: Error code: E0039
+// ────╯
+// Error: map<K, V> requires exactly 2 type parameters, found 1
+//     ╭─[ class_map_types2.baml:27:5 ]
+//     │
+//  27 │   d2 map<string>
+//     │     ──────┬─────  
+//     │           ╰─────── map<K, V> requires exactly 2 type parameters, found 1
+//     │ 
+//     │ Note: Error code: E0039
+// ────╯
+// Error: map<K, V> requires exactly 2 type parameters, found 3
+//     ╭─[ class_map_types2.baml:28:5 ]
+//     │
+//  28 │   d3 map<string, string, string>
+//     │     ──────────────┬─────────────  
+//     │                   ╰─────────────── map<K, V> requires exactly 2 type parameters, found 3
+//     │ 
+//     │ Note: Error code: E0039
+// ────╯

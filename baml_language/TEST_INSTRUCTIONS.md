@@ -71,7 +71,8 @@ UPDATE_EXPECT=1 cargo test --package baml_ide_tests
 ### 7. Verify all tests pass
 
 ```bash
-cargo test --package baml_tests
+# Run all tests (can skip slow parser_stress with --skip parser_stress)
+cargo test --package baml_tests -- --skip parser_stress
 cargo test --package baml_ide_tests
 ```
 
@@ -83,6 +84,9 @@ cargo test --package baml_tests my_project_name
 
 # Run all snapshot tests
 cargo test --package baml_tests
+
+# Run all snapshot tests (skip slow parser_stress tests)
+cargo test --package baml_tests -- --skip parser_stress
 
 # Run LSP tests and auto-update expectations
 UPDATE_EXPECT=1 cargo test --package baml_ide_tests
