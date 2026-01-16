@@ -194,7 +194,7 @@ pub enum HirDiagnostic {
     UnsupportedFloatLiteral { value: String, span: Span },
 
     /// Invalid map type arity (wrong number of type parameters).
-    /// Maps require exactly 2 type parameters: map<KeyType, ValueType>
+    /// Maps require exactly 2 type parameters: `map<KeyType, ValueType>`
     InvalidMapArity {
         expected: usize,
         found: usize,
