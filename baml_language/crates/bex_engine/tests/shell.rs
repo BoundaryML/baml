@@ -1,9 +1,9 @@
 //! Tests for shell operations (baml.sys.shell).
 
-use baml_tests::{
-    engine::{EngineProgram, assert_engine_executes},
-    vm::Value,
-};
+mod common;
+
+use baml_tests::vm::Value;
+use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
 #[tokio::test]

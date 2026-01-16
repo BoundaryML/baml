@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 31
-Globals: 30
+Objects: 33
+Globals: 32
 
 Function FetchDatax (arity: 1, kind: External(Llm)):
   (no bytecode)

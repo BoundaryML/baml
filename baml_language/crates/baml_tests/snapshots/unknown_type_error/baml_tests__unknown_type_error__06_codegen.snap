@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 32
-Globals: 32
+Objects: 34
+Globals: 34
 
 Function Bar (arity: 1, kind: Bytecode):
      0   LOAD_CONST 0   (1)

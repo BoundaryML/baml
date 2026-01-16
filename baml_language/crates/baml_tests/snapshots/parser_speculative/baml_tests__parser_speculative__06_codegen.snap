@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 8
-Objects: 45
-Globals: 37
+Objects: 47
+Globals: 39
 
 Function Ambiguous (arity: 1, kind: External(Llm)):
   (no bytecode)

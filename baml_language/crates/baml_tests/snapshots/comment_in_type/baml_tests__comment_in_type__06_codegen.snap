@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 2
-Objects: 31
-Globals: 31
+Objects: 33
+Globals: 33
 
 Function CommentAfterArrow (arity: 0, kind: External(Llm)):
   (no bytecode)

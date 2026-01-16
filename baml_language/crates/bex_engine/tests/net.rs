@@ -1,18 +1,12 @@
 //! Tests for network operations (baml.net.connect, socket.read).
 
+mod common;
+
 use std::collections::HashMap;
 
-use baml_snapshot::BamlSnapshot;
 use bex_engine::BexEngine;
-use bex_vm::convert_program;
+use common::compile_for_engine;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
-
-/// Compile BAML source to a snapshot.
-fn compile(source: &str) -> BamlSnapshot {
-    let program = baml_tests::bytecode::compile_source(source);
-    let bytecode = convert_program(program).expect("convert_program should succeed");
-    BamlSnapshot::new(bytecode)
-}
 
 #[tokio::test]
 async fn net_connect_and_read() -> anyhow::Result<()> {
@@ -37,7 +31,7 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
         "#
     );
 
-    let snapshot = compile(&source);
+    let snapshot = compile_for_engine(&source);
     let engine = BexEngine::new(snapshot, HashMap::new());
     let result = engine.call_function("main", &[]).await?;
 
@@ -65,7 +59,7 @@ async fn net_connect_failure() -> anyhow::Result<()> {
         }
     "#;
 
-    let snapshot = compile(source);
+    let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, HashMap::new());
     let result = engine.call_function("main", &[]).await;
 
@@ -106,7 +100,7 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
         "#
     );
 
-    let snapshot = compile(&source);
+    let snapshot = compile_for_engine(&source);
     let engine = BexEngine::new(snapshot, HashMap::new());
     let result = engine.call_function("main", &[]).await?;
 

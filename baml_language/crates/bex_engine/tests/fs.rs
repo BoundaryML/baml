@@ -1,9 +1,9 @@
 //! Tests for filesystem operations (baml.fs.open, file.read).
 
-use baml_tests::{
-    engine::{EngineProgram, assert_engine_executes},
-    vm::Value,
-};
+mod common;
+
+use baml_tests::vm::Value;
+use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
 /// Test that just `open()` returns something (without read)

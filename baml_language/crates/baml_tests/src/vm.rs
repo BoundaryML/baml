@@ -4,7 +4,6 @@
 //! rely on indices, making tests more readable and resilient to changes in the
 //! order of globals, constants, and objects.
 
-use bex_engine::ResolvedValue;
 use bex_vm::{
     BexVm, VmExecState,
     vm::WatchNotification as VmWatchNotification,
@@ -42,28 +41,6 @@ impl Value {
         }
     }
 
-    /// Convert a ResolvedValue (from engine execution) to a test Value.
-    pub fn from_resolved(value: &ResolvedValue) -> Self {
-        match value {
-            ResolvedValue::Null => Value::Null,
-            ResolvedValue::Int(i) => Value::Int(*i),
-            ResolvedValue::Float(f) => Value::Float(*f),
-            ResolvedValue::Bool(b) => Value::Bool(*b),
-            ResolvedValue::String(s) => Value::Object(Object::String(s.clone())),
-            ResolvedValue::Array(arr) => {
-                Value::Object(Object::Array(arr.iter().map(Self::from_resolved).collect()))
-            }
-            ResolvedValue::Map(map) => Value::Object(Object::Map(
-                map.iter()
-                    .map(|(k, v)| (k.clone(), Self::from_resolved(v)))
-                    .collect(),
-            )),
-            ResolvedValue::ResourceId(id) => {
-                Value::Object(Object::String(format!("<resource {}>", id)))
-            }
-        }
-    }
-
     /// Shorthand for creating a function value.
     pub fn function(name: &str) -> Self {
         Value::Object(Object::Function(name.to_string()))
@@ -82,6 +59,16 @@ impl Value {
     /// Shorthand for creating a string value.
     pub fn string(s: &str) -> Self {
         Value::Object(Object::String(s.to_string()))
+    }
+
+    /// Shorthand for creating an array value.
+    pub fn array(values: Vec<Value>) -> Self {
+        Value::Object(Object::Array(values))
+    }
+
+    /// Shorthand for creating a map value.
+    pub fn map(values: IndexMap<String, Value>) -> Self {
+        Value::Object(Object::Map(values))
     }
 }
 

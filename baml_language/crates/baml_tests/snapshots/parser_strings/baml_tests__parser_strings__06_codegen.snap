@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 37
-Globals: 32
+Objects: 39
+Globals: 34
 
 Function FormatMessage (arity: 1, kind: External(Llm)):
   (no bytecode)

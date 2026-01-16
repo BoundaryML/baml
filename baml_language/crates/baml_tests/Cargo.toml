@@ -20,7 +20,6 @@ baml_db = { workspace = true }
 baml_project = { workspace = true }
 baml_snapshot = { workspace = true }
 baml_workspace = { workspace = true }
-bex_engine = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 anyhow = { workspace = true }
@@ -28,7 +27,6 @@ indexmap = { workspace = true }
 insta = { workspace = true }
 salsa = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true }
 
 [build-dependencies]
 prettyplease = { workspace = true }

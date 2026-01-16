@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 2
-Objects: 33
-Globals: 31
+Objects: 35
+Globals: 33
 
 Function BadParam (arity: 1, kind: External(Llm)):
   (no bytecode)

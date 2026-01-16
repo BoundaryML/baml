@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 86
-Objects: 290
-Globals: 115
+Objects: 292
+Globals: 117
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)
@@ -787,7 +787,7 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
-     1    LOAD_GLOBAL 70         (<fn GetStatus>)
+     1    LOAD_GLOBAL 72         (<fn GetStatus>)
      2    CALL 0                 
      3    STORE_VAR 1            (_1)
      4    LOAD_VAR 1             (_1)
