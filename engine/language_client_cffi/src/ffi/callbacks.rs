@@ -77,7 +77,12 @@ pub fn send_result_to_callback(
     match buf_result {
         Ok(buf) => {
             let is_done_int = if is_done { 1 } else { 0 };
-            callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
+            // Use block_in_place to tell Tokio this is a blocking operation.
+            // This allows Tokio to move other async tasks to different worker threads,
+            // preventing deadlock when the callback performs blocking FFI calls.
+            tokio::task::block_in_place(|| {
+                callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
+            });
         }
         Err(panic_info) => {
             let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -90,7 +95,10 @@ pub fn send_result_to_callback(
 
             if is_done {
                 // For final results, send error via callback
-                error_callback_fn(id, 1, error_msg.as_ptr() as *const i8, error_msg.len());
+                // Use block_in_place to tell Tokio this is a blocking operation.
+                tokio::task::block_in_place(|| {
+                    error_callback_fn(id, 1, error_msg.as_ptr() as *const i8, error_msg.len());
+                });
             } else {
                 // For streaming events, just log and drop the event
                 baml_log::error!("Encoding error: {}", error_msg);
@@ -104,7 +112,12 @@ pub fn send_error_to_callback(id: u32, error: &anyhow::Error) {
         .get()
         .expect("expected error callback function to be set. Did you call register_callbacks?");
     let message = error.to_string();
-    error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+    // Use block_in_place to tell Tokio this is a blocking operation.
+    // This allows Tokio to move other async tasks to different worker threads,
+    // preventing deadlock when the callback performs blocking FFI calls.
+    tokio::task::block_in_place(|| {
+        error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+    });
 }
 
 pub fn safe_trigger_callback(
