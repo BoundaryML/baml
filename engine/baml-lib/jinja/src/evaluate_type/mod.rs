@@ -417,9 +417,7 @@ impl TypeError {
             Some(name) => format!(
                 "property '{property}' does not exist on {classes_str} in type alias {name}"
             ),
-            None => format!(
-                "property '{property}' does not exist on {classes_str}"
-            ),
+            None => format!("property '{property}' does not exist on {classes_str}"),
         };
         Self { message, span }
     }
@@ -434,9 +432,7 @@ impl TypeError {
             Some(name) => format!(
                 "property '{property}' has inconsistent types across classes in type alias {name}"
             ),
-            None => format!(
-                "property '{property}' has inconsistent types across union members"
-            ),
+            None => format!("property '{property}' has inconsistent types across union members"),
         };
         Self { message, span }
     }

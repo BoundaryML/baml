@@ -220,8 +220,7 @@ pub fn predicate_implications<'a>(
                 if branch {
                     // For `A or B` being TRUE: at least one is true
                     // We need to union the narrowed types for each variable
-                    let left_implications =
-                        predicate_implications(&binary_op.left, context, true);
+                    let left_implications = predicate_implications(&binary_op.left, context, true);
                     let right_implications =
                         predicate_implications(&binary_op.right, context, true);
 

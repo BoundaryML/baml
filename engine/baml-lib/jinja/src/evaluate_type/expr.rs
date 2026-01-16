@@ -819,24 +819,28 @@ fn typecheck_attr_access_on_union(
     // Report specific errors based on what went wrong
     if !classes_missing_property.is_empty() {
         let variable_name = pretty_print(&get_attr.expr);
-        state.errors.push(TypeError::new_property_not_found_in_union(
-            &variable_name,
-            get_attr.name,
-            &classes_missing_property,
-            union_name,
-            get_attr.span(),
-        ));
+        state
+            .errors
+            .push(TypeError::new_property_not_found_in_union(
+                &variable_name,
+                get_attr.name,
+                &classes_missing_property,
+                union_name,
+                get_attr.span(),
+            ));
         return Type::Unknown;
     }
 
     if has_type_mismatch {
         let variable_name = pretty_print(&get_attr.expr);
-        state.errors.push(TypeError::new_property_type_mismatch_in_union(
-            &variable_name,
-            get_attr.name,
-            union_name,
-            get_attr.span(),
-        ));
+        state
+            .errors
+            .push(TypeError::new_property_type_mismatch_in_union(
+                &variable_name,
+                get_attr.name,
+                union_name,
+                get_attr.span(),
+            ));
         return Type::Unknown;
     }
 
