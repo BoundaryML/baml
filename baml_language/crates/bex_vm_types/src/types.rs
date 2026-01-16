@@ -97,6 +97,68 @@ impl<F> Program<F> {
     }
 }
 
+// ============================================================================
+// External Operations
+// ============================================================================
+
+/// External operation to be executed by the engine.
+///
+/// This enum enables static dispatch instead of dynamic dispatch via traits.
+/// The engine matches on this enum to execute the appropriate async operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExternalOp {
+    /// LLM function call (user-defined functions with LLM body).
+    Llm,
+    /// System operation (file I/O, shell, HTTP, etc.).
+    Sys(SysOp),
+}
+
+/// System operations that run outside the VM.
+///
+/// These are built-in async operations provided by the engine.
+/// Add new variants here as new system capabilities are added.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SysOp {
+    /// Open a file: `baml.fs.open(path: String) -> File`
+    FsOpen,
+    /// Read file contents: `File.read() -> String`
+    FsRead,
+    /// Execute a shell command: `baml.sys.shell(cmd: String) -> String`
+    Shell,
+    /// Connect to a TCP socket: `baml.net.connect(addr: String) -> Socket`
+    NetConnect,
+    /// Read from a socket: `Socket.read() -> String`
+    NetRead,
+    // Future operations:
+    // /// HTTP request
+    // HttpRequest,
+}
+
+impl std::fmt::Display for ExternalOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExternalOp::Llm => write!(f, "llm"),
+            ExternalOp::Sys(sys_op) => write!(f, "{sys_op}"),
+        }
+    }
+}
+
+impl std::fmt::Display for SysOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SysOp::FsOpen => write!(f, "fs.open"),
+            SysOp::FsRead => write!(f, "fs.read"),
+            SysOp::Shell => write!(f, "sys.shell"),
+            SysOp::NetConnect => write!(f, "net.connect"),
+            SysOp::NetRead => write!(f, "net.read"),
+        }
+    }
+}
+
+// ============================================================================
+// Function Types
+// ============================================================================
+
 /// Function type.
 ///
 /// # Generic Parameter `F`
@@ -127,9 +189,9 @@ pub enum FunctionKind<F> {
 
     /// External operation (LLM calls, HTTP requests, file I/O, etc.).
     ///
-    /// The VM yields control to the engine which looks up the operation
-    /// in the external operation registry and executes it asynchronously.
-    External,
+    /// The VM yields control to the engine which executes the operation
+    /// asynchronously via static dispatch on the `ExternalOp` enum.
+    External(ExternalOp),
 
     /// Rust native functions.
     ///
@@ -380,8 +442,8 @@ pub enum Future {
 /// LLM calls, HTTP requests, file I/O, or shell commands.
 #[derive(Clone, Debug)]
 pub struct PendingFuture {
-    /// The external operation to execute (e.g., "baml.http.get", "baml.fs.read").
-    pub operation: String,
+    /// The external operation to execute.
+    pub operation: ExternalOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
 }
@@ -563,7 +625,7 @@ impl std::fmt::Display for FunctionType {
 
 impl<F> From<&FunctionKind<F>> for FunctionType {
     fn from(value: &FunctionKind<F>) -> Self {
-        if matches!(value, FunctionKind::External) {
+        if matches!(value, FunctionKind::External(_)) {
             FunctionType::External
         } else {
             FunctionType::Callable

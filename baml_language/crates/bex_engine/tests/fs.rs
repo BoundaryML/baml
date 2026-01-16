@@ -1,0 +1,60 @@
+//! Tests for filesystem operations (baml.fs.open, file.read).
+
+use baml_tests::{
+    engine::{EngineProgram, assert_engine_executes},
+    vm::Value,
+};
+use indexmap::indexmap;
+
+/// Test that just `open()` returns something (without read)
+#[tokio::test]
+async fn fs_open_only() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        fs: indexmap! {
+            "hello.txt" => "Hello from BAML!",
+        },
+        source: r#"
+            function main() -> int {
+                let file = baml.fs.open("{ROOT}/hello.txt");
+                42
+            }
+        "#,
+        function: "main",
+        expected: Ok(Value::Int(42)),
+    })
+    .await
+}
+
+#[tokio::test]
+async fn fs_open_and_read() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        fs: indexmap! {
+            "hello.txt" => "Hello from BAML!",
+        },
+        source: r#"
+            function main() -> string {
+                let file = baml.fs.open("{ROOT}/hello.txt");
+                file.read()
+            }
+        "#,
+        function: "main",
+        expected: Ok(Value::string("Hello from BAML!")),
+    })
+    .await
+}
+
+#[tokio::test]
+async fn fs_open_nonexistent_file() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
+        fs: indexmap! {},
+        source: r#"
+            function main() -> string {
+                let file = baml.fs.open("{ROOT}/nonexistent.txt");
+                file.read()
+            }
+        "#,
+        function: "main",
+        expected: Err("Failed to open file"),
+    })
+    .await
+}

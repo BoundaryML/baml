@@ -42,6 +42,8 @@ enum StructuralTy {
     // User-defined (resolved by name)
     Class(Name),
     Enum(Name),
+    // Builtin types (e.g., baml.fs.File)
+    Builtin(std::string::String),
     // Constructors
     Optional(Box<StructuralTy>),
     List(Box<StructuralTy>),
@@ -285,6 +287,9 @@ fn normalize_impl(
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
         },
+
+        // Builtin types
+        Ty::Builtin(path) => StructuralTy::Builtin(path.clone()),
     }
 }
 

@@ -82,6 +82,9 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         }
         (TypePattern::Media, Ty::Media(_)) => true,
 
+        // Builtin types match exactly by path
+        (TypePattern::Builtin(pattern_path), Ty::Builtin(ty_path)) => *pattern_path == ty_path,
+
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
 
@@ -131,6 +134,7 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         },
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
+        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
     }
 }
 
@@ -153,6 +157,7 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         },
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
+        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
     }
 }
 

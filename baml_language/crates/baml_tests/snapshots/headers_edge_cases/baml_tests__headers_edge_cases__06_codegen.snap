@@ -1,13 +1,13 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 10
-Objects: 44
-Globals: 34
+Objects: 49
+Globals: 39
 
-Function ConsecutiveHeaders (arity: 0, kind: Exec):
+Function ConsecutiveHeaders (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (FirstHeader)
      1   NOTIFY_BLOCK 1   (SecondHeader)
      2   NOTIFY_BLOCK 2   (ThirdHeader)
@@ -17,7 +17,7 @@ Function ConsecutiveHeaders (arity: 0, kind: Exec):
      6   LOAD_CONST 0     (multiple consecutive headers)
      7   RETURN           
 
-Function HeaderLevels (arity: 0, kind: Exec):
+Function HeaderLevels (arity: 0, kind: Bytecode):
      0    NOTIFY_BLOCK 0   (Level1)
      1    NOTIFY_BLOCK 1   (Level2)
      2    NOTIFY_BLOCK 2   (Level3)
@@ -30,7 +30,7 @@ Function HeaderLevels (arity: 0, kind: Exec):
      9    LOAD_CONST 0     (deep nesting)
      10   RETURN           
 
-Function HeaderOnlyFunction (arity: 0, kind: Exec):
+Function HeaderOnlyFunction (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (JustHeaders)
      1   NOTIFY_BLOCK 1   (NoCode)
      2   NOTIFY_BLOCK 2   (OnlyDocumentation)
@@ -40,14 +40,14 @@ Function HeaderOnlyFunction (arity: 0, kind: Exec):
      6   LOAD_CONST 0     (default)
      7   RETURN           
 
-Function HeadersAndComments (arity: 0, kind: Exec):
+Function HeadersAndComments (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (HeaderBeforeComment)
      1   NOTIFY_BLOCK 1   (HeaderAfterComment)
      2   NOTIFY_BLOCK 2   (HeaderAfterDocComment)
      3   LOAD_CONST 0     (test)
      4   RETURN           
 
-Function HeadersAroundExpressions (arity: 0, kind: Exec):
+Function HeadersAroundExpressions (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
      1    LOAD_CONST 0           (null)
      2    LOAD_CONST 0           (null)
@@ -100,7 +100,7 @@ Function HeadersAroundExpressions (arity: 0, kind: Exec):
      49   NOTIFY_BLOCK 9         (InsideFor)
      50   JUMP -19               (to 31)
 
-Function HeadersInComplexNesting (arity: 0, kind: Exec):
+Function HeadersInComplexNesting (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
      1    NOTIFY_BLOCK 0         (MainFunction)
      2    NOTIFY_BLOCK 1         (InsideBlockExpression)
@@ -122,7 +122,7 @@ Function HeadersInComplexNesting (arity: 0, kind: Exec):
      18   LOAD_VAR 1             (result)
      19   RETURN                 
 
-Function HeadersWithSpecialChars (arity: 0, kind: Exec):
+Function HeadersWithSpecialChars (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (Header-With-Dashes)
      1   NOTIFY_BLOCK 1   (Header_With_Underscores)
      2   NOTIFY_BLOCK 2   (Header.With.Dots)
@@ -132,7 +132,7 @@ Function HeadersWithSpecialChars (arity: 0, kind: Exec):
      6   LOAD_CONST 0     (special chars)
      7   RETURN           
 
-Function HeadersWithWhitespace (arity: 0, kind: Exec):
+Function HeadersWithWhitespace (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (ExtraSpacesBeforeTitle)
      1   NOTIFY_BLOCK 1   (MixedTabsAndSpaces)
      2   NOTIFY_BLOCK 2   (AllTabs)
@@ -141,14 +141,14 @@ Function HeadersWithWhitespace (arity: 0, kind: Exec):
      5   LOAD_CONST 0     (whitespace test)
      6   RETURN           
 
-Function UnicodeHeaders (arity: 0, kind: Exec):
+Function UnicodeHeaders (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (你好世界)
      1   NOTIFY_BLOCK 1   (Émojis🎉🎊)
      2   NOTIFY_BLOCK 2   (Special«Characters»™)
      3   LOAD_CONST 0     (test)
      4   RETURN           
 
-Function VeryLongHeaderTitle (arity: 0, kind: Exec):
+Function VeryLongHeaderTitle (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader)
      1   NOTIFY_BLOCK 1   (AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890)
      2   LOAD_CONST 0     (long headers)

@@ -1566,11 +1566,12 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let mut all_args = vec![self.lower_to_operand(*base, body)];
                 all_args.extend(self.lower_args(args, body));
 
-                self.emit_call(
-                    Operand::Constant(Constant::Function(Name::new(def.path))),
-                    all_args,
-                    dest,
-                );
+                let callee = Operand::Constant(Constant::Function(Name::new(def.path)));
+                if def.is_external {
+                    self.emit_external_call(callee, all_args, dest);
+                } else {
+                    self.emit_call(callee, all_args, dest);
+                }
                 return;
             }
         }
@@ -1595,9 +1596,59 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         }
 
         // Regular function call (not a method)
+        // Check if this is an external builtin function (by path)
+        let is_external = Self::is_external_builtin_path(callee_expr, body);
         let callee_operand = self.lower_to_operand(callee, body);
         let arg_operands = self.lower_args(args, body);
-        self.emit_call(callee_operand, arg_operands, dest);
+
+        if is_external {
+            self.emit_external_call(callee_operand, arg_operands, dest);
+        } else {
+            self.emit_call(callee_operand, arg_operands, dest);
+        }
+    }
+
+    /// Check if a callee expression refers to an external builtin function.
+    fn is_external_builtin_path(callee_expr: &Expr, body: &ExprBody) -> bool {
+        // Extract the path from the callee expression
+        let path = match callee_expr {
+            Expr::Var(name) => name.to_string(),
+            Expr::Path(segments) => segments
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>()
+                .join("."),
+            Expr::FieldAccess { .. } => {
+                // Recursively build the path from nested field accesses
+                fn build_path(expr: &Expr, body: &ExprBody) -> Option<String> {
+                    match expr {
+                        Expr::Var(name) => Some(name.to_string()),
+                        Expr::Path(segments) => Some(
+                            segments
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join("."),
+                        ),
+                        Expr::FieldAccess { base, field } => {
+                            let base_path = build_path(body.expr(*base), body)?;
+                            Some(format!("{base_path}.{field}"))
+                        }
+                        _ => None,
+                    }
+                }
+                match build_path(callee_expr, body) {
+                    Some(p) => p,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        };
+
+        // Look up the builtin by path and check if it's external
+        baml_compiler_tir::builtins::lookup_builtin_by_path(&path)
+            .map(|def| def.is_external)
+            .unwrap_or(false)
     }
 
     /// Lower an expression that can be assigned to (lvalue).
@@ -1734,6 +1785,35 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         self.builder.set_current_block(continue_block);
     }
 
+    /// Emit an external (async) function call using `DispatchFuture` + Await.
+    ///
+    /// External functions are implemented outside the VM (by the embedder).
+    /// This emits:
+    /// 1. `DispatchFuture`: Start the async operation, get a future handle
+    /// 2. Await: Wait for the future and retrieve the result
+    fn emit_external_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
+        // Create a temp to hold the future handle
+        // Future handles are opaque to the VM - we use Unknown type
+        let future_local = self.builder.temp(Ty::Unknown);
+        let future_place = Place::local(future_local);
+
+        // Create blocks for the dispatch and await
+        let await_block = self.builder.create_block();
+        let continue_block = self.builder.create_block();
+
+        // Emit DispatchFuture: starts async op, stores future handle, resumes at await_block
+        self.builder
+            .dispatch_future(callee, args, future_place.clone(), await_block);
+
+        // In await_block: wait for the future and store result in dest
+        self.builder.set_current_block(await_block);
+        self.builder
+            .await_(future_place, dest, continue_block, None);
+
+        // Continue execution after await completes
+        self.builder.set_current_block(continue_block);
+    }
+
     /// Convert a VIR type to a TIR type for MIR locals.
     fn lower_typed_ir_ty(ty: &baml_compiler_vir::Ty) -> Ty {
         match ty {
@@ -1770,6 +1850,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
             }
+            baml_compiler_vir::Ty::Builtin(path) => Ty::Builtin(path.clone()),
         }
     }
 }

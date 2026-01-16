@@ -1,28 +1,28 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 8
-Objects: 40
-Globals: 32
+Objects: 45
+Globals: 37
 
-Function Ambiguous (arity: 1, kind: Llm):
+Function Ambiguous (arity: 1, kind: External(Llm)):
   (no bytecode)
 
-Function AnotherLLM (arity: 1, kind: Llm):
+Function AnotherLLM (arity: 1, kind: External(Llm)):
   (no bytecode)
 
-Function ChainedProcess (arity: 1, kind: Llm):
+Function ChainedProcess (arity: 1, kind: External(Llm)):
   (no bytecode)
 
-Function ExtractData (arity: 1, kind: Llm):
+Function ExtractData (arity: 1, kind: External(Llm)):
   (no bytecode)
 
-Function LLMAnalyze (arity: 1, kind: Llm):
+Function LLMAnalyze (arity: 1, kind: External(Llm)):
   (no bytecode)
 
-Function ProcessAnalysis (arity: 1, kind: Exec):
+Function ProcessAnalysis (arity: 1, kind: Bytecode):
      0    LOAD_CONST 0           (null)
      1    LOAD_VAR 1             (analysis)
      2    LOAD_FIELD 2           
@@ -63,7 +63,7 @@ Function ProcessAnalysis (arity: 1, kind: Exec):
      37   BIN_OP +               
      38   RETURN                 
 
-Function ProcessData (arity: 1, kind: Exec):
+Function ProcessData (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (data)
      1    LOAD_FIELD 0           
      2    LOAD_VAR 1             (data)
@@ -78,7 +78,7 @@ Function ProcessData (arity: 1, kind: Exec):
      11   LOAD_CONST 2           (high)
      12   RETURN                 
 
-Function SimpleCalc (arity: 2, kind: Exec):
+Function SimpleCalc (arity: 2, kind: Bytecode):
      0   LOAD_VAR 1     (a)
      1   LOAD_VAR 2     (b)
      2   LOAD_CONST 0   (2)

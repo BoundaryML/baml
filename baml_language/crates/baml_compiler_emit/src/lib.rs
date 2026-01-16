@@ -51,8 +51,8 @@ use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex, Instruction, Object,
-    ObjectIndex, Program, UnaryOp, Value, type_tags,
+    BinOp, Bytecode, Class, CmpOp, Enum, ExternalOp, Function, FunctionKind, GlobalIndex,
+    Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -191,11 +191,21 @@ pub fn compile_files(
 
     // Add builtin functions to globals FIRST (stable indices)
     for builtin in builtins {
+        // External builtins (like file I/O) use FunctionKind::External
+        // so the VM knows to dispatch them via DispatchFuture/Await
+        let kind = if builtin.is_external {
+            let external_op = external_op_for_builtin_path(builtin.path)
+                .expect("external builtin must have ExternalOp mapping");
+            FunctionKind::External(external_op)
+        } else {
+            FunctionKind::Native(())
+        };
+
         let builtin_fn = Function {
             name: builtin.path.to_string(),
             arity: builtin.arity(),
             bytecode: Bytecode::default(),
-            kind: FunctionKind::Native(()),
+            kind,
             locals_in_scope: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
@@ -223,7 +233,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::External,
+                            kind: FunctionKind::External(ExternalOp::Llm),
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -359,4 +369,19 @@ fn build_typing_context(
     }
 
     context
+}
+
+/// Map a builtin path to its corresponding `ExternalOp`.
+///
+/// This is used during code generation to set the correct `ExternalOp` variant
+/// for external builtin functions.
+fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
+    match path {
+        "baml.fs.open" => Some(ExternalOp::Sys(SysOp::FsOpen)),
+        "baml.fs.File.read" => Some(ExternalOp::Sys(SysOp::FsRead)),
+        "baml.sys.shell" => Some(ExternalOp::Sys(SysOp::Shell)),
+        "baml.net.connect" => Some(ExternalOp::Sys(SysOp::NetConnect)),
+        "baml.net.Socket.read" => Some(ExternalOp::Sys(SysOp::NetRead)),
+        _ => None,
+    }
 }

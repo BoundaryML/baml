@@ -64,6 +64,7 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
         TypePattern::Optional(inner) => {
             Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
         }
+        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
     }
 }
 

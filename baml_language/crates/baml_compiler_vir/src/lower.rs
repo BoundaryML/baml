@@ -774,6 +774,8 @@ impl<'a> LoweringContext<'a> {
             baml_compiler_tir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_ty(inner)))
             }
+            // Builtin types (e.g., baml.fs.File)
+            baml_compiler_tir::Ty::Builtin(path) => Ty::Builtin(path.clone()),
         }
     }
 

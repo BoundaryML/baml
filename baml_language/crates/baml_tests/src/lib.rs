@@ -4,10 +4,12 @@
 //! - [`vm`]: Test-friendly representations of VM values and execution states
 //! - [`codegen`]: Test utilities for bytecode compilation tests
 //! - [`bytecode`]: Shared test utilities for bytecode compilation and VM execution
+//! - [`engine`]: Test utilities for async engine execution tests
 //! - Automatic snapshot tests generated from the `projects/` directory by `build.rs`
 
 pub mod bytecode;
 pub mod codegen;
+pub mod engine;
 pub mod vm;
 
 #[cfg(test)]

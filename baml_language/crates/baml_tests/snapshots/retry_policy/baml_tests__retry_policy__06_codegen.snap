@@ -1,8 +1,8 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 0
-Objects: 24
-Globals: 24
+Objects: 29
+Globals: 29

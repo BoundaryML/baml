@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 1
-Objects: 25
-Globals: 25
+Objects: 30
+Globals: 30
 
-Function Foo (arity: 0, kind: Exec):
+Function Foo (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (1)
      1   RETURN

@@ -1,13 +1,13 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 32
-Globals: 28
+Objects: 37
+Globals: 33
 
-Function Calculate (arity: 0, kind: Exec):
+Function Calculate (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0   (null)
      1    LOAD_CONST 0   (null)
      2    LOAD_CONST 1   (1)
@@ -29,7 +29,7 @@ Function Calculate (arity: 0, kind: Exec):
      18   BIN_OP *       
      19   RETURN         
 
-Function FieldAccess (arity: 1, kind: Exec):
+Function FieldAccess (arity: 1, kind: Bytecode):
      0    LOAD_CONST 0         (null)
      1    LOAD_CONST 0         (null)
      2    LOAD_CONST 0         (null)
@@ -51,7 +51,7 @@ Function FieldAccess (arity: 1, kind: Exec):
      18   LOAD_FIELD 0         
      19   RETURN               
 
-Function IndexAccess (arity: 1, kind: Exec):
+Function IndexAccess (arity: 1, kind: Bytecode):
      0    LOAD_CONST 0         (null)
      1    LOAD_CONST 0         (null)
      2    LOAD_CONST 0         (null)
@@ -76,7 +76,7 @@ Function IndexAccess (arity: 1, kind: Exec):
      21   LOAD_FIELD 0         
      22   RETURN               
 
-Function TestPrecedence (arity: 0, kind: Exec):
+Function TestPrecedence (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
      1    LOAD_CONST 0           (null)
      2    LOAD_CONST 0           (null)

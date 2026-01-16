@@ -53,10 +53,11 @@ macro_rules! make_native_fn_entries {
 static NATIVE_FUNCTIONS: LazyLock<IndexMap<&'static str, NativeFunction>> = LazyLock::new(|| {
     // Native function implementations for each builtin.
     //
-    // Automatically generated from `baml_builtins::for_all_builtins!`.
+    // Automatically generated from `baml_builtins::for_native_builtins!`.
     // Maps each path constant to its native function by naming convention.
+    // Note: External functions are excluded - they're handled by the embedder.
     let native_fns: &[(&str, NativeFunction)] =
-        baml_builtins::for_all_builtins!(make_native_fn_entries);
+        baml_builtins::for_native_builtins!(make_native_fn_entries);
 
     native_fns
         .iter()

@@ -10,8 +10,17 @@ license.workspace = true
 baml_snapshot = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+indexmap = { workspace = true }
+parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+baml_tests = { workspace = true }
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
 
 [lints]
 workspace = true

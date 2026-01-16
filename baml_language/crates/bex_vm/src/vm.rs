@@ -248,6 +248,49 @@ pub struct BytecodeProgram {
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
+/// Convert a compiled `Program<()>` to a `BytecodeProgram` with native functions attached.
+///
+/// This is the bridge between compilation output and VM execution. It:
+/// 1. Attaches native function implementations to builtin functions
+/// 2. Builds resolved name lookups for functions, classes, and enums
+pub fn convert_program(program: bex_vm_types::Program<()>) -> Result<BytecodeProgram, VmError> {
+    // Convert objects, attaching native functions
+    let objects: Vec<Object<NativeFunction>> = program
+        .objects
+        .into_iter()
+        .map(|o| crate::native::attach_builtins(o))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Build resolved name maps by scanning objects
+    let mut resolved_function_names = HashMap::new();
+    let mut resolved_class_names = HashMap::new();
+    let mut resolved_enums_names = HashMap::new();
+
+    for (idx, obj) in objects.iter().enumerate() {
+        let obj_idx = ObjectIndex::from_raw(idx);
+        match obj {
+            Object::Function(func) => {
+                resolved_function_names.insert(func.name.clone(), (obj_idx, func.kind));
+            }
+            Object::Class(class) => {
+                resolved_class_names.insert(class.name.clone(), obj_idx);
+            }
+            Object::Enum(enum_def) => {
+                resolved_enums_names.insert(enum_def.name.clone(), obj_idx);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(BytecodeProgram {
+        objects: ObjectPool::from_vec(objects),
+        globals: program.globals,
+        resolved_function_names,
+        resolved_class_names,
+        resolved_enums_names,
+    })
+}
+
 /// Get the type tag for any runtime value.
 ///
 /// This is a free function to avoid borrow checker issues when called
@@ -304,23 +347,8 @@ impl BexVm {
 
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     pub fn from_program(program: bex_vm_types::Program<()>) -> Result<Self, VmError> {
-        Ok(Self {
-            frames: Vec::new(),
-            stack: EvalStack::new(),
-            runtime_allocs_offset: ObjectIndex::from_raw(program.objects.len()),
-            objects: ObjectPool::from_vec(
-                program
-                    .objects
-                    .into_iter()
-                    .map(|o| crate::native::attach_builtins(o))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            globals: program.globals,
-            env_vars: HashMap::new(),
-            watch: Watch::new(),
-            watched_vars: HashMap::new(),
-            interrupt_frame: None,
-        })
+        let bytecode = convert_program(program)?;
+        Ok(Self::new(bytecode, HashMap::new()))
     }
 
     /// Bootstraps the VM preparing the given function to run.
@@ -1567,22 +1595,20 @@ impl BexVm {
                         }));
                     }
 
-                    // Must be an external operation.
-                    if !matches!(callable_future.kind, FunctionKind::External) {
+                    // Must be an external operation - extract the ExternalOp.
+                    let FunctionKind::External(external_op) = callable_future.kind else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: FunctionType::External.into(),
                             got: FunctionType::from(&callable_future.kind).into(),
                         }));
-                    }
+                    };
 
                     // Collect the function call args and cleanup the call.
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).skip(1).collect();
 
-                    // Create the pending future.
-                    // The operation name is the function name - all external operations
-                    // (LLM, Net, etc.) are registered and looked up the same way.
+                    // Create the pending future with the ExternalOp enum.
                     let pending_future = PendingFuture {
-                        operation: callable_future.name.clone(),
+                        operation: external_op,
                         args: future_args,
                     };
 
@@ -1819,7 +1845,7 @@ impl BexVm {
                             function = self.objects[frame.function].as_function()?;
                         }
 
-                        FunctionKind::External => {
+                        FunctionKind::External(_) => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
                                 got: FunctionType::from(&callee.kind).into(),

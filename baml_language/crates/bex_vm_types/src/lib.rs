@@ -20,6 +20,6 @@ pub use bytecode::{
 };
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
-    Class, Enum, Function, FunctionKind, Future, Object, ObjectType, PendingFuture, Program, Value,
-    Variant, type_tags,
+    Class, Enum, ExternalOp, Function, FunctionKind, Future, Object, ObjectType, PendingFuture,
+    Program, SysOp, Value, Variant, type_tags,
 };

@@ -11,78 +11,113 @@
 //!
 //! # External Operations
 //!
-//! External operations (LLM calls, HTTP requests, file I/O) are handled via
-//! the `ExternalOp` trait and `ExternalOpRegistry`. Each operation is identified
-//! by a string name (e.g., "`MyLlmFunction`", "`baml.fetch_as`").
+//! External operations (LLM calls, HTTP requests, file I/O) are dispatched via
+//! the `ExternalOp` enum using static dispatch. This avoids dynamic dispatch
+//! overhead and makes the system more macro-friendly.
+//!
+//! # Resources
+//!
+//! Resources (file handles, connections, etc.) are stored in a `ResourceRegistry`.
+//! External ops can store resources and return their ID to the VM. Later ops
+//! can retrieve resources by ID. The VM only sees integer IDs.
 
-use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+mod resource;
+
+use std::{collections::HashMap, sync::Arc};
 
 use baml_snapshot::BamlSnapshot;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ObjectIndex, PendingFuture, Value};
+use bex_vm_types::{ExternalOp, ObjectIndex, SysOp, Value};
+use parking_lot::RwLock;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
+pub mod ops;
+
+pub use resource::{Resource, ResourceId, ResourceRegistry};
+
 // ============================================================================
-// External Operation Types
+// Resolved Values
 // ============================================================================
 
-/// A boxed future that can be sent across threads.
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+/// A resolved value that external operations can work with directly.
+///
+/// Unlike `Value` which may contain object indices, `ResolvedValue` contains
+/// the actual data that external operations need.
+#[derive(Debug, Clone)]
+pub enum ResolvedValue {
+    Null,
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    String(String),
+    Array(Vec<ResolvedValue>),
+    Map(indexmap::IndexMap<String, ResolvedValue>),
+    /// An object index that couldn't be resolved (fallback).
+    Object(ObjectIndex),
+    /// A resource ID (for file handles, connections, etc.)
+    ResourceId(ResourceId),
+}
+
+// ============================================================================
+// Operation Context and Errors
+// ============================================================================
 
 /// Errors that can occur during external operation execution.
 #[derive(Debug, Error)]
 pub enum OpError {
     #[error("{0}")]
     Other(String),
+
+    #[error("Resource not found: {0}")]
+    ResourceNotFound(ResourceId),
+
+    #[error("Resource type mismatch")]
+    ResourceTypeMismatch,
 }
 
-/// An external operation that runs asynchronously outside the VM.
+/// Context passed to external operations.
 ///
-/// External operations are things like LLM calls, HTTP requests, file I/O,
-/// or shell commands. They are identified by a string name and receive
-/// arguments from the VM.
-pub trait ExternalOp: Send + Sync + 'static {
-    /// The operation name (e.g., "`MyLlmFunction`", "`baml.fetch_as`").
-    fn name(&self) -> &str;
+/// Provides access to resources and other engine state.
+pub struct OpContext {
+    /// Registry for storing/retrieving resources.
+    pub resources: Arc<RwLock<ResourceRegistry>>,
+}
 
-    /// Execute the operation with the given arguments.
+impl OpContext {
+    /// Add a resource and return its ID.
+    pub fn add_resource<T: Resource>(&self, resource: T) -> ResourceId {
+        self.resources.write().add(resource)
+    }
+
+    /// Get a resource by ID and apply a function to it.
     ///
-    /// Returns a `Value` on success or an `OpError` on failure.
-    fn execute(&self, pending: &PendingFuture) -> BoxFuture<'static, Result<Value, OpError>>;
-}
-
-/// Registry of external operations.
-///
-/// The engine uses this to look up and execute external operations
-/// when the VM yields with `VmExecState::ScheduleFuture`.
-pub struct ExternalOpRegistry {
-    ops: HashMap<String, Arc<dyn ExternalOp>>,
-}
-
-impl ExternalOpRegistry {
-    /// Create a new empty registry.
-    pub fn new() -> Self {
-        Self {
-            ops: HashMap::new(),
-        }
+    /// This holds a read lock for the duration of the closure.
+    pub fn with_resource<T: 'static, R, F: FnOnce(&T) -> R>(
+        &self,
+        id: ResourceId,
+        f: F,
+    ) -> Option<R> {
+        let guard = self.resources.read();
+        guard.get::<T>(id).map(f)
     }
 
-    /// Register an external operation.
-    pub fn register(&mut self, op: impl ExternalOp) {
-        self.ops.insert(op.name().to_string(), Arc::new(op));
+    /// Check if a resource exists.
+    pub fn has_resource(&self, id: ResourceId) -> bool {
+        self.resources.read().contains(id)
     }
 
-    /// Look up an operation by name.
-    pub fn get(&self, name: &str) -> Option<Arc<dyn ExternalOp>> {
-        self.ops.get(name).cloned()
+    /// Remove a resource by ID.
+    pub fn remove_resource(&self, id: ResourceId) -> Option<Arc<dyn Resource>> {
+        self.resources.write().remove(id)
     }
 }
 
-impl Default for ExternalOpRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
+/// Resolved arguments for an external operation.
+#[derive(Debug, Clone)]
+pub struct ResolvedArgs {
+    /// Resolved arguments.
+    pub args: Vec<ResolvedValue>,
 }
 
 // ============================================================================
@@ -92,7 +127,7 @@ impl Default for ExternalOpRegistry {
 /// Result of an external future.
 struct FutureResult {
     id: ObjectIndex,
-    result: Result<Value, EngineError>,
+    result: Result<ResolvedValue, EngineError>,
 }
 
 /// Errors that can occur during engine execution.
@@ -100,9 +135,6 @@ struct FutureResult {
 pub enum EngineError {
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
-
-    #[error("External operation not found: {operation}")]
-    ExternalOpNotFound { operation: String },
 
     #[error("External operation failed: {0}")]
     ExternalOpFailed(#[from] OpError),
@@ -124,12 +156,10 @@ pub enum EngineError {
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
-/// It owns the compiled program and external operation registry.
+/// It owns the compiled program.
 pub struct BexEngine {
     /// The compiled program (contains bytecode, types, functions, etc.)
     program: BamlSnapshot,
-    /// Registry of external operations.
-    external_op_registry: ExternalOpRegistry,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
 }
@@ -137,23 +167,12 @@ pub struct BexEngine {
 impl BexEngine {
     /// Create a new engine with the given program.
     pub fn new(program: BamlSnapshot, env_vars: HashMap<String, String>) -> Self {
-        Self {
-            program,
-            external_op_registry: ExternalOpRegistry::new(),
-            env_vars,
-        }
+        Self { program, env_vars }
     }
 
     /// Get a reference to the program.
     pub fn program(&self) -> &BamlSnapshot {
         &self.program
-    }
-
-    /// Get a mutable reference to the external operation registry.
-    ///
-    /// Use this to register external operations before calling functions.
-    pub fn external_op_registry_mut(&mut self) -> &mut ExternalOpRegistry {
-        &mut self.external_op_registry
     }
 
     /// Execute a function by name.
@@ -164,12 +183,13 @@ impl BexEngine {
     ///
     /// Concurrent calls work naturally - each gets its own VM.
     ///
-    /// Args and return value are VM `Value` types directly.
+    /// Args are VM `Value` types. Return value is `ResolvedValue` which contains
+    /// the actual data (strings, arrays, etc.) since the VM is dropped after execution.
     pub async fn call_function(
         &self,
         function_name: &str,
         args: &[Value],
-    ) -> Result<Value, EngineError> {
+    ) -> Result<ResolvedValue, EngineError> {
         // Look up the function to verify it exists
         let function_index = self.lookup_function(function_name)?;
 
@@ -179,8 +199,13 @@ impl BexEngine {
         // Set entry point with args
         vm.set_entry_point(function_index, args);
 
+        // Create a resource registry for this call
+        let ctx = Arc::new(OpContext {
+            resources: Arc::new(RwLock::new(ResourceRegistry::new())),
+        });
+
         // Run the event loop
-        self.run_event_loop(&mut vm).await
+        self.run_event_loop(&mut vm, ctx).await
     }
 
     /// Look up a function by name and return its bytecode index.
@@ -196,35 +221,40 @@ impl BexEngine {
     }
 
     /// Run the VM event loop until completion.
-    async fn run_event_loop(&self, vm: &mut BexVm) -> Result<Value, EngineError> {
+    async fn run_event_loop(
+        &self,
+        vm: &mut BexVm,
+        ctx: Arc<OpContext>,
+    ) -> Result<ResolvedValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
 
         'vm_exec: loop {
             match vm.exec()? {
                 VmExecState::Complete(value) => {
-                    return Ok(value);
+                    // Resolve the value before returning (VM will be dropped after this)
+                    return Ok(Self::resolve_value(vm, &value));
                 }
 
                 VmExecState::ScheduleFuture(id) => {
                     let pending = vm.pending_future(id)?;
 
-                    // Look up the external operation
-                    let Some(op) = self.external_op_registry.get(&pending.operation) else {
-                        let _ = pending_futures.send(FutureResult {
-                            id,
-                            result: Err(EngineError::ExternalOpNotFound {
-                                operation: pending.operation.clone(),
-                            }),
-                        });
-                        continue;
+                    // Resolve arguments from VM values to ResolvedValues
+                    let resolved_args = ResolvedArgs {
+                        args: pending
+                            .args
+                            .iter()
+                            .map(|v| Self::resolve_value(vm, v))
+                            .collect(),
                     };
 
-                    // Spawn the operation
+                    // Clone what we need for the spawned task
                     let pending_futures = pending_futures.clone();
-                    let pending = pending.clone();
+                    let ctx = Arc::clone(&ctx);
+                    let operation = pending.operation;
 
+                    // Spawn the operation with static dispatch
                     tokio::spawn(async move {
-                        let result = op.execute(&pending).await;
+                        let result = Self::execute_external_op(operation, ctx, resolved_args).await;
                         let _ = pending_futures.send(FutureResult {
                             id,
                             result: result.map_err(EngineError::from),
@@ -236,7 +266,9 @@ impl BexEngine {
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
                         // TODO: When there's an error in the future, we must handle somehow.
-                        vm.fulfil_future(future.id, future.result?)?;
+                        let resolved = future.result?;
+                        let value = Self::unresolve_value(vm, resolved);
+                        vm.fulfil_future(future.id, value)?;
                         // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             continue 'vm_exec;
@@ -251,7 +283,9 @@ impl BexEngine {
                             .ok_or(EngineError::FutureChannelClosed)?;
 
                         // TODO: When there's an error in the future, we must handle somehow.
-                        vm.fulfil_future(future.id, future.result?)?;
+                        let resolved = future.result?;
+                        let value = Self::unresolve_value(vm, resolved);
+                        vm.fulfil_future(future.id, value)?;
                         // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             break;
@@ -262,6 +296,96 @@ impl BexEngine {
                 VmExecState::Notify(_notification) => {
                     // Ignore watch notifications for now
                 }
+            }
+        }
+    }
+
+    /// Execute an external operation via static dispatch.
+    async fn execute_external_op(
+        op: ExternalOp,
+        ctx: Arc<OpContext>,
+        args: ResolvedArgs,
+    ) -> Result<ResolvedValue, OpError> {
+        match op {
+            ExternalOp::Llm => {
+                // TODO: Implement LLM operations
+                Err(OpError::Other("LLM operations not yet implemented".into()))
+            }
+            ExternalOp::Sys(sys_op) => Self::execute_sys_op(sys_op, ctx, args).await,
+        }
+    }
+
+    /// Execute a system operation.
+    async fn execute_sys_op(
+        op: SysOp,
+        ctx: Arc<OpContext>,
+        args: ResolvedArgs,
+    ) -> Result<ResolvedValue, OpError> {
+        match op {
+            SysOp::FsOpen => ops::fs::open(ctx, args).await,
+            SysOp::FsRead => ops::fs::read(ctx, args).await,
+            SysOp::Shell => ops::sys::shell(ctx, args).await,
+            SysOp::NetConnect => ops::net::connect(ctx, args).await,
+            SysOp::NetRead => ops::net::read(ctx, args).await,
+        }
+    }
+
+    /// Resolve a VM value to a `ResolvedValue`.
+    fn resolve_value(vm: &BexVm, value: &Value) -> ResolvedValue {
+        match value {
+            Value::Null => ResolvedValue::Null,
+            Value::Int(i) => ResolvedValue::Int(*i),
+            Value::Float(f) => ResolvedValue::Float(*f),
+            Value::Bool(b) => ResolvedValue::Bool(*b),
+            Value::Object(idx) => {
+                use bex_vm_types::Object;
+                match &vm.objects[*idx] {
+                    Object::String(s) => ResolvedValue::String(s.clone()),
+                    Object::Array(arr) => {
+                        let resolved: Vec<ResolvedValue> =
+                            arr.iter().map(|v| Self::resolve_value(vm, v)).collect();
+                        ResolvedValue::Array(resolved)
+                    }
+                    Object::Map(map) => {
+                        let resolved: indexmap::IndexMap<String, ResolvedValue> = map
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Self::resolve_value(vm, v)))
+                            .collect();
+                        ResolvedValue::Map(resolved)
+                    }
+                    // For other objects, keep the index as a fallback
+                    _ => ResolvedValue::Object(*idx),
+                }
+            }
+        }
+    }
+
+    /// Convert a `ResolvedValue` back to a VM Value.
+    fn unresolve_value(vm: &mut BexVm, resolved: ResolvedValue) -> Value {
+        match resolved {
+            ResolvedValue::Null => Value::Null,
+            ResolvedValue::Int(i) => Value::Int(i),
+            ResolvedValue::Float(f) => Value::Float(f),
+            ResolvedValue::Bool(b) => Value::Bool(b),
+            ResolvedValue::String(s) => vm.alloc_string(s),
+            ResolvedValue::Array(arr) => {
+                let values: Vec<Value> = arr
+                    .into_iter()
+                    .map(|v| Self::unresolve_value(vm, v))
+                    .collect();
+                vm.alloc_array(values)
+            }
+            ResolvedValue::Map(map) => {
+                let values: indexmap::IndexMap<String, Value> = map
+                    .into_iter()
+                    .map(|(k, v)| (k, Self::unresolve_value(vm, v)))
+                    .collect();
+                vm.alloc_map(values)
+            }
+            ResolvedValue::Object(idx) => Value::Object(idx),
+            ResolvedValue::ResourceId(id) => {
+                // Store resource ID as an integer value
+                Value::Int(id.cast_signed())
             }
         }
     }

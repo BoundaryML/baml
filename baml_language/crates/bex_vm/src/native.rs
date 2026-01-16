@@ -521,7 +521,9 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
         Object::Function(function) => {
             let kind = match function.kind {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
-                bex_vm_types::FunctionKind::External => bex_vm_types::FunctionKind::External,
+                bex_vm_types::FunctionKind::External(op) => {
+                    bex_vm_types::FunctionKind::External(op)
+                }
                 bex_vm_types::FunctionKind::Native(()) => {
                     let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(

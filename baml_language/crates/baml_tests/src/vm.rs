@@ -4,6 +4,7 @@
 //! rely on indices, making tests more readable and resilient to changes in the
 //! order of globals, constants, and objects.
 
+use bex_engine::ResolvedValue;
 use bex_vm::{
     BexVm, VmExecState,
     vm::WatchNotification as VmWatchNotification,
@@ -38,6 +39,31 @@ impl Value {
             VmValue::Float(f) => Ok(Value::Float(*f)),
             VmValue::Bool(b) => Ok(Value::Bool(*b)),
             VmValue::Object(index) => Object::from_vm_object(*index, vm).map(Value::Object),
+        }
+    }
+
+    /// Convert a ResolvedValue (from engine execution) to a test Value.
+    pub fn from_resolved(value: &ResolvedValue) -> Self {
+        match value {
+            ResolvedValue::Null => Value::Null,
+            ResolvedValue::Int(i) => Value::Int(*i),
+            ResolvedValue::Float(f) => Value::Float(*f),
+            ResolvedValue::Bool(b) => Value::Bool(*b),
+            ResolvedValue::String(s) => Value::Object(Object::String(s.clone())),
+            ResolvedValue::Array(arr) => {
+                Value::Object(Object::Array(arr.iter().map(Self::from_resolved).collect()))
+            }
+            ResolvedValue::Map(map) => Value::Object(Object::Map(
+                map.iter()
+                    .map(|(k, v)| (k.clone(), Self::from_resolved(v)))
+                    .collect(),
+            )),
+            ResolvedValue::Object(idx) => {
+                Value::Object(Object::String(format!("<unresolved object {}>", idx)))
+            }
+            ResolvedValue::ResourceId(id) => {
+                Value::Object(Object::String(format!("<resource {}>", id)))
+            }
         }
     }
 

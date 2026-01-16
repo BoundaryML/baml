@@ -1,18 +1,18 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 34
-Globals: 27
+Objects: 39
+Globals: 32
 
-Function Foo (arity: 0, kind: Llm):
+Function Foo (arity: 0, kind: External(Llm)):
   (no bytecode)
 
-Function Incomplete (arity: 1, kind: Exec):
+Function Incomplete (arity: 1, kind: Bytecode):
   (no bytecode)
 
-Function NextFunction (arity: 0, kind: Exec):
+Function NextFunction (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (parsed)
      1   RETURN

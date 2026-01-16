@@ -31,6 +31,9 @@ pub enum TypePattern {
     /// Type variable - binds to actual type during pattern matching.
     /// E.g., `Var("T")` in `Array<T>.push(item: T)` binds to the element type.
     Var(&'static str),
+    /// Builtin type - matches exactly by path.
+    /// E.g., `Builtin("baml.fs.File")` matches only `Ty::Builtin("baml.fs.File")`.
+    Builtin(&'static str),
 }
 
 impl TypePattern {
@@ -60,6 +63,10 @@ pub struct BuiltinSignature {
 
     /// Return type.
     pub returns: TypePattern,
+
+    /// Whether this is an external function (runs async outside VM).
+    /// External functions use DispatchFuture/Await instead of Call.
+    pub is_external: bool,
 }
 
 impl BuiltinSignature {
@@ -146,6 +153,45 @@ macro_rules! with_builtins {
                     fn as_base64(self: Media) -> Option<String>;
                     fn as_file(self: Media) -> Option<String>;
                     fn mime_type(self: Media) -> Option<String>;
+                }
+
+                // =====================================================================
+                // Filesystem operations
+                // =====================================================================
+                mod fs {
+                    #[builtin]
+                    struct File {
+                        #[external]
+                        fn read(self: File) -> String;
+                    }
+
+                    #[external]
+                    fn open(path: String) -> File;
+                }
+
+                // =====================================================================
+                // System operations
+                // =====================================================================
+                mod sys {
+                    /// Execute a shell command and return stdout.
+                    #[external]
+                    fn shell(command: String) -> String;
+                }
+
+                // =====================================================================
+                // Network operations
+                // =====================================================================
+                mod net {
+                    #[builtin]
+                    struct Socket {
+                        /// Read data from the socket as a string.
+                        #[external]
+                        fn read(self: Socket) -> String;
+                    }
+
+                    /// Connect to a TCP address (host:port).
+                    #[external]
+                    fn connect(addr: String) -> Socket;
                 }
             }
 

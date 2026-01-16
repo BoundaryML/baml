@@ -1469,7 +1469,28 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
     };
 
     // Check that the continuation block is the use block
-    continuation_target == Some(use_loc.block)
+    if continuation_target != Some(use_loc.block) {
+        return false;
+    }
+
+    // Critical check: if the continuation block ends with DispatchFuture, we cannot use
+    // CallResultImmediate. The reason is stack ordering:
+    // - DispatchFuture expects stack layout: [callee, arg0, arg1, ...]
+    // - If we leave the Await result on the stack and then emit the callee, we get
+    //   [result, callee] instead of [callee, result]
+    //
+    // This happens even if the local is used indirectly (e.g., through a copy that
+    // gets Virtual classification), because the intermediate copy's emit_operand_pull
+    // will emit nothing for the CallResultImmediate source.
+    let use_block = mir.block(use_loc.block);
+    if matches!(
+        &use_block.terminator,
+        Some(Terminator::DispatchFuture { .. })
+    ) {
+        return false;
+    }
+
+    true
 }
 
 /// Check if a local is a simple copy of another local (for copy propagation).
