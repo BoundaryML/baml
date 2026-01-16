@@ -24,7 +24,7 @@ pub const MAX_FRAMES: usize = 256;
 /// This is what gets pushed onto the call stack every time we call a function.
 ///
 /// As with [`Value`], this struct should not own allocated objects (like
-/// functions) but instead use references to index into [`Vm::objects`]. Should
+/// functions) but instead use references to index into [`BexVm::objects`]. Should
 /// be [`Copy`].
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -169,7 +169,7 @@ pub struct BexVm {
     ///
     /// For now, since we don't have a garbage collector yet, this is basically
     /// an arena of objects. **Every object** is allocated here and will be
-    /// destroyed when the lifetime of the [`Vm`] ends. Do not allocate objects
+    /// destroyed when the lifetime of the [`BexVm`] ends. Do not allocate objects
     /// elsewhere since that will make adding a garbage collector harder.
     /// Only allocate objects here and use indices to reference them, don't
     /// bother with Rust references because they will introduce lifetime issues.
@@ -183,7 +183,7 @@ pub struct BexVm {
     /// Offset of the first runtime allocated object.
     ///
     /// This is used to track the index of the first runtime allocated object.
-    /// When the embedder calls [`Vm::collect_garbage`] it will drop all values
+    /// When the embedder calls [`BexVm::collect_garbage`] it will drop all values
     /// after this offset.
     pub runtime_allocs_offset: ObjectIndex,
 

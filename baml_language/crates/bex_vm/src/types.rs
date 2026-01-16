@@ -11,7 +11,7 @@ pub trait ObjectTrait {
 impl ObjectTrait for Object<NativeFunction> {
     /// Helper to unwrap an [`Object::Function`].
     ///
-    /// Used to deal with some borrow checker issues in the [`crate::vm::Vm::exec`]
+    /// Used to deal with some borrow checker issues in the [`crate::vm::BexVm::exec`]
     /// function.
     #[inline]
     fn as_function(&self) -> Result<&Function<NativeFunction>, VmError> {

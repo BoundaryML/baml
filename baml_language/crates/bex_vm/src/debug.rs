@@ -1,12 +1,12 @@
 //! VM debugging utilities & helpers.
 //!
 //! NOTE: Functions here should not take an entire reference to the
-//! [`crate::Vm`] because then it will be hard to circumvent the borrow checker
-//! in the [`crate::Vm::exec`] loop (which is where we want to use this).
+//! [`crate::BexVm`] because then it will be hard to circumvent the borrow checker
+//! in the [`crate::BexVm::exec`] loop (which is where we want to use this).
 //!
-//! Instead, they take read only references to the parts of the [`crate::Vm`]
+//! Instead, they take read only references to the parts of the [`crate::BexVm`]
 //! that they need, that way inside the loop we can "destructure" the
-//! [`crate::Vm`] and let the compiler know exactly which properties we're
+//! [`crate::BexVm`] and let the compiler know exactly which properties we're
 //! using as mutable and which properties we're using as immutable.
 //!
 //! Reference structs can be created if needed:
