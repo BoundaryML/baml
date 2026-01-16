@@ -1,0 +1,48 @@
+# Prek/pre-commit configuration
+# Install: prek install (or: pre-commit install)
+# Run manually: prek run --all-files
+
+fail_fast: false
+
+exclude: |
+  (?x)^(
+    crates/.*/snapshots/.*
+  )$
+
+repos:
+  - repo: local
+    hooks:
+      # Priority 0: Read-only checks and formatters
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd baml_language && cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate'
+        language: system
+        pass_filenames: false
+        types: [rust]
+        files: ^baml_language/
+        priority: 0
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'cd baml_language && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged -- -D warnings 2>/dev/null; cargo clippy --workspace --all-targets --all-features -- -D warnings'
+        language: system
+        pass_filenames: false
+        types: [rust]
+        files: ^baml_language/
+        priority: 1
+
+      - id: cargo-stow
+        name: cargo stow
+        entry: bash -c 'cd baml_language && cargo run -p baml_tools_stow --bin cargo-stow -- stow --check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
+        priority: 0
+
+      - id: bep-readme
+        name: bep readme
+        entry: bash -c 'command -v mise >/dev/null && mise run bep:readme || true'
+        language: system
+        pass_filenames: false
+        files: ^beps/
+        priority: 0
