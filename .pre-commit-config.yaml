@@ -12,19 +12,22 @@ exclude: |
 repos:
   - repo: local
     hooks:
-      # Priority 0: Read-only checks and formatters
+      # Priority ordering:
+      # 0: Code generation (rig) - must run first to generate files
+      # 1: Formatters and validators (fmt, stow, bep-readme) - format/validate generated code
+      # 2: Linters (clippy) - final checks on formatted code
+
+      - id: rig
+        name: rig
+        entry: bash -c 'cd baml_language && cargo run -p baml_tools_rig -- --check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(rig_tests/|crates/baml_tools_rig/|crates/baml_codegen)
+        priority: 0
+
       - id: cargo-fmt
         name: cargo fmt
         entry: bash -c 'cd baml_language && cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate'
-        language: system
-        pass_filenames: false
-        types: [rust]
-        files: ^baml_language/
-        priority: 0
-
-      - id: cargo-clippy
-        name: cargo clippy
-        entry: bash -c 'cd baml_language && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged -- -D warnings 2>/dev/null; cargo clippy --workspace --all-targets --all-features -- -D warnings'
         language: system
         pass_filenames: false
         types: [rust]
@@ -37,15 +40,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
-        priority: 0
-
-      - id: rig
-        name: rig
-        entry: bash -c 'cd baml_language && cargo run -p baml_tools_rig -- --check'
-        language: system
-        pass_filenames: false
-        files: ^baml_language/(rig_tests/|crates/baml_tools_rig/|crates/baml_codegen)
-        priority: 0
+        priority: 1
 
       - id: bep-readme
         name: bep readme
@@ -53,4 +48,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^beps/
-        priority: 0
+        priority: 1
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'cd baml_language && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged -- -D warnings 2>/dev/null; cargo clippy --workspace --all-targets --all-features -- -D warnings'
+        language: system
+        pass_filenames: false
+        types: [rust]
+        files: ^baml_language/
+        priority: 2

@@ -137,6 +137,7 @@ url = "2.5.2"
 walkdir = { version = "2.4" }
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
+which = { version = "6.0" }
 webbrowser = "1.0.5"
 wee_alloc = "0.4"
 [workspace.lints.rust]

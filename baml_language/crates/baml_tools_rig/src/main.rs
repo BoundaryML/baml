@@ -32,6 +32,26 @@ fn main() {
     if check_mode && has_diff {
         eprintln!("\nRun `cargo run -p baml_tools_rig` to regenerate.");
         std::process::exit(1);
+    } else if !check_mode {
+        // Format all generated files
+        println!("\nFormatting generated files...");
+        let status = std::process::Command::new("cargo")
+            .args([
+                "fmt",
+                "--all",
+                "--",
+                "--config",
+                "imports_granularity=Crate",
+                "--config",
+                "group_imports=StdExternalCrate",
+            ])
+            .current_dir("rig_tests/crates")
+            .status()
+            .expect("Failed to run cargo fmt");
+
+        if !status.success() {
+            eprintln!("Warning: cargo fmt failed");
+        }
     }
 }
 
@@ -105,15 +125,65 @@ fn has_differences(template_dir: &Path, output_dir: &Path, fixture_name: &str) -
         let template_path = template_dir.join(format!("{}.template", file));
         let output_path = output_dir.join(file);
 
-        let expected = fs::read_to_string(&template_path)
+        let template_content = fs::read_to_string(&template_path)
             .unwrap_or_else(|_| panic!("Failed to read template: {}", template_path.display()))
             .replace("{{fixture_name}}", fixture_name);
 
-        let actual = fs::read_to_string(&output_path).unwrap_or_default();
+        let actual_content = fs::read_to_string(&output_path).unwrap_or_default();
 
-        if expected != actual {
+        // For Rust files, format both before comparing to ensure formatting doesn't cause false positives
+        let (template_formatted, actual_formatted) = if file.ends_with(".rs") {
+            (
+                format_rust_code(&template_content),
+                format_rust_code(&actual_content),
+            )
+        } else {
+            (template_content, actual_content)
+        };
+
+        if template_formatted != actual_formatted {
             return true;
         }
     }
     false
+}
+
+/// Format Rust code using rustfmt
+fn format_rust_code(code: &str) -> String {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+
+    let mut child = Command::new("rustfmt")
+        .args([
+            "--edition",
+            "2021",
+            "--config",
+            "imports_granularity=Crate",
+            "--config",
+            "group_imports=StdExternalCrate",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn rustfmt");
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(code.as_bytes())
+            .expect("Failed to write to rustfmt stdin");
+    }
+
+    let output = child
+        .wait_with_output()
+        .expect("Failed to wait for rustfmt");
+
+    if output.status.success() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        // If rustfmt fails, return original code
+        code.to_string()
+    }
 }

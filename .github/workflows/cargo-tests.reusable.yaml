@@ -70,7 +70,7 @@ jobs:
         working-directory: baml_language
 
       - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --target wasm32-unknown-unknown --all-features --locked -- -D warnings
+        run: cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings
         working-directory: baml_language
 
   cargo-test-linux:
@@ -101,12 +101,15 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: "Install uv"
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: "Run tests with nextest"
         run: cargo nextest run --all-features
         working-directory: baml_language
 
       - name: "Run snapshot tests with insta"
-        run: cargo insta test --all-features --unreferenced reject
+        run: cargo insta test --workspace --all-features --unreferenced reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
         working-directory: baml_language
 
       - name: "Check documentation"
@@ -147,6 +150,9 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: "Install uv"
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: "Run tests"
         run: |
           cargo nextest run --all-features
@@ -176,6 +182,10 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: "Install uv"
+        run: irm https://astral.sh/uv/install.ps1 | iex
+        shell: powershell
+
       - name: "Run tests"
         run: |
           cargo nextest run --all-features
@@ -204,8 +214,8 @@ jobs:
 
       - name: "Build for WASM"
         run: |
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --no-default-features
-          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --no-default-features --release
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --no-default-features
+          cargo build --workspace --target wasm32-unknown-unknown --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --no-default-features --release
         working-directory: baml_language
 
       - name: "Check WASM size"
@@ -297,8 +307,8 @@ jobs:
 
       - name: "Run snapshot tests"
         run: |
-          cargo insta test --all-features --unreferenced=reject
-          cargo insta test --all-features --review
+          cargo insta test --workspace --all-features --unreferenced=reject --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
+          cargo insta test --workspace --all-features --review --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended
         working-directory: baml_language
 
       - name: "Check for snapshot changes"
