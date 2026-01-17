@@ -93,7 +93,7 @@ ignore = ["F401", "F821"]
 "#;
     fs::write(generated_dir.join("pyproject.toml"), pyproject_toml).unwrap();
 
-    // Write test.sh script
+    // Write test.sh script (Unix)
     let test_sh = r#"#!/usr/bin/env bash
 set -e
 
@@ -135,6 +135,38 @@ echo "==> All checks passed!"
         perms.set_mode(0o755);
         fs::set_permissions(generated_dir.join("test.sh"), perms).unwrap();
     }
+
+    // Write test.ps1 script (Windows)
+    let test_ps1 = r#"$ErrorActionPreference = "Stop"
+
+Set-Location $PSScriptRoot
+
+# Check if uv is available
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Error "Error: uv is not installed`nInstall uv with: irm https://astral.sh/uv/install.ps1 | iex"
+    exit 1
+}
+
+Write-Host "==> Running Python syntax check..."
+# Find all .py and .pyi files
+$pythonFiles = Get-ChildItem -Recurse -Include *.py,*.pyi | ForEach-Object { $_.FullName }
+if ($pythonFiles) {
+    foreach ($file in $pythonFiles) {
+        uv run python -m py_compile $file
+    }
+} else {
+    Write-Host "No Python files found to check"
+}
+
+Write-Host "==> Running ruff lint..."
+uv run --with ruff ruff check --config pyproject.toml baml_client
+
+Write-Host "==> Running pytest..."
+uv run --with pytest --with pydantic --with typing-extensions pytest -v
+
+Write-Host "==> All checks passed!"
+"#;
+    fs::write(generated_dir.join("test.ps1"), test_ps1).unwrap();
 
     println!("cargo:rerun-if-changed=build.rs");
 
