@@ -39,6 +39,14 @@ repos:
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
         priority: 0
 
+      - id: rig
+        name: rig
+        entry: bash -c 'cd baml_language && cargo run -p baml_tools_rig -- --check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(rig_tests/|crates/baml_tools_rig/|crates/baml_codegen)
+        priority: 0
+
       - id: bep-readme
         name: bep readme
         entry: bash -c 'command -v mise >/dev/null && mise run bep:readme || true'
