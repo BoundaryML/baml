@@ -1447,6 +1447,18 @@ func (c *DynamicClassOne) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeM
 
 	c.DynamicProperties = make(map[string]any)
 
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		default:
+
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
+
+		}
+	}
+
 }
 
 func (c DynamicClassOne) Encode() (*cffi.HostValue, error) {
@@ -1531,6 +1543,18 @@ func (c *DynamicOutput) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 
 	c.DynamicProperties = make(map[string]any)
 
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		default:
+
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
+
+		}
+	}
+
 }
 
 func (c DynamicOutput) Encode() (*cffi.HostValue, error) {
@@ -1557,6 +1581,18 @@ func (c *DynamicSchema) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap
 	}
 
 	c.DynamicProperties = make(map[string]any)
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		default:
+
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
+
+		}
+	}
 
 }
 
