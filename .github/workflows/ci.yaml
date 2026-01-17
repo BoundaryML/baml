@@ -223,9 +223,14 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Install clippy"
-        run: rustup component add clippy
+      - name: "Install clippy and wasm target"
+        run: |
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
         working-directory: baml_language
+
+      - name: "Install uv"
+        uses: astral-sh/setup-uv@v5
 
       - name: "Install prek"
         uses: j178/prek-action@v1
