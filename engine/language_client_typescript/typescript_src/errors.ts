@@ -1,6 +1,28 @@
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 
-export class BamlClientFinishReasonError extends Error {
+/**
+ * Base class for all BAML errors.
+ */
+export class BamlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BamlError";
+    Object.setPrototypeOf(this, BamlError.prototype);
+  }
+}
+
+/**
+ * Base class for client-related errors (HTTP errors, timeouts, etc.)
+ */
+export class BamlClientError extends BamlError {
+  constructor(message: string) {
+    super(message);
+    this.name = "BamlClientError";
+    Object.setPrototypeOf(this, BamlClientError.prototype);
+  }
+}
+
+export class BamlClientFinishReasonError extends BamlError {
   prompt: string;
   raw_output: string;
   finish_reason?: string;
@@ -62,7 +84,7 @@ export class BamlClientFinishReasonError extends Error {
   }
 }
 
-export class BamlValidationError extends Error {
+export class BamlValidationError extends BamlError {
   prompt: string;
   raw_output: string;
   detailed_message: string;
@@ -116,7 +138,7 @@ export class BamlValidationError extends Error {
   }
 }
 
-export class BamlClientHttpError extends Error {
+export class BamlClientHttpError extends BamlClientError {
   client_name: string;
   status_code: number;
   detailed_message: string;
@@ -166,7 +188,7 @@ export class BamlClientHttpError extends Error {
   }
 }
 
-export class BamlAbortError extends Error {
+export class BamlAbortError extends BamlError {
   public readonly reason?: any;
   detailed_message: string;
 
@@ -260,8 +282,8 @@ function isError(error: unknown): error is Error {
   return false;
 }
 
-// Helper function to safely create a BamlValidationError
-function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
+// Helper function to safely create a BamlError from an unknown error
+function createBamlErrorUnsafe(error: unknown): BamlError | Error {
   if (!isError(error)) {
     return new Error(String(error));
   }
@@ -295,7 +317,13 @@ function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
   return error;
 }
 
-export function isBamlError(error: unknown): error is BamlErrors {
+export function isBamlError(error: unknown): error is BamlError {
+  // Check for actual instances of BamlError (covers all subclasses)
+  if (error instanceof BamlError) {
+    return true;
+  }
+
+  // Check for error objects with BAML type property (from NAPI-RS serialization)
   if (
     (error as any).type === "BamlClientHttpError" ||
     (error as any).type === "BamlValidationError" ||
@@ -306,7 +334,10 @@ export function isBamlError(error: unknown): error is BamlErrors {
     return true;
   }
 
+  // Check for error objects with BAML name property
   if (
+    (error as any).name === "BamlError" ||
+    (error as any).name === "BamlClientError" ||
     (error as any).name === "BamlClientHttpError" ||
     (error as any).name === "BamlValidationError" ||
     (error as any).name === "BamlClientFinishReasonError" ||
@@ -316,24 +347,27 @@ export function isBamlError(error: unknown): error is BamlErrors {
     return true;
   }
 
-  return (
-    error instanceof BamlClientHttpError ||
-    error instanceof BamlValidationError ||
-    error instanceof BamlClientFinishReasonError ||
-    error instanceof BamlAbortError ||
-    error instanceof BamlTimeoutError
-  );
+  return false;
 }
 
-export function toBamlError(error: unknown): BamlErrors | Error {
+export function toBamlError<T>(error: T): BamlError | T {
   try {
     if (isBamlError(error)) {
       return error;
     }
 
-    return createBamlErrorUnsafe(error);
-  } catch (error) {
-    return error as Error;
+    if (isError(error)) {
+      const converted = createBamlErrorUnsafe(error);
+      // Only return if we successfully converted to a BamlError
+      if (converted instanceof BamlError) {
+        return converted;
+      }
+    }
+
+    // Return original error if not convertible
+    return error;
+  } catch {
+    return error;
   }
 }
 

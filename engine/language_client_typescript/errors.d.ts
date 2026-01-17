@@ -1,4 +1,16 @@
-export declare class BamlClientFinishReasonError extends Error {
+/**
+ * Base class for all BAML errors.
+ */
+export declare class BamlError extends Error {
+    constructor(message: string);
+}
+/**
+ * Base class for client-related errors (HTTP errors, timeouts, etc.)
+ */
+export declare class BamlClientError extends BamlError {
+    constructor(message: string);
+}
+export declare class BamlClientFinishReasonError extends BamlError {
     prompt: string;
     raw_output: string;
     finish_reason?: string;
@@ -7,7 +19,7 @@ export declare class BamlClientFinishReasonError extends Error {
     toJSON(): string;
     static from(error: Error): BamlClientFinishReasonError | undefined;
 }
-export declare class BamlValidationError extends Error {
+export declare class BamlValidationError extends BamlError {
     prompt: string;
     raw_output: string;
     detailed_message: string;
@@ -15,7 +27,7 @@ export declare class BamlValidationError extends Error {
     toJSON(): string;
     static from(error: Error): BamlValidationError | undefined;
 }
-export declare class BamlClientHttpError extends Error {
+export declare class BamlClientHttpError extends BamlClientError {
     client_name: string;
     status_code: number;
     detailed_message: string;
@@ -23,7 +35,7 @@ export declare class BamlClientHttpError extends Error {
     toJSON(): string;
     static from(error: Error): BamlClientHttpError | undefined;
 }
-export declare class BamlAbortError extends Error {
+export declare class BamlAbortError extends BamlError {
     readonly reason?: any;
     detailed_message: string;
     constructor(message: string, reason?: any, detailed_message?: string);
@@ -35,6 +47,6 @@ export declare class BamlTimeoutError extends BamlClientHttpError {
     static from(error: Error): BamlTimeoutError | undefined;
 }
 export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError;
-export declare function isBamlError(error: unknown): error is BamlErrors;
-export declare function toBamlError(error: unknown): BamlErrors | Error;
+export declare function isBamlError(error: unknown): error is BamlError;
+export declare function toBamlError<T>(error: T): BamlError | T;
 //# sourceMappingURL=errors.d.ts.map
