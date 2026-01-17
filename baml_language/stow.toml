@@ -37,8 +37,8 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["tools", "compiler", "builtins", "playground"]
-test_crate_exceptions = ["baml_tests"]
+approved_prefixes = ["tools", "compiler", "builtins", "playground", "codegen"]
+test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]

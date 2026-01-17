@@ -227,6 +227,30 @@ jobs:
         run: cargo run -p baml_tools_stow --release -- stow --check
         working-directory: baml_language
 
+  rig-templates:
+    name: "Rig Templates"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 10
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Run baml_tools_rig --check"
+        run: cargo run -p baml_tools_rig -- --check
+        working-directory: baml_language
+
   # Call reusable workflows
   cargo-tests:
     name: "Cargo Tests"
@@ -337,6 +361,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - cargo-stow
+      - rig-templates
       - cargo-tests
       - wasm-pack-tests
       - beps

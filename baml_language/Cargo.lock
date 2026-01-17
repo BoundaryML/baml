@@ -150,6 +150,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "askama"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f75363874b771be265f4ffe307ca705ef6f3baa19011c149da8674a87f1b75c4"
+dependencies = [
+ "askama_derive",
+ "itoa",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "askama_derive"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "129397200fe83088e8a68407a8e2b1f826cf0086b21ccdb866a722c8bcd3a94f"
+dependencies = [
+ "askama_parser",
+ "basic-toml",
+ "memchr",
+ "proc-macro2",
+ "pulldown-cmark",
+ "quote",
+ "rustc-hash 2.1.1",
+ "serde",
+ "serde_derive",
+ "syn 2.0.114",
+]
+
+[[package]]
+name = "askama_parser"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6ab5630b3d5eaf232620167977f95eb51f3432fc76852328774afbd242d4358"
+dependencies = [
+ "memchr",
+ "serde",
+ "serde_derive",
+ "winnow",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -348,6 +391,35 @@ dependencies = [
  "clap-cargo",
  "colored",
  "ctrlc",
+]
+
+[[package]]
+name = "baml_codegen_python"
+version = "0.0.0"
+dependencies = [
+ "askama",
+ "baml_base",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+ "pretty_assertions",
+]
+
+[[package]]
+name = "baml_codegen_tests"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "insta",
+ "paste",
+]
+
+[[package]]
+name = "baml_codegen_types"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
 ]
 
 [[package]]
@@ -684,6 +756,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_tools_rig"
+version = "0.0.0"
+dependencies = [
+ "baml_codegen_tests",
+]
+
+[[package]]
 name = "baml_tools_stow"
 version = "0.0.0"
 dependencies = [
@@ -717,6 +796,15 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "basic-toml"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba62675e8242a4c4e806d12f11d136e626e6c8361d6b829310732241652a178a"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "beef"
@@ -3162,6 +3250,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e8bbe1a966bd2f362681a44f6edce3c2310ac21e4d5067a6e7ec396297a6ea0"
+dependencies = [
+ "bitflags 2.10.0",
+ "memchr",
+ "unicase",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3388,6 +3487,60 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
+]
+
+[[package]]
+name = "rig_python_empty"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "rig_python_literal_types"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "rig_python_map_types"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "rig_python_mixed_complex_types"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "rig_python_semantic_streaming"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
+]
+
+[[package]]
+name = "rig_python_union_types_extended"
+version = "0.1.0"
+dependencies = [
+ "baml_codegen_python",
+ "baml_codegen_tests",
+ "baml_codegen_types",
 ]
 
 [[package]]

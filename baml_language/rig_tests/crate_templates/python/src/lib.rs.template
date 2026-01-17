@@ -1,0 +1,30 @@
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    #[test]
+    fn test_generated_code() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("generated");
+    let test_script = dir.join("test.sh");
+
+    assert!(
+        test_script.exists(),
+        "test.sh not found in generated directory"
+    );
+
+    // Run the test.sh script
+    let output = Command::new("bash")
+        .arg(&test_script)
+        .current_dir(&dir)
+        .output()
+        .expect("Failed to run test.sh");
+
+    assert!(
+        output.status.success(),
+        "test.sh failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    }
+}

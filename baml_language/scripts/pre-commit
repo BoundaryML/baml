@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Pre-commit hook for BAML Language
+# This hook runs before commits to ensure code quality
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check if we're in the baml_language directory
+if [ ! -f "Cargo.toml" ]; then
+    echo "Error: Must be run from baml_language directory"
+    exit 1
+fi
+
+# Run cargo stow check
+echo "==> Checking Cargo.toml stow configuration..."
+if ! cargo run -p baml_tools_stow --quiet -- stow --check 2>/dev/null; then
+    echo "::error::Cargo stow check failed"
+    echo "Run: cargo run -p baml_tools_stow -- stow"
+    exit 1
+fi
+
+# Run rig templates check
+echo "==> Checking rig test templates..."
+if ! cargo run -p baml_tools_rig --quiet -- --check 2>/dev/null; then
+    echo "::error::Rig templates check failed"
+    echo "Run: cargo run -p baml_tools_rig"
+    exit 1
+fi
+
+echo "✓ All pre-commit checks passed!"
