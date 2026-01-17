@@ -41,4 +41,4 @@ if [ ! -d "$DIST_PATH" ]; then
     exit 1
 fi
 
-echo "Frontend build completed successfully!" 
+echo "Frontend build completed successfully!"

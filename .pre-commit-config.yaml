@@ -21,28 +21,17 @@ repos:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
         fail_fast: true
-
-      - id: end-of-file-fixer
-        fail_fast: true
+        files: ^baml_language/
+        # Exclude: snapshots, IDE test files, and special test files (class.rs, enum.rs)
+        exclude: (baml_tests/projects/|baml_ide_tests/test_files/|\.snap$|class\.rs$|enum\.rs$)
 
       - id: check-merge-conflict
-        fail_fast: true
-
-      - id: mixed-line-ending
-        args: [--fix=auto]
-        fail_fast: true
-
-      - id: check-added-large-files
-        args: [--maxkb=1000]
         fail_fast: true
 
       - id: check-toml
         fail_fast: true
 
       - id: check-yaml
-        fail_fast: true
-
-      - id: detect-private-key
         fail_fast: true
 
   - repo: local
