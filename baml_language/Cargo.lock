@@ -691,7 +691,7 @@ dependencies = [
 name = "baml_snapshot"
 version = "0.0.0"
 dependencies = [
- "bex_vm",
+ "bex_vm_types",
 ]
 
 [[package]]

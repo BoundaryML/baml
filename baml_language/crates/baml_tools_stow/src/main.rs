@@ -298,8 +298,8 @@ impl DependencyRule {
             }
         }
 
-        // If no allowed patterns specified, allow by default
-        self.allowed_prefixes.is_empty() && self.allowed_crates.is_empty()
+        // If no allowed patterns matched, deny by default
+        false
     }
 }
 

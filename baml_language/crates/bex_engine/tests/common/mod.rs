@@ -11,7 +11,6 @@ use std::{collections::HashMap, io::Write};
 use baml_snapshot::BamlSnapshot;
 use baml_tests::{bytecode::compile_source, vm::Value};
 use bex_engine::{BexEngine, ResolvedValue};
-use bex_vm::convert_program;
 use indexmap::IndexMap;
 use tempfile::TempDir;
 
@@ -70,11 +69,10 @@ impl EngineProgram {
     }
 }
 
-/// Compile BAML source code into engine-ready bytecode.
+/// Compile BAML source code into a snapshot.
 pub(crate) fn compile_for_engine(source: &str) -> BamlSnapshot {
     let program = compile_source(source);
-    let bytecode = convert_program(program).expect("convert_program should succeed");
-    BamlSnapshot::new(bytecode)
+    BamlSnapshot::new(program)
 }
 
 /// Set up the virtual filesystem for a test.
@@ -127,7 +125,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new());
+    let engine = BexEngine::new(snapshot, HashMap::new()).expect("Failed to create engine");
 
     let result = engine.call_function(input.function, &[]).await;
 

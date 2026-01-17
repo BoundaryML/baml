@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-pub use bex_vm::BytecodeProgram;
+pub use bex_vm_types::Program;
 
 // ============================================================================
 // Type System
@@ -193,13 +193,13 @@ pub struct BamlSnapshot {
     /// Retry policy definitions, keyed by name.
     pub retry_policies: HashMap<String, RetryPolicyDef>,
 
-    /// Bytecode for VM execution.
-    pub bytecode: BytecodeProgram,
+    /// Bytecode program for VM execution (pure data, no native functions attached).
+    pub bytecode: Program<()>,
 }
 
 impl BamlSnapshot {
-    /// Create a new `BamlSnapshot` with the given bytecode.
-    pub fn new(bytecode: BytecodeProgram) -> Self {
+    /// Create a new `BamlSnapshot` with the given bytecode program.
+    pub fn new(bytecode: Program<()>) -> Self {
         Self {
             classes: HashMap::new(),
             enums: HashMap::new(),

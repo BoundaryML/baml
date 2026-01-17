@@ -32,7 +32,7 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new());
+    let engine = BexEngine::new(snapshot, HashMap::new())?;
     let result = engine.call_function("main", &[]).await?;
 
     // Wait for server to finish
@@ -60,7 +60,7 @@ async fn net_connect_failure() -> anyhow::Result<()> {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new());
+    let engine = BexEngine::new(snapshot, HashMap::new())?;
     let result = engine.call_function("main", &[]).await;
 
     assert!(result.is_err());
@@ -101,7 +101,7 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new());
+    let engine = BexEngine::new(snapshot, HashMap::new())?;
     let result = engine.call_function("main", &[]).await?;
 
     server.await?;

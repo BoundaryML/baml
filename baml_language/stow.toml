@@ -54,8 +54,8 @@ reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit"]
-reason = "baml_* crates should depend on bex_vm_types."
+allowed_crates = ["baml_compiler_emit", "baml_snapshot"]
+reason = "Only compiler and snapshot crates should depend on bex_vm_types (pure data layer)."
 
 
 # bex namespace configuration

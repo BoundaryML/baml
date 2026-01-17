@@ -10,6 +10,41 @@ exclude: |
   )$
 
 repos:
+  # Fast built-in hooks (no network, no environment setup)
+  - repo: builtin
+    hooks:
+      - id: no-commit-to-branch
+        args: [-b, canary]
+        always_run: true
+        fail_fast: true
+
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        fail_fast: true
+
+      - id: end-of-file-fixer
+        fail_fast: true
+
+      - id: check-merge-conflict
+        fail_fast: true
+
+      - id: mixed-line-ending
+        args: [--fix=auto]
+        fail_fast: true
+
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+        fail_fast: true
+
+      - id: check-toml
+        fail_fast: true
+
+      - id: check-yaml
+        fail_fast: true
+
+      - id: detect-private-key
+        fail_fast: true
+
   - repo: local
     hooks:
       # Priority ordering:
@@ -23,7 +58,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^baml_language/(rig_tests/|crates/baml_tools_rig/|crates/baml_codegen)
-        priority: 0
+        priority: 1
 
       - id: cargo-fmt
         name: cargo fmt
@@ -32,7 +67,7 @@ repos:
         pass_filenames: false
         types: [rust]
         files: ^baml_language/
-        priority: 1
+        priority: 2
 
       - id: cargo-stow
         name: cargo stow
@@ -40,7 +75,7 @@ repos:
         language: system
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
-        priority: 1
+        priority: 2
 
       - id: bep-readme
         name: bep readme
@@ -48,7 +83,15 @@ repos:
         language: system
         pass_filenames: false
         files: ^beps/
-        priority: 1
+        priority: 3
+
+      - id: validate-markdown
+        name: validate markdown files
+        entry: bash -c 'cd baml_language && scripts/validate_markdown.py'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(.*\.md|\.markdown-whitelist)$
+        priority: 0
 
       - id: cargo-clippy
         name: cargo clippy
@@ -57,4 +100,14 @@ repos:
         pass_filenames: false
         types: [rust]
         files: ^baml_language/
-        priority: 2
+        priority: 3
+
+      - id: cargo-clippy-wasm
+        name: cargo clippy (wasm)
+        entry: bash -c 'cd baml_language && cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings'
+        language: system
+        pass_filenames: false
+        types: [rust]
+        files: ^baml_language/
+        priority: 4
+        stages: [manual]

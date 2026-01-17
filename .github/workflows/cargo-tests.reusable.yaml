@@ -25,54 +25,6 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  cargo-fmt:
-    name: "cargo fmt"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add rustfmt
-        working-directory: baml_language
-
-      - name: "Check formatting"
-        run: cargo fmt --all --check -- --config imports_granularity=Crate --config group_imports=StdExternalCrate
-        working-directory: baml_language
-
-  cargo-clippy:
-    name: "cargo clippy"
-    runs-on: ubuntu-latest
-    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
-      - name: "Install Rust toolchain"
-        run: |
-          rustup show
-          rustup component add clippy
-          rustup target add wasm32-unknown-unknown
-        working-directory: baml_language
-
-      - name: "Clippy"
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-        working-directory: baml_language
-
-      - name: "Clippy (wasm)"
-        run: cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings
-        working-directory: baml_language
-
   cargo-test-linux:
     name: "cargo test (linux)"
     runs-on: ubuntu-latest
