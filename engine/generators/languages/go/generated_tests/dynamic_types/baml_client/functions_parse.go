@@ -120,6 +120,53 @@ func (*parse) CreateArticle(text string, opts ...CallOptionFunc) (types.Article,
 	return casted, nil
 }
 
+// / Parse version of GetDynamicResponse (Takes in string and returns types.PureDynamic)
+func (*parse) GetDynamicResponse(text string, opts ...CallOptionFunc) (types.PureDynamic, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text, "stream": false},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: GetDynamicResponse: %w", err)
+		panic(wrapped_err)
+	}
+
+	result, err := bamlRuntime.CallFunctionParse(context.Background(), "GetDynamicResponse", encoded)
+	if err != nil {
+		return types.PureDynamic{}, err
+	}
+
+	casted := (result).(types.PureDynamic)
+
+	return casted, nil
+}
+
 // / Parse version of GetPerson (Takes in string and returns types.Person)
 func (*parse) GetPerson(text string, opts ...CallOptionFunc) (types.Person, error) {
 

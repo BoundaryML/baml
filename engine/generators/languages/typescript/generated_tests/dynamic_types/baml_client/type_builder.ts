@@ -33,6 +33,8 @@ export default class TypeBuilder {
     
     Person: ClassBuilder<'Person', "name" | "age">;
     
+    PureDynamic: ClassBuilder<'PureDynamic'>;
+    
     
     Category: EnumBuilder<'Category', "Technology" | "Science" | "Arts">;
     
@@ -44,7 +46,7 @@ export default class TypeBuilder {
     constructor() {
         this.tb = new _TypeBuilder({
           classes: new Set([
-            "Address","Article","Person",
+            "Address","Article","Person","PureDynamic",
           ]),
           enums: new Set([
             "Category","Priority","Status",
@@ -62,6 +64,10 @@ export default class TypeBuilder {
         
         this.Person = this.tb.classBuilder("Person", [
           "name","age",
+        ]);
+        
+        this.PureDynamic = this.tb.classBuilder("PureDynamic", [
+          
         ]);
         
         
@@ -88,7 +94,7 @@ export default class TypeBuilder {
         // wraps over the Rust type builder, so we only need to call tb.reset().
         // In JS it's not possible unless we refactor the way class builders are
         // accessed.
-         this.Article.reset();  this.Person.reset(); 
+         this.Article.reset();  this.Person.reset();  this.PureDynamic.reset(); 
     }
 
     __tb() {

@@ -23,7 +23,7 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
    c.DynamicProperties = make(map[string]any)
    {% endif %}
 
-	{% if fields.len() > 0 %}
+	{% if !fields.is_empty() || dynamic %}
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value

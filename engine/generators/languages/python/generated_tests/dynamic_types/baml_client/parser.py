@@ -36,6 +36,12 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="CreateArticle", llm_response=llm_response, mode="request")
         return typing.cast(types.Article, __result__)
 
+    def GetDynamicResponse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.PureDynamic:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GetDynamicResponse", llm_response=llm_response, mode="request")
+        return typing.cast(types.PureDynamic, __result__)
+
     def GetPerson(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Person:
@@ -61,6 +67,12 @@ class LlmStreamParser:
     ) -> stream_types.Article:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="CreateArticle", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.Article, __result__)
+
+    def GetDynamicResponse(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.PureDynamic:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="GetDynamicResponse", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.PureDynamic, __result__)
 
     def GetPerson(
         self, llm_response: str, baml_options: BamlCallOptions = {},

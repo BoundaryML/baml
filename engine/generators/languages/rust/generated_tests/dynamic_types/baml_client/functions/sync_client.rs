@@ -112,6 +112,8 @@ baml_function_sync!(ClassifyArticle(text: impl AsRef<str> + BamlEncode, ) -> (ty
 
 baml_function_sync!(CreateArticle(topic: impl AsRef<str> + BamlEncode, ) -> (stream_types::Article, types::Article));
 
+baml_function_sync!(GetDynamicResponse(prompt: impl AsRef<str> + BamlEncode, ) -> (stream_types::PureDynamic, types::PureDynamic));
+
 baml_function_sync!(GetPerson(description: impl AsRef<str> + BamlEncode, ) -> (stream_types::Person, types::Person));
 
 // =============================================================================
@@ -126,6 +128,8 @@ pub struct BamlSyncClient {
 
     pub CreateArticle: CreateArticle,
 
+    pub GetDynamicResponse: GetDynamicResponse,
+
     pub GetPerson: GetPerson,
 }
 
@@ -137,6 +141,8 @@ impl BamlSyncClient {
             ClassifyArticle: ClassifyArticle::new(),
 
             CreateArticle: CreateArticle::new(),
+
+            GetDynamicResponse: GetDynamicResponse::new(),
 
             GetPerson: GetPerson::new(),
         }
@@ -152,6 +158,10 @@ impl BamlSyncClient {
             },
 
             CreateArticle: CreateArticle {
+                options: options.clone(),
+            },
+
+            GetDynamicResponse: GetDynamicResponse {
                 options: options.clone(),
             },
 

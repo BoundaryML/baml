@@ -69,15 +69,18 @@ mod type_builder_tests {
         let person_builder = tb.Person();
         let address_builder = tb.Address();
         let article_builder = tb.Article();
+        let pure_dynamic_builder = tb.PureDynamic();
 
         // Get the type definitions
         let person_type = person_builder.r#type();
         let address_type = address_builder.r#type();
         let article_type = article_builder.r#type();
+        let pure_dynamic_type = pure_dynamic_builder.r#type();
 
         assert!(!person_type.print().is_empty());
         assert!(!address_type.print().is_empty());
         assert!(!article_type.print().is_empty());
+        assert!(!pure_dynamic_type.print().is_empty());
     }
 
     #[test]
@@ -361,6 +364,49 @@ mod dynamic_struct_field_tests {
 
         assert_eq!(address.street, "123 Main St");
         // No __dynamic field - if this compiles, the test passes
+    }
+
+    #[test]
+    fn test_pure_dynamic_class_has_only_dynamic_field() {
+        // PureDynamic is @@dynamic with NO static fields
+        // It should only have the __dynamic field
+        let mut dynamic = std::collections::HashMap::new();
+        dynamic.insert(
+            "name".to_string(),
+            BamlValue::String("TestItem".to_string()),
+        );
+        dynamic.insert("count".to_string(), BamlValue::Int(42));
+
+        let pure_dynamic = PureDynamic {
+            __dynamic: dynamic,
+        };
+
+        // has() should work
+        assert!(pure_dynamic.has("name"));
+        assert!(pure_dynamic.has("count"));
+        assert!(!pure_dynamic.has("nonexistent"));
+
+        // get() should work
+        let name: String = pure_dynamic.get("name").expect("Should get name");
+        assert_eq!(name, "TestItem");
+
+        let count: i64 = pure_dynamic.get("count").expect("Should get count");
+        assert_eq!(count, 42);
+    }
+
+    #[test]
+    fn test_pure_dynamic_class_iterate_fields() {
+        let mut dynamic = std::collections::HashMap::new();
+        dynamic.insert("field1".to_string(), BamlValue::Int(1));
+        dynamic.insert("field2".to_string(), BamlValue::Int(2));
+        dynamic.insert("field3".to_string(), BamlValue::Int(3));
+
+        let pure_dynamic = PureDynamic {
+            __dynamic: dynamic,
+        };
+
+        let field_count = pure_dynamic.dynamic_fields().count();
+        assert_eq!(field_count, 3);
     }
 }
 
@@ -736,6 +782,60 @@ mod e2e_type_builder_tests {
 
         // The type exists in the TypeBuilder
         assert!(tb.get_class("Product").is_some());
+    }
+
+    #[test]
+    fn test_pure_dynamic_class_e2e() {
+        let tb = TypeBuilder::new();
+
+        // PureDynamic is a class with @@dynamic but NO static fields
+        // Add properties to it at runtime
+        let name_prop = tb
+            .PureDynamic()
+            .add_property("name", &tb.string())
+            .expect("Should add name property");
+        name_prop
+            .set_description("The name of the item")
+            .expect("Should set description");
+
+        let count_prop = tb
+            .PureDynamic()
+            .add_property("count", &tb.int())
+            .expect("Should add count property");
+        count_prop
+            .set_description("The count of items")
+            .expect("Should set description");
+
+        // Call the function with TypeBuilder
+        let result = B.GetDynamicResponse.with_type_builder(&tb).call(
+            "Create a response with name 'TestItem' and count 42",
+        );
+
+        let pure_dynamic = result.expect("LLM call should succeed");
+
+        // Verify dynamic fields were populated (PureDynamic has NO static fields)
+        assert!(
+            pure_dynamic.has("name"),
+            "PureDynamic should have 'name' in dynamic fields"
+        );
+        assert!(
+            pure_dynamic.has("count"),
+            "PureDynamic should have 'count' in dynamic fields"
+        );
+
+        let name: String = pure_dynamic
+            .get("name")
+            .expect("Should be able to get name as String");
+        assert!(!name.is_empty(), "Name should not be empty");
+
+        let count: i64 = pure_dynamic
+            .get("count")
+            .expect("Should be able to get count as i64");
+
+        println!(
+            "Got pure dynamic response: name={}, count={}",
+            name, count
+        );
     }
 
     // Non-LLM tests for compile-time verification

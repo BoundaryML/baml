@@ -23,6 +23,8 @@ pub enum StreamTypes {
     Article(Article),
 
     Person(Person),
+
+    PureDynamic(PureDynamic),
 }
 
 impl baml::KnownTypes for StreamTypes {
@@ -37,6 +39,8 @@ impl baml::KnownTypes for StreamTypes {
             StreamTypes::Article(_) => "Article",
 
             StreamTypes::Person(_) => "Person",
+
+            StreamTypes::PureDynamic(_) => "PureDynamic",
         }
     }
 }

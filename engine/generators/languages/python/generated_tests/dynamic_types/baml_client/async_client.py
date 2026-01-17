@@ -112,6 +112,21 @@ class BamlAsyncClient:
                 "topic": topic,
             })
             return typing.cast(types.Article, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def GetDynamicResponse(self, prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.PureDynamic:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.GetDynamicResponse(prompt=prompt,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="GetDynamicResponse", args={
+                "prompt": prompt,
+            })
+            return typing.cast(types.PureDynamic, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def GetPerson(self, description: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Person:
@@ -160,6 +175,18 @@ class BamlStreamClient:
           lambda x: typing.cast(types.Article, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def GetDynamicResponse(self, prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[stream_types.PureDynamic, types.PureDynamic]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="GetDynamicResponse", args={
+            "prompt": prompt,
+        })
+        return baml_py.BamlStream[stream_types.PureDynamic, types.PureDynamic](
+          __result__,
+          lambda x: typing.cast(stream_types.PureDynamic, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.PureDynamic, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def GetPerson(self, description: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.Person, types.Person]:
@@ -194,6 +221,13 @@ class BamlHttpRequestClient:
             "topic": topic,
         }, mode="request")
         return __result__
+    async def GetDynamicResponse(self, prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GetDynamicResponse", args={
+            "prompt": prompt,
+        }, mode="request")
+        return __result__
     async def GetPerson(self, description: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -221,6 +255,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="CreateArticle", args={
             "topic": topic,
+        }, mode="stream")
+        return __result__
+    async def GetDynamicResponse(self, prompt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GetDynamicResponse", args={
+            "prompt": prompt,
         }, mode="stream")
         return __result__
     async def GetPerson(self, description: str,

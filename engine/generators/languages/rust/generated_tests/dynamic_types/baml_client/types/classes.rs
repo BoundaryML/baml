@@ -181,3 +181,70 @@ impl AsRef<Person> for Person {
         self
     }
 }
+
+#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[baml(dynamic)]
+
+pub struct PureDynamic {
+    /// Dynamic fields added at runtime via TypeBuilder.
+    #[baml(dynamic_fields)]
+    pub __dynamic: std::collections::HashMap<
+        String,
+        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    >,
+}
+
+impl PureDynamic {
+    /// Get a dynamic field by name and convert to the specified type.
+    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+        &self,
+        field: &str,
+    ) -> Result<V, baml::BamlError> {
+        self.__dynamic
+            .get(field)
+            .cloned()
+            .ok_or_else(|| {
+                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+            })
+            .and_then(|v| v.get())
+    }
+
+    /// Get a dynamic field as a BamlValue reference (zero-copy).
+    pub fn get_ref(
+        &self,
+        field: &str,
+    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+        self.__dynamic.get(field)
+    }
+
+    /// Check if a dynamic field exists.
+    pub fn has(&self, field: &str) -> bool {
+        self.__dynamic.contains_key(field)
+    }
+
+    /// Iterate over all dynamic fields.
+    pub fn dynamic_fields(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &str,
+            &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ),
+    > {
+        self.__dynamic.iter().map(|(k, v)| (k.as_str(), v))
+    }
+}
+
+impl Default for PureDynamic {
+    fn default() -> Self {
+        Self {
+            __dynamic: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl AsRef<PureDynamic> for PureDynamic {
+    fn as_ref(&self) -> &PureDynamic {
+        self
+    }
+}

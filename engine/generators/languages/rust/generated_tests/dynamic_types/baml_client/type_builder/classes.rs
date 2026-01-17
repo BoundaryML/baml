@@ -187,3 +187,47 @@ impl PersonClassBuilder {
             .expect("Person.age is statically defined in .baml and should always be present")
     }
 }
+
+/// Wrapper for the `PureDynamic` class builder.
+///
+/// Provides type-safe method access to fields defined in the schema.
+/// Access fields via methods: `builder.field_name()`
+
+///
+/// This class is marked `@@dynamic` - you can add new properties at runtime.
+
+pub struct PureDynamicClassBuilder {
+    inner: baml::ClassBuilder,
+}
+
+impl PureDynamicClassBuilder {
+    /// Create wrapper from runtime ClassBuilder.
+    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+        Self { inner }
+    }
+
+    /// Get the underlying ClassBuilder.
+    pub fn inner(&self) -> &baml::ClassBuilder {
+        &self.inner
+    }
+
+    /// Get the class as a type definition.
+    pub fn r#type(&self) -> baml::TypeDef {
+        self.inner
+            .as_type()
+            .expect("PureDynamic is statically defined in .baml and should always have a type")
+    }
+
+    /// Add a new property to this dynamic class.
+    pub fn add_property(
+        &self,
+        name: &str,
+        field_type: &baml::TypeDef,
+    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        self.inner.add_property(name, field_type)
+    }
+
+    // =========================================================================
+    // Field Accessors (1:1 with schema field names)
+    // =========================================================================
+}

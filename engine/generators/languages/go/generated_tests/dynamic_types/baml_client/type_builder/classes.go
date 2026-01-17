@@ -142,3 +142,35 @@ func (t *TypeBuilder) Person() (*PersonClassBuilder, error) {
 func (t *PersonClassBuilder) Type() (baml.Type, error) {
 	return t.inner.Type()
 }
+
+type PureDynamicClassBuilder struct {
+	inner baml.ClassBuilder
+}
+
+func (t *PureDynamicClassBuilder) ListProperties() ([]ClassPropertyBuilder, error) {
+	result, err := t.inner.ListProperties()
+	if err != nil {
+		return nil, err
+	}
+	builders := make([]ClassPropertyBuilder, len(result))
+	for i, p := range result {
+		builders[i] = p
+	}
+	return builders, nil
+}
+
+func (t *PureDynamicClassBuilder) AddProperty(name string, propertyType Type) (ClassPropertyBuilder, error) {
+	return t.inner.AddProperty(name, propertyType)
+}
+
+func (t *TypeBuilder) PureDynamic() (*PureDynamicClassBuilder, error) {
+	bld, err := t.inner.Class("PureDynamic")
+	if err != nil {
+		return nil, err
+	}
+	return &PureDynamicClassBuilder{inner: bld}, nil
+}
+
+func (t *PureDynamicClassBuilder) Type() (baml.Type, error) {
+	return t.inner.Type()
+}
