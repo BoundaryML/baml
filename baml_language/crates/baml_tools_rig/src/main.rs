@@ -18,8 +18,9 @@ fn main() {
             let template_dir = PathBuf::from("rig_tests/crate_templates").join(language);
 
             if check_mode {
-                if has_differences(&template_dir, &crate_dir, fixture_name) {
-                    eprintln!("DIFF: {}", crate_name);
+                if let Some(diff_info) = check_differences(&template_dir, &crate_dir, fixture_name)
+                {
+                    eprintln!("DIFF in {}: {}", crate_name, diff_info);
                     has_diff = true;
                 }
             } else {
@@ -119,7 +120,7 @@ fn copy_customizable_dir(src: &Path, dst: &Path, fixture_name: &str) -> Result<(
     Ok(())
 }
 
-fn has_differences(template_dir: &Path, output_dir: &Path, fixture_name: &str) -> bool {
+fn check_differences(template_dir: &Path, output_dir: &Path, fixture_name: &str) -> Option<String> {
     // Only check files that are always regenerated (not test_main.py, which can be customized)
     for file in ["Cargo.toml", "build.rs", "src/lib.rs"] {
         let template_path = template_dir.join(format!("{}.template", file));
@@ -129,7 +130,15 @@ fn has_differences(template_dir: &Path, output_dir: &Path, fixture_name: &str) -
             .unwrap_or_else(|_| panic!("Failed to read template: {}", template_path.display()))
             .replace("{{fixture_name}}", fixture_name);
 
-        let actual_content = fs::read_to_string(&output_path).unwrap_or_default();
+        let actual_content = match fs::read_to_string(&output_path) {
+            Ok(content) => content,
+            Err(_) => {
+                return Some(format!(
+                    "{} (file missing or unreadable)",
+                    output_path.display()
+                ));
+            }
+        };
 
         // For Rust files, format both before comparing to ensure formatting doesn't cause false positives
         let (template_formatted, actual_formatted) = if file.ends_with(".rs") {
@@ -138,14 +147,22 @@ fn has_differences(template_dir: &Path, output_dir: &Path, fixture_name: &str) -
                 format_rust_code(&actual_content),
             )
         } else {
-            (template_content, actual_content)
+            (template_content.clone(), actual_content.clone())
         };
 
         if template_formatted != actual_formatted {
-            return true;
+            let template_lines = template_formatted.lines().count();
+            let actual_lines = actual_formatted.lines().count();
+            let template_bytes = template_formatted.len();
+            let actual_bytes = actual_formatted.len();
+
+            return Some(format!(
+                "{} ({} lines vs {}, {} bytes vs {})",
+                file, template_lines, actual_lines, template_bytes, actual_bytes
+            ));
         }
     }
-    false
+    None
 }
 
 /// Format Rust code using rustfmt
@@ -183,7 +200,10 @@ fn format_rust_code(code: &str) -> String {
     if output.status.success() {
         String::from_utf8_lossy(&output.stdout).to_string()
     } else {
-        // If rustfmt fails, return original code
-        code.to_string()
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        panic!(
+            "rustfmt failed with status: {}\nstderr: {}",
+            output.status, stderr
+        );
     }
 }
