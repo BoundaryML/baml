@@ -169,6 +169,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 latency: instant_now.elapsed(),
                 message: format!("Failed to create request builder: {e:#?}"),
                 code: ErrorCode::Other(2),
+                raw_response: None,
             })
         })?;
 
@@ -184,6 +185,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 latency: instant_now.elapsed(),
                 message: format!("Failed to build request: {e:#?}"),
                 code: ErrorCode::Other(2),
+                raw_response: None,
             }));
         }
     };
@@ -271,6 +273,7 @@ pub async fn execute_request(
                 latency: instant_now.elapsed(),
                 message,
                 code,
+                raw_response: None,
             }));
         }
     };
@@ -298,6 +301,7 @@ pub async fn execute_request(
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                    raw_response: None,
                 }));
             }
         };
@@ -328,6 +332,7 @@ pub async fn execute_request(
                 logged_res.status, resp_body
             ),
             code: ErrorCode::from_status(logged_res.status),
+            raw_response: Some(resp_body),
         }));
     }
 
@@ -354,6 +359,7 @@ pub async fn execute_request(
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                    raw_response: None,
                 }));
             }
         };
@@ -425,6 +431,11 @@ pub async fn make_parsed_request(
             Err(e) => return e,
         };
 
+    // Capture raw response body as string before parsing
+    let raw_body_str = std::str::from_utf8(&response.body)
+        .ok()
+        .map(|s| s.to_string());
+
     let response_body = serde_json::from_slice::<serde_json::Value>(&response.body).map_err(|e| {
         LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
@@ -435,6 +446,7 @@ pub async fn make_parsed_request(
             latency: instant_now.elapsed(),
             message: format!("Failed to parse JSON: {e}"),
             code: ErrorCode::from_status(response.status),
+            raw_response: raw_body_str.clone(),
         })
     });
 
@@ -450,6 +462,7 @@ pub async fn make_parsed_request(
                 latency: instant_now.elapsed(),
                 message: e.to_string(),
                 code: ErrorCode::from_status(response.status),
+                raw_response: raw_body_str,
             })
         }
     };
@@ -467,6 +480,7 @@ pub async fn make_parsed_request(
                 response.status, response_body
             ),
             code: ErrorCode::from_status(response.status),
+            raw_response: Some(response_body.to_string()),
         });
     }
 

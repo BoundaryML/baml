@@ -31,7 +31,13 @@ export declare class BamlClientHttpError extends BamlClientError {
     client_name: string;
     status_code: number;
     detailed_message: string;
-    constructor(client_name: string, message: string, status_code: number, detailed_message: string);
+    /**
+     * The raw response body from the LLM API (if available).
+     * This contains the exact response from the provider, useful for debugging
+     * or extracting structured error information.
+     */
+    raw_response?: string;
+    constructor(client_name: string, message: string, status_code: number, detailed_message: string, raw_response?: string);
     toJSON(): string;
     static from(error: Error): BamlClientHttpError | undefined;
 }
@@ -47,6 +53,25 @@ export declare class BamlTimeoutError extends BamlClientHttpError {
     static from(error: Error): BamlTimeoutError | undefined;
 }
 export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError;
+/**
+ * Check if an error is an instance of BamlError.
+ *
+ * Note: This only returns true for actual BamlError instances (using instanceof).
+ * If you have a raw error from NAPI-RS that hasn't been converted yet, use
+ * toBamlError() first to convert it, then check with isBamlError().
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await b.MyFunction();
+ * } catch (e) {
+ *   const error = toBamlError(e);
+ *   if (isBamlError(error)) {
+ *     // error is now typed as BamlError
+ *   }
+ * }
+ * ```
+ */
 export declare function isBamlError(error: unknown): error is BamlError;
 export declare function toBamlError<T>(error: T): BamlError | T;
 //# sourceMappingURL=errors.d.ts.map

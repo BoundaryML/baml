@@ -141,6 +141,7 @@ impl FunctionResult {
                                     message: err.message.clone(),
                                     status_code: err.code.clone(),
                                     detailed_message: err.message.clone(),
+                                    raw_response: err.raw_response.clone(),
                                 }
                             )),
                         }
@@ -201,42 +202,57 @@ impl FunctionResult {
                 detailed_message: actual_error.clone(),
                 message: actual_error,
                 status_code: ErrorCode::ServiceUnavailable,
+                raw_response: None,
             };
         }
 
-        // Check if the underlying LLM response was a timeout - if so, preserve the TimeoutError
-        // instead of converting it to a ValidationError
+        // Check if the underlying LLM response was a failure - if so, convert to the appropriate
+        // error type instead of ValidationError
         if let LLMResponse::LLMFailure(llm_err) = self.llm_response() {
-            if matches!(llm_err.code, ErrorCode::Timeout) {
-                return ExposedError::TimeoutError {
+            return match &llm_err.code {
+                ErrorCode::Timeout => ExposedError::TimeoutError {
                     client_name: llm_err.client.clone(),
                     message: llm_err.message.clone(),
-                };
-            }
+                },
+                // For all other LLM failures (HTTP errors, etc.), create a ClientHttpError
+                // ValidationError should only be for parsing failures on successful LLM responses
+                _ => ExposedError::ClientHttpError {
+                    client_name: llm_err.client.clone(),
+                    message: llm_err.message.clone(),
+                    status_code: llm_err.code.clone(),
+                    detailed_message: format!(
+                        "LLM client \"{}\" failed with error: {} - {}",
+                        llm_err.client, llm_err.message, actual_error
+                    ),
+                    raw_response: llm_err.raw_response.clone(),
+                },
+            };
         }
 
+        // For cancelled operations, return AbortError
+        if let LLMResponse::Cancelled(msg) = self.llm_response() {
+            return ExposedError::AbortError {
+                detailed_message: format!("Operation Cancelled: {msg} - {actual_error}"),
+            };
+        }
+
+        // For successful LLM responses where parsing failed, create a ValidationError
         let message = match self.llm_response() {
             LLMResponse::Success(_) => {
                 format!("Failed to parse LLM response: {actual_error}")
             }
-            LLMResponse::LLMFailure(err) => format!(
-                "LLM Failure: {} ({}) - {}",
-                err.message, err.code, actual_error
-            ),
             LLMResponse::UserFailure(err) => {
                 format!("User Failure: {err} - {actual_error}")
             }
             LLMResponse::InternalFailure(err) => {
                 format!("Internal Failure: {err} - {actual_error}")
             }
-            LLMResponse::Cancelled(err) => {
-                format!("Operation Cancelled: {err} - {actual_error}")
-            }
+            // LLMFailure and Cancelled are handled above
+            _ => actual_error.clone(),
         };
         ExposedError::ValidationError {
             prompt: match self.llm_response() {
                 LLMResponse::Success(resp) => resp.prompt.to_string(),
-                LLMResponse::LLMFailure(err) => err.prompt.to_string(),
                 _ => "N/A".to_string(),
             },
             raw_output: self
@@ -244,8 +260,6 @@ impl FunctionResult {
                 .content()
                 .unwrap_or_default()
                 .to_string(),
-            // The only branch that should be hit is LLMResponse::Success(_) since we
-            // only call this function when we have a successful response.
             detailed_message: message.clone(),
             message,
         }

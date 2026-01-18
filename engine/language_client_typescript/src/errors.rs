@@ -56,7 +56,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 message,
                 status_code,
                 detailed_message,
-                ..
+                raw_response,
             } => throw_baml_client_http_error(
                 client_name,
                 message,
@@ -66,6 +66,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 } else {
                     Some(detailed_message.as_str())
                 },
+                raw_response.as_deref(),
             ),
             ExposedError::AbortError {
                 detailed_message, ..
@@ -110,6 +111,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                         failed.message.as_str(),
                         &failed.code,
                         None,
+                        failed.raw_response.as_deref(),
                     )
                 }
             },
@@ -172,6 +174,7 @@ fn throw_baml_client_http_error(
     message: &str,
     status_code: &ErrorCode,
     detailed_message: Option<&str>,
+    raw_response: Option<&str>,
 ) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientHttpError",
@@ -179,6 +182,7 @@ fn throw_baml_client_http_error(
         "message": format!("BamlError: BamlClientError: BamlClientHttpError: {}", message),
         "status_code": status_code.to_u16(),
         "detailed_message": detailed_message,
+        "raw_response": raw_response,
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
