@@ -574,7 +574,7 @@ macro_rules! define_fixtures {
     ) => {
         /// Fixture functions that return `ObjectPool` for testing.
         pub mod fixtures {
-            use super::*;
+
             $(
                 $(#[$meta])*
                 pub fn $fixture_name() -> $crate::ObjectPool $body

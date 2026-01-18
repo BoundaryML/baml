@@ -27,7 +27,7 @@ pub const MAX_FRAMES: usize = 256;
 /// This is what gets pushed onto the call stack every time we call a function.
 ///
 /// As with [`Value`], this struct should not own allocated objects (like
-/// functions) but instead use references to index into [`BexVm::objects`]. Should
+/// functions) but instead use references to index into [`BexVm::heap`]. Should
 /// be [`Copy`].
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {

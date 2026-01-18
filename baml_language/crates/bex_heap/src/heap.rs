@@ -103,7 +103,7 @@ pub struct BexHeap<F> {
     /// Maps handle keys to ObjectIndex values. Handles provide safe,
     /// validated access to heap objects from external code.
     ///
-    /// Uses RwLock<HashMap> instead of sharded_slab to allow in-place
+    /// Uses `RwLock<HashMap>` instead of sharded_slab to allow in-place
     /// updates after GC moves objects.
     pub(crate) handles: RwLock<HashMap<usize, ObjectIndex>>,
 
