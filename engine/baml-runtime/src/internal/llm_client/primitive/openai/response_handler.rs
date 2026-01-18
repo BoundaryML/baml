@@ -63,7 +63,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
                 response.choices.len()
             ),
             code: ErrorCode::Other(200),
-                raw_response: Some(response_body.to_string()),
+            raw_response: Some(response_body.to_string()),
         });
     }
 
@@ -276,7 +276,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
             code: ErrorCode::Other(2),
-                raw_response: Some(response_body.to_string()),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),

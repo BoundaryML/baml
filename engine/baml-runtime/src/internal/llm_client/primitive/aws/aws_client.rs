@@ -906,7 +906,7 @@ impl WithStreamChat for AwsClient {
                     latency: web_time::Duration::ZERO,
                     message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
-                raw_response: None,
+                    raw_response: None,
                 }));
             }
         };
@@ -923,7 +923,7 @@ impl WithStreamChat for AwsClient {
                     latency: web_time::Duration::ZERO,
                     message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
-                raw_response: None,
+                    raw_response: None,
                 }))
             }
         };
@@ -1093,7 +1093,7 @@ impl WithStreamChat for AwsClient {
                                 latency: instant_start.elapsed(),
                                 message: format!("Failed to parse event: {e:#?}"),
                                 code: ErrorCode::Other(2),
-                raw_response: None,
+                                raw_response: None,
                             }),
                             (None, response),
                         )),
@@ -1324,7 +1324,7 @@ impl WithChat for AwsClient {
                     latency: web_time::Duration::ZERO,
                     message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
-                raw_response: None,
+                    raw_response: None,
                 })
             }
         };
@@ -1341,7 +1341,7 @@ impl WithChat for AwsClient {
                     latency: web_time::Duration::ZERO,
                     message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
-                raw_response: None,
+                    raw_response: None,
                 })
             }
         };
