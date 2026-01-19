@@ -252,46 +252,77 @@ function useBamlAction<FunctionName extends FunctionNames>(
           if (isStreamingProps(props) && response instanceof ReadableStream) {
             const reader = response.getReader()
             const decoder = new TextDecoder()
+            // Buffer for incomplete NDJSON messages split across chunks
+            let buffer = ''
+
+            // Helper function to process a single NDJSON line
+            const processLine = (line: string): 'continue' | 'return' => {
+              const trimmedLine = line.trim()
+              if (!trimmedLine) return 'continue'
+
+              try {
+                const parsed: BamlStreamResponse<
+                  StreamDataType<FunctionName>,
+                  FinalDataType<FunctionName>
+                > = JSON.parse(trimmedLine)
+                if (parsed.error) {
+                  if (parsed.error instanceof Error) {
+                    throw parsed.error
+                  }
+
+                  const parsedError = JSON.parse(parsed.error)
+                  const finalError = toBamlError(parsedError)
+                  throw finalError
+                }
+                if (parsed.partial !== undefined) {
+                  dispatch({ type: 'SET_PARTIAL', payload: parsed.partial })
+                  if (isStreamingProps(props)) {
+                    props.onStreamData?.(parsed.partial)
+                  }
+                  props.onData?.(parsed.partial)
+                }
+                if (parsed.final !== undefined) {
+                  dispatch({ type: 'SET_FINAL', payload: parsed.final })
+                  onFinalData?.(parsed.final)
+                  props.onData?.(parsed.final)
+                  return 'return'
+                }
+              } catch (err: unknown) {
+                dispatch({
+                  type: 'SET_ERROR',
+                  payload: err as BamlErrors,
+                })
+                onError?.(err as BamlErrors)
+                return 'return'
+              }
+              return 'continue'
+            }
+
             try {
               while (true) {
                 const { value, done } = await reader.read()
-                if (done) break
+                if (done) {
+                  // Flush the decoder and process any remaining buffer content
+                  buffer += decoder.decode()
+                  if (buffer.trim()) {
+                    const result = processLine(buffer)
+                    if (result === 'return') return
+                  }
+                  break
+                }
                 if (value) {
-                  const chunk = decoder.decode(value, { stream: true }).trim()
-                  try {
-                    const parsed: BamlStreamResponse<
-                      StreamDataType<FunctionName>,
-                      FinalDataType<FunctionName>
-                    > = JSON.parse(chunk)
-                    if (parsed.error) {
-                       if (parsed.error instanceof Error) {
-                        throw parsed.error
-                      }
+                  // Append decoded chunk to buffer
+                  buffer += decoder.decode(value, { stream: true })
 
-                      const parsedError = JSON.parse(parsed.error)
-                      const finalError = toBamlError(parsedError)
-                      throw finalError
-                    }
-                    if (parsed.partial !== undefined) {
-                      dispatch({ type: 'SET_PARTIAL', payload: parsed.partial })
-                      if (isStreamingProps(props)) {
-                        props.onStreamData?.(parsed.partial)
-                      }
-                      props.onData?.(parsed.partial)
-                    }
-                    if (parsed.final !== undefined) {
-                      dispatch({ type: 'SET_FINAL', payload: parsed.final })
-                      onFinalData?.(parsed.final)
-                      props.onData?.(parsed.final)
-                      return
-                    }
-                  } catch (err: unknown) {
-                    dispatch({
-                      type: 'SET_ERROR',
-                      payload: err as BamlErrors,
-                    })
-                    onError?.(err as BamlErrors)
-                    break
+                  // Split by newlines - NDJSON format has one JSON object per line
+                  const lines = buffer.split('\n')
+                  // Keep the last (potentially incomplete) line in the buffer
+                  buffer = lines.pop() || ''
+
+                  // Process complete lines
+                  for (const line of lines) {
+                    const result = processLine(line)
+                    if (result === 'return') return
                   }
                 }
               }

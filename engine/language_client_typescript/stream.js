@@ -103,10 +103,14 @@ class BamlStream {
     /**
      * Converts the BAML stream to a Next.js compatible stream.
      * This is used for server-side streaming in Next.js API routes and Server Actions.
-     * The stream emits JSON-encoded messages containing either:
+     * The stream emits newline-delimited JSON (NDJSON) messages containing either:
      * - Partial results of type PartialOutputType
      * - Final result of type FinalOutputType
      * - Error information
+     *
+     * Each message is a JSON object followed by a newline character.
+     * This format handles TCP chunking correctly - messages can be split across
+     * chunks or multiple messages can arrive in a single chunk.
      */
     toStreamable() {
         const stream = this;
@@ -114,19 +118,19 @@ class BamlStream {
         return new ReadableStream({
             async start(controller) {
                 try {
-                    // Stream partials
+                    // Stream partials - each message ends with newline for NDJSON format
                     for await (const partial of stream) {
-                        controller.enqueue(encoder.encode(JSON.stringify({ partial })));
+                        controller.enqueue(encoder.encode(JSON.stringify({ partial }) + "\n"));
                     }
                     try {
                         const final = await stream.getFinalResponse();
-                        controller.enqueue(encoder.encode(JSON.stringify({ final })));
+                        controller.enqueue(encoder.encode(JSON.stringify({ final }) + "\n"));
                         controller.close();
                         return;
                     }
                     catch (err) {
                         const bamlError = (0, errors_1.toBamlError)(err instanceof Error ? err : new Error(String(err)));
-                        controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })));
+                        controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError }) + "\n"));
                         controller.close();
                         return;
                     }
@@ -140,7 +144,7 @@ class BamlStream {
                         prompt: "",
                         raw_output: "",
                     };
-                    controller.enqueue(encoder.encode(JSON.stringify({ error: errorPayload })));
+                    controller.enqueue(encoder.encode(JSON.stringify({ error: errorPayload }) + "\n"));
                     controller.close();
                 }
             },

@@ -51,6 +51,10 @@ class FakeRuntimeStream<TPartial, TFinal> {
 
   async done(): Promise<FakeFinal<TFinal>> {
     await Promise.all(this.dispatchPromises)
+    // Add delay after last partial to allow React to render streaming state
+    if (this.delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, this.delayMs))
+    }
     return new FakeFinal(this.finalValue)
   }
 }

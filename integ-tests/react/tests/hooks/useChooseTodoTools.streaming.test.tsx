@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 import { render, screen, waitFor } from "@testing-library/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useChooseTodoTools } from "../../baml_client/react/hooks";
 
@@ -17,15 +17,21 @@ const StreamingComponent = ({
   onStreamData,
   onFinalData,
 }: StreamingComponentProps) => {
+  // Memoize options to prevent unnecessary mutate recreation
+  const options = useMemo(() => ({
+    stream: true as const,
+    onStreamData,
+    onFinalData,
+  }), [onStreamData, onFinalData]);
+
   const { mutate, status, streamData, data, finalData, isLoading, isSuccess } =
-    useChooseTodoTools({
-      stream: true,
-      onStreamData,
-      onFinalData,
-    });
+    useChooseTodoTools(options);
 
   const [statusHistory, setStatusHistory] = useState<string[]>([]);
   const [streamSnapshots, setStreamSnapshots] = useState<string[]>([]);
+
+  // Track if mutate has been called to prevent multiple calls
+  const hasMutatedRef = useRef(false);
 
   useEffect(() => {
     setStatusHistory((prev) =>
@@ -40,6 +46,10 @@ const StreamingComponent = ({
   }, [streamData]);
 
   useEffect(() => {
+    // Only call mutate once
+    if (hasMutatedRef.current) return;
+    hasMutatedRef.current = true;
+
     const run = async () => {
       try {
         await mutate(query);
@@ -69,6 +79,9 @@ const StreamingComponent = ({
 };
 
 describe("useChooseTodoTools streaming hook", () => {
+  // This test makes real API calls, so needs longer timeout
+  jest.setTimeout(60000);
+
   it("surfaces mixed union results through streaming states", async () => {
     const onStreamData = jest.fn();
     const onFinalData = jest.fn();
@@ -82,7 +95,7 @@ describe("useChooseTodoTools streaming hook", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("status").textContent).toBe("success");
-    });
+    }, { timeout: 30000 });
 
     const readJson = (testId: string) => {
       const raw = screen.getByTestId(testId).textContent ?? "null";
