@@ -14,11 +14,6 @@ import { useBAMLSDK } from "../sdk";
 // ============================================================================
 // EventListener-specific atoms (not managed by SDK)
 // ============================================================================
-export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
-  "has-closed-env-vars-dialog",
-  false,
-  vscodeLocalStorageStore,
-);
 
 export const bamlCliVersionAtom = atom<string | null>(null);
 
