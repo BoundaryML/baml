@@ -340,7 +340,7 @@ function createBamlErrorUnsafe(error: unknown): BamlError | Error {
  *   await b.MyFunction();
  * } catch (e) {
  *   const error = toBamlError(e);
- *   if (isBamlError(error)) {
+ *   if (error) {
  *     // error is now typed as BamlError
  *   }
  * }
@@ -350,7 +350,7 @@ export function isBamlError(error: unknown): error is BamlError {
   return error instanceof BamlError;
 }
 
-export function toBamlError<T>(error: T): BamlError | T {
+export function toBamlError(error: unknown): BamlError | null {
   try {
     if (isBamlError(error)) {
       return error;
@@ -364,10 +364,10 @@ export function toBamlError<T>(error: T): BamlError | T {
       }
     }
 
-    // Return original error if not convertible
-    return error;
+    // Return null if not convertible
+    return null;
   } catch {
-    return error;
+    return null;
   }
 }
 
