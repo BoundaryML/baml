@@ -85,7 +85,23 @@ func encodeValue(value any) (*cffi.HostValue, error) {
 	// Use the potentially dereferenced value 'rv.Interface()' here if concrete types are structs
 	concreteValue := rv.Interface() // Get the concrete value (dereferenced if original was pointer)
 
+	// Check originalValue first (for non-pointer cases)
 	if internalObject, ok := originalValue.(InternalBamlSerializer); ok {
+		handle, err := internalObject.Encode()
+		if err != nil {
+			return nil, fmt.Errorf("encoding internal object: %w", err)
+		}
+		return &cffi.HostValue{
+			Value: &cffi.HostValue_Handle{
+				Handle: handle,
+			},
+		}, nil
+	}
+
+	// Also check the dereferenced value for pointer-to-interface cases (e.g., *types.Image)
+	// In Go, a pointer to an interface doesn't implement the interface, but the dereferenced
+	// value (the interface itself) does.
+	if internalObject, ok := concreteValue.(InternalBamlSerializer); ok {
 		handle, err := internalObject.Encode()
 		if err != nil {
 			return nil, fmt.Errorf("encoding internal object: %w", err)

@@ -20,7 +20,7 @@ $ pnpm add @boundaryml/baml
 
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml"
 import type { Checked, Check } from "./types"
-import type {  Address,  Article,  Category,  Person,  Priority,  Status } from "./types"
+import type {  Address,  Article,  Category,  Person,  Priority,  PureDynamic,  Status } from "./types"
 import type * as types from "./types"
 
 /******************************************************************************
@@ -51,6 +51,9 @@ export namespace partial_types {
     export interface Person {
       name?: string | null
       age?: number | null
+      [key: string]: any;
+    }
+    export interface PureDynamic {
       [key: string]: any;
     }
 }

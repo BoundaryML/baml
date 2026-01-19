@@ -23,7 +23,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (3)
+# Generated classes (4)
 # #########################################################################
 
 class Address(BaseModel):
@@ -42,6 +42,9 @@ class Person(BaseModel):
     model_config = ConfigDict(extra='allow')
     name: typing.Optional[str] = None
     age: typing.Optional[int] = None
+
+class PureDynamic(BaseModel):
+    model_config = ConfigDict(extra='allow')
 
 # #########################################################################
 # Generated type aliases (0)

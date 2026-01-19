@@ -149,6 +149,128 @@ class T { f bool }
 
 ---
 
+# Media Types
+
+## image_field
+
+```baml
+class T { f image }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `baml_py.Image`
+- Streaming: `typing.Optional[baml_py.Image]`
+
+### TypeScript
+
+- Non-streaming: `Image`
+- Streaming: `Image | null`
+
+### Go
+
+- Non-streaming: `Image`
+- Streaming: `*types.Image`
+
+### Rust
+
+- Non-streaming: `Image`
+- Streaming: `Option<types::Image>`
+
+---
+
+## optional_image
+
+```baml
+class T { f image? }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[baml_py.Image]`
+- Streaming: `typing.Optional[baml_py.Image]`
+
+### TypeScript
+
+- Non-streaming: `Image | null`
+- Streaming: `Image | null`
+
+### Go
+
+- Non-streaming: `*Image`
+- Streaming: `*types.Image`
+
+### Rust
+
+- Non-streaming: `Option<Image>`
+- Streaming: `Option<types::Image>`
+
+---
+
+## audio_field
+
+```baml
+class T { f audio }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `baml_py.Audio`
+- Streaming: `typing.Optional[baml_py.Audio]`
+
+### TypeScript
+
+- Non-streaming: `Audio`
+- Streaming: `Audio | null`
+
+### Go
+
+- Non-streaming: `Audio`
+- Streaming: `*types.Audio`
+
+### Rust
+
+- Non-streaming: `Audio`
+- Streaming: `Option<types::Audio>`
+
+---
+
+## optional_audio
+
+```baml
+class T { f audio? }
+```
+
+### target: `T.f`
+
+### Python
+
+- Non-streaming: `typing.Optional[baml_py.Audio]`
+- Streaming: `typing.Optional[baml_py.Audio]`
+
+### TypeScript
+
+- Non-streaming: `Audio | null`
+- Streaming: `Audio | null`
+
+### Go
+
+- Non-streaming: `*Audio`
+- Streaming: `*types.Audio`
+
+### Rust
+
+- Non-streaming: `Option<Audio>`
+- Streaming: `Option<types::Audio>`
+
+---
+
 # Optional Types
 
 ## optional_string

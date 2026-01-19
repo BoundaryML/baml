@@ -322,6 +322,49 @@ func TestFullyDynamicClassE2E(t *testing.T) {
 	assert.NotNil(t, productType)
 }
 
+// TestPureDynamicClassE2E tests a class with @@dynamic but no static fields
+func TestPureDynamicClassE2E(t *testing.T) {
+	ctx := context.Background()
+
+	tb, err := b.NewTypeBuilder()
+	require.NoError(t, err)
+
+	stringType, err := tb.String()
+	require.NoError(t, err)
+	intType, err := tb.Int()
+	require.NoError(t, err)
+
+	// Add properties to the pure dynamic class
+	pureDynamicClass, err := tb.PureDynamic()
+	require.NoError(t, err)
+
+	nameProp, err := pureDynamicClass.AddProperty("name", stringType)
+	require.NoError(t, err)
+	err = nameProp.SetDescription("The name of the item")
+	require.NoError(t, err)
+
+	countProp, err := pureDynamicClass.AddProperty("count", intType)
+	require.NoError(t, err)
+	err = countProp.SetDescription("The count of items")
+	require.NoError(t, err)
+
+	result, err := b.GetDynamicResponse(ctx,
+		"Create a response with name 'TestItem' and count 42",
+		b.WithTypeBuilder(tb))
+	require.NoError(t, err)
+
+	// Verify dynamic fields were captured
+	name, ok := result.DynamicProperties["name"]
+	assert.True(t, ok, "PureDynamic should have 'name' in DynamicProperties")
+	assert.NotEmpty(t, name, "Name should not be empty")
+
+	count, ok := result.DynamicProperties["count"]
+	assert.True(t, ok, "PureDynamic should have 'count' in DynamicProperties")
+	assert.NotNil(t, count, "Count should not be nil")
+
+	t.Logf("Got pure dynamic response: name=%v, count=%v", name, count)
+}
+
 func TestUnionsE2E(t *testing.T) {
 	tb, err := b.NewTypeBuilder()
 	require.NoError(t, err)

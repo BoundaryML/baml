@@ -25,6 +25,9 @@ type_map = {
     "types.Person": types.Person,
     "stream_types.Person": stream_types.Person,
 
+    "types.PureDynamic": types.PureDynamic,
+    "stream_types.PureDynamic": stream_types.PureDynamic,
+
 
     "types.Category": types.Category,
 

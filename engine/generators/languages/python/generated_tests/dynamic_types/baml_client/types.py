@@ -56,7 +56,7 @@ class Status(str, Enum):
     Pending = "Pending"
 
 # #########################################################################
-# Generated classes (3)
+# Generated classes (4)
 # #########################################################################
 
 class Address(BaseModel):
@@ -75,6 +75,9 @@ class Person(BaseModel):
     model_config = ConfigDict(extra='allow')
     name: str
     age: int
+
+class PureDynamic(BaseModel):
+    model_config = ConfigDict(extra='allow')
 
 # #########################################################################
 # Generated type aliases (0)

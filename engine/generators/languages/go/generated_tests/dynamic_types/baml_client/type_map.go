@@ -20,12 +20,14 @@ import (
 )
 
 var typeMap = map[string]reflect.Type{
-	"TYPES.Address":        reflect.TypeOf(types.Address{}),
-	"STREAM_TYPES.Address": reflect.TypeOf(stream_types.Address{}),
-	"TYPES.Article":        reflect.TypeOf(types.Article{}),
-	"STREAM_TYPES.Article": reflect.TypeOf(stream_types.Article{}),
-	"TYPES.Person":         reflect.TypeOf(types.Person{}),
-	"STREAM_TYPES.Person":  reflect.TypeOf(stream_types.Person{}),
+	"TYPES.Address":            reflect.TypeOf(types.Address{}),
+	"STREAM_TYPES.Address":     reflect.TypeOf(stream_types.Address{}),
+	"TYPES.Article":            reflect.TypeOf(types.Article{}),
+	"STREAM_TYPES.Article":     reflect.TypeOf(stream_types.Article{}),
+	"TYPES.Person":             reflect.TypeOf(types.Person{}),
+	"STREAM_TYPES.Person":      reflect.TypeOf(stream_types.Person{}),
+	"TYPES.PureDynamic":        reflect.TypeOf(types.PureDynamic{}),
+	"STREAM_TYPES.PureDynamic": reflect.TypeOf(stream_types.PureDynamic{}),
 
 	"TYPES.Category": reflect.TypeOf(types.Category("")),
 	"TYPES.Priority": reflect.TypeOf(types.Priority("")),

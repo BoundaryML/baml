@@ -20,7 +20,7 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIM
 class TypeBuilder(type_builder.TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
-          ["Address","Article","Person",]
+          ["Address","Article","Person","PureDynamic",]
         ), enums=set(
           ["Category","Priority","Status",]
         ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
@@ -43,7 +43,7 @@ class TypeBuilder(type_builder.TypeBuilder):
 
 
     # #########################################################################
-    # Generated classes 3
+    # Generated classes 4
     # #########################################################################
 
     @property
@@ -57,6 +57,10 @@ class TypeBuilder(type_builder.TypeBuilder):
     @property
     def Person(self) -> "PersonBuilder":
         return PersonBuilder(self)
+
+    @property
+    def PureDynamic(self) -> "PureDynamicBuilder":
+        return PureDynamicBuilder(self)
 
 
 
@@ -224,7 +228,7 @@ class StatusValues:
 
 
 # #########################################################################
-# Generated classes 3
+# Generated classes 4
 # #########################################################################
 
 class AddressAst:
@@ -398,6 +402,58 @@ class PersonProperties:
     @property
     def age(self) -> baml_py.ClassPropertyBuilder:
         return self.__bldr.property("age")
+    
+    
+
+
+class PureDynamicAst:
+    def __init__(self, tb: type_builder.TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.class_("PureDynamic")
+        self._properties: typing.Set[str] = set([  ])
+        self._props = PureDynamicProperties(self._bldr, self._properties)
+
+    def type(self) -> baml_py.FieldType:
+        return self._bldr.field()
+
+    @property
+    def props(self) -> "PureDynamicProperties":
+        return self._props
+
+
+class PureDynamicBuilder(PureDynamicAst):
+    def __init__(self, tb: type_builder.TypeBuilder):
+        super().__init__(tb)
+
+    
+    def add_property(self, name: str, type: baml_py.FieldType) -> baml_py.ClassPropertyBuilder:
+        if name in self._properties:
+            raise ValueError(f"Property {name} already exists.")
+        return self._bldr.property(name).type(type)
+
+    def list_properties(self) -> typing.List[typing.Tuple[str, baml_py.ClassPropertyBuilder]]:
+        return self._bldr.list_properties()
+
+    def remove_property(self, name: str) -> None:
+        self._bldr.remove_property(name)
+
+    def reset(self) -> None:
+        self._bldr.reset()
+
+    
+
+
+class PureDynamicProperties:
+    def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
+        self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
+
+    
+    def __getattr__(self, name: str) -> baml_py.ClassPropertyBuilder:
+        if name not in self.__properties:
+            raise AttributeError(f"Property {name} not found.")
+        return self.__bldr.property(name)
+
     
     
 

@@ -170,6 +170,80 @@ func CreateArticle(ctx context.Context, topic string, opts ...CallOptionFunc) (t
 	}
 }
 
+func GetDynamicResponse(ctx context.Context, prompt string, opts ...CallOptionFunc) (types.PureDynamic, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"prompt": prompt},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		panic(err)
+	}
+
+	if callOpts.onTick == nil {
+		result, err := bamlRuntime.CallFunction(ctx, "GetDynamicResponse", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PureDynamic{}, err
+		}
+
+		if result.Error != nil {
+			return types.PureDynamic{}, result.Error
+		}
+
+		casted := (result.Data).(types.PureDynamic)
+
+		return casted, nil
+	} else {
+		channel, err := bamlRuntime.CallFunctionStream(ctx, "GetDynamicResponse", encoded, callOpts.onTick)
+		if err != nil {
+			return types.PureDynamic{}, err
+		}
+
+		for result := range channel {
+			if result.Error != nil {
+				return types.PureDynamic{}, result.Error
+			}
+
+			if result.HasData {
+				return result.Data.(types.PureDynamic), nil
+			}
+		}
+
+		return types.PureDynamic{}, fmt.Errorf("No data returned from stream")
+	}
+}
+
 func GetPerson(ctx context.Context, description string, opts ...CallOptionFunc) (types.Person, error) {
 
 	var callOpts callOption

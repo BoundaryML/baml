@@ -29,7 +29,7 @@ pub use bex_sys::{
     FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
     ResourceRegistry, SocketHandle, SysOpResult, ops,
 };
-use bex_vm::{BexVm, VmExecState};
+use bex_vm::{BexVm, BytecodeProgram, VmExecState};
 use bex_vm_types::{ExternalOp, Object, ObjectIndex, SysOp, Value};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -72,27 +72,38 @@ pub enum EngineError {
 /// `BexEngine` is the main entry point for executing BAML programs.
 /// It owns the compiled program.
 pub struct BexEngine {
-    /// The compiled program (contains bytecode, types, functions, etc.)
-    program: BamlSnapshot,
+    /// The original snapshot (for metadata access)
+    snapshot: BamlSnapshot,
+    /// The converted bytecode program with native functions attached (for VM execution)
+    bytecode: BytecodeProgram,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
 }
 
 impl BexEngine {
     /// Create a new engine with the given program.
-    pub fn new(program: BamlSnapshot, env_vars: HashMap<String, String>) -> Self {
-        Self { program, env_vars }
+    pub fn new(
+        snapshot: BamlSnapshot,
+        env_vars: HashMap<String, String>,
+    ) -> Result<Self, EngineError> {
+        // Convert the pure bytecode to a VM-ready program with native functions attached
+        let bytecode = bex_vm::convert_program(snapshot.bytecode.clone())?;
+        Ok(Self {
+            snapshot,
+            bytecode,
+            env_vars,
+        })
     }
 
-    /// Get a reference to the program.
+    /// Get a reference to the program snapshot.
     pub fn program(&self) -> &BamlSnapshot {
-        &self.program
+        &self.snapshot
     }
 
     /// Execute a function by name.
     ///
     /// This method is `&self` because:
-    /// - VM is created as a local variable (cloned from self.program.bytecode)
+    /// - VM is created as a local variable (cloned from self.bytecode)
     /// - Each call gets its own VM instance (like legacy)
     ///
     /// Concurrent calls work naturally - each gets its own VM.
@@ -108,7 +119,7 @@ impl BexEngine {
         let function_index = self.lookup_function(function_name)?;
 
         // Create VM by cloning bytecode (like legacy async_vm_runtime.rs)
-        let mut vm = BexVm::new(self.program.bytecode.clone(), self.env_vars.clone());
+        let mut vm = BexVm::new(self.bytecode.clone(), self.env_vars.clone());
 
         // Set entry point with args
         vm.set_entry_point(function_index, args);
@@ -122,8 +133,7 @@ impl BexEngine {
 
     /// Look up a function by name and return its bytecode index.
     fn lookup_function(&self, function_name: &str) -> Result<ObjectIndex, EngineError> {
-        self.program
-            .bytecode
+        self.bytecode
             .resolved_function_names
             .get(function_name)
             .map(|(idx, _kind)| *idx)

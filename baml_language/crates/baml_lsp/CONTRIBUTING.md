@@ -5,7 +5,7 @@ This is a mostly free-form guide with resources to help you get started with con
 
 ### Project Architecture
 
-`language_server` contains 
+`language_server` contains
  - A Rust library for managing a `Session` and running the abstract functionality of an LSP server.
  - A concrete LSP server that uses the above library runs as a native executable.
  - A WASM module that wraps the above library with WASM shims for use by the web panel.

@@ -189,3 +189,42 @@ func (c Person) Encode() (*cffi.HostValue, error) {
 func (c Person) BamlTypeName() string {
 	return "Person"
 }
+
+type PureDynamic struct {
+	DynamicProperties map[string]any
+}
+
+func (c *PureDynamic) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	typeName := holder.Name
+	if typeName.Namespace != cffi.CFFITypeNamespace_STREAM_TYPES {
+		panic(fmt.Sprintf("expected cffi.CFFITypeNamespace_STREAM_TYPES, got %s", string(typeName.Namespace.String())))
+	}
+	if typeName.Name != "PureDynamic" {
+		panic(fmt.Sprintf("expected PureDynamic, got %s", typeName.Name))
+	}
+
+	c.DynamicProperties = make(map[string]any)
+
+	for _, field := range holder.Fields {
+		key := field.Key
+		valueHolder := field.Value
+		switch key {
+
+		default:
+
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
+
+		}
+	}
+
+}
+
+func (c PureDynamic) Encode() (*cffi.HostValue, error) {
+	fields := map[string]any{}
+
+	return baml.EncodeClass("PureDynamic", fields, &c.DynamicProperties)
+}
+
+func (c PureDynamic) BamlTypeName() string {
+	return "PureDynamic"
+}

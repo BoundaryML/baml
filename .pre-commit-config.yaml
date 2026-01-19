@@ -10,9 +10,45 @@ exclude: |
   )$
 
 repos:
+  # Fast built-in hooks (no network, no environment setup)
+  - repo: builtin
+    hooks:
+      - id: no-commit-to-branch
+        args: [-b, canary]
+        always_run: true
+        fail_fast: true
+
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        fail_fast: true
+        files: ^baml_language/
+        # Exclude: snapshots, IDE test files, and special test files (class.rs, enum.rs)
+        exclude: (baml_tests/projects/|baml_ide_tests/test_files/|\.snap$|class\.rs$|enum\.rs$)
+
+      - id: check-merge-conflict
+        fail_fast: true
+
+      - id: check-toml
+        fail_fast: true
+
+      - id: check-yaml
+        fail_fast: true
+
   - repo: local
     hooks:
-      # Priority 0: Read-only checks and formatters
+      # Priority ordering:
+      # 0: Code generation (rig) - must run first to generate files
+      # 1: Formatters and validators (fmt, stow, bep-readme) - format/validate generated code
+      # 2: Linters (clippy) - final checks on formatted code
+
+      - id: rig
+        name: rig
+        entry: bash -c 'cd baml_language && cargo run -p baml_tools_rig -- --check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(rig_tests/|crates/baml_tools_rig/|crates/baml_codegen)
+        priority: 1
+
       - id: cargo-fmt
         name: cargo fmt
         entry: bash -c 'cd baml_language && cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate'
@@ -20,6 +56,30 @@ repos:
         pass_filenames: false
         types: [rust]
         files: ^baml_language/
+        priority: 2
+
+      - id: cargo-stow
+        name: cargo stow
+        entry: bash -c 'cd baml_language && cargo run -p baml_tools_stow --bin cargo-stow -- stow --check'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
+        priority: 2
+
+      - id: bep-readme
+        name: bep readme
+        entry: bash -c 'command -v mise >/dev/null && mise run bep:readme || true'
+        language: system
+        pass_filenames: false
+        files: ^beps/
+        priority: 3
+
+      - id: validate-markdown
+        name: validate markdown files
+        entry: bash -c 'cd baml_language && scripts/validate_markdown.py'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/(.*\.md|\.markdown-whitelist)$
         priority: 0
 
       - id: cargo-clippy
@@ -29,20 +89,14 @@ repos:
         pass_filenames: false
         types: [rust]
         files: ^baml_language/
-        priority: 1
+        priority: 3
 
-      - id: cargo-stow
-        name: cargo stow
-        entry: bash -c 'cd baml_language && cargo run -p baml_tools_stow --bin cargo-stow -- stow --check'
+      - id: cargo-clippy-wasm
+        name: cargo clippy (wasm)
+        entry: bash -c 'cd baml_language && cargo clippy --workspace --exclude baml_tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude baml_tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings'
         language: system
         pass_filenames: false
-        files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/baml_tools_stow/)
-        priority: 0
-
-      - id: bep-readme
-        name: bep readme
-        entry: bash -c 'command -v mise >/dev/null && mise run bep:readme || true'
-        language: system
-        pass_filenames: false
-        files: ^beps/
-        priority: 0
+        types: [rust]
+        files: ^baml_language/
+        priority: 4
+        stages: [manual]

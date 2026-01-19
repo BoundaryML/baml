@@ -191,6 +191,80 @@ func (*stream) CreateArticle(ctx context.Context, topic string, opts ...CallOpti
 	return channel, nil
 }
 
+// / Streaming version of GetDynamicResponse
+func (*stream) GetDynamicResponse(ctx context.Context, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.PureDynamic, types.PureDynamic], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"prompt": prompt},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
+	if callOpts.typeBuilder != nil {
+		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
+	encoded, err := args.Encode()
+	if err != nil {
+		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+		// and include the type of the args you're passing in.
+		wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: GetDynamicResponse: %w", err)
+		panic(wrapped_err)
+	}
+
+	internal_channel, err := bamlRuntime.CallFunctionStream(ctx, "GetDynamicResponse", encoded, callOpts.onTick)
+	if err != nil {
+		return nil, err
+	}
+
+	channel := make(chan StreamValue[stream_types.PureDynamic, types.PureDynamic])
+	go func() {
+		for result := range internal_channel {
+			if result.Error != nil {
+				channel <- StreamValue[stream_types.PureDynamic, types.PureDynamic]{
+					IsError: true,
+					Error:   result.Error,
+				}
+				close(channel)
+				return
+			}
+			if result.HasData {
+				data := (result.Data).(types.PureDynamic)
+				channel <- StreamValue[stream_types.PureDynamic, types.PureDynamic]{
+					IsFinal:  true,
+					as_final: &data,
+				}
+			} else {
+				data := (result.StreamData).(stream_types.PureDynamic)
+				channel <- StreamValue[stream_types.PureDynamic, types.PureDynamic]{
+					IsFinal:   false,
+					as_stream: &data,
+				}
+			}
+		}
+
+		// when internal_channel is closed, close the output too
+		close(channel)
+	}()
+	return channel, nil
+}
+
 // / Streaming version of GetPerson
 func (*stream) GetPerson(ctx context.Context, description string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Person, types.Person], error) {
 

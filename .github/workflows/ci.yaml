@@ -203,12 +203,12 @@ jobs:
           fi
 
   # Lint checks
-  cargo-stow:
-    name: "Cargo Stow"
+  prek:
+    name: "Pre-commit Checks"
     runs-on: ubuntu-latest
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: "Checkout Branch"
         uses: actions/checkout@v4
@@ -223,9 +223,36 @@ jobs:
         run: rustup show
         working-directory: baml_language
 
-      - name: "Run cargo stow --check"
-        run: cargo run -p baml_tools_stow --release -- stow --check
+      - name: "Install clippy and wasm target"
+        run: |
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
         working-directory: baml_language
+
+      - name: "Install uv"
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Install prek"
+        uses: j178/prek-action@v1
+        with:
+          install-only: true
+
+      - name: "Cache prek"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: "Run prek"
+        run: |
+          echo '```console' > "$GITHUB_STEP_SUMMARY"
+          # Enable color output for prek and remove it for the summary
+          # Use --hook-stage=manual to enable slower hooks that are skipped by default
+          prek run --all-files --show-diff-on-failure --color always --hook-stage manual | \
+            tee >(sed -E 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})*)?[mGK]//g' >> "$GITHUB_STEP_SUMMARY") >&1
+          exit_code="${PIPESTATUS[0]}"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$exit_code"
 
   # Call reusable workflows
   cargo-tests:
@@ -336,7 +363,7 @@ jobs:
     name: "CI-v2 Failure Alert"
     runs-on: ubuntu-latest
     needs:
-      - cargo-stow
+      - prek
       - cargo-tests
       - wasm-pack-tests
       - beps
@@ -354,7 +381,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| cargo-stow | ${{ needs.cargo-stow.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY

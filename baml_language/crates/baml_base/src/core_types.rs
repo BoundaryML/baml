@@ -95,6 +95,13 @@ impl fmt::Display for MediaKind {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Literal {
+    Int(i64),
+    String(String),
+    Bool(bool),
+}
+
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);

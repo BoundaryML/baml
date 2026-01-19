@@ -180,3 +180,36 @@ func TestPDFInputVertex(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, result, "Expected non-empty Vertex PDF result")
 }
+
+// TestOptionalImageInputNil tests that optional image parameters work with nil
+// This tests the fix for encoding *types.Image (pointer to interface)
+func TestOptionalImageInputNil(t *testing.T) {
+	ctx := context.Background()
+
+	// Call ExtractResume with nil image - this tests the encoder handles *types.Image correctly
+	result, err := b.ExtractResume(ctx, "John Doe\nSoftware Engineer\n5 years experience", nil)
+	require.NoError(t, err, "ExtractResume with nil image should not fail")
+
+	// Should have extracted some name
+	assert.NotEmpty(t, result.Name, "Expected name to be extracted")
+}
+
+// TestOptionalImageInputWithValue tests that optional image parameters work with an actual image
+// This tests the fix for encoding *types.Image (pointer to interface) with a non-nil value
+func TestOptionalImageInputWithValue(t *testing.T) {
+	ctx := context.Background()
+
+	// Create an image - b.NewImageFromUrl returns baml_client.Image (which is baml.Image)
+	img, err := b.NewImageFromUrl("https://i.imgur.com/93fWs5R.png", nil)
+	require.NoError(t, err)
+
+	// Convert to types.Image (which is a distinct type from baml_client.Image)
+	typesImg := types.Image(img)
+
+	// Call ExtractResume with the image - this tests encoding a non-nil *types.Image
+	result, err := b.ExtractResume(ctx, "John Doe\nSoftware Engineer\n5 years experience", &typesImg)
+	require.NoError(t, err, "ExtractResume with image should not fail")
+
+	// Should have extracted some name
+	assert.NotEmpty(t, result.Name, "Expected name to be extracted")
+}

@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-bex_vm = { workspace = true }
+bex_vm_types = { workspace = true }
 
 [lints]
 workspace = true

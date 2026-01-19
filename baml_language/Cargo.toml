@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/*" ]
+members = [ "crates/*", "rig_tests/crates/*" ]
 resolver = "2"
 
 [workspace.package]
@@ -20,6 +20,9 @@ version = "0.0.0"
 baml_base = { path = "crates/baml_base" }
 baml_builtins = { path = "crates/baml_builtins" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
+baml_codegen_python = { path = "crates/baml_codegen_python" }
+baml_codegen_tests = { path = "crates/baml_codegen_tests" }
+baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_compiler_hir = { path = "crates/baml_compiler_hir" }
@@ -47,6 +50,7 @@ baml_workspace = { path = "crates/baml_workspace" }
 anyhow = { version = "1" }
 arboard = "3.4"
 ariadne = { version = "0.6" }
+askama = { version = "0.14.0" }
 axum = { version = "0.8.4", features = [ "ws" ] }
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
@@ -133,6 +137,7 @@ url = "2.5.2"
 walkdir = { version = "2.4" }
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
+which = { version = "6.0" }
 webbrowser = "1.0.5"
 wee_alloc = "0.4"
 [workspace.lints.rust]

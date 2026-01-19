@@ -77,6 +77,15 @@ impl TypeBuilder {
         )
     }
 
+    /// Access the `PureDynamic` class builder.
+    pub fn PureDynamic(&self) -> PureDynamicClassBuilder {
+        PureDynamicClassBuilder::new(
+            self.inner
+                .get_class("PureDynamic")
+                .expect("class PureDynamic is defined in schema"),
+        )
+    }
+
     // =========================================================================
     // Schema Enum Accessors (1:1 with schema enum names)
     // =========================================================================

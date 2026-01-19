@@ -87,3 +87,8 @@ export interface Person {
   
   [key: string]: any;
 }
+
+export interface PureDynamic {
+  
+  [key: string]: any;
+}

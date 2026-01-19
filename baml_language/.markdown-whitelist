@@ -1,0 +1,14 @@
+# Whitelist of allowed .md files in baml_language/ (besides README.md)
+# Paths are relative to baml_language/
+# Supports glob patterns (*, **)
+# Only long-term informational .md files should be listed here
+
+# Test documentation
+crates/baml_tests/BENCHMARKS.md
+crates/baml_tests/benches/incremental/*/description.md
+
+# LSP documentation
+crates/baml_lsp/CONTRIBUTING.md
+
+# Test instructions
+TEST_INSTRUCTIONS.md

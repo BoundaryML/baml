@@ -15,6 +15,11 @@ class Address {
     country string
 }
 
+// A purely dynamic class with no static fields
+class PureDynamic {
+    @@dynamic
+}
+
 // A dynamic enum that can have values added at runtime
 enum Category {
     Technology
@@ -82,6 +87,16 @@ function CreateArticle(topic: string) -> Article {
     client TestClient
     prompt #"
         Create an article about: {{ topic }}
+
+        {{ ctx.output_format }}
+    "#
+}
+
+// Function that returns a pure dynamic type (no static fields)
+function GetDynamicResponse(prompt: string) -> PureDynamic {
+    client TestClient
+    prompt #"
+        {{ prompt }}
 
         {{ ctx.output_format }}
     "#

@@ -180,3 +180,6 @@ baml-graph/_site/
 
 # beps
 _site/
+
+# claude
+.claude/

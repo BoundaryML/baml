@@ -29,6 +29,8 @@ pub enum Types {
 
     Person(Person),
 
+    PureDynamic(PureDynamic),
+
     Category(Category),
 
     Priority(Priority),
@@ -48,6 +50,8 @@ impl baml::KnownTypes for Types {
             Types::Article(_) => "Article",
 
             Types::Person(_) => "Person",
+
+            Types::PureDynamic(_) => "PureDynamic",
 
             Types::Category(_) => "Category",
 
