@@ -128,6 +128,7 @@ pub async fn orchestrate(
                         code,
                         client,
                         message,
+                        raw_response,
                         ..
                     }) => {
                         match code {
@@ -150,6 +151,7 @@ pub async fn orchestrate(
                                     message: message.clone(),
                                     status_code: code.clone(),
                                     detailed_message: message.clone(),
+                                    raw_response: raw_response.clone(),
                                 }
                             ))),
                         }

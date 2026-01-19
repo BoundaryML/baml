@@ -66,6 +66,36 @@ describe("Error Handling Tests", () => {
     }
   });
 
+  it("should include raw_response in BamlClientHttpError", async () => {
+    try {
+      const cr = new ClientRegistry();
+      cr.addLlmClient("MyClient", "openai", {
+        model: "gpt-4o-mini",
+        api_key: "INVALID_KEY",
+      });
+      cr.setPrimary("MyClient");
+      await b.MyFunc(
+        "My name is Harrison. My hair is black and I'm 6 feet tall.",
+        { clientRegistry: cr },
+      );
+      fail("Expected b.MyFunc to throw a BamlClientHttpError");
+    } catch (error: any) {
+      if (error instanceof BamlClientHttpError) {
+        expect(error.message).toContain("BamlClientHttpError");
+        expect(error.status_code).toBe(401);
+        // raw_response should contain the actual JSON response from the LLM API
+        expect(error.raw_response).toBeDefined();
+        expect(typeof error.raw_response).toBe("string");
+        // OpenAI returns JSON with an "error" field for auth failures
+        const rawJson = JSON.parse(error.raw_response!);
+        expect(rawJson).toHaveProperty("error");
+        expect(rawJson.error).toHaveProperty("message");
+      } else {
+        expect(`${error}`).toBe("FAILED");
+      }
+    }
+  });
+
   it("should raise a BamlClientHttpError with proper details", async () => {
     try {
       const cr = new ClientRegistry();

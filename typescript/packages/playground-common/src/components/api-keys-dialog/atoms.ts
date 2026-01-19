@@ -3,6 +3,7 @@ import { atomWithStorage } from 'jotai/utils';
 import { vscodeLocalStorageStore } from '../../shared/baml-project-panel/Jotai';
 import { vscode } from '../../shared/baml-project-panel/vscode';
 import { proxyUrlAtom, runtimeAtom } from '../../shared/baml-project-panel/atoms';
+import { isPlaceholderApiKey } from './utils';
 
 export const apiKeyVisibilityAtom = atom<Record<string, boolean>>({});
 
@@ -13,39 +14,56 @@ export interface ApiKeyEntry {
   hidden: boolean;
 }
 
-const hasShownApiKeyDialogAtom = atomWithStorage(
-  'has-closed-env-vars-dialog',
+// Track if user has explicitly dismissed the dialog (persisted)
+const hasUserDismissedDialogAtom = atomWithStorage(
+  'has-dismissed-api-key-dialog',
   false,
   vscodeLocalStorageStore,
+  { getOnInit: true }  // Sync read from storage on init
 );
 
+// Track if dialog is currently open (not persisted)
 const apiKeyDialogOpenAtom = atom(false);
+
+// Track if we've already auto-shown the dialog this session (not persisted)
+const hasAutoShownThisSessionAtom = atom(false);
 
 export const showApiKeyDialogAtom = atom(
   (get) => {
     const apiKeyDialogOpen = get(apiKeyDialogOpenAtom)
     if (apiKeyDialogOpen) return true
 
-    const requiredVars = get(requiredApiKeysAtom)
-    const envVars = get(apiKeysAtom)
+    // Check if user has ever dismissed the dialog
+    const hasUserDismissed = get(hasUserDismissedDialogAtom)
+    if (hasUserDismissed) return false
 
-    // Check if ALL required vars are missing
-    const hasMissingVars =
-      requiredVars.length > 0 && requiredVars.every((key: string) => !envVars[key])
+    // Check if we already auto-showed this session
+    const hasAutoShownThisSession = get(hasAutoShownThisSessionAtom)
+    if (hasAutoShownThisSession) return false
 
-    const hasShownDialog = get(hasShownApiKeyDialogAtom)
-    if (hasShownDialog) return apiKeyDialogOpen
-
-    // if we are in vscode, we don't want to show the dialog
+    // Only auto-show in VSCode
     if (!vscode.isVscode()) {
       return false
     }
 
+    const requiredVars = get(requiredApiKeysAtom)
+    const envVars = get(apiKeysAtom)
+
+    // Check if ALL required vars are missing or have placeholder values
+    const hasMissingVars =
+      requiredVars.length > 0 && requiredVars.every((key: string) => {
+        return !envVars[key] || isPlaceholderApiKey(envVars[key])
+      })
+
     return hasMissingVars
   },
   (get, set, value: boolean) => {
-    if (!value) {
-      set(hasShownApiKeyDialogAtom, true)
+    if (value) {
+      // Opening the dialog - mark that we've auto-shown this session
+      set(hasAutoShownThisSessionAtom, true)
+    } else {
+      // User is closing the dialog - mark as permanently dismissed
+      set(hasUserDismissedDialogAtom, true)
     }
     set(apiKeyDialogOpenAtom, value)
   },

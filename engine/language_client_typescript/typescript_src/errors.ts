@@ -1,6 +1,28 @@
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 
-export class BamlClientFinishReasonError extends Error {
+/**
+ * Base class for all BAML errors.
+ */
+export class BamlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BamlError";
+    Object.setPrototypeOf(this, BamlError.prototype);
+  }
+}
+
+/**
+ * Base class for client-related errors (HTTP errors, timeouts, etc.)
+ */
+export class BamlClientError extends BamlError {
+  constructor(message: string) {
+    super(message);
+    this.name = "BamlClientError";
+    Object.setPrototypeOf(this, BamlClientError.prototype);
+  }
+}
+
+export class BamlClientFinishReasonError extends BamlError {
   prompt: string;
   raw_output: string;
   finish_reason?: string;
@@ -62,7 +84,7 @@ export class BamlClientFinishReasonError extends Error {
   }
 }
 
-export class BamlValidationError extends Error {
+export class BamlValidationError extends BamlError {
   prompt: string;
   raw_output: string;
   detailed_message: string;
@@ -116,22 +138,30 @@ export class BamlValidationError extends Error {
   }
 }
 
-export class BamlClientHttpError extends Error {
+export class BamlClientHttpError extends BamlClientError {
   client_name: string;
   status_code: number;
   detailed_message: string;
+  /**
+   * The raw response body from the LLM API (if available).
+   * This contains the exact response from the provider, useful for debugging
+   * or extracting structured error information.
+   */
+  raw_response?: string;
 
   constructor(
     client_name: string,
     message: string,
     status_code: number,
     detailed_message: string,
+    raw_response?: string,
   ) {
     super(message);
     this.name = "BamlClientHttpError";
     this.client_name = client_name;
     this.status_code = status_code;
     this.detailed_message = detailed_message;
+    this.raw_response = raw_response;
 
     Object.setPrototypeOf(this, BamlClientHttpError.prototype);
   }
@@ -143,6 +173,7 @@ export class BamlClientHttpError extends Error {
       status_code: this.status_code,
       client_name: this.client_name,
       detailed_message: this.detailed_message,
+      raw_response: this.raw_response,
     });
   }
 
@@ -156,6 +187,7 @@ export class BamlClientHttpError extends Error {
             errorData.message || error.message,
             errorData.status_code || -100,
             errorData.detailed_message || "",
+            errorData.raw_response || undefined,
           );
         }
       } catch (parseError) {
@@ -166,7 +198,7 @@ export class BamlClientHttpError extends Error {
   }
 }
 
-export class BamlAbortError extends Error {
+export class BamlAbortError extends BamlError {
   public readonly reason?: any;
   detailed_message: string;
 
@@ -260,8 +292,8 @@ function isError(error: unknown): error is Error {
   return false;
 }
 
-// Helper function to safely create a BamlValidationError
-function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
+// Helper function to safely create a BamlError from an unknown error
+function createBamlErrorUnsafe(error: unknown): BamlError | Error {
   if (!isError(error)) {
     return new Error(String(error));
   }
@@ -295,45 +327,47 @@ function createBamlErrorUnsafe(error: unknown): BamlErrors | Error {
   return error;
 }
 
-export function isBamlError(error: unknown): error is BamlErrors {
-  if (
-    (error as any).type === "BamlClientHttpError" ||
-    (error as any).type === "BamlValidationError" ||
-    (error as any).type === "BamlClientFinishReasonError" ||
-    (error as any).type === "BamlAbortError" ||
-    (error as any).type === "BamlTimeoutError"
-  ) {
-    return true;
-  }
-
-  if (
-    (error as any).name === "BamlClientHttpError" ||
-    (error as any).name === "BamlValidationError" ||
-    (error as any).name === "BamlClientFinishReasonError" ||
-    (error as any).name === "BamlAbortError" ||
-    (error as any).name === "BamlTimeoutError"
-  ) {
-    return true;
-  }
-
-  return (
-    error instanceof BamlClientHttpError ||
-    error instanceof BamlValidationError ||
-    error instanceof BamlClientFinishReasonError ||
-    error instanceof BamlAbortError ||
-    error instanceof BamlTimeoutError
-  );
+/**
+ * Check if an error is an instance of BamlError.
+ *
+ * Note: This only returns true for actual BamlError instances (using instanceof).
+ * If you have a raw error from NAPI-RS that hasn't been converted yet, use
+ * toBamlError() first to convert it, then check with isBamlError().
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await b.MyFunction();
+ * } catch (e) {
+ *   const error = toBamlError(e);
+ *   if (error) {
+ *     // error is now typed as BamlError
+ *   }
+ * }
+ * ```
+ */
+export function isBamlError(error: unknown): error is BamlError {
+  return error instanceof BamlError;
 }
 
-export function toBamlError(error: unknown): BamlErrors | Error {
+export function toBamlError(error: unknown): BamlError | null {
   try {
     if (isBamlError(error)) {
       return error;
     }
 
-    return createBamlErrorUnsafe(error);
-  } catch (error) {
-    return error as Error;
+    if (isError(error)) {
+      const converted = createBamlErrorUnsafe(error);
+      // Only return if we successfully converted to a BamlError
+      if (converted instanceof BamlError) {
+        return converted;
+      }
+    }
+
+    // Return null if not convertible
+    return null;
+  } catch {
+    return null;
   }
 }
 

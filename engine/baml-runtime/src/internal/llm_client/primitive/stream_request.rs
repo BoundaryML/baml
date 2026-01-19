@@ -205,6 +205,7 @@ pub async fn make_stream_request(
                                     latency: start_time_instant.elapsed(),
                                     message,
                                     code,
+                                    raw_response: None,
                                 },
                             )));
                         }

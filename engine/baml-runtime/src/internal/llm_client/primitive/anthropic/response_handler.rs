@@ -47,6 +47,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
             code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -73,6 +74,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: "Anthropic response contains no text".to_string(),
             code: ErrorCode::Other(2),
+            raw_response: Some(response_body.to_string()),
         });
     };
 
@@ -126,6 +128,7 @@ pub fn scan_anthropic_response_stream(
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
             code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(event_body.to_string()),
         })?;
 
     match event {
@@ -172,6 +175,7 @@ pub fn scan_anthropic_response_stream(
                 latency: instant_now.elapsed(),
                 message: error.message.unwrap_or_default(),
                 code: ErrorCode::Other(2),
+                raw_response: Some(event_body.to_string()),
             });
         }
         MessageChunk::Other => (),

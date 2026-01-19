@@ -300,6 +300,7 @@ where
                                                     timeout_type
                                                 ),
                                                 code: ErrorCode::Timeout,
+                    raw_response: None,
                                             }));
                                             // Explicitly drop the stream to abort the HTTP request
                                             drop(response_stream);
@@ -358,6 +359,7 @@ where
                                     request_options: request_options_for_timeout.clone(),
                                     message: "Stream ended without receiving any events".to_string(),
                                     code: ErrorCode::Other(2),
+                    raw_response: None,
                                 }));
                             }
 
@@ -385,6 +387,7 @@ where
                                 request_options: node.provider.request_options().clone(),
                                 message: "Stream ended and no events were received".to_string(),
                                 code: ErrorCode::Other(2),
+                    raw_response: None,
                             })
                         }
                     }
@@ -415,6 +418,7 @@ where
                         code,
                         client,
                         message,
+                        raw_response,
                         ..
                     }) => {
                         match code {
@@ -428,6 +432,7 @@ where
                                     message: message.clone(),
                                     status_code: code.clone(),
                                     detailed_message: message.clone(),
+                                    raw_response: raw_response.clone(),
                                 }
                             ))),
                         }

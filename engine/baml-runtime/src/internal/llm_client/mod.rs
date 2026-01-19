@@ -222,6 +222,12 @@ pub struct LLMErrorResponse {
     // Short error message
     pub message: String,
     pub code: ErrorCode,
+
+    /// The raw response body from the LLM API (if available).
+    /// This is useful for debugging and for users who want to inspect
+    /// the exact response from the provider.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_response: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

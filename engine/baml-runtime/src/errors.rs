@@ -23,6 +23,8 @@ pub enum ExposedError {
         message: String,
         status_code: ErrorCode,
         detailed_message: String,
+        /// The raw response body from the LLM API (if available)
+        raw_response: Option<String>,
     },
     TimeoutError {
         client_name: String,
@@ -98,7 +100,7 @@ impl std::fmt::Display for ExposedError {
                 client_name,
                 message,
                 status_code,
-                detailed_message: _,
+                ..
             } => {
                 write!(
                         f,
@@ -159,10 +161,9 @@ impl IntoBamlError for &anyhow::Error {
                     raw_output: Cow::Owned(raw_response.clone()),
                 },
                 ExposedError::ClientHttpError {
-                    client_name: _,
                     message,
                     status_code,
-                    detailed_message: _,
+                    ..
                 } => baml_types::tracing::events::BamlError::ClientHttp {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
