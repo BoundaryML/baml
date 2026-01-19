@@ -256,7 +256,7 @@ function createBamlErrorUnsafe(error) {
  *   await b.MyFunction();
  * } catch (e) {
  *   const error = toBamlError(e);
- *   if (isBamlError(error)) {
+ *   if (error) {
  *     // error is now typed as BamlError
  *   }
  * }
@@ -277,11 +277,11 @@ function toBamlError(error) {
                 return converted;
             }
         }
-        // Return original error if not convertible
-        return error;
+        // Return null if not convertible
+        return null;
     }
     catch {
-        return error;
+        return null;
     }
 }
 // No need for a separate throwBamlValidationError function in TypeScript

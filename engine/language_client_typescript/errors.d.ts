@@ -66,12 +66,12 @@ export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientF
  *   await b.MyFunction();
  * } catch (e) {
  *   const error = toBamlError(e);
- *   if (isBamlError(error)) {
+ *   if (error) {
  *     // error is now typed as BamlError
  *   }
  * }
  * ```
  */
 export declare function isBamlError(error: unknown): error is BamlError;
-export declare function toBamlError<T>(error: T): BamlError | T;
+export declare function toBamlError(error: unknown): BamlError | null;
 //# sourceMappingURL=errors.d.ts.map
