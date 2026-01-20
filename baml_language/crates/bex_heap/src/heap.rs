@@ -399,14 +399,31 @@ impl<F> BexHeap<F> {
     ///
     /// Called by GC after copying objects to update handle table entries
     /// to point to the new locations.
-    pub fn update_handles(&self, forwarding: &HashMap<ObjectIndex, ObjectIndex>) {
+    /// Update handle entries after GC.
+    ///
+    /// Updates handles to point to new object locations. Invalidates handles
+    /// pointing to dead objects (runtime objects not found in forwarding map).
+    /// Preserves handles to compile-time objects even if not traced.
+    ///
+    /// Returns the number of handles invalidated.
+    pub fn update_handles(&self, forwarding: &HashMap<ObjectIndex, ObjectIndex>) -> usize {
+        let mut invalidated_count = 0;
         if let Ok(mut handles) = self.handles.write() {
-            for idx in handles.values_mut() {
+            handles.retain(|_, idx| {
                 if let Some(&new_idx) = forwarding.get(idx) {
                     *idx = new_idx;
+                    true
+                } else if self.is_compile_time(*idx) {
+                    // Compile-time objects are always valid
+                    true
+                } else {
+                    // Object dead (not forwarded and not compile-time)
+                    invalidated_count += 1;
+                    false
                 }
-            }
+            });
         }
+        invalidated_count
     }
 }
 

@@ -136,12 +136,12 @@ impl<F: Clone> BexHeap<F> {
             .collect();
 
         // Update handle table entries to point to new object locations
-        self.update_handles(&forwarding);
+        let handles_invalidated = self.update_handles(&forwarding);
 
         let stats = GcStats {
             live_count,
             collected_count,
-            handles_invalidated: 0, // Handles are updated, not invalidated
+            handles_invalidated,
         };
 
         (stats, remapped_roots)
@@ -213,12 +213,12 @@ impl<F: Clone> BexHeap<F> {
             .collect();
 
         // Update handle table
-        self.update_handles(&forwarding);
+        let handles_invalidated = self.update_handles(&forwarding);
 
         let stats = GcStats {
             live_count,
             collected_count,
-            handles_invalidated: 0,
+            handles_invalidated,
         };
 
         (stats, remapped_roots, forwarding)
@@ -538,7 +538,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Handle invalidation not implemented
     fn test_gc_invalidates_dead_handles() {
         use bex_external_types::WeakHeapRef;
 
