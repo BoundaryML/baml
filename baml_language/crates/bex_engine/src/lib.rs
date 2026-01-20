@@ -20,17 +20,37 @@
 //! Resources (file handles, connections, etc.) are stored in a `ResourceRegistry`.
 //! External ops can store resources and return their ID to the VM. Later ops
 //! can retrieve resources by ID. The VM only sees integer IDs.
+//!
+//! # Garbage Collection Coordination
+//!
+//! The engine coordinates GC using an epoch-based system:
+//!
+//! 1. **Epoch tracking**: Each `call_function` registers with the current epoch
+//! 2. **GC trigger**: `collect_garbage()` increments epoch, causing old-epoch VMs to park
+//! 3. **Safe collection**: Once all VMs park, GC collects roots from:
+//!    - Handle table (objects returned to external code)
+//!    - Parked VM stacks (via VM pointer registry)
+//! 4. **Stack update**: GC updates parked VM stacks with forwarding pointers
+//! 5. **TLAB invalidation**: Parked VMs get TLABs invalidated before resuming
+//! 6. **Resume**: `gc_complete.notify_waiters()` releases parked VMs
+//!
+//! ## Safety Invariants
+//!
+//! - VMs register pointers before parking, unregister after waking
+//! - GC only accesses VM stacks while holding `parked_vms` lock
+//! - Handles always resolve through table (no cached indices)
+//! - New calls wait for in-progress GC before processing handle args
 
 use std::{
     collections::HashMap,
     sync::{
-        Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
 use baml_snapshot::BamlSnapshot;
-pub use bex_external_types::{ExternalValue, Snapshot};
+pub use bex_external_types::{EpochGuard, ExternalValue, Snapshot};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -54,6 +74,20 @@ struct FutureResult {
     result: Result<ResolvedValue, EngineError>,
 }
 
+/// Wrapper for VM pointer that implements Send.
+///
+/// # Safety
+///
+/// This is safe because:
+/// - The pointer is only used while holding the `parked_vms` lock
+/// - We only dereference when all VMs are parked at safepoints
+/// - The VM lives on the async task's stack and won't move/drop while parked
+struct VmPtr(*const BexVm);
+
+// SAFETY: We control all access through the mutex and only use while VMs are parked
+#[allow(unsafe_code)]
+unsafe impl Send for VmPtr {}
+
 /// State for a single epoch slot.
 /// Used to track VMs that started in a particular epoch.
 struct EpochState {
@@ -61,6 +95,16 @@ struct EpochState {
     active: AtomicUsize,
     /// Number of VMs parked waiting for GC.
     parked: AtomicUsize,
+    /// Pointers to parked VMs for root collection during GC.
+    ///
+    /// # Safety
+    ///
+    /// These raw pointers are valid because:
+    /// - VM is borrowed from `call_function`'s stack frame
+    /// - `.await` on `gc_complete` suspends but doesn't drop the VM
+    /// - GC only reads/writes while all VMs are parked
+    /// - VM unregisters before resuming execution
+    parked_vms: Mutex<Vec<VmPtr>>,
 }
 
 impl EpochState {
@@ -68,6 +112,7 @@ impl EpochState {
         Self {
             active: AtomicUsize::new(0),
             parked: AtomicUsize::new(0),
+            parked_vms: Mutex::new(Vec::new()),
         }
     }
 }
@@ -184,6 +229,9 @@ pub struct BexEngine {
     epoch_drained: Notify,
     /// Notified when GC completes and parked VMs can resume.
     gc_complete: Notify,
+    /// Flag indicating GC is currently in progress.
+    /// Used to prevent handle resolution races.
+    gc_in_progress: AtomicBool,
 }
 
 impl BexEngine {
@@ -217,6 +265,7 @@ impl BexEngine {
             epoch_states: [EpochState::new(), EpochState::new()],
             epoch_drained: Notify::new(),
             gc_complete: Notify::new(),
+            gc_in_progress: AtomicBool::new(false),
         })
     }
 
@@ -279,15 +328,26 @@ impl BexEngine {
     }
 
     /// Convert a handle to a snapshot.
+    ///
+    /// This is safe for external code to call (no `EpochGuard` needed) because
+    /// we hold the handle table read lock for the entire operation, preventing
+    /// GC from moving objects while we're snapshotting.
     fn snapshot_handle(
         &self,
         handle: &bex_external_types::Handle,
     ) -> Result<Snapshot, EngineError> {
-        let idx = self
-            .heap()
-            .resolve_handle(handle)
-            .expect("Handle is a GC root - object should never be collected");
-        self.snapshot_object(idx)
+        // Hold the handles read lock for the entire snapshot operation.
+        // This prevents GC from running update_handles (which needs write lock),
+        // ensuring all ObjectIndex values remain valid during recursive snapshotting.
+        //
+        // The GcProtectedHeap guard ensures resolve_handle can only be called
+        // while the lock is held - you can't accidentally use it unsafely.
+        self.heap.with_gc_protection(|protected| {
+            let idx = protected
+                .resolve_handle(handle.slab_key())
+                .expect("Handle is a GC root - object should never be collected");
+            self.snapshot_object(idx)
+        })
     }
 
     /// Convert an object at the given index to a snapshot.
@@ -421,6 +481,9 @@ impl BexEngine {
     ///
     /// Statistics about the collection (live count, collected count, etc.)
     pub async fn collect_garbage(&self) -> bex_heap::GcStats {
+        // Signal GC starting - new calls will wait
+        self.gc_in_progress.store(true, Ordering::Release);
+
         // Increment epoch - new calls get the new epoch
         let gc_epoch = self.current_epoch.fetch_add(1, Ordering::SeqCst);
         let slot = (gc_epoch % 2) as usize;
@@ -444,22 +507,61 @@ impl BexEngine {
         }
 
         // Collect roots from handles (objects returned to external code)
-        // These must be preserved during GC.
-        let handle_roots = self.heap.collect_handle_roots();
+        let mut all_roots = self.heap.collect_handle_roots();
 
-        tracing::debug!("GC: {} handle roots collected", handle_roots.len());
+        // Acquire parked_vms lock - hold it through GC to update stacks
+        let parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
 
-        // Note: For a complete implementation, we would also collect roots from parked VMs.
-        // For now, we only use handle roots. Parked VMs would need their stacks updated
-        // with remapped indices after GC.
-
-        // Run GC with handle roots
+        // SAFETY: All VMs are parked (verified above), so we have exclusive read access
+        // to their stacks. The parked_vms vec contains valid pointers because VMs
+        // register before parking and unregister only after gc_complete is notified.
         #[allow(unsafe_code)]
-        let (stats, _remapped_roots) = unsafe { self.heap.collect_garbage(&handle_roots) };
+        for vm_ptr in parked_vms.iter() {
+            let vm = unsafe { &*vm_ptr.0 };
+            all_roots.extend(Self::collect_vm_roots(vm));
+        }
+
+        tracing::debug!(
+            "GC: {} total roots from {} handles and {} parked VMs",
+            all_roots.len(),
+            self.heap.stats().active_handles,
+            parked_vms.len()
+        );
+
+        // Run GC with forwarding map
+        #[allow(unsafe_code)]
+        let (stats, _remapped_roots, forwarding) =
+            unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
+
+        // Update all parked VM stacks with forwarding pointers and invalidate TLABs
+        // SAFETY: VMs are still parked (gc_complete not yet notified), we have
+        // exclusive access via the parked_vms lock we're still holding
+        #[allow(unsafe_code)]
+        for vm_ptr in parked_vms.iter() {
+            let vm = unsafe { &mut *vm_ptr.0.cast_mut() };
+
+            // Update stack values
+            for value in &mut vm.stack.0 {
+                if let Value::Object(idx) = value {
+                    if let Some(&new_idx) = forwarding.get(idx) {
+                        *idx = new_idx;
+                    }
+                }
+            }
+
+            // Invalidate TLAB so next allocation gets chunk from new space
+            vm.tlab.invalidate();
+        }
+
+        // Release lock before notifying waiters
+        drop(parked_vms);
 
         // Reset epoch state for reuse
         self.epoch_states[slot].active.store(0, Ordering::Release);
         self.epoch_states[slot].parked.store(0, Ordering::Release);
+
+        // Signal GC complete before releasing parked VMs
+        self.gc_in_progress.store(false, Ordering::Release);
 
         // Release parked VMs
         self.gc_complete.notify_waiters();
@@ -509,6 +611,12 @@ impl BexEngine {
         function_name: &str,
         args: &[ExternalValue],
     ) -> Result<ExternalValue, EngineError> {
+        // Wait for any in-progress GC to complete.
+        // This ensures Handles in args have stable indices.
+        while self.gc_in_progress.load(Ordering::Acquire) {
+            self.gc_complete.notified().await;
+        }
+
         // Look up the function to verify it exists
         let function_index = self.lookup_function(function_name)?;
 
@@ -518,6 +626,10 @@ impl BexEngine {
         self.epoch_states[slot]
             .active
             .fetch_add(1, Ordering::AcqRel);
+
+        // SAFETY: We just registered with the epoch above
+        #[allow(unsafe_code)]
+        let guard = unsafe { EpochGuard::new() };
 
         // Create VM with shared heap (each VM gets its own TLAB)
         let mut vm = BexVm::new(
@@ -529,7 +641,7 @@ impl BexEngine {
         // Convert ExternalValue args to Value, allocating Snapshots on the heap
         let vm_args: Vec<Value> = args
             .iter()
-            .map(|arg| Self::externalize_to_value(&mut vm, arg))
+            .map(|arg| Self::externalize_to_value(&mut vm, arg, &guard))
             .collect();
 
         // Set entry point with converted args
@@ -556,11 +668,24 @@ impl BexEngine {
 
     /// Convert an `ExternalValue` to a VM `Value`.
     ///
+    /// Requires `EpochGuard` because resolving handles returns an `ObjectIndex`
+    /// that must remain valid while we use it.
+    ///
     /// - `Object(Handle)` extracts the `ObjectIndex`
     /// - `Snapshot(...)` recursively allocates on the heap
-    fn externalize_to_value(vm: &mut BexVm, external: &ExternalValue) -> Value {
+    fn externalize_to_value(
+        vm: &mut BexVm,
+        external: &ExternalValue,
+        guard: &EpochGuard<'_>,
+    ) -> Value {
         match external {
-            ExternalValue::Object(handle) => Value::Object(handle.object_index()),
+            ExternalValue::Object(handle) => {
+                // Resolve through table to get current index after any GC
+                let idx = handle
+                    .object_index(guard)
+                    .expect("Handle should be valid - object was returned to external code");
+                Value::Object(idx)
+            }
             ExternalValue::Snapshot(snapshot) => Self::allocate_snapshot(vm, snapshot),
         }
     }
@@ -628,20 +753,32 @@ impl BexEngine {
     }
 
     /// Run GC if conditions are met (called at safepoints).
-    fn maybe_run_gc(&self, vm: &BexVm) {
+    fn maybe_run_gc(&self, vm: &mut BexVm) {
         if self.heap.should_gc() {
             let roots = Self::collect_vm_roots(vm);
             #[allow(unsafe_code)]
             unsafe {
-                let (stats, _remapped_roots) = self.heap.collect_garbage(&roots);
+                let (stats, _remapped_roots, forwarding) =
+                    self.heap.collect_garbage_with_forwarding(&roots);
+
+                // Update VM stack with forwarding pointers
+                for value in &mut vm.stack.0 {
+                    if let Value::Object(idx) = value {
+                        if let Some(&new_idx) = forwarding.get(idx) {
+                            *idx = new_idx;
+                        }
+                    }
+                }
+
+                // Invalidate TLAB so next allocation gets chunk from new space
+                vm.tlab.invalidate();
+
                 self.heap.reset_gc_counter();
                 tracing::debug!(
-                    "GC completed: {} live, {} collected, {} handles invalidated",
+                    "GC completed: {} live, {} collected",
                     stats.live_count,
-                    stats.collected_count,
-                    stats.handles_invalidated
+                    stats.collected_count
                 );
-                // TODO: Phase 5/6 - Update VM stack with remapped roots
             }
         }
     }
@@ -724,6 +861,14 @@ impl BexEngine {
                         // GC has been requested - we need to park
                         let slot = (my_epoch % 2) as usize;
 
+                        // Register VM pointer before parking
+                        // SAFETY: VM lives on our async task's stack and won't be dropped
+                        // until after we unregister (after gc_complete.notified().await returns)
+                        {
+                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
+                            parked_vms.push(VmPtr(std::ptr::from_ref(vm)));
+                        }
+
                         // Increment parked count and notify GC
                         self.epoch_states[slot]
                             .parked
@@ -733,6 +878,13 @@ impl BexEngine {
                         // Wait for GC to complete
                         // Note: GC will update our VM's stack with new object indices
                         self.gc_complete.notified().await;
+
+                        // Unregister VM pointer after waking
+                        {
+                            let mut parked_vms = self.epoch_states[slot].parked_vms.lock().unwrap();
+                            let vm_ptr = std::ptr::from_ref(vm);
+                            parked_vms.retain(|p| p.0 != vm_ptr);
+                        }
 
                         // Decrement parked count
                         self.epoch_states[slot]

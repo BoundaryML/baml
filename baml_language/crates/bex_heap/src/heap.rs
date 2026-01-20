@@ -148,6 +148,13 @@ where
             handles.remove(&handle_key);
         }
     }
+
+    fn resolve_handle(&self, slab_key: usize) -> Option<ObjectIndex> {
+        self.handles
+            .read()
+            .ok()
+            .and_then(|handles| handles.get(&slab_key).copied())
+    }
 }
 
 impl<F> BexHeap<F> {
@@ -421,18 +428,8 @@ where
             handles.insert(handle_key, idx);
         }
 
-        // Use Handle::new from bex_external_types, passing self as WeakHeapRef
-        Handle::new(handle_key, idx, Arc::clone(self) as Arc<dyn WeakHeapRef>)
-    }
-
-    /// Resolve a handle to its ObjectIndex.
-    ///
-    /// Returns None if the handle has been invalidated (e.g., by GC).
-    pub fn resolve_handle(&self, handle: &Handle) -> Option<ObjectIndex> {
-        self.handles
-            .read()
-            .ok()
-            .and_then(|handles| handles.get(&handle.slab_key()).copied())
+        // Handle no longer stores idx - always resolves through table
+        Handle::new(handle_key, Arc::clone(self) as Arc<dyn WeakHeapRef>)
     }
 
     /// Collect all handle roots for garbage collection.
@@ -528,16 +525,20 @@ mod tests {
 
     #[test]
     fn test_handle_create_resolve() {
+        use bex_external_types::WeakHeapRef;
+
         let objects: Vec<Object<()>> = vec![Object::String("test".to_string())];
         let heap = BexHeap::new(objects);
 
         let handle = heap.create_handle(ObjectIndex::from_raw(0));
-        let resolved = heap.resolve_handle(&handle);
+        let resolved = heap.resolve_handle(handle.slab_key());
         assert_eq!(resolved, Some(ObjectIndex::from_raw(0)));
     }
 
     #[test]
     fn test_handle_clone_and_drop() {
+        use bex_external_types::WeakHeapRef;
+
         let objects: Vec<Object<()>> = vec![Object::String("test".to_string())];
         let heap = BexHeap::new(objects);
 
@@ -545,14 +546,14 @@ mod tests {
         let handle2 = handle1.clone();
 
         // Both handles resolve
-        assert!(heap.resolve_handle(&handle1).is_some());
-        assert!(heap.resolve_handle(&handle2).is_some());
+        assert!(heap.resolve_handle(handle1.slab_key()).is_some());
+        assert!(heap.resolve_handle(handle2.slab_key()).is_some());
 
         // Drop first clone
         drop(handle1);
 
         // Second clone still resolves
-        assert!(heap.resolve_handle(&handle2).is_some());
+        assert!(heap.resolve_handle(handle2.slab_key()).is_some());
 
         // Drop second clone - this should release the slab entry
         drop(handle2);

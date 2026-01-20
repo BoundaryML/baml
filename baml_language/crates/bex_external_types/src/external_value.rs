@@ -161,8 +161,6 @@ impl PartialEq for ExternalValue {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::ObjectIndex;
-
     use super::*;
 
     #[test]
@@ -190,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_external_value_object() {
-        let handle = Handle::new_detached(42, ObjectIndex::from_raw(100));
+        let handle = Handle::new_detached(42);
         let v = ExternalValue::Object(handle);
 
         assert!(v.as_object().is_some());
@@ -204,7 +202,7 @@ mod tests {
         assert_eq!(ExternalValue::from(0.0f64).type_name(), "float");
         assert_eq!(ExternalValue::from(false).type_name(), "bool");
 
-        let handle = Handle::new_detached(0, ObjectIndex::from_raw(0));
+        let handle = Handle::new_detached(0);
         assert_eq!(ExternalValue::Object(handle).type_name(), "object");
     }
 
