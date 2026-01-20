@@ -99,6 +99,16 @@ impl TypeExpr {
     ///
     /// For `int[]?`, this returns true (array comes before optional).
     pub fn is_array(&self) -> bool {
+        self.array_depth() > 0
+    }
+
+    /// Count the number of `[]` array modifiers.
+    ///
+    /// For `int` returns 0.
+    /// For `int[]` returns 1.
+    /// For `int[][]` returns 2.
+    /// For `int[]?` returns 1 (optional is separate).
+    pub fn array_depth(&self) -> usize {
         let tokens: Vec<_> = self
             .syntax
             .children_with_tokens()
@@ -106,23 +116,27 @@ impl TypeExpr {
             .filter(|t| !t.kind().is_trivia())
             .collect();
 
-        // Check for [] at the end (possibly before ?)
-        let len = tokens.len();
-        if len >= 2 {
-            let last = tokens[len - 1].kind();
-            let second_last = tokens[len - 2].kind();
-            // Either ends with [] or ends with []?
-            if last == SyntaxKind::R_BRACKET && second_last == SyntaxKind::L_BRACKET {
-                return true;
-            }
-            if len >= 3 && last == SyntaxKind::QUESTION {
-                let third_last = tokens[len - 3].kind();
-                if second_last == SyntaxKind::R_BRACKET && third_last == SyntaxKind::L_BRACKET {
-                    return true;
-                }
+        let mut depth = 0;
+        let mut i = tokens.len();
+
+        // Skip trailing ? if present
+        if i > 0 && tokens[i - 1].kind() == SyntaxKind::QUESTION {
+            i -= 1;
+        }
+
+        // Count [] pairs from the end
+        while i >= 2 {
+            if tokens[i - 1].kind() == SyntaxKind::R_BRACKET
+                && tokens[i - 2].kind() == SyntaxKind::L_BRACKET
+            {
+                depth += 1;
+                i -= 2;
+            } else {
+                break;
             }
         }
-        false
+
+        depth
     }
 
     /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
@@ -147,6 +161,18 @@ impl TypeExpr {
             .children()
             .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
             .map(|n| TypeExpr { syntax: n })
+    }
+
+    /// Get all child `TypeExpr` nodes.
+    ///
+    /// For union types where the parser creates child `TYPE_EXPR` for each member,
+    /// this returns those members. Returns empty vec if no children.
+    pub fn child_type_exprs(&self) -> Vec<TypeExpr> {
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+            .collect()
     }
 
     /// Get the `TYPE_ARGS` node for generic types like `map<K, V>`.

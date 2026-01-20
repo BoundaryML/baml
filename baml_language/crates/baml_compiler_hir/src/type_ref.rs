@@ -111,6 +111,11 @@ impl TypeRef {
         // For `int[] | string[]`, this is a union of arrays, not an array of unions
         // Note: `(int | string)[]` has PIPE inside parens, so is_union() returns false
         if type_expr.is_union() {
+            // For unions, the CST may have child TYPE_EXPR nodes for parenthesized members
+            // (e.g., `(Failure)` in `Success | (Failure)`), but simple type names are just tokens.
+            //
+            // To properly handle all cases, we parse the text parts which correctly groups
+            // tokens between PIPE separators.
             let parts = type_expr.parts();
             let members: Vec<TypeRef> = parts.iter().map(|p| Self::from_type_text(p)).collect();
             return TypeRef::Union(members);
@@ -127,6 +132,8 @@ impl TypeRef {
     }
 
     /// Get the element type for an array `TypeExpr`.
+    ///
+    /// Uses token-based `array_depth()` to handle nested arrays without string manipulation.
     fn from_ast_array_element(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         // For parenthesized arrays like `(int | string)[]`, the element is the inner TypeExpr
         if let Some(inner) = type_expr.inner_type_expr() {
@@ -134,20 +141,19 @@ impl TypeRef {
         }
 
         // For non-parenthesized arrays like `int[]`, `string[][]`, `"user"[]`:
-        // Get the type text and strip the trailing [] to get the element type.
-        // This handles nested arrays correctly (e.g., `string[][]` -> `string[]`).
-        let parts = type_expr.parts();
-        if let Some(text) = parts.first() {
-            // Strip optional `?` first (if we're called from within optional handling)
-            let text = text.strip_suffix('?').unwrap_or(text);
-            // Strip the trailing `[]` to get the element type
-            if let Some(element_text) = text.strip_suffix("[]") {
-                return Self::from_type_text(element_text);
-            }
-        }
+        // Use array_depth() to count nesting levels and from_ast_base_type() for the base.
+        //
+        // For `int[][]`: depth=2, base=Int -> element is List(Int) i.e. `int[]`
+        // For `int[]`: depth=1, base=Int -> element is Int
+        let depth = type_expr.array_depth();
+        let base = Self::from_ast_base_type(type_expr);
 
-        // Fallback: should not reach here for well-formed array types
-        Self::from_ast_base_type(type_expr)
+        // Wrap base type in (depth-1) List layers to get the element type
+        let mut result = base;
+        for _ in 0..depth.saturating_sub(1) {
+            result = TypeRef::List(Box::new(result));
+        }
+        result
     }
 
     /// Parse the base type (no optional, array, or union modifiers).
