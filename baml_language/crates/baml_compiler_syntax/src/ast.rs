@@ -187,12 +187,16 @@ impl TypeExpr {
             .children()
             .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
             .map(|n| {
-                // Extract the content between quotes, excluding trivia
-                n.children_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .filter(|t| t.kind() != SyntaxKind::QUOTE && !t.kind().is_trivia())
-                    .map(|t| t.text().to_string())
-                    .collect::<String>()
+                // Get text and trim leading/trailing whitespace (trivia)
+                let text = n.text().to_string();
+                let trimmed = text.trim();
+                // Well-formed: starts AND ends with quote
+                if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+                    trimmed[1..trimmed.len() - 1].to_string()
+                } else {
+                    // Malformed (error recovery): preserve full text, just strip leading quote
+                    trimmed.trim_start_matches('"').to_string()
+                }
             })
     }
 

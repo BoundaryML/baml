@@ -46,5 +46,6 @@ class Test {
   field1: string
   field2: string
   another: closed
-  string: ")//Shouldstillparsethis}"
+  string: ")  // Should still parse this
+}"
 }

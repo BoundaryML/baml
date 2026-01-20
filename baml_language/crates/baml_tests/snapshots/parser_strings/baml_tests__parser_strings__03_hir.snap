@@ -17,7 +17,8 @@ class NestedQuotes {
   single_in_double: string
   double_in_single: string
   She: said
-  hello: "')escaped_in_escapedstring@alias("
+  hello: "')
+  escaped_in_escaped string @alias("
   The: <unknown>
   quote: <unknown>
   is: here
