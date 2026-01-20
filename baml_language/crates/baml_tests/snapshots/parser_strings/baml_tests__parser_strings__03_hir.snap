@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -17,8 +17,7 @@ class NestedQuotes {
   single_in_double: string
   double_in_single: string
   She: said
-  hello: "')
-  escaped_in_escaped string @alias("
+  hello: "')escaped_in_escapedstring@alias("
   The: <unknown>
   quote: <unknown>
   is: here

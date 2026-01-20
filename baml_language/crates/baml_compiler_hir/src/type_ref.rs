@@ -85,30 +85,117 @@ impl TypeRef {
 
     /// Create a `TypeRef` from an AST `TypeExpr` node.
     ///
-    /// This properly handles complex types including:
+    /// This uses structured CST accessors to properly handle complex types including:
     /// - Primitives: int, string, bool, etc.
     /// - Named types: User, `MyClass`
     /// - Optional types: string?
     /// - List types: string[]
     /// - Union types: Success | Failure
     /// - String literal types: "user" | "assistant"
-    ///
-    /// NOTE: Type parsing occurs here, which is somewhat brittle for edge cases
-    /// like `int??` or `int[][]`. See canary TODO for future improvements.
+    /// - Parenthesized types: (int | string)[]
+    /// - Generic types: map<K, V>
     pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        let parts = type_expr.parts();
+        // Handle optional modifier (outermost)
+        // For `int[]?`, optional wraps the array
+        if type_expr.is_optional() {
+            let inner = Self::from_ast_without_optional(type_expr);
+            return TypeRef::Optional(Box::new(inner));
+        }
 
-        // If multiple parts, this is a union type
-        if parts.len() > 1 {
+        Self::from_ast_without_optional(type_expr)
+    }
+
+    /// Parse a `TypeExpr` assuming the optional modifier has been handled.
+    fn from_ast_without_optional(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle union FIRST (top-level PIPE)
+        // For `int[] | string[]`, this is a union of arrays, not an array of unions
+        // Note: `(int | string)[]` has PIPE inside parens, so is_union() returns false
+        if type_expr.is_union() {
+            let parts = type_expr.parts();
             let members: Vec<TypeRef> = parts.iter().map(|p| Self::from_type_text(p)).collect();
             return TypeRef::Union(members);
         }
 
-        // Single type (possibly with modifiers like ? or [])
-        parts
-            .first()
-            .map(|p| Self::from_type_text(p))
-            .unwrap_or(TypeRef::Unknown)
+        // Handle array modifier
+        // For `(int | string)[]`, array wraps the parenthesized union
+        if type_expr.is_array() {
+            let element = Self::from_ast_array_element(type_expr);
+            return TypeRef::List(Box::new(element));
+        }
+
+        Self::from_ast_base(type_expr)
+    }
+
+    /// Get the element type for an array `TypeExpr`.
+    fn from_ast_array_element(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // For parenthesized arrays like `(int | string)[]`, the element is the inner TypeExpr
+        if let Some(inner) = type_expr.inner_type_expr() {
+            return Self::from_ast(&inner);
+        }
+
+        // For non-parenthesized arrays like `int[]`, `string[][]`, `"user"[]`:
+        // Get the type text and strip the trailing [] to get the element type.
+        // This handles nested arrays correctly (e.g., `string[][]` -> `string[]`).
+        let parts = type_expr.parts();
+        if let Some(text) = parts.first() {
+            // Strip optional `?` first (if we're called from within optional handling)
+            let text = text.strip_suffix('?').unwrap_or(text);
+            // Strip the trailing `[]` to get the element type
+            if let Some(element_text) = text.strip_suffix("[]") {
+                return Self::from_type_text(element_text);
+            }
+        }
+
+        // Fallback: should not reach here for well-formed array types
+        Self::from_ast_base_type(type_expr)
+    }
+
+    /// Parse the base type (no optional, array, or union modifiers).
+    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle parenthesized types like `(int | string)`
+        if let Some(inner) = type_expr.inner_type_expr() {
+            return Self::from_ast(&inner);
+        }
+
+        Self::from_ast_base_type(type_expr)
+    }
+
+    /// Parse a base type (no modifiers, not a union).
+    fn from_ast_base_type(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Check for string literal types like `"user"`
+        if let Some(s) = type_expr.string_literal() {
+            return TypeRef::StringLiteral(s);
+        }
+
+        // Check for integer literal types like `200`
+        if let Some(i) = type_expr.integer_literal() {
+            return TypeRef::IntLiteral(i);
+        }
+
+        // Check for boolean literal types
+        if let Some(b) = type_expr.bool_literal() {
+            return TypeRef::BoolLiteral(b);
+        }
+
+        // Check for map type with type args
+        if let Some(name) = type_expr.base_name() {
+            if name == "map" {
+                let args = type_expr.type_arg_exprs();
+                if args.len() == 2 {
+                    let key = Self::from_ast(&args[0]);
+                    let value = Self::from_ast(&args[1]);
+                    return TypeRef::Map {
+                        key: Box::new(key),
+                        value: Box::new(value),
+                    };
+                }
+            }
+
+            // Named type (primitive or user-defined)
+            return Self::from_type_name(&name);
+        }
+
+        TypeRef::Unknown
     }
 
     /// Create a `TypeRef` from a single type text (not a union).

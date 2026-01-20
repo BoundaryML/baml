@@ -75,14 +75,144 @@ ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
 ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 
 impl TypeExpr {
-    /// Check if this is a union type (contains PIPE separators).
+    /// Check if this is a union type (contains top-level PIPE separators).
     ///
-    /// Returns `true` for types like `Success | Failure` or `"user" | "assistant"`.
+    /// Returns `true` for types like `Success | Failure` or `int[] | string[]`.
+    /// Returns `false` for `(int | string)[]` because the PIPE is inside parens.
     pub fn is_union(&self) -> bool {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .any(|t| t.kind() == SyntaxKind::PIPE)
+    }
+
+    /// Check if this type has a trailing `?` (optional modifier).
+    pub fn is_optional(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .last()
+            .is_some_and(|t| t.kind() == SyntaxKind::QUESTION)
+    }
+
+    /// Check if this type has trailing `[]` (array modifier).
+    ///
+    /// For `int[]?`, this returns true (array comes before optional).
+    pub fn is_array(&self) -> bool {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia())
+            .collect();
+
+        // Check for [] at the end (possibly before ?)
+        let len = tokens.len();
+        if len >= 2 {
+            let last = tokens[len - 1].kind();
+            let second_last = tokens[len - 2].kind();
+            // Either ends with [] or ends with []?
+            if last == SyntaxKind::R_BRACKET && second_last == SyntaxKind::L_BRACKET {
+                return true;
+            }
+            if len >= 3 && last == SyntaxKind::QUESTION {
+                let third_last = tokens[len - 3].kind();
+                if second_last == SyntaxKind::R_BRACKET && third_last == SyntaxKind::L_BRACKET {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
+    pub fn is_parenthesized(&self) -> bool {
+        let first_token = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| !t.kind().is_trivia());
+
+        first_token.is_some_and(|t| t.kind() == SyntaxKind::L_PAREN)
+    }
+
+    /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
+    ///
+    /// Returns None if this is not a parenthesized type.
+    pub fn inner_type_expr(&self) -> Option<TypeExpr> {
+        if !self.is_parenthesized() {
+            return None;
+        }
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+    }
+
+    /// Get the `TYPE_ARGS` node for generic types like `map<K, V>`.
+    pub fn type_args(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_ARGS)
+    }
+
+    /// Get the type argument `TypeExprs` from `TYPE_ARGS`.
+    pub fn type_arg_exprs(&self) -> Vec<TypeExpr> {
+        self.type_args()
+            .map(|args| {
+                args.children()
+                    .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                    .map(|n| TypeExpr { syntax: n })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get the base type name (the first WORD token).
+    ///
+    /// For `int[]?` returns `Some("int")`.
+    /// For `map<K, V>` returns `Some("map")`.
+    /// For `"user"` returns `None` (it's a string literal, not a named type).
+    pub fn base_name(&self) -> Option<String> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+            .map(|t| t.text().to_string())
+    }
+
+    /// Check if this is a string literal type like `"user"`.
+    pub fn string_literal(&self) -> Option<String> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
+            .map(|n| {
+                // Extract the content between quotes, excluding trivia
+                n.children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .filter(|t| t.kind() != SyntaxKind::QUOTE && !t.kind().is_trivia())
+                    .map(|t| t.text().to_string())
+                    .collect::<String>()
+            })
+    }
+
+    /// Check if this is an integer literal type like `200`.
+    pub fn integer_literal(&self) -> Option<i64> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
+            .and_then(|t| t.text().parse().ok())
+    }
+
+    /// Check if this is a boolean literal (`true` or `false`).
+    pub fn bool_literal(&self) -> Option<bool> {
+        let name = self.base_name()?;
+        match name.as_str() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        }
     }
 
     /// Get the text parts of this type expression, split by PIPE separators.
