@@ -1,86 +1,99 @@
-//! Snapshot type for deep-copied value trees.
+//! BexExternalValue - owned value tree for FFI.
 //!
-//! `Snapshot` is a fully-owned value tree with no heap references.
+//! `BexExternalValue` is a fully-owned value tree with no heap references.
 //! Use when you need to traverse and convert the entire object graph,
 //! such as for FFI conversion to Python/JS objects.
 //!
-//! Unlike `ExternalValue` which uses `Handle` for heap objects,
-//! `Snapshot` contains owned copies of all data.
+//! # Union Types
 //!
-//! # Typed Snapshots
-//!
-//! `TypedSnapshot` pairs a `Snapshot` value with its declared type from
-//! the BAML schema. This is useful when the declared type is a union -
-//! the caller can see what alternatives the value could have been.
+//! When a value comes from a union type (e.g., `int | string` or `Success | Failure`),
+//! it's wrapped in the `Union` variant with metadata about the union:
 //!
 //! ```ignore
 //! // Function returns Success | Failure
-//! let result: TypedSnapshot = engine.call_function("GetStatus", &[]).await?;
+//! let result: BexExternalValue = engine.call_function("GetStatus", &[]).await?;
 //!
-//! // result.value = Snapshot::Instance { class_name: "Success", ... }
-//! // result.declared_type = Ty::Union([Ty::Class("Success"), Ty::Class("Failure")])
+//! match result {
+//!     BexExternalValue::Union { value, metadata } => {
+//!         println!("Selected: {}", metadata.selected_option);
+//!         println!("Could have been: {:?}", metadata.union_type);
+//!     }
+//!     _ => {}
+//! }
 //! ```
 
 // Re-export Ty from baml_snapshot for convenience
 pub use baml_snapshot::Ty;
 use indexmap::IndexMap;
 
-/// A snapshot paired with its declared type from the BAML schema.
+/// Metadata about a union type, embedded with values from union-typed contexts.
 ///
-/// This is the primary return type from `BexEngine::call_function`. It contains
-/// both the runtime value and the declared type, which is useful when the type
-/// is a union - callers can see what alternatives the value could have been.
-///
-/// # Example
-///
-/// ```ignore
-/// // Function signature: fn GetStatus() -> Success | Failure
-/// let result: TypedSnapshot = engine.call_function("GetStatus", &[]).await?;
-///
-/// match &result.value {
-///     Snapshot::Instance { class_name, .. } => {
-///         println!("Got: {}", class_name);
-///         // Check what else it could have been:
-///         if let Ty::Union(alternatives) = &result.declared_type {
-///             println!("Could have been: {:?}", alternatives);
-///         }
-///     }
-///     _ => {}
-/// }
-/// ```
+/// This mirrors `CFFIValueUnionVariant` from the CFFI protocol, enabling
+/// easy serialization for FFI consumers.
 #[derive(Clone, Debug, PartialEq)]
-pub struct TypedSnapshot {
-    /// The actual value.
-    pub value: Snapshot,
-    /// The declared type from the schema (may be a union).
-    pub declared_type: Ty,
+pub struct UnionMetadata {
+    /// Name of the union type (for named type aliases like `type Result = Success | Failure`).
+    pub name: Option<String>,
+
+    /// Whether this union is optional (T?).
+    /// An optional type `T?` is equivalent to `T | null`.
+    pub is_optional: bool,
+
+    /// Whether there's only one non-null option in the union.
+    /// This simplifies FFI handling - languages can unwrap directly.
+    pub is_single_pattern: bool,
+
+    /// The full union type for serialization.
+    pub union_type: Ty,
+
+    /// Which option of the union was selected (e.g., `Ty::Int`, `Ty::String`, `Ty::Class("Success")`).
+    pub selected_option: Ty,
 }
 
-impl TypedSnapshot {
-    /// Create a new TypedSnapshot.
-    pub fn new(value: Snapshot, declared_type: Ty) -> Self {
+impl UnionMetadata {
+    /// Create metadata for a union type.
+    pub fn new(union_type: Ty, selected_option: Ty) -> Self {
+        let (is_optional, is_single_pattern) = match &union_type {
+            Ty::Union(members) => {
+                let has_null = members.iter().any(|m| matches!(m, Ty::Null));
+                let non_null_count = members.iter().filter(|m| !matches!(m, Ty::Null)).count();
+                (has_null, non_null_count == 1)
+            }
+            Ty::Optional(_) => (true, true),
+            _ => (false, false),
+        };
+
         Self {
-            value,
-            declared_type,
+            name: None,
+            is_optional,
+            is_single_pattern,
+            union_type,
+            selected_option,
         }
+    }
+
+    /// Set the name for this union (for named type aliases).
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 }
 
 /// A deep-copied value tree with no heap references.
 ///
-/// Use `BexEngine::call_function` to get a `TypedSnapshot` which contains
-/// both the value and its declared type.
+/// Use `BexEngine::call_function` to get the result. When the return type
+/// is a union, the value will be wrapped in the `Union` variant with metadata.
 ///
-/// # When to use Snapshot vs ExternalValue
+/// # When to use BexExternalValue vs BexValue
 ///
-/// - **ExternalValue**: When you want to keep data in the heap and access lazily.
+/// - **BexValue**: When you want to keep data in the heap and access lazily.
 ///   Good for passing handles across FFI without copying.
 ///
-/// - **Snapshot**: When you need to convert the entire value to another format
+/// - **BexExternalValue**: When you need to convert the entire value to another format
 ///   (Python objects, JSON, etc.). Since you're traversing anyway, might as
 ///   well have owned data.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub enum Snapshot {
+pub enum BexExternalValue {
     /// Null value.
     #[default]
     Null,
@@ -97,16 +110,16 @@ pub enum Snapshot {
     /// Owned string.
     String(String),
 
-    /// Owned array of typed snapshots.
-    Array(Vec<TypedSnapshot>),
+    /// Owned array of values.
+    Array(Vec<BexExternalValue>),
 
-    /// Owned map with string keys and typed snapshot values.
-    Map(IndexMap<String, TypedSnapshot>),
+    /// Owned map with string keys.
+    Map(IndexMap<String, BexExternalValue>),
 
-    /// Class instance with class name and typed field values.
+    /// Class instance with class name and field values.
     Instance {
         class_name: String,
-        fields: IndexMap<String, TypedSnapshot>,
+        fields: IndexMap<String, BexExternalValue>,
     },
 
     /// Enum variant with enum name and variant name.
@@ -114,21 +127,33 @@ pub enum Snapshot {
         enum_name: String,
         variant_name: String,
     },
+
+    /// Value from a union type with metadata.
+    ///
+    /// When the declared type is a union (e.g., `int | string`), the actual
+    /// value is wrapped with metadata about the union for FFI serialization.
+    Union {
+        /// The actual value (one of the union options).
+        value: Box<BexExternalValue>,
+        /// Metadata about the union type.
+        metadata: UnionMetadata,
+    },
 }
 
-impl Snapshot {
+impl BexExternalValue {
     /// Get the type name for error messages.
     pub fn type_name(&self) -> &'static str {
         match self {
-            Snapshot::Null => "null",
-            Snapshot::Int(_) => "int",
-            Snapshot::Float(_) => "float",
-            Snapshot::Bool(_) => "bool",
-            Snapshot::String(_) => "string",
-            Snapshot::Array(_) => "array",
-            Snapshot::Map(_) => "map",
-            Snapshot::Instance { .. } => "instance",
-            Snapshot::Variant { .. } => "variant",
+            BexExternalValue::Null => "null",
+            BexExternalValue::Int(_) => "int",
+            BexExternalValue::Float(_) => "float",
+            BexExternalValue::Bool(_) => "bool",
+            BexExternalValue::String(_) => "string",
+            BexExternalValue::Array(_) => "array",
+            BexExternalValue::Map(_) => "map",
+            BexExternalValue::Instance { .. } => "instance",
+            BexExternalValue::Variant { .. } => "variant",
+            BexExternalValue::Union { .. } => "union",
         }
     }
 }

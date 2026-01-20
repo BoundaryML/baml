@@ -2,7 +2,7 @@
 
 mod common;
 
-use bex_engine::Snapshot;
+use bex_engine::BexExternalValue;
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
@@ -20,7 +20,7 @@ async fn fs_open_only() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(Snapshot::Int(42)),
+        expected: Ok(BexExternalValue::Int(42)),
     })
     .await
 }
@@ -38,7 +38,7 @@ async fn fs_open_and_read() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(Snapshot::String("Hello from BAML!".to_string())),
+        expected: Ok(BexExternalValue::String("Hello from BAML!".to_string())),
     })
     .await
 }

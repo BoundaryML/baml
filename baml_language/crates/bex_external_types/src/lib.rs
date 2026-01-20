@@ -27,6 +27,6 @@ mod handle;
 mod snapshot;
 
 pub use epoch_guard::EpochGuard;
-pub use external_value::{ExternalValue, TypedExternalValue};
+pub use external_value::BexValue;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
-pub use snapshot::{Snapshot, Ty, TypedSnapshot};
+pub use snapshot::{BexExternalValue, Ty, UnionMetadata};

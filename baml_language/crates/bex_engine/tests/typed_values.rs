@@ -1,85 +1,17 @@
-//! Tests for `TypedSnapshot` with union types.
+//! Tests for union type handling in `BexExternalValue`.
 //!
-//! These tests verify that `call_function` returns proper type information,
-//! especially for union return types where the declared type differs from
-//! the actual runtime value's type.
+//! These tests verify that `call_function` properly wraps union return types
+//! in `BexExternalValue::Union { value, metadata }` with correct metadata.
 
 mod common;
 
-use bex_engine::{Snapshot, Ty, TypedSnapshot};
-use common::{TypedEngineProgram, assert_engine_typed};
+use bex_engine::{BexExternalValue, Ty, UnionMetadata};
+use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
 #[tokio::test]
-async fn test_primitive_int() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            function main() -> int {
-                42
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Int(42),
-            declared_type: Ty::Int,
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_primitive_string() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            function main() -> string {
-                "hello"
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::String("hello".to_string()),
-            declared_type: Ty::String,
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_array_of_ints() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            function main() -> int[] {
-                [1, 2, 3]
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Array(vec![
-                TypedSnapshot {
-                    value: Snapshot::Int(1),
-                    declared_type: Ty::Int,
-                },
-                TypedSnapshot {
-                    value: Snapshot::Int(2),
-                    declared_type: Ty::Int,
-                },
-                TypedSnapshot {
-                    value: Snapshot::Int(3),
-                    declared_type: Ty::Int,
-                },
-            ]),
-            declared_type: Ty::List(Box::new(Ty::Int)),
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_union_int_or_string_returns_int() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn union_int_or_string_returns_int() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> int | string {
@@ -87,17 +19,17 @@ async fn test_union_int_or_string_returns_int() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Int(42),
-            declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Int(42)),
+            metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_union_int_or_string_returns_string() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn union_int_or_string_returns_string() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> int | string {
@@ -105,17 +37,17 @@ async fn test_union_int_or_string_returns_string() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::String("hello".to_string()),
-            declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::String("hello".to_string())),
+            metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_optional_int_returns_value() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn optional_int_returns_value() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> int? {
@@ -123,17 +55,17 @@ async fn test_optional_int_returns_value() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Int(42),
-            declared_type: Ty::Optional(Box::new(Ty::Int)),
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Int(42)),
+            metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Int),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_optional_int_returns_null() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn optional_int_returns_null() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> int? {
@@ -141,41 +73,17 @@ async fn test_optional_int_returns_null() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Null,
-            declared_type: Ty::Optional(Box::new(Ty::Int)),
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Null),
+            metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Null),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_map_string_to_int() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            function main() -> map<string, int> {
-                {"a": 1, "b": 2}
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Map(indexmap! {
-                "a".to_string() => TypedSnapshot { value: Snapshot::Int(1), declared_type: Ty::Int },
-                "b".to_string() => TypedSnapshot { value: Snapshot::Int(2), declared_type: Ty::Int },
-            }),
-            declared_type: Ty::Map {
-                key: Box::new(Ty::String),
-                value: Box::new(Ty::Int),
-            },
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_class_with_union_field() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn class_with_union_field() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Response {
@@ -187,25 +95,22 @@ async fn test_class_with_union_field() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
-                class_name: "Response".to_string(),
-                fields: indexmap! {
-                    "data".to_string() => TypedSnapshot {
-                        value: Snapshot::Int(42),
-                        declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                    },
+        expected: Ok(BexExternalValue::Instance {
+            class_name: "Response".to_string(),
+            fields: indexmap! {
+                "data".to_string() => BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(42)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
                 },
             },
-            declared_type: Ty::Class("Response".to_string()),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_union_of_classes_returns_success() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn union_of_classes_returns_success() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Success {
@@ -221,28 +126,28 @@ async fn test_union_of_classes_returns_success() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Instance {
                 class_name: "Success".to_string(),
                 fields: indexmap! {
-                    "value".to_string() => TypedSnapshot {
-                        value: Snapshot::Int(42),
-                        declared_type: Ty::Int,
-                    },
+                    "value".to_string() => BexExternalValue::Int(42),
                 },
-            },
-            declared_type: Ty::Union(vec![
+            }),
+            metadata: UnionMetadata::new(
+                Ty::Union(vec![
+                    Ty::Class("Success".to_string()),
+                    Ty::Class("Failure".to_string()),
+                ]),
                 Ty::Class("Success".to_string()),
-                Ty::Class("Failure".to_string()),
-            ]),
+            ),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_union_of_classes_returns_failure() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn union_of_classes_returns_failure() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Success {
@@ -258,28 +163,28 @@ async fn test_union_of_classes_returns_failure() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Instance {
                 class_name: "Failure".to_string(),
                 fields: indexmap! {
-                    "error".to_string() => TypedSnapshot {
-                        value: Snapshot::String("something went wrong".to_string()),
-                        declared_type: Ty::String,
-                    },
+                    "error".to_string() => BexExternalValue::String("something went wrong".to_string()),
                 },
-            },
-            declared_type: Ty::Union(vec![
-                Ty::Class("Success".to_string()),
+            }),
+            metadata: UnionMetadata::new(
+                Ty::Union(vec![
+                    Ty::Class("Success".to_string()),
+                    Ty::Class("Failure".to_string()),
+                ]),
                 Ty::Class("Failure".to_string()),
-            ]),
+            ),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_union_of_arrays() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn union_of_arrays() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> int[] | string[] {
@@ -287,33 +192,27 @@ async fn test_union_of_arrays() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Array(vec![
-                TypedSnapshot {
-                    value: Snapshot::Int(1),
-                    declared_type: Ty::Int,
-                },
-                TypedSnapshot {
-                    value: Snapshot::Int(2),
-                    declared_type: Ty::Int,
-                },
-                TypedSnapshot {
-                    value: Snapshot::Int(3),
-                    declared_type: Ty::Int,
-                },
-            ]),
-            declared_type: Ty::Union(vec![
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Array(vec![
+                BexExternalValue::Int(1),
+                BexExternalValue::Int(2),
+                BexExternalValue::Int(3),
+            ])),
+            metadata: UnionMetadata::new(
+                Ty::Union(vec![
+                    Ty::List(Box::new(Ty::Int)),
+                    Ty::List(Box::new(Ty::String)),
+                ]),
                 Ty::List(Box::new(Ty::Int)),
-                Ty::List(Box::new(Ty::String)),
-            ]),
+            ),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_array_of_unions() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn array_of_unions() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> (int | string)[] {
@@ -321,72 +220,27 @@ async fn test_array_of_unions() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Array(vec![
-                TypedSnapshot {
-                    value: Snapshot::Int(1),
-                    declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                },
-                TypedSnapshot {
-                    value: Snapshot::String("two".to_string()),
-                    declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                },
-                TypedSnapshot {
-                    value: Snapshot::Int(3),
-                    declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                },
-            ]),
-            declared_type: Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String]))),
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_nested_class() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            class Inner {
-                value int
-            }
-
-            class Outer {
-                inner Inner
-            }
-
-            function main() -> Outer {
-                Outer { inner: Inner { value: 42 } }
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
-                class_name: "Outer".to_string(),
-                fields: indexmap! {
-                    "inner".to_string() => TypedSnapshot {
-                        value: Snapshot::Instance {
-                            class_name: "Inner".to_string(),
-                            fields: indexmap! {
-                                "value".to_string() => TypedSnapshot {
-                                    value: Snapshot::Int(42),
-                                    declared_type: Ty::Int,
-                                },
-                            },
-                        },
-                        declared_type: Ty::Class("Inner".to_string()),
-                    },
-                },
+        expected: Ok(BexExternalValue::Array(vec![
+            BexExternalValue::Union {
+                value: Box::new(BexExternalValue::Int(1)),
+                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
             },
-            declared_type: Ty::Class("Outer".to_string()),
-        }),
+            BexExternalValue::Union {
+                value: Box::new(BexExternalValue::String("two".to_string())),
+                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+            },
+            BexExternalValue::Union {
+                value: Box::new(BexExternalValue::Int(3)),
+                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+            },
+        ])),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_optional_class() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn optional_class() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Data {
@@ -398,25 +252,25 @@ async fn test_optional_class() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Instance {
                 class_name: "Data".to_string(),
                 fields: indexmap! {
-                    "value".to_string() => TypedSnapshot {
-                        value: Snapshot::Int(42),
-                        declared_type: Ty::Int,
-                    },
+                    "value".to_string() => BexExternalValue::Int(42),
                 },
-            },
-            declared_type: Ty::Optional(Box::new(Ty::Class("Data".to_string()))),
+            }),
+            metadata: UnionMetadata::new(
+                Ty::Optional(Box::new(Ty::Class("Data".to_string()))),
+                Ty::Class("Data".to_string()),
+            ),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_optional_class_returns_null() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn optional_class_returns_null() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Data {
@@ -428,17 +282,20 @@ async fn test_optional_class_returns_null() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Null,
-            declared_type: Ty::Optional(Box::new(Ty::Class("Data".to_string()))),
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Null),
+            metadata: UnionMetadata::new(
+                Ty::Optional(Box::new(Ty::Class("Data".to_string()))),
+                Ty::Null,
+            ),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_class_with_optional_field() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn class_with_optional_field() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             class Person {
@@ -451,76 +308,23 @@ async fn test_class_with_optional_field() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Instance {
-                class_name: "Person".to_string(),
-                fields: indexmap! {
-                    "name".to_string() => TypedSnapshot {
-                        value: Snapshot::String("Alice".to_string()),
-                        declared_type: Ty::String,
-                    },
-                    "age".to_string() => TypedSnapshot {
-                        value: Snapshot::Null,
-                        declared_type: Ty::Optional(Box::new(Ty::Int)),
-                    },
+        expected: Ok(BexExternalValue::Instance {
+            class_name: "Person".to_string(),
+            fields: indexmap! {
+                "name".to_string() => BexExternalValue::String("Alice".to_string()),
+                "age".to_string() => BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Null),
+                    metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Null),
                 },
             },
-            declared_type: Ty::Class("Person".to_string()),
         }),
     })
     .await
 }
 
 #[tokio::test]
-async fn test_array_of_classes() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
-        fs: indexmap! {},
-        source: r#"
-            class Item {
-                id int
-            }
-
-            function main() -> Item[] {
-                [Item { id: 1 }, Item { id: 2 }]
-            }
-        "#,
-        entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Array(vec![
-                TypedSnapshot {
-                    value: Snapshot::Instance {
-                        class_name: "Item".to_string(),
-                        fields: indexmap! {
-                            "id".to_string() => TypedSnapshot {
-                                value: Snapshot::Int(1),
-                                declared_type: Ty::Int,
-                            },
-                        },
-                    },
-                    declared_type: Ty::Class("Item".to_string()),
-                },
-                TypedSnapshot {
-                    value: Snapshot::Instance {
-                        class_name: "Item".to_string(),
-                        fields: indexmap! {
-                            "id".to_string() => TypedSnapshot {
-                                value: Snapshot::Int(2),
-                                declared_type: Ty::Int,
-                            },
-                        },
-                    },
-                    declared_type: Ty::Class("Item".to_string()),
-                },
-            ]),
-            declared_type: Ty::List(Box::new(Ty::Class("Item".to_string()))),
-        }),
-    })
-    .await
-}
-
-#[tokio::test]
-async fn test_map_with_union_values() -> anyhow::Result<()> {
-    assert_engine_typed(TypedEngineProgram {
+async fn map_with_union_values() -> anyhow::Result<()> {
+    assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
             function main() -> map<string, int | string> {
@@ -528,21 +332,56 @@ async fn test_map_with_union_values() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(TypedSnapshot {
-            value: Snapshot::Map(indexmap! {
-                "count".to_string() => TypedSnapshot {
-                    value: Snapshot::Int(42),
-                    declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                },
-                "name".to_string() => TypedSnapshot {
-                    value: Snapshot::String("test".to_string()),
-                    declared_type: Ty::Union(vec![Ty::Int, Ty::String]),
-                },
-            }),
-            declared_type: Ty::Map {
-                key: Box::new(Ty::String),
-                value: Box::new(Ty::Union(vec![Ty::Int, Ty::String])),
+        expected: Ok(BexExternalValue::Map(indexmap! {
+            "count".to_string() => BexExternalValue::Union {
+                value: Box::new(BexExternalValue::Int(42)),
+                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
             },
+            "name".to_string() => BexExternalValue::Union {
+                value: Box::new(BexExternalValue::String("test".to_string())),
+                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+            },
+        })),
+    })
+    .await
+}
+
+#[tokio::test]
+async fn union_of_array_with_union_elements_or_string() -> anyhow::Result<()> {
+    // Tests that selected_option uses declared type, not inferred from values
+    // The array element type is (int | bool), not just int
+    assert_engine_executes(EngineProgram {
+        fs: indexmap! {},
+        source: r#"
+            function main() -> (int | bool)[] | string {
+                [1, true, 2]
+            }
+        "#,
+        entry: "main",
+        expected: Ok(BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Array(vec![
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(1)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                },
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Bool(true)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Bool),
+                },
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(2)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                },
+            ])),
+            // Key assertion: selected_option is the full declared type (int | bool)[]
+            // not Ty::List(Ty::Int) inferred from first element
+            metadata: UnionMetadata::new(
+                Ty::Union(vec![
+                    Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::Bool]))),
+                    Ty::String,
+                ]),
+                Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::Bool]))),
+            ),
         }),
     })
     .await

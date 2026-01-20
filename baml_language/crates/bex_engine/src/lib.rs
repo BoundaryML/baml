@@ -50,9 +50,7 @@ use std::{
 };
 
 use baml_snapshot::BamlSnapshot;
-pub use bex_external_types::{
-    EpochGuard, ExternalValue, Snapshot, Ty, TypedExternalValue, TypedSnapshot,
-};
+pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -137,8 +135,8 @@ pub enum EngineError {
     #[error("Internal VM error: {0}")]
     InternalVmError(#[from] bex_vm::InternalError),
 
-    #[error("Cannot snapshot object of type {type_name}")]
-    CannotSnapshot { type_name: String },
+    #[error("Cannot convert object of type {type_name}")]
+    CannotConvert { type_name: String },
 
     #[error("Type mismatch: {message}")]
     TypeMismatch { message: String },
@@ -294,63 +292,64 @@ impl BexEngine {
         self.heap.stats()
     }
 
-    /// Convert a `TypedExternalValue` to a `TypedSnapshot` (owned data with types).
+    /// Convert a `BexValue` to a `BexExternalValue` (owned data).
     ///
-    /// - For `Snapshot` variants: wraps the snapshot with the declared type
-    /// - For `Object(Handle)`: resolves the handle and deep-copies with type info
+    /// - For `External` variants: returns the value directly
+    /// - For `Opaque(Handle)`: resolves the handle and deep-copies
+    ///
+    /// If the declared type is a union, the value is wrapped in `Union { value, metadata }`.
     ///
     /// # Supported Object Types
     ///
-    /// - `String` → `Snapshot::String`
-    /// - `Array` → `Snapshot::Array` (recursively converts elements with types)
-    /// - `Map` → `Snapshot::Map` (recursively converts values with types)
-    /// - `Instance` → `Snapshot::Instance` (includes class name and typed fields)
-    /// - `Variant` → `Snapshot::Variant` (includes enum and variant names)
+    /// - `String` → `BexExternalValue::String`
+    /// - `Array` → `BexExternalValue::Array` (recursively converts elements)
+    /// - `Map` → `BexExternalValue::Map` (recursively converts values)
+    /// - `Instance` → `BexExternalValue::Instance` (includes class name and fields)
+    /// - `Variant` → `BexExternalValue::Variant` (includes enum and variant names)
     ///
     /// # Errors
     ///
-    /// Returns `EngineError::CannotSnapshot` for object types that cannot be
+    /// Returns `EngineError::CannotConvert` for object types that cannot be
     /// converted (Function, Class, Enum, Future, Media).
     ///
     /// # Example
     ///
     /// ```ignore
     /// let result = engine.call_function("get_user", &[]).await?;
-    /// let typed_snapshot = engine.to_typed_snapshot(result)?;
-    /// match &typed_snapshot.value {
-    ///     Snapshot::Instance { class_name, fields } => {
+    /// match result {
+    ///     BexExternalValue::Instance { class_name, fields } => {
     ///         println!("Got {} with {} fields", class_name, fields.len());
+    ///     }
+    ///     BexExternalValue::Union { value, metadata } => {
+    ///         println!("Union selected: {}", metadata.selected_option);
     ///     }
     ///     _ => {}
     /// }
-    /// // Also have access to declared_type for union info
-    /// println!("Declared type: {:?}", typed_snapshot.declared_type);
     /// ```
-    pub fn to_typed_snapshot(
+    pub fn to_bex_external(
         &self,
-        typed_external: TypedExternalValue,
-    ) -> Result<TypedSnapshot, EngineError> {
-        match typed_external.value {
-            ExternalValue::Snapshot(s) => Ok(TypedSnapshot::new(s, typed_external.declared_type)),
-            ExternalValue::Object(handle) => {
-                self.typed_snapshot_handle(&handle, &typed_external.declared_type)
-            }
+        value: BexValue,
+        declared_type: &Ty,
+    ) -> Result<BexExternalValue, EngineError> {
+        match value {
+            BexValue::External(s) => Ok(Self::maybe_wrap_union(s, declared_type)),
+            BexValue::Opaque(handle) => self.handle_to_external(&handle, declared_type),
         }
     }
 
-    /// Convert a handle to a typed snapshot using the declared type.
+    /// Convert a handle to a `BexExternalValue` using the declared type.
     ///
     /// This is safe for external code to call (no `EpochGuard` needed) because
     /// we hold the handle table read lock for the entire operation, preventing
-    /// GC from moving objects while we're snapshotting.
-    fn typed_snapshot_handle(
+    /// GC from moving objects while we're converting.
+    fn handle_to_external(
         &self,
         handle: &bex_external_types::Handle,
         declared_type: &Ty,
-    ) -> Result<TypedSnapshot, EngineError> {
-        // Hold the handles read lock for the entire snapshot operation.
+    ) -> Result<BexExternalValue, EngineError> {
+        // Hold the handles read lock for the entire conversion operation.
         // This prevents GC from running update_handles (which needs write lock),
-        // ensuring all ObjectIndex values remain valid during recursive snapshotting.
+        // ensuring all ObjectIndex values remain valid during recursive conversion.
         //
         // The GcProtectedHeap guard ensures resolve_handle can only be called
         // while the lock is held - you can't accidentally use it unsafely.
@@ -359,56 +358,117 @@ impl BexEngine {
                 .resolve_handle(handle.slab_key())
                 .expect("Handle is a GC root - object should never be collected");
             let value = Value::Object(idx);
-            self.typed_snapshot_value(&value, declared_type)
+            self.vm_value_to_external(&value, declared_type)
         })
     }
 
+    /// Wrap a value in Union metadata if the declared type is a union.
+    fn maybe_wrap_union(value: BexExternalValue, declared_type: &Ty) -> BexExternalValue {
+        match declared_type {
+            Ty::Union(members) => {
+                let selected = Self::find_matching_member(&value, members);
+                let metadata = UnionMetadata::new(declared_type.clone(), selected);
+                BexExternalValue::Union {
+                    value: Box::new(value),
+                    metadata,
+                }
+            }
+            Ty::Optional(inner) => {
+                let selected = if matches!(value, BexExternalValue::Null) {
+                    Ty::Null
+                } else {
+                    (**inner).clone()
+                };
+                let metadata = UnionMetadata::new(declared_type.clone(), selected);
+                BexExternalValue::Union {
+                    value: Box::new(value),
+                    metadata,
+                }
+            }
+            _ => value,
+        }
+    }
+
+    /// Find which union member matches a value.
+    fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Ty {
+        for member in members {
+            if Self::value_matches_type(value, member) {
+                return member.clone();
+            }
+        }
+        // Fallback: shouldn't happen if type checking is correct
+        members.first().cloned().unwrap_or(Ty::Null)
+    }
+
+    /// Check if a value matches a declared type.
+    fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
+        match (value, ty) {
+            (BexExternalValue::Null, Ty::Null) => true,
+            (BexExternalValue::Int(_), Ty::Int) => true,
+            (BexExternalValue::Float(_), Ty::Float) => true,
+            (BexExternalValue::Bool(_), Ty::Bool) => true,
+            (BexExternalValue::String(_), Ty::String) => true,
+            (BexExternalValue::Array(_), Ty::List(_)) => true,
+            (BexExternalValue::Map(_), Ty::Map { .. }) => true,
+            (BexExternalValue::Instance { class_name, .. }, Ty::Class(name)) => class_name == name,
+            (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(name)) => enum_name == name,
+            (BexExternalValue::Union { value, .. }, ty) => Self::value_matches_type(value, ty),
+            // Handle nested unions/optionals in the type
+            (value, Ty::Union(members)) => {
+                members.iter().any(|m| Self::value_matches_type(value, m))
+            }
+            (value, Ty::Optional(inner)) => {
+                matches!(value, BexExternalValue::Null) || Self::value_matches_type(value, inner)
+            }
+            _ => false,
+        }
+    }
+
     // =========================================================================
-    // Typed Snapshot Conversion (with declared type information)
+    // External Value Conversion (with declared type information)
     // =========================================================================
 
-    /// Convert a VM Value to a `TypedSnapshot` using the declared type.
+    /// Convert a VM Value to a `BexExternalValue` using the declared type.
     ///
-    /// This is the main entry point for creating typed snapshots. It walks the
-    /// value tree and type tree in parallel, attaching declared types to each
-    /// value.
-    fn typed_snapshot_value(
+    /// If the declared type is a union, the value is wrapped in `Union { value, metadata }`.
+    fn vm_value_to_external(
         &self,
         value: &Value,
         declared_type: &Ty,
-    ) -> Result<TypedSnapshot, EngineError> {
+    ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
         let effective_type = self.resolve_effective_type(value, declared_type);
 
-        let snapshot = match value {
-            Value::Null => Snapshot::Null,
-            Value::Int(i) => Snapshot::Int(*i),
-            Value::Float(f) => Snapshot::Float(*f),
-            Value::Bool(b) => Snapshot::Bool(*b),
-            Value::Object(idx) => self.typed_snapshot_object(*idx, effective_type)?,
+        let external = match value {
+            Value::Null => BexExternalValue::Null,
+            Value::Int(i) => BexExternalValue::Int(*i),
+            Value::Float(f) => BexExternalValue::Float(*f),
+            Value::Bool(b) => BexExternalValue::Bool(*b),
+            Value::Object(idx) => self.vm_object_to_external(*idx, effective_type)?,
         };
 
-        Ok(TypedSnapshot::new(snapshot, declared_type.clone()))
+        // Wrap in Union if declared type is a union
+        Ok(Self::maybe_wrap_union(external, declared_type))
     }
 
-    /// Convert an object to a Snapshot using the effective (non-union) type.
+    /// Convert an object to a `BexExternalValue` using the effective (non-union) type.
     ///
     /// # Safety
     ///
     /// This method uses unsafe calls to `heap.get_object()`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the index is valid (from a handle which is a GC root)
-    fn typed_snapshot_object(
+    fn vm_object_to_external(
         &self,
         idx: ObjectIndex,
         effective_type: &Ty,
-    ) -> Result<Snapshot, EngineError> {
+    ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the index comes from a valid handle.
         #[allow(unsafe_code)]
         let obj = unsafe { self.heap().get_object(idx) };
 
         match obj {
-            Object::String(s) => Ok(Snapshot::String(s.clone())),
+            Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
                 // Get element type from declared type
@@ -423,9 +483,9 @@ impl BexEngine {
 
                 let items: Result<Vec<_>, _> = arr
                     .iter()
-                    .map(|v| self.typed_snapshot_value(v, element_type))
+                    .map(|v| self.vm_value_to_external(v, element_type))
                     .collect();
-                Ok(Snapshot::Array(items?))
+                Ok(BexExternalValue::Array(items?))
             }
 
             Object::Map(map) => {
@@ -439,11 +499,11 @@ impl BexEngine {
                     }
                 };
 
-                let entries: Result<indexmap::IndexMap<String, TypedSnapshot>, EngineError> = map
-                    .iter()
-                    .map(|(k, v)| Ok((k.clone(), self.typed_snapshot_value(v, value_type)?)))
-                    .collect();
-                Ok(Snapshot::Map(entries?))
+                let entries: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
+                    map.iter()
+                        .map(|(k, v)| Ok((k.clone(), self.vm_value_to_external(v, value_type)?)))
+                        .collect();
+                Ok(BexExternalValue::Map(entries?))
             }
 
             Object::Instance(instance) => {
@@ -463,7 +523,7 @@ impl BexEngine {
                 })?;
 
                 // Convert fields with their declared types
-                let fields: Result<indexmap::IndexMap<String, TypedSnapshot>, EngineError> =
+                let fields: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
                     field_names
                         .iter()
                         .zip(instance.fields.iter())
@@ -480,11 +540,11 @@ impl BexEngine {
                                     ),
                                 })?;
 
-                            Ok((name.clone(), self.typed_snapshot_value(value, field_type)?))
+                            Ok((name.clone(), self.vm_value_to_external(value, field_type)?))
                         })
                         .collect();
 
-                Ok(Snapshot::Instance {
+                Ok(BexExternalValue::Instance {
                     class_name,
                     fields: fields?,
                 })
@@ -506,25 +566,25 @@ impl BexEngine {
                     _ => panic!("Variant.enm should point to an Enum object"),
                 };
 
-                Ok(Snapshot::Variant {
+                Ok(BexExternalValue::Variant {
                     enum_name,
                     variant_name,
                 })
             }
 
-            Object::Function(_) => Err(EngineError::CannotSnapshot {
+            Object::Function(_) => Err(EngineError::CannotConvert {
                 type_name: "function".to_string(),
             }),
-            Object::Class(_) => Err(EngineError::CannotSnapshot {
+            Object::Class(_) => Err(EngineError::CannotConvert {
                 type_name: "class".to_string(),
             }),
-            Object::Enum(_) => Err(EngineError::CannotSnapshot {
+            Object::Enum(_) => Err(EngineError::CannotConvert {
                 type_name: "enum".to_string(),
             }),
-            Object::Future(_) => Err(EngineError::CannotSnapshot {
+            Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::Media(_) => Err(EngineError::CannotSnapshot {
+            Object::Media(_) => Err(EngineError::CannotConvert {
                 type_name: "media".to_string(),
             }),
         }
@@ -602,18 +662,18 @@ impl BexEngine {
         }
     }
 
-    /// Convert a VM Value to an `ExternalValue`.
+    /// Convert a VM Value to a `BexValue`.
     ///
-    /// Primitives are wrapped in Snapshot, heap objects get a Handle.
-    fn value_to_external(&self, value: Value) -> ExternalValue {
+    /// Primitives become `External(BexExternalValue)`, heap objects get a `Handle`.
+    fn value_to_external(&self, value: Value) -> BexValue {
         match value {
-            Value::Null => ExternalValue::Snapshot(Snapshot::Null),
-            Value::Int(i) => ExternalValue::Snapshot(Snapshot::Int(i)),
-            Value::Float(f) => ExternalValue::Snapshot(Snapshot::Float(f)),
-            Value::Bool(b) => ExternalValue::Snapshot(Snapshot::Bool(b)),
+            Value::Null => BexValue::External(BexExternalValue::Null),
+            Value::Int(i) => BexValue::External(BexExternalValue::Int(i)),
+            Value::Float(f) => BexValue::External(BexExternalValue::Float(f)),
+            Value::Bool(b) => BexValue::External(BexExternalValue::Bool(b)),
             Value::Object(idx) => {
                 let handle = self.heap().create_handle(idx);
-                ExternalValue::Object(handle)
+                BexValue::Opaque(handle)
             }
         }
     }
@@ -736,16 +796,15 @@ impl BexEngine {
     ///
     /// # Arguments
     ///
-    /// Arguments are passed as `ExternalValue` types:
-    /// - Primitives convert to `Snapshot` via `From` impls
-    /// - `Object(Handle)` references existing heap objects
-    /// - `Snapshot(...)` allocates new objects on the heap
+    /// Arguments are passed as `BexValue` types:
+    /// - Primitives convert to `External(BexExternalValue)` via `From` impls
+    /// - `Opaque(Handle)` references existing heap objects
+    /// - `External(...)` allocates new objects on the heap
     ///
     /// # Returns
     ///
-    /// Returns `TypedSnapshot` containing:
-    /// - `value`: The actual result as a deep-copied `Snapshot`
-    /// - `declared_type`: The declared return type from the schema (useful for unions)
+    /// Returns `BexExternalValue` - the owned result value. If the return type is a union,
+    /// the value is wrapped in `Union { value, metadata }` with information about the union.
     ///
     /// # Example
     ///
@@ -755,24 +814,21 @@ impl BexEngine {
     ///     42i64.into(),
     /// ]).await?;
     ///
-    /// // Access the value directly - it's already a snapshot
-    /// match &result.value {
-    ///     Snapshot::Instance { class_name, fields } => {
+    /// match result {
+    ///     BexExternalValue::Instance { class_name, fields } => {
     ///         println!("Got {} with {} fields", class_name, fields.len());
     ///     }
+    ///     BexExternalValue::Union { value, metadata } => {
+    ///         println!("Got union value, selected: {}", metadata.selected_option);
+    ///     }
     ///     _ => {}
-    /// }
-    ///
-    /// // Check the declared type (useful for unions)
-    /// if let Ty::Union(members) = &result.declared_type {
-    ///     println!("Could have been: {:?}", members);
     /// }
     /// ```
     pub async fn call_function(
         &self,
         function_name: &str,
-        args: &[ExternalValue],
-    ) -> Result<TypedExternalValue, EngineError> {
+        args: &[BexValue],
+    ) -> Result<BexExternalValue, EngineError> {
         // Wait for any in-progress GC to complete.
         // This ensures Handles in args have stable indices.
         while self.gc_in_progress.load(Ordering::Acquire) {
@@ -808,7 +864,7 @@ impl BexEngine {
             self.env_vars.clone(),
         );
 
-        // Convert ExternalValue args to Value, allocating Snapshots on the heap
+        // Convert ExternalValue args to Value, allocating BexExternalValue data on the heap
         let vm_args: Vec<Value> = args
             .iter()
             .map(|arg| Self::externalize_to_value(&mut vm, arg, &guard))
@@ -833,8 +889,8 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        // Wrap the result with the declared return type
-        result.map(|value| TypedExternalValue::new(value, return_type))
+        // Convert BexValue to BexExternalValue, wrapping in Union if return type is union
+        result.and_then(|value| self.to_bex_external(value, &return_type))
     }
 
     /// Convert an `ExternalValue` to a VM `Value`.
@@ -842,56 +898,58 @@ impl BexEngine {
     /// Requires `EpochGuard` because resolving handles returns an `ObjectIndex`
     /// that must remain valid while we use it.
     ///
-    /// - `Object(Handle)` extracts the `ObjectIndex`
-    /// - `Snapshot(...)` recursively allocates on the heap
-    fn externalize_to_value(
-        vm: &mut BexVm,
-        external: &ExternalValue,
-        guard: &EpochGuard<'_>,
-    ) -> Value {
+    /// - `Opaque(Handle)` extracts the `ObjectIndex`
+    /// - `External(...)` recursively allocates on the heap
+    fn externalize_to_value(vm: &mut BexVm, external: &BexValue, guard: &EpochGuard<'_>) -> Value {
         match external {
-            ExternalValue::Object(handle) => {
+            BexValue::Opaque(handle) => {
                 // Resolve through table to get current index after any GC
                 let idx = handle
                     .object_index(guard)
                     .expect("Handle should be valid - object was returned to external code");
                 Value::Object(idx)
             }
-            ExternalValue::Snapshot(snapshot) => Self::allocate_snapshot(vm, snapshot),
+            BexValue::External(ext) => Self::allocate_from_external(vm, ext),
         }
     }
 
-    /// Recursively allocate a `Snapshot` onto the heap, returning a `Value`.
-    fn allocate_snapshot(vm: &mut BexVm, snapshot: &Snapshot) -> Value {
-        match snapshot {
-            Snapshot::Null => Value::Null,
-            Snapshot::Int(i) => Value::Int(*i),
-            Snapshot::Float(f) => Value::Float(*f),
-            Snapshot::Bool(b) => Value::Bool(*b),
-            Snapshot::String(s) => vm.alloc_string(s.clone()),
-            Snapshot::Array(arr) => {
+    /// Recursively allocate a `BexExternalValue` onto the heap, returning a `Value`.
+    fn allocate_from_external(vm: &mut BexVm, external: &BexExternalValue) -> Value {
+        match external {
+            BexExternalValue::Null => Value::Null,
+            BexExternalValue::Int(i) => Value::Int(*i),
+            BexExternalValue::Float(f) => Value::Float(*f),
+            BexExternalValue::Bool(b) => Value::Bool(*b),
+            BexExternalValue::String(s) => vm.alloc_string(s.clone()),
+            BexExternalValue::Array(arr) => {
                 let values: Vec<Value> = arr
                     .iter()
-                    .map(|item| Self::allocate_snapshot(vm, &item.value))
+                    .map(|item| Self::allocate_from_external(vm, item))
                     .collect();
                 vm.alloc_array(values)
             }
-            Snapshot::Map(map) => {
+            BexExternalValue::Map(map) => {
                 let values: indexmap::IndexMap<String, Value> = map
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::allocate_snapshot(vm, &v.value)))
+                    .map(|(k, v)| (k.clone(), Self::allocate_from_external(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
-            Snapshot::Instance { .. } => {
+            BexExternalValue::Instance { .. } => {
                 // Instance allocation requires class lookup - not supported from external
                 // External callers should use the class constructor functions
-                panic!("Cannot allocate Instance from Snapshot - use class constructor functions")
+                panic!(
+                    "Cannot allocate Instance from BexExternalValue - use class constructor functions"
+                )
             }
-            Snapshot::Variant { .. } => {
+            BexExternalValue::Variant { .. } => {
                 // Variant allocation requires enum lookup - not supported from external
                 // External callers should use enum variant values
-                panic!("Cannot allocate Variant from Snapshot - use enum values")
+                panic!("Cannot allocate Variant from BexExternalValue - use enum values")
+            }
+            BexExternalValue::Union { value, .. } => {
+                // Unwrap the union and allocate the inner value
+                Self::allocate_from_external(vm, value)
             }
         }
     }
@@ -963,13 +1021,13 @@ impl BexEngine {
         vm: &mut BexVm,
         ctx: Arc<OpContext>,
         my_epoch: u64,
-    ) -> Result<ExternalValue, EngineError> {
+    ) -> Result<BexValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
 
         'vm_exec: loop {
             match vm.exec()? {
                 VmExecState::Complete(value) => {
-                    // Convert to ExternalValue (handles for objects, snapshots for primitives)
+                    // Convert to BexValue (handles for objects, BexExternalValue for primitives)
                     return Ok(self.value_to_external(value));
                 }
 

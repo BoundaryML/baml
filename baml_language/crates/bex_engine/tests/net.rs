@@ -4,7 +4,7 @@ mod common;
 
 use std::collections::HashMap;
 
-use bex_engine::BexEngine;
+use bex_engine::{BexEngine, BexExternalValue};
 use common::compile_for_engine;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
 
@@ -38,10 +38,9 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     // Wait for server to finish
     server.await?;
 
-    // Check result - convert to snapshot
-    let typed_snapshot = engine.to_typed_snapshot(result)?;
-    match typed_snapshot.value {
-        bex_engine::Snapshot::String(s) => {
+    // Check result
+    match result {
+        BexExternalValue::String(s) => {
             assert_eq!(s, "Hello from server!");
         }
         other => panic!("Expected string, got: {other:?}"),
@@ -107,10 +106,9 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
 
     server.await?;
 
-    // First read should get "chunk1" - convert to snapshot
-    let typed_snapshot = engine.to_typed_snapshot(result)?;
-    match typed_snapshot.value {
-        bex_engine::Snapshot::String(s) => {
+    // First read should get "chunk1"
+    match result {
+        BexExternalValue::String(s) => {
             assert_eq!(s, "chunk1");
         }
         other => panic!("Expected string, got: {other:?}"),

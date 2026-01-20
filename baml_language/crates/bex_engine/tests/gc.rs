@@ -7,7 +7,7 @@ mod common;
 
 use std::collections::HashMap;
 
-use bex_engine::{BexEngine, ExternalValue, Snapshot};
+use bex_engine::{BexEngine, BexExternalValue};
 use common::compile_for_engine;
 
 /// Test that a handle prevents the referenced object from being collected.
@@ -25,20 +25,15 @@ async fn test_handle_prevents_gc_collection() {
     // Get a handle to a string object
     let result = engine.call_function("return_string", &[]).await.unwrap();
     assert!(
-        matches!(result.value, ExternalValue::Object(_)),
-        "Expected Object handle, got {:?}",
-        result.value
+        matches!(result, BexExternalValue::String(_)),
+        "Expected String, got {result:?}"
     );
 
     // Trigger GC
     let _stats = engine.collect_garbage().await;
 
-    // Handle should still be valid - convert to snapshot
-    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
-    assert_eq!(
-        typed_snapshot.value,
-        Snapshot::String("hello world".to_string())
-    );
+    // Value should still be correct after GC
+    assert_eq!(result, BexExternalValue::String("hello world".to_string()));
 }
 
 /// Test that handles to arrays preserve the entire structure.
@@ -57,21 +52,19 @@ async fn test_array_preserved_through_gc() {
     // Get a handle to the array
     let result = engine.call_function("return_array", &[]).await.unwrap();
     assert!(
-        matches!(result.value, ExternalValue::Object(_)),
-        "Expected Object handle, got {:?}",
-        result.value
+        matches!(result, BexExternalValue::Array(_)),
+        "Expected Array, got {result:?}"
     );
 
     // Trigger GC
     let _stats = engine.collect_garbage().await;
 
     // Array and all its elements should be preserved
-    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
-    match typed_snapshot.value {
-        Snapshot::Array(arr) => {
+    match result {
+        BexExternalValue::Array(arr) => {
             assert_eq!(arr.len(), 5);
-            assert_eq!(arr[0].value, Snapshot::String("a".to_string()));
-            assert_eq!(arr[4].value, Snapshot::String("e".to_string()));
+            assert_eq!(arr[0], BexExternalValue::String("a".to_string()));
+            assert_eq!(arr[4], BexExternalValue::String("e".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -107,13 +100,12 @@ async fn test_gc_updates_forwarding_pointers() {
     }
 
     // Objects should still be accessible with correct values
-    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
-    match typed_snapshot.value {
-        Snapshot::Array(arr) => {
+    match result {
+        BexExternalValue::Array(arr) => {
             assert_eq!(arr.len(), 3);
-            assert_eq!(arr[0].value, Snapshot::String("first".to_string()));
-            assert_eq!(arr[1].value, Snapshot::String("second".to_string()));
-            assert_eq!(arr[2].value, Snapshot::String("third".to_string()));
+            assert_eq!(arr[0], BexExternalValue::String("first".to_string()));
+            assert_eq!(arr[1], BexExternalValue::String("second".to_string()));
+            assert_eq!(arr[2], BexExternalValue::String("third".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -151,23 +143,14 @@ async fn test_multiple_handles_survive_gc() {
     let _stats = engine.collect_garbage().await;
 
     // All handles should still be valid
-    assert_eq!(
-        engine.to_typed_snapshot(h1).unwrap().value,
-        Snapshot::String("hello".to_string())
-    );
-    assert_eq!(
-        engine.to_typed_snapshot(h2).unwrap().value,
-        Snapshot::String("world".to_string())
-    );
-    assert_eq!(
-        engine.to_typed_snapshot(h3).unwrap().value,
-        Snapshot::String("test".to_string())
-    );
+    assert_eq!(h1, BexExternalValue::String("hello".to_string()));
+    assert_eq!(h2, BexExternalValue::String("world".to_string()));
+    assert_eq!(h3, BexExternalValue::String("test".to_string()));
 }
 
-/// Test primitive return values (should be Snapshot, not Handle).
+/// Test primitive return values (should be `BexExternalValue`, not Handle).
 #[tokio::test]
-async fn test_primitive_returns_are_snapshots() {
+async fn test_primitive_returns_are_external_values() {
     let source = r#"
         function return_int() -> int {
             42
@@ -183,24 +166,15 @@ async fn test_primitive_returns_are_snapshots() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
 
-    // Int should be Snapshot
+    // Int should be BexExternalValue::Int
     let result = engine.call_function("return_int", &[]).await.unwrap();
-    assert!(matches!(
-        result.value,
-        ExternalValue::Snapshot(Snapshot::Int(42))
-    ));
+    assert!(matches!(result, BexExternalValue::Int(42)));
 
-    // Null should be Snapshot
+    // Null should be BexExternalValue::Null
     let result = engine.call_function("return_null", &[]).await.unwrap();
-    assert!(matches!(
-        result.value,
-        ExternalValue::Snapshot(Snapshot::Null)
-    ));
+    assert!(matches!(result, BexExternalValue::Null));
 
-    // Bool should be Snapshot
+    // Bool should be BexExternalValue::Bool
     let result = engine.call_function("return_bool", &[]).await.unwrap();
-    assert!(matches!(
-        result.value,
-        ExternalValue::Snapshot(Snapshot::Bool(true))
-    ));
+    assert!(matches!(result, BexExternalValue::Bool(true)));
 }

@@ -2,7 +2,7 @@
 
 mod common;
 
-use bex_engine::Snapshot;
+use bex_engine::BexExternalValue;
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
@@ -17,7 +17,7 @@ async fn shell_echo() -> anyhow::Result<()> {
         "#,
         entry: "main",
         // Note: echo adds a newline
-        expected: Ok(Snapshot::String("Hello From Shell!\n".to_string())),
+        expected: Ok(BexExternalValue::String("Hello From Shell!\n".to_string())),
     })
     .await
 }
@@ -32,7 +32,7 @@ async fn shell_with_pipe() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(Snapshot::String("HELLO WORLD\n".to_string())),
+        expected: Ok(BexExternalValue::String("HELLO WORLD\n".to_string())),
     })
     .await
 }
@@ -78,7 +78,7 @@ async fn shell_with_variable() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(Snapshot::String("dynamic\n".to_string())),
+        expected: Ok(BexExternalValue::String("dynamic\n".to_string())),
     })
     .await
 }
