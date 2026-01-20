@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -2240,12 +2240,12 @@ fn NestedTypeBindings(r: TypeAlias(FullyQualifiedName { namespace: Local, name: 
     let _0: Int // return
     let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // r // param
     let _2: Bool
-    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Error]) // s
+    let _3: Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]) // s
     let _4: Bool
     let _5: Class(FullyQualifiedName { namespace: Local, name: "Failure" }) // f
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Error]));
+        _2 = is_type(copy _1, Union([Class(FullyQualifiedName { namespace: Local, name: "Success" }), Class(FullyQualifiedName { namespace: Local, name: "Failure" })]));
         branch copy _2 -> [bb5, bb4];
     }
 

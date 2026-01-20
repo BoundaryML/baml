@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -220,6 +220,17 @@ expression: output
      │ ╰─────────── Non-exhaustive match on `AlwaysTrue`: missing cases true
      │     
      │     Note: Error code: E0062
+─────╯
+
+  [type] Error: Unreachable match arm
+     ╭─[ match_exhaustiveness.baml:806:37 ]
+     │
+ 806 │ ╭─▶         s: Success | (Failure) => 0,
+ 807 │ ├─▶         f: Failure => 1
+     │ │                             
+     │ ╰───────────────────────────── Unreachable match arm
+     │     
+     │     Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `OkOrCreated`: missing cases 201

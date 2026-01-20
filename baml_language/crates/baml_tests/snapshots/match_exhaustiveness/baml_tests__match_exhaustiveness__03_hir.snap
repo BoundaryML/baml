@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -360,7 +360,7 @@ function ExhaustiveWithNamedCatchAll(x: int) -> int {
 
 function NestedTypeBindings(r: Result) -> int {
       match (r) {
-          s: Success | (Failure) => 0,
+          s: Success | Failure => 0,
           f: Failure => 1,
       }
 }

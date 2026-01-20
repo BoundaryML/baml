@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -137,6 +137,8 @@ expression: output
     Return: Union([Literal(Int(100)), Int])
   Function NestedTypeBindings:
     Return: Union([Literal(Int(0)), Literal(Int(1))])
+    Errors:
+      - Unreachable match arm
   Function NonExhaustiveAliasOfLiterals:
     Return: Literal(String("ok"))
     Errors:
