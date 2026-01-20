@@ -197,7 +197,7 @@ export interface SDKStorage {
   // Test History
   addTestHistoryRun(run: TestHistoryRun): void;
   getTestHistory(): TestHistoryRun[];
-  updateTestInHistory(runIndex: number, testIndex: number, update: TestState): void;
+  updateTestInHistoryByRunId(runId: string, testIndex: number, update: TestState): void;
   setSelectedHistoryIndex(index: number): void;
   getSelectedHistoryIndex(): number;
 

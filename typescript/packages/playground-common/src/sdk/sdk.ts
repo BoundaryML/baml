@@ -1077,7 +1077,10 @@ export class BAMLSDK {
       this.storage.clearAllNodeIterations();
 
       // Create test history run with all tests
+      // Generate unique runId to track this specific run in callbacks
+      const runId = `run-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const historyRun: testAtoms.TestHistoryRun = {
+        runId,
         timestamp: Date.now(),
         tests: tests.map((test) => {
           const testCases = this.runtime!.getTestCases(test.functionName);
@@ -1129,7 +1132,7 @@ export class BAMLSDK {
         const testKey = `${test.functionName}:${test.testName}`;
         watchNotificationsByTest[testKey] = [];
         // Mark as running - execution is about to begin
-        this.storage.updateTestInHistory(0, i, { status: 'running' });
+        this.storage.updateTestInHistoryByRunId(runId, i, { status: 'running' });
 
         // Emit node.enter to execution log
         const testCase = this.runtime!.getTestCases(test.functionName).find((tc) => tc.name === test.testName);
@@ -1166,7 +1169,7 @@ export class BAMLSDK {
             );
             if (testIndex !== -1) {
               const testKey = `${functionName}:${testName}`;
-              this.storage.updateTestInHistory(0, testIndex, {
+              this.storage.updateTestInHistoryByRunId(runId, testIndex, {
                 status: 'running',
                 response: partial,
                 watchNotifications: watchNotificationsByTest[testKey] || [],
@@ -1182,7 +1185,7 @@ export class BAMLSDK {
             );
             if (testIndex !== -1) {
               const testKey = `${functionName}:${testName}`;
-              this.storage.updateTestInHistory(0, testIndex, {
+              this.storage.updateTestInHistoryByRunId(runId, testIndex, {
                 status: 'done',
                 response,
                 response_status: status,
@@ -1276,7 +1279,7 @@ export class BAMLSDK {
 
         // Update all running/queued tests to error
         tests.forEach((_, i) => {
-          this.storage.updateTestInHistory(0, i, {
+          this.storage.updateTestInHistoryByRunId(runId, i, {
             status: 'error',
             message: err.message,
           });
