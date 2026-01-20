@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 11
-Objects: 58
-Globals: 42
+Functions: 12
+Objects: 60
+Globals: 43
 
 Function boolArray (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0    (true)
@@ -51,6 +51,13 @@ Function intValues (arity: 0, kind: Bytecode):
      3   LOAD_CONST 3   (test)
      4   ALLOC_MAP 2    
      5   RETURN         
+
+Function mixedArray (arity: 0, kind: Bytecode):
+     0   LOAD_CONST 0    (1)
+     1   LOAD_CONST 1    (two)
+     2   LOAD_CONST 2    (3)
+     3   ALLOC_ARRAY 3   
+     4   RETURN          
 
 Function point (arity: 0, kind: Bytecode):
      0   ALLOC_INSTANCE 2   (<class Point>)

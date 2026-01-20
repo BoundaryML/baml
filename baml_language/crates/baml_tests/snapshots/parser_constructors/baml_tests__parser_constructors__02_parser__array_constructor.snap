@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -175,6 +175,37 @@ SOURCE_FILE
               COLON ":"
               INTEGER_LITERAL "6"
             R_BRACE "}"
+          R_BRACKET "]"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "mixedArray"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+      R_PAREN ")"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        ARRAY_LITERAL
+          L_BRACKET "["
+          INTEGER_LITERAL "1"
+          COMMA ","
+          STRING_LITERAL "two"
+            QUOTE """
+            WORD "two"
+            QUOTE """
+          COMMA ","
+          INTEGER_LITERAL "3"
           R_BRACKET "]"
         R_BRACE "}"
 

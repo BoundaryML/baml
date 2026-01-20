@@ -14,9 +14,11 @@ use std::{
     },
 };
 
-use baml_tests::vm::Value;
-use bex_engine::{BexEngine, ExternalValue, Snapshot};
-use common::{compile_for_engine, value_from_snapshot};
+use bex_engine::{BexEngine, ExternalValue, Snapshot, Ty, TypedSnapshot};
+use common::compile_for_engine;
+
+/// Helper type alias for spawned task results
+type TaskResult = Result<TypedSnapshot, bex_engine::EngineError>;
 
 #[tokio::test]
 async fn test_concurrent_calls_no_race() {
@@ -39,22 +41,23 @@ async fn test_concurrent_calls_no_race() {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             let result = engine.call_function("test_function", &[]).await?;
-            // Convert to snapshot while still having access to engine
-            let snapshot = engine.to_snapshot(result)?;
-            Ok::<_, bex_engine::EngineError>(snapshot)
+            // Convert to typed snapshot while still having access to engine
+            engine.to_typed_snapshot(result)
         }));
     }
 
     // All should complete successfully
     for (i, handle) in handles.into_iter().enumerate() {
-        let result = handle.await.expect("task panicked");
+        let result: TaskResult = handle.await.expect("task panicked");
         assert!(result.is_ok(), "concurrent call {i} failed: {result:?}");
 
         // Verify the result
-        let snapshot = result.unwrap();
-        let actual = value_from_snapshot(&snapshot);
-        let expected = Value::Int(22); // (10 + 1) * 2
-        assert_eq!(actual, expected, "Result mismatch for call {i}");
+        let typed_snapshot = result.unwrap();
+        let expected = Snapshot::Int(22); // (10 + 1) * 2
+        assert_eq!(
+            typed_snapshot.value, expected,
+            "Result mismatch for call {i}"
+        );
     }
 }
 
@@ -82,28 +85,27 @@ async fn test_concurrent_allocations_no_overlap() {
         handles.push(tokio::spawn(async move {
             // Function that allocates many objects
             let result = engine.call_function("allocate_many", &[]).await?;
-            let snapshot = engine.to_snapshot(result)?;
+            let typed_snapshot = engine.to_typed_snapshot(result)?;
 
             count.fetch_add(1, Ordering::SeqCst);
-            Ok::<_, bex_engine::EngineError>(snapshot)
+            Ok::<_, bex_engine::EngineError>(typed_snapshot)
         }));
     }
 
     for handle in handles {
-        let result = handle.await.expect("task panicked");
+        let result: TaskResult = handle.await.expect("task panicked");
         assert!(result.is_ok(), "call failed: {result:?}");
 
         // Verify the result is correct
-        let snapshot = result.unwrap();
-        let actual = value_from_snapshot(&snapshot);
-        let expected = Value::array(vec![
-            Value::string("a"),
-            Value::string("b"),
-            Value::string("c"),
-            Value::string("d"),
-            Value::string("e"),
+        let typed_snapshot = result.unwrap();
+        let expected = Snapshot::Array(vec![
+            TypedSnapshot::new(Snapshot::String("a".to_string()), Ty::String),
+            TypedSnapshot::new(Snapshot::String("b".to_string()), Ty::String),
+            TypedSnapshot::new(Snapshot::String("c".to_string()), Ty::String),
+            TypedSnapshot::new(Snapshot::String("d".to_string()), Ty::String),
+            TypedSnapshot::new(Snapshot::String("e".to_string()), Ty::String),
         ]);
-        assert_eq!(actual, expected);
+        assert_eq!(typed_snapshot.value, expected);
     }
 
     assert_eq!(allocation_count.load(Ordering::SeqCst), 5);
@@ -182,20 +184,23 @@ async fn test_concurrent_string_allocations() {
         let func = (*func_name).to_string();
         handles.push(tokio::spawn(async move {
             let result = engine.call_function(&func, &[]).await?;
-            let snapshot = engine.to_snapshot(result)?;
-            Ok::<_, bex_engine::EngineError>((func, snapshot))
+            let typed_snapshot = engine.to_typed_snapshot(result)?;
+            Ok::<_, bex_engine::EngineError>((func, typed_snapshot))
         }));
     }
 
     // Collect all results
     for handle in handles {
-        let (func_name, snapshot) = handle.await.expect("task panicked").expect("call failed");
-        let actual = value_from_snapshot(&snapshot);
+        let result: Result<(String, TypedSnapshot), _> = handle.await.expect("task panicked");
+        let (func_name, typed_snapshot) = result.expect("call failed");
 
         // Extract expected suffix from function name
         let suffix = func_name.strip_prefix("create_string_").unwrap();
-        let expected = Value::string(&format!("string_{suffix}"));
-        assert_eq!(actual, expected, "String mismatch for {func_name}");
+        let expected = Snapshot::String(format!("string_{suffix}"));
+        assert_eq!(
+            typed_snapshot.value, expected,
+            "String mismatch for {func_name}"
+        );
     }
 }
 
@@ -223,26 +228,33 @@ async fn test_concurrent_array_allocations() {
     // Spawn concurrent calls with different array sizes
     let mut handles = vec![];
     for (func_name, size) in [
-        ("create_array_5", 5),
-        ("create_array_10", 10),
-        ("create_array_15", 15),
+        ("create_array_5", 5i64),
+        ("create_array_10", 10i64),
+        ("create_array_15", 15i64),
     ] {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             let result = engine.call_function(func_name, &[]).await?;
-            let snapshot = engine.to_snapshot(result)?;
-            Ok::<_, bex_engine::EngineError>((size, snapshot))
+            let typed_snapshot = engine.to_typed_snapshot(result)?;
+            Ok::<_, bex_engine::EngineError>((size, typed_snapshot))
         }));
     }
 
     // Verify all arrays are correct
     for handle in handles {
-        let (size, snapshot) = handle.await.expect("task panicked").expect("call failed");
-        let actual = value_from_snapshot(&snapshot);
+        let result: Result<(i64, TypedSnapshot), _> = handle.await.expect("task panicked");
+        let (size, typed_snapshot) = result.expect("call failed");
 
         // Build expected array [0, 1, 2, ..., size-1]
-        let expected = Value::array((0..size).map(Value::Int).collect());
-        assert_eq!(actual, expected, "Array mismatch for size {size}");
+        let expected = Snapshot::Array(
+            (0..size)
+                .map(|i| TypedSnapshot::new(Snapshot::Int(i), Ty::Int))
+                .collect(),
+        );
+        assert_eq!(
+            typed_snapshot.value, expected,
+            "Array mismatch for size {size}"
+        );
     }
 }
 
@@ -276,26 +288,31 @@ async fn test_call_function_with_snapshot_args() {
         .call_function("concat_strings", &["Hello".into(), "World".into()])
         .await
         .expect("call_function failed");
-    let result_snapshot = engine.to_snapshot(result).expect("to_snapshot failed");
+    let typed_snapshot = engine
+        .to_typed_snapshot(result)
+        .expect("to_typed_snapshot failed");
 
-    let actual = value_from_snapshot(&result_snapshot);
-    assert_eq!(actual, Value::string("Hello World"));
+    assert_eq!(
+        typed_snapshot.value,
+        Snapshot::String("Hello World".to_string())
+    );
 
     // Test passing an array via Snapshot
     let arr = Snapshot::Array(vec![
-        Snapshot::Int(1),
-        Snapshot::Int(2),
-        Snapshot::Int(3),
-        Snapshot::Int(4),
+        TypedSnapshot::new(Snapshot::Int(1), Ty::Int),
+        TypedSnapshot::new(Snapshot::Int(2), Ty::Int),
+        TypedSnapshot::new(Snapshot::Int(3), Ty::Int),
+        TypedSnapshot::new(Snapshot::Int(4), Ty::Int),
     ]);
     let result = engine
         .call_function("sum_array", &[arr.into()])
         .await
         .expect("call_function failed");
-    let result_snapshot = engine.to_snapshot(result).expect("to_snapshot failed");
+    let typed_snapshot = engine
+        .to_typed_snapshot(result)
+        .expect("to_typed_snapshot failed");
 
-    let actual = value_from_snapshot(&result_snapshot);
-    assert_eq!(actual, Value::Int(10)); // 1 + 2 + 3 + 4
+    assert_eq!(typed_snapshot.value, Snapshot::Int(10)); // 1 + 2 + 3 + 4
 
     // Test passing primitives via ExternalValue
     let result = engine
@@ -305,8 +322,9 @@ async fn test_call_function_with_snapshot_args() {
         )
         .await
         .expect("call_function failed");
-    let result_snapshot = engine.to_snapshot(result).expect("to_snapshot failed");
+    let typed_snapshot = engine
+        .to_typed_snapshot(result)
+        .expect("to_typed_snapshot failed");
 
-    let actual = value_from_snapshot(&result_snapshot);
-    assert_eq!(actual, Value::Int(42));
+    assert_eq!(typed_snapshot.value, Snapshot::Int(42));
 }

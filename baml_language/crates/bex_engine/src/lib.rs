@@ -50,7 +50,9 @@ use std::{
 };
 
 use baml_snapshot::BamlSnapshot;
-pub use bex_external_types::{EpochGuard, ExternalValue, Snapshot};
+pub use bex_external_types::{
+    EpochGuard, ExternalValue, Snapshot, Ty, TypedExternalValue, TypedSnapshot,
+};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -137,6 +139,12 @@ pub enum EngineError {
 
     #[error("Cannot snapshot object of type {type_name}")]
     CannotSnapshot { type_name: String },
+
+    #[error("Type mismatch: {message}")]
+    TypeMismatch { message: String },
+
+    #[error("Schema inconsistency: {message}")]
+    SchemaInconsistency { message: String },
 }
 
 // ============================================================================
@@ -286,17 +294,17 @@ impl BexEngine {
         self.heap.stats()
     }
 
-    /// Convert an `ExternalValue` to a `Snapshot` (owned data).
+    /// Convert a `TypedExternalValue` to a `TypedSnapshot` (owned data with types).
     ///
-    /// - For `Snapshot` variants: returns the snapshot directly
-    /// - For `Object(Handle)`: resolves the handle and deep-copies the object graph
+    /// - For `Snapshot` variants: wraps the snapshot with the declared type
+    /// - For `Object(Handle)`: resolves the handle and deep-copies with type info
     ///
     /// # Supported Object Types
     ///
     /// - `String` → `Snapshot::String`
-    /// - `Array` → `Snapshot::Array` (recursively converts elements)
-    /// - `Map` → `Snapshot::Map` (recursively converts values)
-    /// - `Instance` → `Snapshot::Instance` (includes class name and field names)
+    /// - `Array` → `Snapshot::Array` (recursively converts elements with types)
+    /// - `Map` → `Snapshot::Map` (recursively converts values with types)
+    /// - `Instance` → `Snapshot::Instance` (includes class name and typed fields)
     /// - `Variant` → `Snapshot::Variant` (includes enum and variant names)
     ///
     /// # Errors
@@ -304,38 +312,42 @@ impl BexEngine {
     /// Returns `EngineError::CannotSnapshot` for object types that cannot be
     /// converted (Function, Class, Enum, Future, Media).
     ///
-    /// # Panics
-    ///
-    /// Panics if the handle is invalid (should never happen - handles are GC roots).
-    ///
     /// # Example
     ///
     /// ```ignore
     /// let result = engine.call_function("get_user", &[]).await?;
-    /// let snapshot = engine.to_snapshot(result)?;
-    /// match snapshot {
+    /// let typed_snapshot = engine.to_typed_snapshot(result)?;
+    /// match &typed_snapshot.value {
     ///     Snapshot::Instance { class_name, fields } => {
     ///         println!("Got {} with {} fields", class_name, fields.len());
     ///     }
     ///     _ => {}
     /// }
+    /// // Also have access to declared_type for union info
+    /// println!("Declared type: {:?}", typed_snapshot.declared_type);
     /// ```
-    pub fn to_snapshot(&self, external: ExternalValue) -> Result<Snapshot, EngineError> {
-        match external {
-            ExternalValue::Snapshot(s) => Ok(s),
-            ExternalValue::Object(handle) => self.snapshot_handle(&handle),
+    pub fn to_typed_snapshot(
+        &self,
+        typed_external: TypedExternalValue,
+    ) -> Result<TypedSnapshot, EngineError> {
+        match typed_external.value {
+            ExternalValue::Snapshot(s) => Ok(TypedSnapshot::new(s, typed_external.declared_type)),
+            ExternalValue::Object(handle) => {
+                self.typed_snapshot_handle(&handle, &typed_external.declared_type)
+            }
         }
     }
 
-    /// Convert a handle to a snapshot.
+    /// Convert a handle to a typed snapshot using the declared type.
     ///
     /// This is safe for external code to call (no `EpochGuard` needed) because
     /// we hold the handle table read lock for the entire operation, preventing
     /// GC from moving objects while we're snapshotting.
-    fn snapshot_handle(
+    fn typed_snapshot_handle(
         &self,
         handle: &bex_external_types::Handle,
-    ) -> Result<Snapshot, EngineError> {
+        declared_type: &Ty,
+    ) -> Result<TypedSnapshot, EngineError> {
         // Hold the handles read lock for the entire snapshot operation.
         // This prevents GC from running update_handles (which needs write lock),
         // ensuring all ObjectIndex values remain valid during recursive snapshotting.
@@ -346,38 +358,96 @@ impl BexEngine {
             let idx = protected
                 .resolve_handle(handle.slab_key())
                 .expect("Handle is a GC root - object should never be collected");
-            self.snapshot_object(idx)
+            let value = Value::Object(idx);
+            self.typed_snapshot_value(&value, declared_type)
         })
     }
 
-    /// Convert an object at the given index to a snapshot.
+    // =========================================================================
+    // Typed Snapshot Conversion (with declared type information)
+    // =========================================================================
+
+    /// Convert a VM Value to a `TypedSnapshot` using the declared type.
+    ///
+    /// This is the main entry point for creating typed snapshots. It walks the
+    /// value tree and type tree in parallel, attaching declared types to each
+    /// value.
+    fn typed_snapshot_value(
+        &self,
+        value: &Value,
+        declared_type: &Ty,
+    ) -> Result<TypedSnapshot, EngineError> {
+        // If declared type is a union, find which member matches the actual value
+        let effective_type = self.resolve_effective_type(value, declared_type);
+
+        let snapshot = match value {
+            Value::Null => Snapshot::Null,
+            Value::Int(i) => Snapshot::Int(*i),
+            Value::Float(f) => Snapshot::Float(*f),
+            Value::Bool(b) => Snapshot::Bool(*b),
+            Value::Object(idx) => self.typed_snapshot_object(*idx, effective_type)?,
+        };
+
+        Ok(TypedSnapshot::new(snapshot, declared_type.clone()))
+    }
+
+    /// Convert an object to a Snapshot using the effective (non-union) type.
     ///
     /// # Safety
     ///
     /// This method uses unsafe calls to `heap.get_object()`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the index is valid (from a handle which is a GC root)
-    fn snapshot_object(&self, idx: ObjectIndex) -> Result<Snapshot, EngineError> {
+    fn typed_snapshot_object(
+        &self,
+        idx: ObjectIndex,
+        effective_type: &Ty,
+    ) -> Result<Snapshot, EngineError> {
         // SAFETY: We only read objects, and the index comes from a valid handle.
-        // No concurrent writes can occur while we hold a reference to the heap.
         #[allow(unsafe_code)]
         let obj = unsafe { self.heap().get_object(idx) };
+
         match obj {
             Object::String(s) => Ok(Snapshot::String(s.clone())),
+
             Object::Array(arr) => {
-                let items: Result<Vec<_>, _> = arr.iter().map(|v| self.snapshot_value(v)).collect();
+                // Get element type from declared type
+                let element_type = match effective_type {
+                    Ty::List(elem_ty) => elem_ty.as_ref(),
+                    other => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!("VM has Array but declared type is {other:?}"),
+                        });
+                    }
+                };
+
+                let items: Result<Vec<_>, _> = arr
+                    .iter()
+                    .map(|v| self.typed_snapshot_value(v, element_type))
+                    .collect();
                 Ok(Snapshot::Array(items?))
             }
+
             Object::Map(map) => {
-                let entries: Result<indexmap::IndexMap<String, Snapshot>, EngineError> = map
+                // Get value type from declared type
+                let value_type = match effective_type {
+                    Ty::Map { value, .. } => value.as_ref(),
+                    other => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!("VM has Map but declared type is {other:?}"),
+                        });
+                    }
+                };
+
+                let entries: Result<indexmap::IndexMap<String, TypedSnapshot>, EngineError> = map
                     .iter()
-                    .map(|(k, v)| Ok((k.clone(), self.snapshot_value(v)?)))
+                    .map(|(k, v)| Ok((k.clone(), self.typed_snapshot_value(v, value_type)?)))
                     .collect();
                 Ok(Snapshot::Map(entries?))
             }
+
             Object::Instance(instance) => {
-                // Get class name and field names from the Class object
-                // SAFETY: Same as above - read-only access to a valid object
+                // Get class name from the Class object
                 #[allow(unsafe_code)]
                 let class_obj = unsafe { self.heap().get_object(instance.class) };
                 let (class_name, field_names) = match class_obj {
@@ -385,21 +455,43 @@ impl BexEngine {
                     _ => panic!("Instance.class should point to a Class object"),
                 };
 
-                // Convert fields with their names
-                let fields: Result<indexmap::IndexMap<String, Snapshot>, EngineError> = field_names
-                    .iter()
-                    .zip(instance.fields.iter())
-                    .map(|(name, value)| Ok((name.clone(), self.snapshot_value(value)?)))
-                    .collect();
+                // Look up field types from the schema
+                let class_def = self.snapshot.classes.get(&class_name).ok_or_else(|| {
+                    EngineError::SchemaInconsistency {
+                        message: format!("Class '{class_name}' not found in schema"),
+                    }
+                })?;
+
+                // Convert fields with their declared types
+                let fields: Result<indexmap::IndexMap<String, TypedSnapshot>, EngineError> =
+                    field_names
+                        .iter()
+                        .zip(instance.fields.iter())
+                        .map(|(name, value)| {
+                            // Look up the field's declared type from schema
+                            let field_type = class_def
+                                .fields
+                                .iter()
+                                .find(|f| &f.name == name)
+                                .map(|f| &f.field_type)
+                                .ok_or_else(|| EngineError::SchemaInconsistency {
+                                    message: format!(
+                                        "Field '{name}' not found in class '{class_name}'"
+                                    ),
+                                })?;
+
+                            Ok((name.clone(), self.typed_snapshot_value(value, field_type)?))
+                        })
+                        .collect();
 
                 Ok(Snapshot::Instance {
                     class_name,
                     fields: fields?,
                 })
             }
+
             Object::Variant(variant) => {
                 // Get enum name and variant name from the Enum object
-                // SAFETY: Same as above - read-only access to a valid object
                 #[allow(unsafe_code)]
                 let enum_obj = unsafe { self.heap().get_object(variant.enm) };
                 let (enum_name, variant_name) = match enum_obj {
@@ -419,6 +511,7 @@ impl BexEngine {
                     variant_name,
                 })
             }
+
             Object::Function(_) => Err(EngineError::CannotSnapshot {
                 type_name: "function".to_string(),
             }),
@@ -437,14 +530,75 @@ impl BexEngine {
         }
     }
 
-    /// Convert a VM Value to a Snapshot.
-    fn snapshot_value(&self, value: &Value) -> Result<Snapshot, EngineError> {
+    /// For union types, find which member matches the actual runtime value.
+    ///
+    /// If the declared type is not a union, returns it unchanged.
+    fn resolve_effective_type<'a>(&self, value: &Value, declared_type: &'a Ty) -> &'a Ty {
+        match declared_type {
+            Ty::Union(members) => self
+                .find_matching_union_member(value, members)
+                .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
+            _ => declared_type,
+        }
+    }
+
+    /// Find the union member that matches the runtime value's type.
+    fn find_matching_union_member<'a>(&self, value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
         match value {
-            Value::Null => Ok(Snapshot::Null),
-            Value::Int(i) => Ok(Snapshot::Int(*i)),
-            Value::Float(f) => Ok(Snapshot::Float(*f)),
-            Value::Bool(b) => Ok(Snapshot::Bool(*b)),
-            Value::Object(idx) => self.snapshot_object(*idx),
+            Value::Null => members.iter().find(|m| matches!(m, Ty::Null)),
+            Value::Int(_) => members.iter().find(|m| matches!(m, Ty::Int)),
+            Value::Float(_) => members.iter().find(|m| matches!(m, Ty::Float)),
+            Value::Bool(_) => members.iter().find(|m| matches!(m, Ty::Bool)),
+            Value::Object(idx) => {
+                #[allow(unsafe_code)]
+                let obj = unsafe { self.heap().get_object(*idx) };
+                match obj {
+                    Object::String(_) => members.iter().find(|m| matches!(m, Ty::String)),
+                    Object::Instance(inst) => {
+                        #[allow(unsafe_code)]
+                        let class_obj = unsafe { self.heap().get_object(inst.class) };
+                        if let Object::Class(class) = class_obj {
+                            members
+                                .iter()
+                                .find(|m| matches!(m, Ty::Class(name) if name == &class.name))
+                        } else {
+                            None
+                        }
+                    }
+                    Object::Variant(variant) => {
+                        #[allow(unsafe_code)]
+                        let enum_obj = unsafe { self.heap().get_object(variant.enm) };
+                        if let Object::Enum(enm) = enum_obj {
+                            members
+                                .iter()
+                                .find(|m| matches!(m, Ty::Enum(name) if name == &enm.name))
+                        } else {
+                            None
+                        }
+                    }
+                    Object::Array(elements) => {
+                        // For arrays, check first element to determine which List type
+                        if let Some(first) = elements.first() {
+                            members.iter().find(|m| {
+                                if let Ty::List(elem_ty) = m {
+                                    self.find_matching_union_member(
+                                        first,
+                                        &[elem_ty.as_ref().clone()],
+                                    )
+                                    .is_some()
+                                } else {
+                                    false
+                                }
+                            })
+                        } else {
+                            // Empty array - match any List type
+                            members.iter().find(|m| matches!(m, Ty::List(_)))
+                        }
+                    }
+                    Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
+                    _ => None,
+                }
+            }
         }
     }
 
@@ -589,11 +743,9 @@ impl BexEngine {
     ///
     /// # Returns
     ///
-    /// Returns `ExternalValue`:
-    /// - Primitives return as `Snapshot(Snapshot::Int/Float/Bool/Null)`
-    /// - Heap objects return as `Object(Handle)` - a reference, not a deep copy
-    ///
-    /// Use `to_snapshot()` to convert handles to owned data when needed.
+    /// Returns `TypedSnapshot` containing:
+    /// - `value`: The actual result as a deep-copied `Snapshot`
+    /// - `declared_type`: The declared return type from the schema (useful for unions)
     ///
     /// # Example
     ///
@@ -603,22 +755,40 @@ impl BexEngine {
     ///     42i64.into(),
     /// ]).await?;
     ///
-    /// // Get owned data
-    /// let snapshot = engine.to_snapshot(result)?;
+    /// // Access the value directly - it's already a snapshot
+    /// match &result.value {
+    ///     Snapshot::Instance { class_name, fields } => {
+    ///         println!("Got {} with {} fields", class_name, fields.len());
+    ///     }
+    ///     _ => {}
+    /// }
+    ///
+    /// // Check the declared type (useful for unions)
+    /// if let Ty::Union(members) = &result.declared_type {
+    ///     println!("Could have been: {:?}", members);
+    /// }
     /// ```
     pub async fn call_function(
         &self,
         function_name: &str,
         args: &[ExternalValue],
-    ) -> Result<ExternalValue, EngineError> {
+    ) -> Result<TypedExternalValue, EngineError> {
         // Wait for any in-progress GC to complete.
         // This ensures Handles in args have stable indices.
         while self.gc_in_progress.load(Ordering::Acquire) {
             self.gc_complete.notified().await;
         }
 
-        // Look up the function to verify it exists
+        // Look up the function to verify it exists and get its return type
         let function_index = self.lookup_function(function_name)?;
+        let return_type = self
+            .snapshot
+            .functions
+            .get(function_name)
+            .map(|f| f.return_type.clone())
+            .ok_or_else(|| EngineError::SchemaInconsistency {
+                message: format!("Function '{function_name}' exists in bytecode but not in schema"),
+            })?;
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -663,7 +833,8 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        result
+        // Wrap the result with the declared return type
+        result.map(|value| TypedExternalValue::new(value, return_type))
     }
 
     /// Convert an `ExternalValue` to a VM `Value`.
@@ -701,14 +872,14 @@ impl BexEngine {
             Snapshot::Array(arr) => {
                 let values: Vec<Value> = arr
                     .iter()
-                    .map(|item| Self::allocate_snapshot(vm, item))
+                    .map(|item| Self::allocate_snapshot(vm, &item.value))
                     .collect();
                 vm.alloc_array(values)
             }
             Snapshot::Map(map) => {
                 let values: indexmap::IndexMap<String, Value> = map
                     .iter()
-                    .map(|(k, v): (&String, &Snapshot)| (k.clone(), Self::allocate_snapshot(vm, v)))
+                    .map(|(k, v)| (k.clone(), Self::allocate_snapshot(vm, &v.value)))
                     .collect();
                 vm.alloc_map(values)
             }

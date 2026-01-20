@@ -835,6 +835,7 @@ dependencies = [
 name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
+ "baml_snapshot",
  "bex_vm_types",
  "indexmap 2.13.0",
 ]

@@ -1,11 +1,17 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 2
-Objects: 37
-Globals: 33
+Functions: 4
+Objects: 39
+Globals: 35
+
+Function GetMixedList (arity: 0, kind: External(Llm)):
+  (no bytecode)
+
+Function GetMixedMap (arity: 0, kind: External(Llm)):
+  (no bytecode)
 
 Function GetStatus (arity: 0, kind: External(Llm)):
   (no bytecode)

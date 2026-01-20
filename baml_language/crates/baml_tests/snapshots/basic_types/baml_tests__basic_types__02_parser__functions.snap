@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -59,6 +59,73 @@ SOURCE_FILE
           QUOTE """
           WORD "Get"
           WORD "status"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GetMixedList"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+      R_PAREN ")"
+      L_BRACKET "["
+      R_BRACKET "]"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"Get mixed list"#
+          HASH "#"
+          QUOTE """
+          WORD "Get"
+          WORD "mixed"
+          WORD "list"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GetMixedMap"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+        GREATER ">"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"Get mixed map"#
+          HASH "#"
+          QUOTE """
+          WORD "Get"
+          WORD "mixed"
+          WORD "map"
           QUOTE """
           HASH "#"
       R_BRACE "}"

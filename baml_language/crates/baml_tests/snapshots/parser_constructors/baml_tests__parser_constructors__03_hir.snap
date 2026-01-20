@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -17,6 +17,10 @@ function pointArray() -> Point[] {
 
 function boolArray() -> bool[] {
       [true, false, true]
+}
+
+function mixedArray() -> (int | string)[] {
+      [1, "two", 3]
 }
 
 function intArray() -> int[] {

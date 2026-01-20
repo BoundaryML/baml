@@ -25,16 +25,20 @@ async fn test_handle_prevents_gc_collection() {
     // Get a handle to a string object
     let result = engine.call_function("return_string", &[]).await.unwrap();
     assert!(
-        matches!(result, ExternalValue::Object(_)),
-        "Expected Object handle, got {result:?}"
+        matches!(result.value, ExternalValue::Object(_)),
+        "Expected Object handle, got {:?}",
+        result.value
     );
 
     // Trigger GC
     let _stats = engine.collect_garbage().await;
 
     // Handle should still be valid - convert to snapshot
-    let snapshot = engine.to_snapshot(result).unwrap();
-    assert_eq!(snapshot, Snapshot::String("hello world".to_string()));
+    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
+    assert_eq!(
+        typed_snapshot.value,
+        Snapshot::String("hello world".to_string())
+    );
 }
 
 /// Test that handles to arrays preserve the entire structure.
@@ -53,20 +57,21 @@ async fn test_array_preserved_through_gc() {
     // Get a handle to the array
     let result = engine.call_function("return_array", &[]).await.unwrap();
     assert!(
-        matches!(result, ExternalValue::Object(_)),
-        "Expected Object handle, got {result:?}"
+        matches!(result.value, ExternalValue::Object(_)),
+        "Expected Object handle, got {:?}",
+        result.value
     );
 
     // Trigger GC
     let _stats = engine.collect_garbage().await;
 
     // Array and all its elements should be preserved
-    let snapshot = engine.to_snapshot(result).unwrap();
-    match snapshot {
+    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
+    match typed_snapshot.value {
         Snapshot::Array(arr) => {
             assert_eq!(arr.len(), 5);
-            assert_eq!(arr[0], Snapshot::String("a".to_string()));
-            assert_eq!(arr[4], Snapshot::String("e".to_string()));
+            assert_eq!(arr[0].value, Snapshot::String("a".to_string()));
+            assert_eq!(arr[4].value, Snapshot::String("e".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -102,13 +107,13 @@ async fn test_gc_updates_forwarding_pointers() {
     }
 
     // Objects should still be accessible with correct values
-    let snapshot = engine.to_snapshot(result).unwrap();
-    match snapshot {
+    let typed_snapshot = engine.to_typed_snapshot(result).unwrap();
+    match typed_snapshot.value {
         Snapshot::Array(arr) => {
             assert_eq!(arr.len(), 3);
-            assert_eq!(arr[0], Snapshot::String("first".to_string()));
-            assert_eq!(arr[1], Snapshot::String("second".to_string()));
-            assert_eq!(arr[2], Snapshot::String("third".to_string()));
+            assert_eq!(arr[0].value, Snapshot::String("first".to_string()));
+            assert_eq!(arr[1].value, Snapshot::String("second".to_string()));
+            assert_eq!(arr[2].value, Snapshot::String("third".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -147,15 +152,15 @@ async fn test_multiple_handles_survive_gc() {
 
     // All handles should still be valid
     assert_eq!(
-        engine.to_snapshot(h1).unwrap(),
+        engine.to_typed_snapshot(h1).unwrap().value,
         Snapshot::String("hello".to_string())
     );
     assert_eq!(
-        engine.to_snapshot(h2).unwrap(),
+        engine.to_typed_snapshot(h2).unwrap().value,
         Snapshot::String("world".to_string())
     );
     assert_eq!(
-        engine.to_snapshot(h3).unwrap(),
+        engine.to_typed_snapshot(h3).unwrap().value,
         Snapshot::String("test".to_string())
     );
 }
@@ -180,16 +185,22 @@ async fn test_primitive_returns_are_snapshots() {
 
     // Int should be Snapshot
     let result = engine.call_function("return_int", &[]).await.unwrap();
-    assert!(matches!(result, ExternalValue::Snapshot(Snapshot::Int(42))));
+    assert!(matches!(
+        result.value,
+        ExternalValue::Snapshot(Snapshot::Int(42))
+    ));
 
     // Null should be Snapshot
     let result = engine.call_function("return_null", &[]).await.unwrap();
-    assert!(matches!(result, ExternalValue::Snapshot(Snapshot::Null)));
+    assert!(matches!(
+        result.value,
+        ExternalValue::Snapshot(Snapshot::Null)
+    ));
 
     // Bool should be Snapshot
     let result = engine.call_function("return_bool", &[]).await.unwrap();
     assert!(matches!(
-        result,
+        result.value,
         ExternalValue::Snapshot(Snapshot::Bool(true))
     ));
 }

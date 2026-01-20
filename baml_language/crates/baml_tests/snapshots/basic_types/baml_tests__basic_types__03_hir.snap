@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -16,6 +16,20 @@ class FieldAttributes {
 class ClassAttributes {
   name: string
   @@dynamic
+}
+
+function GetMixedMap() -> Map<string, int | string> {
+  client GPT4
+  prompt #"
+    Get mixed map
+  "#
+}
+
+function GetMixedList() -> (int | string)[] {
+  client GPT4
+  prompt #"
+    Get mixed list
+  "#
 }
 
 function GetStatus() -> Status {
@@ -43,6 +57,8 @@ enum Status {
   Inactive
 }
 
+type MixedList = (int | string)[]
+
 type OptionalRoleList = "writer"[]?
 
 type RoleList = "reader"[]
@@ -50,6 +66,10 @@ type RoleList = "reader"[]
 type OptionalRole = "admin"?
 
 type Role = "user" | "assistant" | "system"
+
+type UnionOfArrays = int[] | string[]
+
+type MixedMap = Map<string, int | string>
 
 type OptionalFlag = true?
 

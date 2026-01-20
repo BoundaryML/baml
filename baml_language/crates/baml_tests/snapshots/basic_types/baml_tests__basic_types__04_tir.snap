@@ -1,8 +1,12 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
+  Function GetMixedMap:
+    Return: Map { key: String, value: Union([Int, String]) }
+  Function GetMixedList:
+    Return: List(Union([Int, String]))
   Function GetStatus:
     Return: Enum(FullyQualifiedName { namespace: Local, name: "Status" })
   Function GetUser:

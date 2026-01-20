@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -96,6 +96,47 @@ SOURCE_FILE
     TYPE_EXPR "true?"
       WORD "true"
       QUESTION "?"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MixedList"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+      R_PAREN ")"
+      L_BRACKET "["
+      R_BRACKET "]"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MixedMap"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+        GREATER ">"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "UnionOfArrays"
+    EQUALS "="
+    TYPE_EXPR "int[] | string[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+      PIPE "|"
+      WORD "string"
+      L_BRACKET "["
+      R_BRACKET "]"
 
 === ERRORS ===
 None

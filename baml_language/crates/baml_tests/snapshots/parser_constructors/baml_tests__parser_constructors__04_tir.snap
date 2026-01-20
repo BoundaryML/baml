@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -11,6 +11,8 @@ expression: output
     Return: List(Class(FullyQualifiedName { namespace: Local, name: "Point" }))
   Function boolArray:
     Return: List(Bool)
+  Function mixedArray:
+    Return: List(Union([Int, String]))
   Function intArray:
     Return: List(Int)
   Function point:

@@ -9,23 +9,21 @@
 use std::{collections::HashMap, io::Write};
 
 use baml_snapshot::BamlSnapshot;
-use baml_tests::{bytecode::compile_source, vm::Value};
-use bex_engine::{BexEngine, Snapshot};
+use baml_tests::bytecode::compile_source_with_schema;
+use bex_engine::{BexEngine, Snapshot, Ty, TypedSnapshot};
 use indexmap::IndexMap;
 use tempfile::TempDir;
 
-/// Test input for engine execution.
+/// Test input for engine execution (value-only checks).
 pub(crate) struct EngineProgram {
     /// Virtual filesystem: maps relative paths to file contents.
-    /// Files are created in a temp directory before the test runs.
-    /// Relative paths in `baml.fs.open()` are resolved against this directory.
     pub fs: IndexMap<&'static str, &'static str>,
     /// The BAML source code to compile and execute.
     pub source: &'static str,
     /// The function name to execute.
-    pub function: &'static str,
+    pub entry: &'static str,
     /// Expected result: Ok(value) for success, Err(message) for expected error.
-    pub expected: Result<Value, &'static str>,
+    pub expected: Result<Snapshot, &'static str>,
 }
 
 impl Default for EngineProgram {
@@ -33,60 +31,47 @@ impl Default for EngineProgram {
         Self {
             fs: IndexMap::new(),
             source: "",
-            function: "main",
-            expected: Ok(Value::Null),
+            entry: "main",
+            expected: Ok(Snapshot::Null),
         }
     }
 }
 
-/// Helper to create test inputs more ergonomically.
-impl EngineProgram {
-    pub(crate) fn new(source: &'static str) -> Self {
+/// Test input for engine execution with type checking.
+pub(crate) struct TypedEngineProgram {
+    /// Virtual filesystem: maps relative paths to file contents.
+    pub fs: IndexMap<&'static str, &'static str>,
+    /// The BAML source code to compile and execute.
+    pub source: &'static str,
+    /// The function name to execute.
+    pub entry: &'static str,
+    /// Expected result: `Ok(typed_value)` for success, Err(message) for expected error.
+    pub expected: Result<TypedSnapshot, &'static str>,
+}
+
+impl Default for TypedEngineProgram {
+    fn default() -> Self {
         Self {
-            source,
-            ..Default::default()
+            fs: IndexMap::new(),
+            source: "",
+            entry: "main",
+            expected: Ok(TypedSnapshot::new(Snapshot::Null, Ty::Null)),
         }
-    }
-
-    pub(crate) fn with_fs(mut self, fs: IndexMap<&'static str, &'static str>) -> Self {
-        self.fs = fs;
-        self
-    }
-
-    pub(crate) fn function(mut self, function: &'static str) -> Self {
-        self.function = function;
-        self
-    }
-
-    pub(crate) fn expect(mut self, expected: Value) -> Self {
-        self.expected = Ok(expected);
-        self
-    }
-
-    pub(crate) fn expect_error(mut self, message: &'static str) -> Self {
-        self.expected = Err(message);
-        self
     }
 }
 
-/// Compile BAML source code into a snapshot.
+/// Compile BAML source code into a snapshot with schema populated.
 pub(crate) fn compile_for_engine(source: &str) -> BamlSnapshot {
-    let program = compile_source(source);
-    BamlSnapshot::new(program)
+    compile_source_with_schema(source)
 }
 
 /// Set up the virtual filesystem for a test.
-///
-/// Creates a temp directory and writes all files from `fs` into it.
-/// Returns the temp directory (kept alive for the test duration).
 fn setup_virtual_fs(fs: &IndexMap<&'static str, &'static str>) -> anyhow::Result<TempDir> {
     let temp_dir = TempDir::new()?;
     let root = temp_dir.path();
 
-    // Write all files to the temp directory
     for (path, contents) in fs {
         let full_path = root.join(path);
-        // Create parent directories if needed
         if let Some(parent) = full_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -97,64 +82,26 @@ fn setup_virtual_fs(fs: &IndexMap<&'static str, &'static str>) -> anyhow::Result
     Ok(temp_dir)
 }
 
-/// Convert a `Snapshot` (from engine execution) to a test Value.
-pub(crate) fn value_from_snapshot(snapshot: &Snapshot) -> Value {
-    match snapshot {
-        Snapshot::Null => Value::Null,
-        Snapshot::Int(i) => Value::Int(*i),
-        Snapshot::Float(f) => Value::Float(*f),
-        Snapshot::Bool(b) => Value::Bool(*b),
-        Snapshot::String(s) => Value::string(s),
-        Snapshot::Array(arr) => Value::array(arr.iter().map(value_from_snapshot).collect()),
-        Snapshot::Map(map) => Value::map(
-            map.iter()
-                .map(|(k, v)| (k.clone(), value_from_snapshot(v)))
-                .collect(),
-        ),
-        Snapshot::Instance { class_name, fields } => {
-            // For tests, represent as a map with a special __class__ key
-            let mut test_map = indexmap::IndexMap::new();
-            test_map.insert("__class__".to_string(), Value::string(class_name));
-            for (k, v) in fields {
-                test_map.insert(k.clone(), value_from_snapshot(v));
-            }
-            Value::map(test_map)
-        }
-        Snapshot::Variant {
-            enum_name,
-            variant_name,
-        } => {
-            // For tests, represent as string "EnumName::VariantName"
-            Value::string(&format!("{enum_name}::{variant_name}"))
-        }
-    }
-}
-
-/// Assert that engine execution succeeds with the expected result.
+/// Assert that engine execution produces the expected value.
 pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Result<()> {
-    // Set up virtual filesystem
     let temp_dir = setup_virtual_fs(&input.fs)?;
     let root_path = temp_dir.path().display().to_string();
-
-    // Replace {ROOT} in source with actual temp directory path
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
     let engine = BexEngine::new(snapshot, HashMap::new()).expect("Failed to create engine");
 
-    let result = engine.call_function(input.function, &[]).await;
+    let result = engine.call_function(input.entry, &[]).await;
 
     match (result, input.expected) {
-        (Ok(external_value), Ok(expected)) => {
-            // Convert ExternalValue to Snapshot for comparison
-            let snapshot = engine
-                .to_snapshot(external_value)
+        (Ok(typed_value), Ok(expected)) => {
+            let typed_snapshot = engine
+                .to_typed_snapshot(typed_value)
                 .expect("Failed to convert result to snapshot");
-            let actual = value_from_snapshot(&snapshot);
             assert_eq!(
-                actual, expected,
-                "Engine execution result mismatch for function '{}'",
-                input.function
+                typed_snapshot.value, expected,
+                "Value mismatch for function '{}'",
+                input.entry
             );
         }
         (Err(e), Err(expected_msg)) => {
@@ -164,8 +111,11 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
                 "Expected error containing '{expected_msg}', got: {error_msg}"
             );
         }
-        (Ok(value), Err(expected_msg)) => {
-            panic!("Expected error containing '{expected_msg}', but got success: {value:?}");
+        (Ok(typed_value), Err(expected_msg)) => {
+            panic!(
+                "Expected error containing '{expected_msg}', but got success: {:?}",
+                typed_value.value
+            );
         }
         (Err(e), Ok(expected)) => {
             panic!("Expected success with {expected:?}, but got error: {e}");
@@ -175,7 +125,50 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     Ok(())
 }
 
-/// Assert that engine execution fails with an error containing the expected message.
-pub(crate) async fn assert_engine_fails(input: EngineProgram) -> anyhow::Result<()> {
-    assert_engine_executes(input).await
+/// Assert that engine execution produces the expected typed value (value + type).
+pub(crate) async fn assert_engine_typed(input: TypedEngineProgram) -> anyhow::Result<()> {
+    let temp_dir = setup_virtual_fs(&input.fs)?;
+    let root_path = temp_dir.path().display().to_string();
+    let source = input.source.replace("{ROOT}", &root_path);
+
+    let snapshot = compile_for_engine(&source);
+    let engine = BexEngine::new(snapshot, HashMap::new()).expect("Failed to create engine");
+
+    let result = engine.call_function(input.entry, &[]).await;
+
+    match (result, input.expected) {
+        (Ok(typed_value), Ok(expected)) => {
+            let typed_snapshot = engine
+                .to_typed_snapshot(typed_value)
+                .expect("Failed to convert result to snapshot");
+            assert_eq!(
+                typed_snapshot.value, expected.value,
+                "Value mismatch for function '{}'",
+                input.entry
+            );
+            assert_eq!(
+                typed_snapshot.declared_type, expected.declared_type,
+                "Type mismatch for function '{}': expected {:?}, got {:?}",
+                input.entry, expected.declared_type, typed_snapshot.declared_type
+            );
+        }
+        (Err(e), Err(expected_msg)) => {
+            let error_msg = e.to_string();
+            assert!(
+                error_msg.contains(expected_msg),
+                "Expected error containing '{expected_msg}', got: {error_msg}"
+            );
+        }
+        (Ok(typed_value), Err(expected_msg)) => {
+            panic!(
+                "Expected error containing '{expected_msg}', but got success: {:?}",
+                typed_value.value
+            );
+        }
+        (Err(e), Ok(expected)) => {
+            panic!("Expected success with {expected:?}, but got error: {e}");
+        }
+    }
+
+    Ok(())
 }

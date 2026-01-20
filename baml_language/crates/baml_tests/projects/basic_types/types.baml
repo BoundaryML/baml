@@ -24,5 +24,14 @@ type OptionalRoleList = "writer"[]?
 // Optional int literal
 type OptionalCode = 200?
 
-// Optional bool literal  
+// Optional bool literal
 type OptionalFlag = true?
+
+// Array of union - tests parenthesized union in array
+type MixedList = (int | string)[]
+
+// Map with union value type
+type MixedMap = map<string, int | string>
+
+// Union of arrays (different from array of union)
+type UnionOfArrays = int[] | string[]

@@ -4,7 +4,7 @@
 //! across the FFI boundary without requiring heap access to inspect.
 //! Two variants for clear semantics: references vs owned data.
 
-use crate::{Handle, Snapshot};
+use crate::{Handle, Snapshot, Ty};
 
 /// A value that can cross the FFI boundary.
 ///
@@ -144,6 +144,56 @@ impl From<String> for ExternalValue {
 impl From<&str> for ExternalValue {
     fn from(value: &str) -> Self {
         ExternalValue::Snapshot(Snapshot::String(value.to_string()))
+    }
+}
+
+// ============================================================================
+// TypedExternalValue
+// ============================================================================
+
+/// An external value paired with its declared type from the BAML schema.
+///
+/// This is the primary return type from `BexEngine::call_function`. It contains
+/// both the runtime value and the declared type, which is useful when the type
+/// is a union - callers can see what alternatives the value could have been.
+///
+/// # Example
+///
+/// ```ignore
+/// // Function signature: fn GetStatus() -> Success | Failure
+/// let result: TypedExternalValue = engine.call_function("GetStatus", &[]).await?;
+///
+/// // Check what type we got
+/// match &result.value {
+///     ExternalValue::Object(handle) => {
+///         // Convert to snapshot if needed
+///         let snapshot = engine.to_snapshot(result.value.clone())?;
+///     }
+///     ExternalValue::Snapshot(s) => {
+///         println!("Got primitive: {:?}", s);
+///     }
+/// }
+///
+/// // See what alternatives existed (useful for unions)
+/// if let Ty::Union(members) = &result.declared_type {
+///     println!("Could have been: {:?}", members);
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct TypedExternalValue {
+    /// The actual value.
+    pub value: ExternalValue,
+    /// The declared type from the schema (may be a union).
+    pub declared_type: Ty,
+}
+
+impl TypedExternalValue {
+    /// Create a new TypedExternalValue.
+    pub fn new(value: ExternalValue, declared_type: Ty) -> Self {
+        Self {
+            value,
+            declared_type,
+        }
     }
 }
 

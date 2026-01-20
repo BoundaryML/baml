@@ -2,7 +2,7 @@
 
 mod common;
 
-use baml_tests::vm::Value;
+use bex_engine::Snapshot;
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
@@ -19,8 +19,8 @@ async fn fs_open_only() -> anyhow::Result<()> {
                 42
             }
         "#,
-        function: "main",
-        expected: Ok(Value::Int(42)),
+        entry: "main",
+        expected: Ok(Snapshot::Int(42)),
     })
     .await
 }
@@ -37,8 +37,8 @@ async fn fs_open_and_read() -> anyhow::Result<()> {
                 file.read()
             }
         "#,
-        function: "main",
-        expected: Ok(Value::string("Hello from BAML!")),
+        entry: "main",
+        expected: Ok(Snapshot::String("Hello from BAML!".to_string())),
     })
     .await
 }
@@ -53,7 +53,7 @@ async fn fs_open_nonexistent_file() -> anyhow::Result<()> {
                 file.read()
             }
         "#,
-        function: "main",
+        entry: "main",
         expected: Err("Failed to open file"),
     })
     .await

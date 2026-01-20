@@ -1986,20 +1986,22 @@ impl LoweringContext {
     fn lower_array_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
         use baml_compiler_syntax::SyntaxKind;
 
-        // Collect elements from both child nodes and direct tokens
+        // Collect elements from both child nodes and direct tokens.
+        // Arrays can have mixed content: some elements are nodes (like STRING_LITERAL
+        // with quote children), while others are bare tokens (INTEGER_LITERAL).
+        // We need to process all of them in order.
         let mut elements = Vec::new();
 
-        // First, collect expression nodes
-        for child in node.children() {
-            if !matches!(child.kind(), SyntaxKind::L_BRACKET | SyntaxKind::R_BRACKET) {
-                elements.push(self.lower_expr(&child));
-            }
-        }
-
-        // If no child nodes found, check for direct literal tokens
-        if elements.is_empty() {
-            for elem in node.children_with_tokens() {
-                if let rowan::NodeOrToken::Token(token) = elem {
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    // Skip bracket nodes (shouldn't happen but be safe)
+                    if !matches!(child.kind(), SyntaxKind::L_BRACKET | SyntaxKind::R_BRACKET) {
+                        elements.push(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    // Try to lower value tokens (integers, floats, etc.)
                     if let Some(expr_id) = self.lower_value_token(&token) {
                         elements.push(expr_id);
                     }

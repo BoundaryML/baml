@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -89,6 +89,27 @@ fn boolArray() -> List(Bool) {
         _1 = const true;
         _2 = const false;
         _3 = const true;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn mixedArray() -> List(Union([Int, String])) {
+    // Locals:
+    let _0: List(Union([Int, String])) // return
+    let _1: Int
+    let _2: String
+    let _3: Int
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const "two";
+        _3 = const 3_i64;
         _0 = [copy _1, copy _2, copy _3];
         goto -> bb1;
     }

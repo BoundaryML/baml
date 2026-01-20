@@ -39,8 +39,8 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     server.await?;
 
     // Check result - convert to snapshot
-    let snapshot = engine.to_snapshot(result)?;
-    match snapshot {
+    let typed_snapshot = engine.to_typed_snapshot(result)?;
+    match typed_snapshot.value {
         bex_engine::Snapshot::String(s) => {
             assert_eq!(s, "Hello from server!");
         }
@@ -108,8 +108,8 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
     server.await?;
 
     // First read should get "chunk1" - convert to snapshot
-    let snapshot = engine.to_snapshot(result)?;
-    match snapshot {
+    let typed_snapshot = engine.to_typed_snapshot(result)?;
+    match typed_snapshot.value {
         bex_engine::Snapshot::String(s) => {
             assert_eq!(s, "chunk1");
         }

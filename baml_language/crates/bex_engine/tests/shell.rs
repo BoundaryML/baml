@@ -2,7 +2,7 @@
 
 mod common;
 
-use baml_tests::vm::Value;
+use bex_engine::Snapshot;
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
 
@@ -15,9 +15,9 @@ async fn shell_echo() -> anyhow::Result<()> {
                 baml.sys.shell("echo 'Hello From Shell!'")
             }
         "#,
-        function: "main",
+        entry: "main",
         // Note: echo adds a newline
-        expected: Ok(Value::string("Hello From Shell!\n")),
+        expected: Ok(Snapshot::String("Hello From Shell!\n".to_string())),
     })
     .await
 }
@@ -31,8 +31,8 @@ async fn shell_with_pipe() -> anyhow::Result<()> {
                 baml.sys.shell("echo 'hello world' | tr 'a-z' 'A-Z'")
             }
         "#,
-        function: "main",
-        expected: Ok(Value::string("HELLO WORLD\n")),
+        entry: "main",
+        expected: Ok(Snapshot::String("HELLO WORLD\n".to_string())),
     })
     .await
 }
@@ -46,7 +46,7 @@ async fn shell_failing_command() -> anyhow::Result<()> {
                 baml.sys.shell("exit 1")
             }
         "#,
-        function: "main",
+        entry: "main",
         expected: Err("failed with exit code 1"),
     })
     .await
@@ -61,7 +61,7 @@ async fn shell_nonexistent_command() -> anyhow::Result<()> {
                 baml.sys.shell("nonexistent_command_12345")
             }
         "#,
-        function: "main",
+        entry: "main",
         expected: Err("not found"),
     })
     .await
@@ -77,8 +77,8 @@ async fn shell_with_variable() -> anyhow::Result<()> {
                 baml.sys.shell(cmd)
             }
         "#,
-        function: "main",
-        expected: Ok(Value::string("dynamic\n")),
+        entry: "main",
+        expected: Ok(Snapshot::String("dynamic\n".to_string())),
     })
     .await
 }

@@ -76,6 +76,12 @@ fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth
 // Helper function for formatting TypeRef as code
 #[cfg(test)]
 fn format_type_ref(type_ref: &baml_compiler_hir::TypeRef) -> String {
+    format_type_ref_impl(type_ref, false)
+}
+
+/// Format TypeRef, optionally wrapping unions in parentheses when needed.
+#[cfg(test)]
+fn format_type_ref_impl(type_ref: &baml_compiler_hir::TypeRef, wrap_union: bool) -> String {
     use baml_compiler_hir::TypeRef;
     match type_ref {
         TypeRef::Path(path) => format_path(path),
@@ -85,16 +91,27 @@ fn format_type_ref(type_ref: &baml_compiler_hir::TypeRef) -> String {
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
         TypeRef::Media(kind) => kind.to_string(),
-        TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
-        TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
+        TypeRef::Optional(inner) => format!("{}?", format_type_ref_impl(inner, true)),
+        TypeRef::List(inner) => format!("{}[]", format_type_ref_impl(inner, true)),
         TypeRef::Map { key, value } => {
-            format!("Map<{}, {}>", format_type_ref(key), format_type_ref(value))
+            format!(
+                "Map<{}, {}>",
+                format_type_ref_impl(key, false),
+                format_type_ref_impl(value, false)
+            )
         }
-        TypeRef::Union(types) => types
-            .iter()
-            .map(format_type_ref)
-            .collect::<Vec<_>>()
-            .join(" | "),
+        TypeRef::Union(types) => {
+            let inner = types
+                .iter()
+                .map(|t| format_type_ref_impl(t, false))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            if wrap_union {
+                format!("({})", inner)
+            } else {
+                inner
+            }
+        }
         TypeRef::StringLiteral(s) => format!("\"{}\"", s),
         TypeRef::IntLiteral(n) => n.to_string(),
         TypeRef::FloatLiteral(f) => f.clone(),
@@ -102,10 +119,10 @@ fn format_type_ref(type_ref: &baml_compiler_hir::TypeRef) -> String {
         TypeRef::Generic { base, args } => {
             let args_str = args
                 .iter()
-                .map(format_type_ref)
+                .map(|t| format_type_ref_impl(t, false))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}<{}>", format_type_ref(base), args_str)
+            format!("{}<{}>", format_type_ref_impl(base, false), args_str)
         }
         TypeRef::TypeParam(name) => name.to_string(),
         TypeRef::Error => "<error>".to_string(),

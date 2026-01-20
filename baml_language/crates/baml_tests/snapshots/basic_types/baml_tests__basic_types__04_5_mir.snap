@@ -1,8 +1,14 @@
 ---
-source: target/debug/build/baml_tests-17af2d4231950a65/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
+fn GetMixedMap:
+  (no MIR due to errors: MissingBody)
+
+fn GetMixedList:
+  (no MIR due to errors: MissingBody)
+
 fn GetStatus:
   (no MIR due to errors: MissingBody)
 

@@ -22,3 +22,8 @@ function boolArray() -> bool[] {
 function pointArray() -> Point[] {
   [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
 }
+
+// Heterogeneous array - array of union type
+function mixedArray() -> (int | string)[] {
+  [1, "two", 3]
+}

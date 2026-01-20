@@ -115,6 +115,8 @@ impl TypeRef {
     ///
     /// This handles:
     /// - String literal types: `"foo"` or `'bar'`
+    /// - Parenthesized types: `(int | string)`
+    /// - Union types: `int | string`
     /// - Array types: `int[]`
     /// - Optional types: `int?`
     /// - Boolean literal types: `true` or `false`
@@ -138,6 +140,22 @@ impl TypeRef {
         if let Some(inner_text) = text.strip_suffix('?') {
             let inner = Self::from_type_text(inner_text);
             return TypeRef::Optional(Box::new(inner));
+        }
+
+        // Check for parenthesized types (e.g., "(int | string)")
+        if text.starts_with('(') && text.ends_with(')') {
+            let inner = &text[1..text.len() - 1];
+            return Self::from_type_text(inner);
+        }
+
+        // Check for union types (e.g., "int | string")
+        // Only split at top-level pipes (not inside generics or parens)
+        if let Some(parts) = Self::split_union(text) {
+            let members: Vec<TypeRef> = parts
+                .iter()
+                .map(|p| Self::from_type_text(p.trim()))
+                .collect();
+            return TypeRef::Union(members);
         }
 
         // Check for boolean literal types
@@ -183,6 +201,33 @@ impl TypeRef {
         }
 
         Self::from_type_name(text)
+    }
+
+    /// Split a type text at top-level `|` characters.
+    /// Returns None if no top-level `|` is found.
+    fn split_union(s: &str) -> Option<Vec<&str>> {
+        let mut depth = 0;
+        let mut parts = Vec::new();
+        let mut start = 0;
+
+        for (i, c) in s.char_indices() {
+            match c {
+                '<' | '(' => depth += 1,
+                '>' | ')' => depth -= 1,
+                '|' if depth == 0 => {
+                    parts.push(&s[start..i]);
+                    start = i + 1;
+                }
+                _ => {}
+            }
+        }
+
+        if parts.is_empty() {
+            None
+        } else {
+            parts.push(&s[start..]);
+            Some(parts)
+        }
     }
 
     /// Split generic parameters at the top-level comma.
