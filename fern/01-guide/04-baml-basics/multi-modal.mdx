@@ -65,6 +65,36 @@ async def test_image_input():
       )
   )
 
+  # Gemini Files API (google-ai): upload once, then reference the returned `file.uri`
+  #
+  # This avoids re-sending image bytes across multiple calls. Example `file_uri` values:
+  # - "https://generativelanguage.googleapis.com/v1beta/files/..."
+  # - "gs://bucket/path" (when applicable)
+  #
+  # Then pass it just like a URL-based image:
+  # img=Image.from_url(file_uri, media_type="image/jpeg")
+  #
+  # If you're making multiple calls that all share the same image + stable instructions,
+  # Gemini also supports *explicit cached content* via `cachedContent`:
+  #
+  #   from baml_py import ClientRegistry, create_cached_content, upload_file_bytes
+  #   from baml_py import Image
+  #
+  #   f = upload_file_bytes(data=raw_bytes, mime_type="image/jpeg")
+  #   cache = create_cached_content(
+  #     model="gemini-3-flash-preview",
+  #     system_instruction="your stable system rules...",
+  #     file_uri=f.uri,
+  #     file_mime_type=f.mime_type or "image/jpeg",
+  #     ttl_seconds=600,
+  #   )
+  #   cr = ClientRegistry()
+  #   cr.add_llm_client("GeminiCached", "google-ai", {
+  #     "model": "gemini-3-flash-preview",
+  #     "api_key": os.environ["GOOGLE_API_KEY"],
+  #     "cachedContent": cache.name,
+  #   })
+
   # Base64 image
   image_b64 = "iVBORw0K...."
   res = await b.TestImageInput(

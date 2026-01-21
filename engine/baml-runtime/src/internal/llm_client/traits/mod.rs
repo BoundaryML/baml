@@ -514,6 +514,16 @@ async fn process_media(
     ctx: &RuntimeContext,
     part: &BamlMedia,
 ) -> Result<BamlMedia> {
+    fn is_google_ai_file_uri(url: &str) -> bool {
+        // Google AI (Gemini) accepts `file_data.file_uri` for:
+        // - Google Cloud Storage URIs (gs://...)
+        // - Gemini Files API URIs (returned as `.file.uri` from /upload/v1beta/files)
+        // - (sometimes) relative "files/..." resource names, depending on API surface.
+        url.starts_with("gs://")
+            || url.starts_with("https://generativelanguage.googleapis.com/")
+            || url.starts_with("files/")
+    }
+
     match &part.content {
         BamlMediaContent::File(media_file) => {
             // Prompt rendering preserves files, because the vscode webview understands files.
@@ -621,7 +631,7 @@ async fn process_media(
                 (ResolveMediaUrls::SendUrlAddMimeType, Some(""))
                 | (ResolveMediaUrls::SendUrlAddMimeType, None) => {}
                 (ResolveMediaUrls::SendBase64UnlessGoogleUrl, _) => {
-                    if media_url.url.starts_with("gs://") {
+                    if is_google_ai_file_uri(&media_url.url) {
                         return Ok(part.clone());
                     }
                 }
@@ -922,5 +932,95 @@ mod tests_merge_messages {
         let result = merge_messages(&chat);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].parts.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod tests_process_media_google_file_uri {
+    use std::{collections::HashMap, sync::Arc};
+
+    use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType};
+
+    use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings, RuntimeContext};
+
+    use super::process_media;
+
+    fn empty_ctx() -> RuntimeContext {
+        RuntimeContext::new(
+            Arc::new(None),
+            HashMap::new(),
+            HashMap::new(),
+            None,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            vec![baml_ids::FunctionCallId::new()],
+        )
+    }
+
+    #[tokio::test]
+    async fn send_base64_unless_google_url_allows_gemini_files_api_uri() {
+        let ctx = empty_ctx();
+        let media = BamlMedia::url(
+            BamlMediaType::Image,
+            "https://generativelanguage.googleapis.com/v1beta/files/abc123".to_string(),
+            Some("image/jpeg".to_string()),
+        );
+
+        let out = process_media(
+            ResolveMediaUrls::SendBase64UnlessGoogleUrl,
+            true,
+            RenderCurlSettings {
+                stream: false,
+                as_shell_commands: false,
+                expose_secrets: false,
+            },
+            &ctx,
+            &media,
+        )
+        .await
+        .expect("should not attempt to download Gemini Files API URIs");
+
+        let BamlMediaContent::Url(out_url) = &out.content else {
+            panic!("expected Url media, got {out:?}");
+        };
+        let BamlMediaContent::Url(in_url) = &media.content else {
+            panic!("expected Url media, got {media:?}");
+        };
+        assert_eq!(out_url.url, in_url.url);
+    }
+
+    #[tokio::test]
+    async fn send_base64_unless_google_url_allows_gcs_uri() {
+        let ctx = empty_ctx();
+        let media = BamlMedia::url(
+            BamlMediaType::Image,
+            "gs://my-bucket/path/to/file.jpg".to_string(),
+            Some("image/jpeg".to_string()),
+        );
+
+        let out = process_media(
+            ResolveMediaUrls::SendBase64UnlessGoogleUrl,
+            true,
+            RenderCurlSettings {
+                stream: false,
+                as_shell_commands: false,
+                expose_secrets: false,
+            },
+            &ctx,
+            &media,
+        )
+        .await
+        .expect("should not attempt to download gs:// URIs");
+
+        let BamlMediaContent::Url(out_url) = &out.content else {
+            panic!("expected Url media, got {out:?}");
+        };
+        let BamlMediaContent::Url(in_url) = &media.content else {
+            panic!("expected Url media, got {media:?}");
+        };
+        assert_eq!(out_url.url, in_url.url);
     }
 }
