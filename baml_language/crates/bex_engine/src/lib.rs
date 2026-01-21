@@ -417,8 +417,8 @@ impl BexEngine {
             (BexExternalValue::Float(_), Ty::Float) => true,
             (BexExternalValue::Bool(_), Ty::Bool) => true,
             (BexExternalValue::String(_), Ty::String) => true,
-            (BexExternalValue::Array(_), Ty::List(_)) => true,
-            (BexExternalValue::Map(_), Ty::Map { .. }) => true,
+            (BexExternalValue::Array { .. }, Ty::List(_)) => true,
+            (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
             (BexExternalValue::Instance { class_name, .. }, Ty::Class(name)) => class_name == name,
             (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(name)) => enum_name == name,
             (BexExternalValue::Union { value, .. }, ty) => Self::value_matches_type(value, ty),
@@ -494,13 +494,16 @@ impl BexEngine {
                     .iter()
                     .map(|v| self.vm_value_to_external(v, element_type))
                     .collect();
-                Ok(BexExternalValue::Array(items?))
+                Ok(BexExternalValue::Array {
+                    element_type: element_type.clone(),
+                    items: items?,
+                })
             }
 
             Object::Map(map) => {
-                // Get value type from declared type
-                let value_type = match effective_type {
-                    Ty::Map { value, .. } => value.as_ref(),
+                // Get key and value types from declared type
+                let (key_type, value_type) = match effective_type {
+                    Ty::Map { key, value } => (key.as_ref(), value.as_ref()),
                     other => {
                         return Err(EngineError::TypeMismatch {
                             message: format!("VM has Map but declared type is {other:?}"),
@@ -512,7 +515,11 @@ impl BexEngine {
                     map.iter()
                         .map(|(k, v)| Ok((k.clone(), self.vm_value_to_external(v, value_type)?)))
                         .collect();
-                Ok(BexExternalValue::Map(entries?))
+                Ok(BexExternalValue::Map {
+                    key_type: key_type.clone(),
+                    value_type: value_type.clone(),
+                    entries: entries?,
+                })
             }
 
             Object::Instance(instance) => {
@@ -934,17 +941,19 @@ impl BexEngine {
             BexExternalValue::Float(f) => Value::Float(*f),
             BexExternalValue::Bool(b) => Value::Bool(*b),
             BexExternalValue::String(s) => vm.alloc_string(s.clone()),
-            BexExternalValue::Array(arr) => {
-                let values: Vec<Value> = arr
+            BexExternalValue::Array { items, .. } => {
+                let values: Vec<Value> = items
                     .iter()
                     .map(|item| Self::allocate_from_external(vm, item))
                     .collect();
                 vm.alloc_array(values)
             }
-            BexExternalValue::Map(map) => {
-                let values: indexmap::IndexMap<String, Value> = map
+            BexExternalValue::Map { entries, .. } => {
+                let values: indexmap::IndexMap<String, Value> = entries
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::allocate_from_external(vm, v)))
+                    .map(|(k, v): (&String, &BexExternalValue)| {
+                        (k.clone(), Self::allocate_from_external(vm, v))
+                    })
                     .collect();
                 vm.alloc_map(values)
             }

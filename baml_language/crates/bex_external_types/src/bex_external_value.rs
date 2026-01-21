@@ -110,11 +110,23 @@ pub enum BexExternalValue {
     /// Owned string.
     String(String),
 
-    /// Owned array of values.
-    Array(Vec<BexExternalValue>),
+    /// Owned array of values with element type.
+    Array {
+        /// The declared element type (e.g., `int | string` for `(int | string)[]`).
+        element_type: Ty,
+        /// The array items.
+        items: Vec<BexExternalValue>,
+    },
 
-    /// Owned map with string keys.
-    Map(IndexMap<String, BexExternalValue>),
+    /// Owned map with string keys and type information.
+    Map {
+        /// The declared key type (usually `Ty::String`).
+        key_type: Ty,
+        /// The declared value type (e.g., `int | string` for `map<string, int | string>`).
+        value_type: Ty,
+        /// The map entries.
+        entries: IndexMap<String, BexExternalValue>,
+    },
 
     /// Class instance with class name and field values.
     Instance {
@@ -149,8 +161,8 @@ impl BexExternalValue {
             BexExternalValue::Float(_) => "float",
             BexExternalValue::Bool(_) => "bool",
             BexExternalValue::String(_) => "string",
-            BexExternalValue::Array(_) => "array",
-            BexExternalValue::Map(_) => "map",
+            BexExternalValue::Array { .. } => "array",
+            BexExternalValue::Map { .. } => "map",
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",

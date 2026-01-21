@@ -193,11 +193,14 @@ async fn union_of_arrays() -> anyhow::Result<()> {
         "#,
         entry: "main",
         expected: Ok(BexExternalValue::Union {
-            value: Box::new(BexExternalValue::Array(vec![
-                BexExternalValue::Int(1),
-                BexExternalValue::Int(2),
-                BexExternalValue::Int(3),
-            ])),
+            value: Box::new(BexExternalValue::Array {
+                element_type: Ty::Int,
+                items: vec![
+                    BexExternalValue::Int(1),
+                    BexExternalValue::Int(2),
+                    BexExternalValue::Int(3),
+                ],
+            }),
             metadata: UnionMetadata::new(
                 Ty::Union(vec![
                     Ty::List(Box::new(Ty::Int)),
@@ -220,20 +223,23 @@ async fn array_of_unions() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::Array(vec![
-            BexExternalValue::Union {
-                value: Box::new(BexExternalValue::Int(1)),
-                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
-            },
-            BexExternalValue::Union {
-                value: Box::new(BexExternalValue::String("two".to_string())),
-                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
-            },
-            BexExternalValue::Union {
-                value: Box::new(BexExternalValue::Int(3)),
-                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
-            },
-        ])),
+        expected: Ok(BexExternalValue::Array {
+            element_type: Ty::Union(vec![Ty::Int, Ty::String]),
+            items: vec![
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(1)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                },
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::String("two".to_string())),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+                },
+                BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(3)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                },
+            ],
+        }),
     })
     .await
 }
@@ -332,16 +338,20 @@ async fn map_with_union_values() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
-        expected: Ok(BexExternalValue::Map(indexmap! {
-            "count".to_string() => BexExternalValue::Union {
-                value: Box::new(BexExternalValue::Int(42)),
-                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+        expected: Ok(BexExternalValue::Map {
+            key_type: Ty::String,
+            value_type: Ty::Union(vec![Ty::Int, Ty::String]),
+            entries: indexmap! {
+                "count".to_string() => BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::Int(42)),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                },
+                "name".to_string() => BexExternalValue::Union {
+                    value: Box::new(BexExternalValue::String("test".to_string())),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+                },
             },
-            "name".to_string() => BexExternalValue::Union {
-                value: Box::new(BexExternalValue::String("test".to_string())),
-                metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
-            },
-        })),
+        }),
     })
     .await
 }
@@ -359,20 +369,23 @@ async fn union_of_array_with_union_elements_or_string() -> anyhow::Result<()> {
         "#,
         entry: "main",
         expected: Ok(BexExternalValue::Union {
-            value: Box::new(BexExternalValue::Array(vec![
-                BexExternalValue::Union {
-                    value: Box::new(BexExternalValue::Int(1)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
-                },
-                BexExternalValue::Union {
-                    value: Box::new(BexExternalValue::Bool(true)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Bool),
-                },
-                BexExternalValue::Union {
-                    value: Box::new(BexExternalValue::Int(2)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
-                },
-            ])),
+            value: Box::new(BexExternalValue::Array {
+                element_type: Ty::Union(vec![Ty::Int, Ty::Bool]),
+                items: vec![
+                    BexExternalValue::Union {
+                        value: Box::new(BexExternalValue::Int(1)),
+                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                    },
+                    BexExternalValue::Union {
+                        value: Box::new(BexExternalValue::Bool(true)),
+                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Bool),
+                    },
+                    BexExternalValue::Union {
+                        value: Box::new(BexExternalValue::Int(2)),
+                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                    },
+                ],
+            }),
             // Key assertion: selected_option is the full declared type (int | bool)[]
             // not Ty::List(Ty::Int) inferred from first element
             metadata: UnionMetadata::new(

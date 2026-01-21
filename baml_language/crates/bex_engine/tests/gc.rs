@@ -52,7 +52,7 @@ async fn test_array_preserved_through_gc() {
     // Get a handle to the array
     let result = engine.call_function("return_array", &[]).await.unwrap();
     assert!(
-        matches!(result, BexExternalValue::Array(_)),
+        matches!(result, BexExternalValue::Array { .. }),
         "Expected Array, got {result:?}"
     );
 
@@ -61,10 +61,10 @@ async fn test_array_preserved_through_gc() {
 
     // Array and all its elements should be preserved
     match result {
-        BexExternalValue::Array(arr) => {
-            assert_eq!(arr.len(), 5);
-            assert_eq!(arr[0], BexExternalValue::String("a".to_string()));
-            assert_eq!(arr[4], BexExternalValue::String("e".to_string()));
+        BexExternalValue::Array { items, .. } => {
+            assert_eq!(items.len(), 5);
+            assert_eq!(items[0], BexExternalValue::String("a".to_string()));
+            assert_eq!(items[4], BexExternalValue::String("e".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
@@ -101,11 +101,11 @@ async fn test_gc_updates_forwarding_pointers() {
 
     // Objects should still be accessible with correct values
     match result {
-        BexExternalValue::Array(arr) => {
-            assert_eq!(arr.len(), 3);
-            assert_eq!(arr[0], BexExternalValue::String("first".to_string()));
-            assert_eq!(arr[1], BexExternalValue::String("second".to_string()));
-            assert_eq!(arr[2], BexExternalValue::String("third".to_string()));
+        BexExternalValue::Array { items, .. } => {
+            assert_eq!(items.len(), 3);
+            assert_eq!(items[0], BexExternalValue::String("first".to_string()));
+            assert_eq!(items[1], BexExternalValue::String("second".to_string()));
+            assert_eq!(items[2], BexExternalValue::String("third".to_string()));
         }
         other => panic!("Expected array, got: {other:?}"),
     }
