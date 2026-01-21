@@ -21,12 +21,14 @@ import { BAMLSDKContext } from './context';
 interface BAMLSDKProviderProps {
   children: ReactNode;
   mode?: RuntimeMode;
+  /** Initial files to load. If not provided, uses debug fixtures in debug mode, otherwise empty. */
+  initialFiles?: Record<string, string>;
 }
 
 /**
  * Provider component that wraps the app and provides SDK access
  */
-export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSDKProviderProps) {
+export function BAMLSDKProvider({ children, mode: initialMode = 'wasm', initialFiles: propInitialFiles }: BAMLSDKProviderProps) {
   // Check if debug mode is enabled (memoized to avoid SSR issues)
   const debugMode = useMemo(() => isDebugMode(), []);
 
@@ -72,20 +74,16 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSD
     async function init() {
       console.log('⏳ Initializing SDK with mode:', runtimeMode);
 
-      // Use debug fixtures when in debug mode, otherwise use empty files
-      const initialFiles = debugMode
-        ? DEBUG_BAML_FILES
-        : {
-          'workflows/simple.baml': '// Mock workflow file',
-          'workflows/conditional.baml': '// Mock conditional workflow',
-        };
+      // Use provided files, or debug fixtures in debug mode, or skip initialization
+      // If no files provided and not in debug mode, the consumer is responsible for calling sdk.files.update()
+      const initialFiles = propInitialFiles ?? (debugMode ? DEBUG_BAML_FILES : null);
 
-      await sdk.initialize(initialFiles);
+      if (initialFiles) {
+        await sdk.initialize(initialFiles);
+      }
 
       if (mounted) {
-        console.log('✅ SDK initialized successfully');
-        const workflows = sdk.workflows.getAll();
-        console.log('📦 Loaded workflows:', workflows.length, workflows.map((w) => w.id));
+        console.log(' ✅ SDK initialized successfully');
         setIsInitialized(true);
       }
     }
@@ -95,7 +93,7 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm' }: BAMLSD
     return () => {
       mounted = false;
     };
-  }, [sdk, runtimeMode, debugMode]);
+  }, [sdk, runtimeMode, debugMode, propInitialFiles]);
 
   return (
     <BAMLSDKContext.Provider value={sdk}>

@@ -3,15 +3,15 @@
 import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
 import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
 import { EventListener } from '@baml/playground-common/event-listener';
-import { BAMLSDKProvider } from '@baml/playground-common/sdk';
+import { BAMLSDKProvider, useBAMLSDK } from '@baml/playground-common/sdk';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@baml/ui/resizable';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { isMobile } from 'react-device-detect';
 import { useKeybindingOverrides } from '../../../hooks/command-s';
 import type { BAMLProject } from '../../../lib/exampleProjects';
@@ -22,9 +22,7 @@ import {
   filesAtom,
   functionsAtom,
   unifiedSelectionStateAtom,
-  type SelectionState,
 } from '@baml/playground-common';
-import { useBAMLSDK } from '@baml/playground-common/sdk';
 import { useFeedbackWidget } from '@baml/playground-common/lib/feedback_widget';
 import { ScrollArea } from '@baml/ui/scroll-area';
 import Image from 'next/image';
@@ -39,36 +37,6 @@ const ErrorBoundaryWrapper = ({
   children: React.ReactNode;
 }) => <CustomErrorBoundary message={message}>{children}</CustomErrorBoundary>;
 
-// Hook for project file management
-const useProjectFiles = (project: BAMLProject) => {
-  const sdk = useBAMLSDK();
-  const files = useAtomValue(filesAtom);
-  const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom);
-
-  useEffect(() => {
-    if (project) {
-      console.log('Updating files via SDK: project', project.id);
-      setUnsavedChanges(false);
-      const newFiles = project.files.reduce(
-        (acc, f) => {
-          acc[f.path] = f.content;
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
-      // Use SDK to update files and recreate runtime
-      sdk.files.update(newFiles);
-    }
-  }, [project, sdk, setUnsavedChanges]);
-
-  // Wrapper to update files via SDK
-  const setFiles = (newFiles: Record<string, string>) => {
-    sdk.files.update(newFiles);
-  };
-
-  return { files, setFiles, unsavedChanges };
-};
-
 // Hook for editable text fields
 const useEditableField = (initialValue: string) => {
   const [value, setValue] = useState(initialValue);
@@ -82,7 +50,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   useFeedbackWidget();
   useKeybindingOverrides();
 
-  const { files, setFiles, unsavedChanges } = useProjectFiles(project);
+  const sdk = useBAMLSDK();
+  const files = useAtomValue(filesAtom);
+  const unsavedChanges = useAtomValue(unsavedChangesAtom);
   const activeFileName = useAtomValue(activeFileNameAtom);
   const { value: projectName, setValue: setProjectName } = useEditableField(
     project.name,
@@ -95,12 +65,15 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     textareaRef: descriptionTextareaRef,
   } = useEditableField(project.description);
 
+  // Note: Initial files are provided via BAMLSDKProvider's initialFiles prop
+  // No need for a useEffect here - the provider handles initialization
+
   const handleContentChange = (newContent: string) => {
     const newFiles: Record<string, string> = {};
     for (const [key, value] of Object.entries(files)) {
       newFiles[key] = key === activeFileName ? newContent : value;
     }
-    setFiles(newFiles);
+    sdk.files.update(newFiles);
   };
 
   return (
@@ -214,7 +187,7 @@ export const FunctionSelectorProvider = () => {
       // Only auto-select on initial load or when file changes
       // Check if we already have this function selected to avoid loops
       if (currentSelection.mode === 'function' &&
-          currentSelection.functionName === func.name) {
+        currentSelection.functionName === func.name) {
         // Already selected this function, only update test if empty
         if (!currentSelection.testName && firstTestName) {
           setSelectionState({
@@ -281,11 +254,24 @@ export const ProjectSidebar = () => (
   </div>
 );
 
-export const ProjectView = ({ project }: { project: BAMLProject }) => (
-  <BAMLSDKProvider mode="wasm">
-    <ProjectViewImpl project={project} />
-  </BAMLSDKProvider>
-);
+export const ProjectView = ({ project }: { project: BAMLProject }) => {
+  // Convert project files to the format expected by the SDK (memoized to prevent re-renders)
+  const initialFiles = useMemo(() => {
+    return project.files.reduce(
+      (acc, f) => {
+        acc[f.path] = f.content;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+  }, [project.files]);
+
+  return (
+    <BAMLSDKProvider mode="wasm" initialFiles={initialFiles}>
+      <ProjectViewImpl project={project} />
+    </BAMLSDKProvider>
+  );
+};
 
 const PlaygroundView = () => (
   <ErrorBoundaryWrapper message="Error loading playground">

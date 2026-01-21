@@ -50,8 +50,8 @@ export class BAMLSDK {
   private storage: SDKStorage;
   private activeExecutions = new Map<string, AbortController>();
   private runtimeFactory: BamlRuntimeFactory;
-  private currentFiles: Record<string, string> = {};
   private coordinator: NavigationCoordinator | null = null;
+  private initialized = false;
 
   /**
    * Expose all atoms directly via sdk.atoms
@@ -66,6 +66,7 @@ export class BAMLSDK {
   constructor(runtimeFactory: BamlRuntimeFactory, storage: SDKStorage) {
     this.runtimeFactory = runtimeFactory;
     this.storage = storage;
+    this.initialized = false;
   }
 
   /**
@@ -79,6 +80,11 @@ export class BAMLSDK {
       featureFlags?: string[];
     }
   ) {
+    if (this.initialized) {
+      console.log('aaron: SDK: Already initialized, skipping initialization');
+      return;
+    }
+    this.initialized = true;
     if (Object.keys(initialFiles).length === 0) {
       throw new Error('Cannot initialize SDK with empty files');
     }
@@ -87,7 +93,6 @@ export class BAMLSDK {
     await this.loadVSCodeSettings();
 
     // Store initial state in atoms
-    this.currentFiles = initialFiles;
     this.storage.setBAMLFiles(initialFiles);
 
     if (options?.envVars) {
@@ -96,6 +101,9 @@ export class BAMLSDK {
     if (options?.featureFlags) {
       this.storage.setFeatureFlags(options.featureFlags);
     }
+
+    // Create the runtime with the initial files
+    await this.recreateRuntime();
   }
 
   /**
@@ -139,13 +147,14 @@ export class BAMLSDK {
    * WasmProject and WasmRuntime instances (not the entire WASM module)
    */
   private async recreateRuntime() {
-    console.log('SDK: Recreating runtime instance');
 
+    const files = this.storage.getBAMLFiles();
+    console.log('aaron: SDK: Recreating runtime instance with files', files);
     const envVars = this.storage.getEnvVars();
     const featureFlags = this.storage.getFeatureFlags();
 
     // Create new runtime instance (WASM module is cached, only WasmProject/WasmRuntime recreated)
-    this.runtime = await this.runtimeFactory(this.currentFiles, envVars, featureFlags);
+    this.runtime = await this.runtimeFactory(files, envVars, featureFlags);
 
     // Store runtime instance - this automatically updates all derived atoms
     this.storage.setRuntime(this.runtime);
@@ -160,6 +169,7 @@ export class BAMLSDK {
     //     );
     //   });
     // });
+    console.log('aaron: SDK: Parsed files', parsedFiles);
     this.storage.setParsedBAMLFiles(parsedFiles);
 
     // Store last valid WASM instance if no errors
@@ -288,7 +298,7 @@ export class BAMLSDK {
       }
 
       // Efficiently detect if file contents have changed
-      const oldFiles = this.currentFiles;
+      const oldFiles = this.storage.getBAMLFiles();
       const oldKeys = Object.keys(oldFiles);
       const newKeys = Object.keys(files);
 
@@ -314,13 +324,11 @@ export class BAMLSDK {
       }
 
       if (!changed) {
-        console.log('files: SDK: No file content changes detected, skipping runtime update');
+        console.log('aaron: files: SDK: No file content changes detected, skipping runtime update');
         return;
       }
 
-
       // Update files in storage (updates atom)
-      this.currentFiles = files;
       this.storage.setBAMLFiles(files);
 
       // Recreate runtime with new files
@@ -328,7 +336,7 @@ export class BAMLSDK {
     },
 
     getCurrent: () => {
-      return { ...this.currentFiles };
+      return { ...this.storage.getBAMLFiles() };
     },
   };
 
@@ -843,7 +851,7 @@ export class BAMLSDK {
       const result = this.runtime.updateCursor(cursor, fileContents, currentSelection);
 
       if (!result.functionName) {
-        console.debug('aaron: [SDK] Cursor not on any function');
+        console.debug('[SDK] Cursor not on any function');
         return;
       }
 
