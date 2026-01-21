@@ -5,6 +5,16 @@
 //! This module implements a reachability algorithm that tracks which nodes need
 //! to emit when values change.
 //!
+//! # Unsafe Code
+//!
+//! This module uses unsafe code for heap traversal when building watch dependency graphs:
+//! - `heap.get_object(idx)`: Reading objects to discover their references
+//!
+//! Safety is ensured by:
+//! - Read-only access: Only reads objects, never writes
+//! - Single-threaded context: Called from VM execution which is single-threaded
+//! - Valid indices: All indices come from the VM's own stack/heap traversal
+//!
 //! The structure maintains reachability sets for each "watched" root, and
 //! updates them when edges are added or removed.
 //!

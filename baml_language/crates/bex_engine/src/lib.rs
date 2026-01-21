@@ -40,6 +40,18 @@
 //! - GC only accesses VM stacks while holding `parked_vms` lock
 //! - Handles always resolve through table (no cached indices)
 //! - New calls wait for in-progress GC before processing handle args
+//!
+//! # Unsafe Code
+//!
+//! This module uses unsafe code for:
+//! - `VmPtr` Send implementation: Raw VM pointers stored for GC root collection
+//! - Direct heap access: Reading objects during value conversion (index from valid handle)
+//! - GC coordination: Dereferencing parked VM pointers to collect/update roots
+//! - Epoch guards: Creating guards after registering with the epoch system
+//!
+//! Safety is ensured by the epoch-based GC coordination system described above.
+
+#![allow(unsafe_code)]
 
 use std::{
     collections::HashMap,
@@ -85,7 +97,6 @@ struct FutureResult {
 struct VmPtr(*const BexVm);
 
 // SAFETY: We control all access through the mutex and only use while VMs are parked
-#[allow(unsafe_code)]
 unsafe impl Send for VmPtr {}
 
 /// State for a single epoch slot.
@@ -473,7 +484,6 @@ impl BexEngine {
         effective_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the index comes from a valid handle.
-        #[allow(unsafe_code)]
         let obj = unsafe { self.heap().get_object(idx) };
 
         match obj {
@@ -524,7 +534,6 @@ impl BexEngine {
 
             Object::Instance(instance) => {
                 // Get class name from the Class object
-                #[allow(unsafe_code)]
                 let class_obj = unsafe { self.heap().get_object(instance.class) };
                 let (class_name, field_names) = match class_obj {
                     Object::Class(class) => (class.name.clone(), &class.field_names),
@@ -572,7 +581,6 @@ impl BexEngine {
 
             Object::Variant(variant) => {
                 // Get enum name and variant name from the Enum object
-                #[allow(unsafe_code)]
                 let enum_obj = unsafe { self.heap().get_object(variant.enm) };
                 let (enum_name, variant_name) = match enum_obj {
                     Object::Enum(enm) => {
@@ -630,12 +638,10 @@ impl BexEngine {
             Value::Float(_) => members.iter().find(|m| matches!(m, Ty::Float)),
             Value::Bool(_) => members.iter().find(|m| matches!(m, Ty::Bool)),
             Value::Object(idx) => {
-                #[allow(unsafe_code)]
                 let obj = unsafe { self.heap().get_object(*idx) };
                 match obj {
                     Object::String(_) => members.iter().find(|m| matches!(m, Ty::String)),
                     Object::Instance(inst) => {
-                        #[allow(unsafe_code)]
                         let class_obj = unsafe { self.heap().get_object(inst.class) };
                         if let Object::Class(class) = class_obj {
                             members
@@ -646,7 +652,6 @@ impl BexEngine {
                         }
                     }
                     Object::Variant(variant) => {
-                        #[allow(unsafe_code)]
                         let enum_obj = unsafe { self.heap().get_object(variant.enm) };
                         if let Object::Enum(enm) = enum_obj {
                             members
@@ -749,7 +754,6 @@ impl BexEngine {
         // SAFETY: All VMs are parked (verified above), so we have exclusive read access
         // to their stacks. The parked_vms vec contains valid pointers because VMs
         // register before parking and unregister only after gc_complete is notified.
-        #[allow(unsafe_code)]
         for vm_ptr in parked_vms.iter() {
             let vm = unsafe { &*vm_ptr.0 };
             all_roots.extend(Self::collect_vm_roots(vm));
@@ -763,14 +767,12 @@ impl BexEngine {
         );
 
         // Run GC with forwarding map
-        #[allow(unsafe_code)]
         let (stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
 
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
-        #[allow(unsafe_code)]
         for vm_ptr in parked_vms.iter() {
             let vm = unsafe { &mut *vm_ptr.0.cast_mut() };
 
@@ -874,7 +876,6 @@ impl BexEngine {
             .fetch_add(1, Ordering::AcqRel);
 
         // SAFETY: We just registered with the epoch above
-        #[allow(unsafe_code)]
         let guard = unsafe { EpochGuard::new() };
 
         // Create VM with shared heap (each VM gets its own TLAB)
@@ -1007,7 +1008,6 @@ impl BexEngine {
     fn maybe_run_gc(&self, vm: &mut BexVm) {
         if self.heap.should_gc() {
             let roots = Self::collect_vm_roots(vm);
-            #[allow(unsafe_code)]
             unsafe {
                 let (stats, _remapped_roots, forwarding) =
                     self.heap.collect_garbage_with_forwarding(&roots);
