@@ -132,7 +132,7 @@ impl<F> Tlab<F> {
         // Track allocation for GC heuristic
         self.heap.record_alloc();
 
-        ObjectIndex::from_raw(global_idx)
+        self.heap.make_object_index(global_idx)
     }
 
     /// Allocate a string object.
@@ -240,6 +240,35 @@ impl<F> std::fmt::Debug for Tlab<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn test_tlab_canary_panics_on_clobber() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Off,
+        };
+        let heap = BexHeap::<()>::with_tlab_size_and_debug(vec![], 4, debug);
+
+        let _chunk = heap.alloc_tlab_chunk();
+
+        let ct_len = heap.compile_time_len();
+        let canary_idx = ct_len + heap.tlab_size();
+        let runtime_idx = canary_idx - ct_len;
+        unsafe {
+            let space = &mut *heap.spaces[heap.active_space_index()].get();
+            space[runtime_idx] = Object::String("clobbered".to_string());
+        }
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let _ = heap.alloc_tlab_chunk();
+        }));
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_tlab_alloc_single() {

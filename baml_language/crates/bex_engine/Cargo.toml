@@ -27,3 +27,7 @@ tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
 
 [lints]
 workspace = true
+
+[features]
+default = []
+heap_debug = ["bex_vm/heap_debug", "bex_heap/heap_debug", "bex_vm_types/heap_debug"]

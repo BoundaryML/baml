@@ -61,6 +61,7 @@
 mod accessor;
 mod gc;
 mod heap;
+mod heap_debugger;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
@@ -68,4 +69,6 @@ pub use accessor::GcProtectedHeap;
 pub use bex_external_types::{BexExternalValue, BexValue, Handle};
 pub use gc::GcStats;
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};
+pub(crate) use heap_debugger::HeapDebuggerState;
+pub use heap_debugger::{HeapDebuggerConfig, HeapVerifyMode};
 pub use tlab::{Tlab, TlabChunk};

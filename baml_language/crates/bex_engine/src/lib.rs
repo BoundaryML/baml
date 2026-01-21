@@ -143,6 +143,10 @@ pub enum EngineError {
 
     #[error("Schema inconsistency: {message}")]
     SchemaInconsistency { message: String },
+
+    #[cfg(feature = "heap_debug")]
+    #[error("Snapshot not possible for type: {type_name}")]
+    CannotSnapshot { type_name: String },
 }
 
 // ============================================================================
@@ -607,6 +611,10 @@ impl BexEngine {
             Object::Media(_) => Err(EngineError::CannotConvert {
                 type_name: "media".to_string(),
             }),
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
+                type_name: "sentinel".to_string(),
+            }),
         }
     }
 
@@ -789,6 +797,8 @@ impl BexEngine {
 
         // Release lock before notifying waiters
         drop(parked_vms);
+
+        self.heap.verify_quick();
 
         // Reset epoch state for reuse
         self.epoch_states[slot].active.store(0, Ordering::Release);
@@ -1005,6 +1015,7 @@ impl BexEngine {
 
     /// Run GC if conditions are met (called at safepoints).
     fn maybe_run_gc(&self, vm: &mut BexVm) {
+        self.heap.verify_quick();
         if self.heap.should_gc() {
             let roots = Self::collect_vm_roots(vm);
             #[allow(unsafe_code)]
@@ -1031,6 +1042,7 @@ impl BexEngine {
                     stats.collected_count
                 );
             }
+            self.heap.verify_quick();
         }
     }
 

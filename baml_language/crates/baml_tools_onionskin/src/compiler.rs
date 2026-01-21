@@ -2428,6 +2428,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Media(m) => format!("<type {}>", m.kind),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(_) => "<sentinel>".to_string(),
             }
         }
     }

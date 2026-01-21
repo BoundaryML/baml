@@ -238,4 +238,88 @@ pub type ObjectPool<F> = Pool<Object<F>, ObjectKind>;
 
 pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;
+
+#[cfg(feature = "heap_debug")]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct ObjectIndex {
+    raw: usize,
+    epoch: u32,
+}
+
+#[cfg(feature = "heap_debug")]
+impl ObjectIndex {
+    pub fn from_raw(raw: usize) -> Self {
+        Self { raw, epoch: 0 }
+    }
+
+    pub fn from_raw_epoch(raw: usize, epoch: u32) -> Self {
+        Self { raw, epoch }
+    }
+
+    pub fn into_raw(self) -> usize {
+        self.raw
+    }
+
+    pub fn raw(self) -> usize {
+        self.raw
+    }
+
+    pub fn epoch(self) -> u32 {
+        self.epoch
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl std::fmt::Debug for ObjectIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ObjectIndex({}@{})", self.raw, self.epoch)
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl std::fmt::Display for ObjectIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(&self.raw, f)
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl std::ops::Add<usize> for ObjectIndex {
+    type Output = Self;
+    fn add(self, rhs: usize) -> Self {
+        Self {
+            raw: self.raw + rhs,
+            epoch: self.epoch,
+        }
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl<T> std::ops::Index<ObjectIndex> for Pool<T, ObjectKind> {
+    type Output = T;
+
+    fn index(&self, index: ObjectIndex) -> &Self::Output {
+        &self.0[index.raw]
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl<T> std::ops::IndexMut<ObjectIndex> for Pool<T, ObjectKind> {
+    fn index_mut(&mut self, index: ObjectIndex) -> &mut Self::Output {
+        &mut self.0[index.raw]
+    }
+}
+
+#[cfg(not(feature = "heap_debug"))]
 pub type ObjectIndex = Index<ObjectKind>;
+
+#[cfg(not(feature = "heap_debug"))]
+impl Index<ObjectKind> {
+    pub fn from_raw_epoch(raw: usize, _epoch: u32) -> Self {
+        Self::from_raw(raw)
+    }
+
+    pub fn epoch(self) -> u32 {
+        0
+    }
+}
