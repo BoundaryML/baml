@@ -44,6 +44,24 @@ impl<F: Clone> BexHeap<F> {
         self.copy_collection(roots)
     }
 
+    /// Run garbage collection with the given roots, returning the forwarding map.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure all VMs are at safepoints (not executing).
+    ///
+    /// # Returns
+    ///
+    /// A tuple of (GcStats, remapped_roots, forwarding_map) where:
+    /// - remapped_roots contains the new ObjectIndex for each root
+    /// - forwarding_map maps old ObjectIndex to new ObjectIndex for all moved objects
+    pub unsafe fn collect_garbage_with_forwarding(
+        &self,
+        roots: &[ObjectIndex],
+    ) -> (GcStats, Vec<ObjectIndex>, HashMap<ObjectIndex, ObjectIndex>) {
+        self.copy_collection_with_forwarding(roots)
+    }
+
     /// Semi-space copy collection.
     ///
     /// Copies all live objects reachable from roots to the inactive space,
@@ -118,15 +136,92 @@ impl<F: Clone> BexHeap<F> {
             .collect();
 
         // Update handle table entries to point to new object locations
-        self.update_handles(&forwarding);
+        let handles_invalidated = self.update_handles(&forwarding);
 
         let stats = GcStats {
             live_count,
             collected_count,
-            handles_invalidated: 0, // Handles are updated, not invalidated
+            handles_invalidated,
         };
 
         (stats, remapped_roots)
+    }
+
+    /// Semi-space copy collection, returning forwarding map for external use.
+    fn copy_collection_with_forwarding(
+        &self,
+        roots: &[ObjectIndex],
+    ) -> (GcStats, Vec<ObjectIndex>, HashMap<ObjectIndex, ObjectIndex>) {
+        // Track old -> new index mappings (forwarding pointers)
+        let mut forwarding: HashMap<ObjectIndex, ObjectIndex> = HashMap::new();
+
+        // Get current and next space indices
+        let from_space = self.active_space_index();
+        let to_space = 1 - from_space;
+
+        // Get the old space size for stats calculation
+        let old_space_size = unsafe { (*self.spaces[from_space].get()).len() };
+
+        // Clear the target space and prepare for copying
+        unsafe {
+            (*self.spaces[to_space].get()).clear();
+        }
+
+        // Worklist for BFS traversal
+        let mut worklist: Vec<ObjectIndex> = roots.to_vec();
+
+        // Process all reachable objects
+        while let Some(old_idx) = worklist.pop() {
+            if forwarding.contains_key(&old_idx) {
+                continue;
+            }
+
+            if self.is_compile_time(old_idx) {
+                forwarding.insert(old_idx, old_idx);
+                continue;
+            }
+
+            let new_idx = self.copy_object_to_new_space(old_idx, to_space, &mut forwarding);
+
+            let ct_len = self.compile_time_len();
+            let obj = unsafe { &(&(*self.spaces[to_space].get()))[new_idx.into_raw() - ct_len] };
+            self.add_references_to_worklist(obj, &mut worklist);
+        }
+
+        // Fix up all references in the copied objects
+        unsafe {
+            self.fixup_references(to_space, &forwarding);
+        }
+
+        // Calculate stats before swapping
+        let live_count = unsafe { (*self.spaces[to_space].get()).len() };
+        let collected_count = old_space_size.saturating_sub(live_count);
+
+        // Swap spaces
+        self.active_space.store(to_space, Ordering::Release);
+        self.reset_next_chunk(live_count);
+
+        // Clear the old space
+        unsafe {
+            (*self.spaces[from_space].get()).clear();
+        }
+
+        // Remap roots to their new locations
+        let remapped_roots: Vec<ObjectIndex> = roots
+            .iter()
+            .map(|old_idx| *forwarding.get(old_idx).unwrap_or(old_idx))
+            .collect();
+
+        // Update handle table
+        let handles_invalidated = self.update_handles(&forwarding);
+
+        let stats = GcStats {
+            live_count,
+            collected_count,
+            handles_invalidated,
+        };
+
+        (stats, remapped_roots, forwarding)
     }
 
     /// Copy a single object from old space to new space.
@@ -443,8 +538,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Handle invalidation not implemented
     fn test_gc_invalidates_dead_handles() {
+        use bex_external_types::WeakHeapRef;
+
         let heap = BexHeap::<()>::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
@@ -453,13 +549,13 @@ mod tests {
         let handle = heap.create_handle(obj);
 
         // Verify handle is valid
-        assert!(heap.resolve_handle(&handle).is_some());
+        assert!(heap.resolve_handle(handle.slab_key()).is_some());
 
         // Run GC with no roots - object should be collected, handle invalidated
         let (stats, _) = unsafe { heap.collect_garbage(&[]) };
 
         assert_eq!(stats.handles_invalidated, 1);
-        assert!(heap.resolve_handle(&handle).is_none());
+        assert!(heap.resolve_handle(handle.slab_key()).is_none());
     }
 
     #[test]

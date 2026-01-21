@@ -1,16 +1,16 @@
 ---
-source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function BadReturnType() -> Map<string, int>> {
+function BadReturnType() -> Map<string, int> {
   client GPT4
   prompt #"
     test
   "#
 }
 
-function BadParam(x: Map<string, int>>) -> string {
+function BadParam(x: Map<string, int>) -> string {
   client GPT4
   prompt #"
     test
@@ -18,7 +18,7 @@ function BadParam(x: Map<string, int>>) -> string {
 }
 
 class MalformedClass {
-  bad_field: Map<string, int>>
+  bad_field: Map<string, int>
   good_field: Map<string, int>
   another_field: string
 }
@@ -28,4 +28,4 @@ class NestedGenerics {
   simple: Map<string, int>
 }
 
-type BadAlias = Map<string, int>>
+type BadAlias = Map<string, int>

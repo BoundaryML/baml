@@ -58,11 +58,13 @@
 //! (internal)       (FFI boundary)         (memory)     (exec)     (async)
 //! ```
 
+mod accessor;
 mod gc;
 mod heap;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
+pub use accessor::GcProtectedHeap;
 pub use bex_external_types::{ExternalValue, Handle, Snapshot};
 pub use gc::GcStats;
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};

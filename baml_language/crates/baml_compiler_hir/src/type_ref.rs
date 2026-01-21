@@ -4,6 +4,7 @@
 //! `TypeRef` -> Ty happens during THIR construction.
 
 use baml_base::Name;
+use rowan::ast::AstNode;
 
 use crate::path::Path;
 
@@ -85,124 +86,202 @@ impl TypeRef {
 
     /// Create a `TypeRef` from an AST `TypeExpr` node.
     ///
-    /// This properly handles complex types including:
+    /// This uses structured CST accessors to properly handle complex types including:
     /// - Primitives: int, string, bool, etc.
     /// - Named types: User, `MyClass`
     /// - Optional types: string?
     /// - List types: string[]
     /// - Union types: Success | Failure
     /// - String literal types: "user" | "assistant"
-    ///
-    /// NOTE: Type parsing occurs here, which is somewhat brittle for edge cases
-    /// like `int??` or `int[][]`. See canary TODO for future improvements.
+    /// - Parenthesized types: (int | string)[]
+    /// - Generic types: map<K, V>
     pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        let parts = type_expr.parts();
-
-        // If multiple parts, this is a union type
-        if parts.len() > 1 {
-            let members: Vec<TypeRef> = parts.iter().map(|p| Self::from_type_text(p)).collect();
-            return TypeRef::Union(members);
-        }
-
-        // Single type (possibly with modifiers like ? or [])
-        parts
-            .first()
-            .map(|p| Self::from_type_text(p))
-            .unwrap_or(TypeRef::Unknown)
-    }
-
-    /// Create a `TypeRef` from a single type text (not a union).
-    ///
-    /// This handles:
-    /// - String literal types: `"foo"` or `'bar'`
-    /// - Array types: `int[]`
-    /// - Optional types: `int?`
-    /// - Boolean literal types: `true` or `false`
-    /// - Integer literal types: `42`
-    /// - Primitive types: `int`, `string`, etc.
-    /// - Named types: `User`, `MyClass`
-    pub(crate) fn from_type_text(text: &str) -> Self {
-        // Check for string literal types like "user" or "assistant"
-        if text.starts_with('"') && text.ends_with('"') {
-            let inner = &text[1..text.len() - 1];
-            return TypeRef::StringLiteral(inner.to_string());
-        }
-
-        // Check for array type (e.g., "int[]")
-        if let Some(inner_text) = text.strip_suffix("[]") {
-            let inner = Self::from_type_text(inner_text);
-            return TypeRef::List(Box::new(inner));
-        }
-
-        // Check for optional type (e.g., "int?")
-        if let Some(inner_text) = text.strip_suffix('?') {
-            let inner = Self::from_type_text(inner_text);
+        // Handle optional modifier (outermost)
+        // For `int[]?`, optional wraps the array
+        if type_expr.is_optional() {
+            let inner = Self::from_ast_without_optional(type_expr);
             return TypeRef::Optional(Box::new(inner));
         }
 
+        Self::from_ast_without_optional(type_expr)
+    }
+
+    /// Parse a `TypeExpr` assuming the optional modifier has been handled.
+    fn from_ast_without_optional(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle union FIRST (top-level PIPE)
+        // For `int[] | string[]`, this is a union of arrays, not an array of unions
+        // Note: `(int | string)[]` has PIPE inside parens, so is_union() returns false
+        if type_expr.is_union() {
+            // Parse each union member using structured token/node accessors
+            let member_parts = type_expr.union_member_parts();
+            let members: Vec<TypeRef> = member_parts.iter().map(Self::from_union_member).collect();
+            return TypeRef::Union(members);
+        }
+
+        // Handle array modifier
+        // For `(int | string)[]`, array wraps the parenthesized union
+        if type_expr.is_array() {
+            let element = Self::from_ast_array_element(type_expr);
+            return TypeRef::List(Box::new(element));
+        }
+
+        Self::from_ast_base(type_expr)
+    }
+
+    /// Get the element type for an array `TypeExpr`.
+    ///
+    /// Uses token-based `array_depth()` to handle nested arrays without string manipulation.
+    fn from_ast_array_element(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // For parenthesized arrays like `(int | string)[]`, the element is the inner TypeExpr
+        if let Some(inner) = type_expr.inner_type_expr() {
+            return Self::from_ast(&inner);
+        }
+
+        // For non-parenthesized arrays like `int[]`, `string[][]`, `"user"[]`:
+        // Use array_depth() to count nesting levels and from_ast_base_type() for the base.
+        //
+        // For `int[][]`: depth=2, base=Int -> element is List(Int) i.e. `int[]`
+        // For `int[]`: depth=1, base=Int -> element is Int
+        let depth = type_expr.array_depth();
+        let base = Self::from_ast_base_type(type_expr);
+
+        // Wrap base type in (depth-1) List layers to get the element type
+        let mut result = base;
+        for _ in 0..depth.saturating_sub(1) {
+            result = TypeRef::List(Box::new(result));
+        }
+        result
+    }
+
+    /// Parse the base type (no optional, array, or union modifiers).
+    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle parenthesized types like `(int | string)`
+        if let Some(inner) = type_expr.inner_type_expr() {
+            return Self::from_ast(&inner);
+        }
+
+        Self::from_ast_base_type(type_expr)
+    }
+
+    /// Parse a base type (no modifiers, not a union).
+    fn from_ast_base_type(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Check for string literal types like `"user"`
+        if let Some(s) = type_expr.string_literal() {
+            return TypeRef::StringLiteral(s);
+        }
+
+        // Check for integer literal types like `200`
+        if let Some(i) = type_expr.integer_literal() {
+            return TypeRef::IntLiteral(i);
+        }
+
         // Check for boolean literal types
-        if text == "true" {
-            return TypeRef::BoolLiteral(true);
-        }
-        if text == "false" {
-            return TypeRef::BoolLiteral(false);
+        if let Some(b) = type_expr.bool_literal() {
+            return TypeRef::BoolLiteral(b);
         }
 
-        // Check for integer literal types (for exhaustiveness like 200 | 201)
-        if let Ok(int_val) = text.parse::<i64>() {
-            return TypeRef::IntLiteral(int_val);
-        }
-
-        // Check for map type (e.g., "map<string, int>")
-        if let Some(rest) = text.strip_prefix("map<") {
-            if let Some(inner) = rest.strip_suffix('>') {
-                // Find the comma that separates key and value types
-                // Need to handle nested generics like map<string, map<int, bool>>
-                if let Some((key_text, value_text)) = Self::split_generic_params(inner) {
-                    let key = Self::from_type_text(key_text.trim());
-                    let value = Self::from_type_text(value_text.trim());
+        // Check for map type with type args
+        if let Some(name) = type_expr.base_name() {
+            if name == "map" {
+                let args = type_expr.type_arg_exprs();
+                if args.len() == 2 {
+                    let key = Self::from_ast(&args[0]);
+                    let value = Self::from_ast(&args[1]);
                     return TypeRef::Map {
                         key: Box::new(key),
                         value: Box::new(value),
                     };
                 }
             }
+
+            // Named type (primitive or user-defined)
+            return Self::from_type_name(&name);
         }
 
-        // Detect numeric literals that failed parsing above:
-        // - Integer overflow (e.g., "9...9" > i64::MAX)
-        // - Float literals (e.g., "3.14")
-        //
-        // Without this check, these would fall through to `from_type_name` and
-        // incorrectly become named types, causing confusing "unknown type" errors.
-        //
-        // TODO: Add spans to TypeRef to emit proper diagnostics instead of just Error.
-        // See: https://github.com/BoundaryML/baml/pull/2838/files/1e6d23cc70e4825bfca302069caee658c7a0f437#r2634900737
-        if text.starts_with(|c: char| c.is_ascii_digit()) {
-            return TypeRef::Error;
-        }
-
-        Self::from_type_name(text)
+        TypeRef::Unknown
     }
 
-    /// Split generic parameters at the top-level comma.
-    /// Handles nested generics like `string, map<int, bool>`.
-    fn split_generic_params(s: &str) -> Option<(&str, &str)> {
-        let mut depth = 0;
-        for (i, c) in s.char_indices() {
-            match c {
-                '<' => depth += 1,
-                '>' => depth -= 1,
-                ',' if depth == 0 => {
-                    return Some((&s[..i], &s[i + 1..]));
+    /// Parse a union member from its structured parts (tokens and child nodes).
+    ///
+    /// Uses token kinds and child node kinds directly instead of string manipulation.
+    fn from_union_member(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> Self {
+        // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
+        if let Some(type_expr) = parts.type_expr() {
+            let inner = Self::from_ast(&type_expr);
+            // Apply array and optional modifiers from tokens
+            return Self::apply_modifiers_from_parts(inner, parts);
+        }
+
+        // Check for string literal (e.g., `"user"` in `"user" | "admin"`)
+        if let Some(s) = parts.string_literal() {
+            let base = TypeRef::StringLiteral(s);
+            return Self::apply_modifiers_from_parts(base, parts);
+        }
+
+        // Check for integer literal (e.g., `200` in `200 | 201`)
+        if let Some(i) = parts.integer_literal() {
+            let base = TypeRef::IntLiteral(i);
+            return Self::apply_modifiers_from_parts(base, parts);
+        }
+
+        // Check for named/primitive type or map type (e.g., `int`, `User`, `map<K,V>`)
+        if let Some(name) = parts.first_word() {
+            // Check for map type with TYPE_ARGS
+            if name == "map" {
+                if let Some(type_args_node) = parts.type_args() {
+                    let type_arg_exprs: Vec<_> = type_args_node
+                        .children()
+                        .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                        .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
+                        .collect();
+
+                    if type_arg_exprs.len() == 2 {
+                        let key = Self::from_ast(&type_arg_exprs[0]);
+                        let value = Self::from_ast(&type_arg_exprs[1]);
+                        let base = TypeRef::Map {
+                            key: Box::new(key),
+                            value: Box::new(value),
+                        };
+                        return Self::apply_modifiers_from_parts(base, parts);
+                    }
                 }
-                _ => {}
             }
+
+            // Check for boolean literals
+            let base = match name {
+                "true" => TypeRef::BoolLiteral(true),
+                "false" => TypeRef::BoolLiteral(false),
+                _ => Self::from_type_name(name),
+            };
+            return Self::apply_modifiers_from_parts(base, parts);
         }
-        None
+
+        TypeRef::Unknown
     }
 
-    /// Create a `TypeRef` from a type name string.
+    /// Apply array and optional modifiers from `UnionMemberParts` to a base type.
+    fn apply_modifiers_from_parts(
+        base: Self,
+        parts: &baml_compiler_syntax::ast::UnionMemberParts,
+    ) -> Self {
+        let array_depth = parts.array_depth();
+        let is_optional = parts.is_optional();
+
+        // Wrap in array layers
+        let mut result = base;
+        for _ in 0..array_depth {
+            result = TypeRef::List(Box::new(result));
+        }
+
+        // Wrap in optional if needed
+        if is_optional {
+            result = TypeRef::Optional(Box::new(result));
+        }
+
+        result
+    }
+
+    /// Create a `TypeRef` from a type name string (primitive or user-defined).
     fn from_type_name(name: &str) -> Self {
         match name.to_lowercase().as_str() {
             "int" => TypeRef::Int,
@@ -216,87 +295,5 @@ impl TypeRef {
             "pdf" => TypeRef::Media(baml_base::MediaKind::Pdf),
             _ => TypeRef::Path(Path::single(Name::new(name))),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_string_literal() {
-        assert_eq!(
-            TypeRef::from_type_text(r#""user""#),
-            TypeRef::StringLiteral("user".to_string())
-        );
-    }
-
-    #[test]
-    fn test_optional_string_literal() {
-        // Regression test: ensure "literal"? correctly produces Optional(StringLiteral)
-        // The string literal check requires BOTH starts_with('"') AND ends_with('"').
-        // For `"user"?`, ends_with('"') is false, so we fall through to optional check.
-        assert_eq!(
-            TypeRef::from_type_text(r#""user"?"#),
-            TypeRef::Optional(Box::new(TypeRef::StringLiteral("user".to_string())))
-        );
-    }
-
-    #[test]
-    fn test_array_of_string_literal() {
-        assert_eq!(
-            TypeRef::from_type_text(r#""user"[]"#),
-            TypeRef::List(Box::new(TypeRef::StringLiteral("user".to_string())))
-        );
-    }
-
-    #[test]
-    fn test_optional_array_of_string_literal() {
-        // "user"[]? -> Optional(List(StringLiteral("user")))
-        assert_eq!(
-            TypeRef::from_type_text(r#""user"[]?"#),
-            TypeRef::Optional(Box::new(TypeRef::List(Box::new(TypeRef::StringLiteral(
-                "user".to_string()
-            )))))
-        );
-    }
-
-    #[test]
-    fn test_optional_int_literal() {
-        assert_eq!(
-            TypeRef::from_type_text("200?"),
-            TypeRef::Optional(Box::new(TypeRef::IntLiteral(200)))
-        );
-    }
-
-    #[test]
-    fn test_optional_bool_literal() {
-        assert_eq!(
-            TypeRef::from_type_text("true?"),
-            TypeRef::Optional(Box::new(TypeRef::BoolLiteral(true)))
-        );
-    }
-
-    #[test]
-    fn test_primitives() {
-        assert_eq!(TypeRef::from_type_text("int"), TypeRef::Int);
-        assert_eq!(TypeRef::from_type_text("string"), TypeRef::String);
-        assert_eq!(TypeRef::from_type_text("bool"), TypeRef::Bool);
-    }
-
-    #[test]
-    fn test_optional_primitive() {
-        assert_eq!(
-            TypeRef::from_type_text("int?"),
-            TypeRef::Optional(Box::new(TypeRef::Int))
-        );
-    }
-
-    #[test]
-    fn test_array_of_primitive() {
-        assert_eq!(
-            TypeRef::from_type_text("int[]"),
-            TypeRef::List(Box::new(TypeRef::Int))
-        );
     }
 }

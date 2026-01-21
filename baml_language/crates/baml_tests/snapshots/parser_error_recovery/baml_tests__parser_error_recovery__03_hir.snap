@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -34,8 +34,7 @@ class Partial {
   field2: <unknown>
   field3: string
   string: <unknown>
-  alias: (  // Unclosed attribute
-  field5string
+  alias: field5
 }
 
 enum ValidEnum {
@@ -48,5 +47,5 @@ class Test {
   field2: string
   another: closed
   string: ")  // Should still parse this
-}
+}"
 }

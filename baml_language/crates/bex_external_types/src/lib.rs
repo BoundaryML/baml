@@ -21,10 +21,12 @@
 //! (internal)       (external)              (memory)     (exec)     (async)
 //! ```
 
+mod epoch_guard;
 mod external_value;
 mod handle;
 mod snapshot;
 
+pub use epoch_guard::EpochGuard;
 pub use external_value::ExternalValue;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use snapshot::Snapshot;

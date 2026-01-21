@@ -74,10 +74,139 @@ ast_node!(Attribute, ATTRIBUTE);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
 ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 
+/// Parts of a union member for token-based parsing.
+///
+/// Union members can contain both tokens (WORD, `L_BRACKET`, etc.) and child nodes
+/// (`STRING_LITERAL`, `TYPE_EXPR` for parenthesized types, `TYPE_ARGS` for generics).
+#[derive(Debug, Clone)]
+pub struct UnionMemberParts {
+    /// Tokens in this union member (WORD, `L_BRACKET`, `R_BRACKET`, QUESTION, etc.).
+    pub tokens: Vec<SyntaxToken>,
+    /// Child nodes in this union member (`STRING_LITERAL`, `TYPE_EXPR`, `TYPE_ARGS`, etc.).
+    pub child_nodes: Vec<SyntaxNode>,
+}
+
+impl UnionMemberParts {
+    /// Create an empty `UnionMemberParts`.
+    pub fn new() -> Self {
+        Self {
+            tokens: Vec::new(),
+            child_nodes: Vec::new(),
+        }
+    }
+
+    /// Check if this member is empty (no tokens or child nodes).
+    pub fn is_empty(&self) -> bool {
+        self.tokens.is_empty() && self.child_nodes.is_empty()
+    }
+
+    /// Get the first WORD token's text, if any.
+    pub fn first_word(&self) -> Option<&str> {
+        self.tokens
+            .iter()
+            .find(|t| t.kind() == SyntaxKind::WORD)
+            .map(rowan::SyntaxToken::text)
+    }
+
+    /// Check if this member has a trailing `?` (optional modifier).
+    pub fn is_optional(&self) -> bool {
+        self.tokens
+            .last()
+            .is_some_and(|t| t.kind() == SyntaxKind::QUESTION)
+    }
+
+    /// Count the number of `[]` array modifiers at the end.
+    pub fn array_depth(&self) -> usize {
+        let mut depth = 0;
+        let mut i = self.tokens.len();
+
+        // Skip trailing ? if present
+        if i > 0 && self.tokens[i - 1].kind() == SyntaxKind::QUESTION {
+            i -= 1;
+        }
+
+        // Count [] pairs from the end
+        while i >= 2 {
+            if self.tokens[i - 1].kind() == SyntaxKind::R_BRACKET
+                && self.tokens[i - 2].kind() == SyntaxKind::L_BRACKET
+            {
+                depth += 1;
+                i -= 2;
+            } else {
+                break;
+            }
+        }
+
+        depth
+    }
+
+    /// Check if this member contains a `STRING_LITERAL` child node.
+    pub fn has_string_literal(&self) -> bool {
+        self.child_nodes
+            .iter()
+            .any(|n| n.kind() == SyntaxKind::STRING_LITERAL)
+    }
+
+    /// Get the string literal value if this member is a string literal type.
+    pub fn string_literal(&self) -> Option<String> {
+        self.child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
+            .map(|n| {
+                let text = n.text().to_string();
+                let trimmed = text.trim();
+                if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+                    trimmed[1..trimmed.len() - 1].to_string()
+                } else {
+                    trimmed.trim_start_matches('"').to_string()
+                }
+            })
+    }
+
+    /// Check if this member contains a `TYPE_EXPR` child node (parenthesized type).
+    pub fn has_type_expr(&self) -> bool {
+        self.child_nodes
+            .iter()
+            .any(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+    }
+
+    /// Get the `TYPE_EXPR` child node if present (for parenthesized types).
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        self.child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .cloned()
+            .map(|syntax| TypeExpr { syntax })
+    }
+
+    /// Get the `TYPE_ARGS` child node if present (for generic types like map<K,V>).
+    pub fn type_args(&self) -> Option<SyntaxNode> {
+        self.child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::TYPE_ARGS)
+            .cloned()
+    }
+
+    /// Check if this member has an `INTEGER_LITERAL` token.
+    pub fn integer_literal(&self) -> Option<i64> {
+        self.tokens
+            .iter()
+            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
+            .and_then(|t| t.text().parse().ok())
+    }
+}
+
+impl Default for UnionMemberParts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeExpr {
-    /// Check if this is a union type (contains PIPE separators).
+    /// Check if this is a union type (contains top-level PIPE separators).
     ///
-    /// Returns `true` for types like `Success | Failure` or `"user" | "assistant"`.
+    /// Returns `true` for types like `Success | Failure` or `int[] | string[]`.
+    /// Returns `false` for `(int | string)[]` because the PIPE is inside parens.
     pub fn is_union(&self) -> bool {
         self.syntax
             .children_with_tokens()
@@ -85,47 +214,208 @@ impl TypeExpr {
             .any(|t| t.kind() == SyntaxKind::PIPE)
     }
 
-    /// Get the text parts of this type expression, split by PIPE separators.
+    /// Check if this type has a trailing `?` (optional modifier).
+    pub fn is_optional(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .last()
+            .is_some_and(|t| t.kind() == SyntaxKind::QUESTION)
+    }
+
+    /// Check if this type has trailing `[]` (array modifier).
     ///
-    /// For union types like `A | B | C`, returns `["A", "B", "C"]`.
-    /// For non-union types like `string?`, returns `["string?"]`.
+    /// For `int[]?`, this returns true (array comes before optional).
+    pub fn is_array(&self) -> bool {
+        self.array_depth() > 0
+    }
+
+    /// Count the number of `[]` array modifiers.
     ///
-    /// Each part is trimmed of surrounding whitespace.
-    pub fn parts(&self) -> Vec<String> {
-        let mut parts = Vec::new();
-        let mut current_part = String::new();
+    /// For `int` returns 0.
+    /// For `int[]` returns 1.
+    /// For `int[][]` returns 2.
+    /// For `int[]?` returns 1 (optional is separate).
+    pub fn array_depth(&self) -> usize {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| !t.kind().is_trivia())
+            .collect();
+
+        let mut depth = 0;
+        let mut i = tokens.len();
+
+        // Skip trailing ? if present
+        if i > 0 && tokens[i - 1].kind() == SyntaxKind::QUESTION {
+            i -= 1;
+        }
+
+        // Count [] pairs from the end
+        while i >= 2 {
+            if tokens[i - 1].kind() == SyntaxKind::R_BRACKET
+                && tokens[i - 2].kind() == SyntaxKind::L_BRACKET
+            {
+                depth += 1;
+                i -= 2;
+            } else {
+                break;
+            }
+        }
+
+        depth
+    }
+
+    /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
+    pub fn is_parenthesized(&self) -> bool {
+        let first_token = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| !t.kind().is_trivia());
+
+        first_token.is_some_and(|t| t.kind() == SyntaxKind::L_PAREN)
+    }
+
+    /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
+    ///
+    /// Returns None if this is not a parenthesized type.
+    pub fn inner_type_expr(&self) -> Option<TypeExpr> {
+        if !self.is_parenthesized() {
+            return None;
+        }
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+    }
+
+    /// Get all child `TypeExpr` nodes.
+    ///
+    /// For union types where the parser creates child `TYPE_EXPR` for each member,
+    /// this returns those members. Returns empty vec if no children.
+    pub fn child_type_exprs(&self) -> Vec<TypeExpr> {
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+            .collect()
+    }
+
+    /// Get the `TYPE_ARGS` node for generic types like `map<K, V>`.
+    pub fn type_args(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_ARGS)
+    }
+
+    /// Get the type argument `TypeExprs` from `TYPE_ARGS`.
+    pub fn type_arg_exprs(&self) -> Vec<TypeExpr> {
+        self.type_args()
+            .map(|args| {
+                args.children()
+                    .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                    .map(|n| TypeExpr { syntax: n })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get the base type name (the first WORD token).
+    ///
+    /// For `int[]?` returns `Some("int")`.
+    /// For `map<K, V>` returns `Some("map")`.
+    /// For `"user"` returns `None` (it's a string literal, not a named type).
+    pub fn base_name(&self) -> Option<String> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+            .map(|t| t.text().to_string())
+    }
+
+    /// Check if this is a string literal type like `"user"`.
+    pub fn string_literal(&self) -> Option<String> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
+            .map(|n| {
+                // Get text and trim leading/trailing whitespace (trivia)
+                let text = n.text().to_string();
+                let trimmed = text.trim();
+                // Well-formed: starts AND ends with quote
+                if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+                    trimmed[1..trimmed.len() - 1].to_string()
+                } else {
+                    // Malformed (error recovery): preserve full text, just strip leading quote
+                    trimmed.trim_start_matches('"').to_string()
+                }
+            })
+    }
+
+    /// Check if this is an integer literal type like `200`.
+    pub fn integer_literal(&self) -> Option<i64> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
+            .and_then(|t| t.text().parse().ok())
+    }
+
+    /// Check if this is a boolean literal (`true` or `false`).
+    pub fn bool_literal(&self) -> Option<bool> {
+        let name = self.base_name()?;
+        match name.as_str() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None,
+        }
+    }
+
+    /// Get the parts of this type expression for each union member.
+    ///
+    /// Returns a list of `UnionMemberParts`, where each contains the tokens
+    /// and child nodes for one union member. This allows parsing union members
+    /// by token/node kinds instead of string manipulation.
+    ///
+    /// For `int | string[]`, returns two `UnionMemberParts`:
+    /// - First: tokens=\[WORD("int")\]
+    /// - Second: tokens=\[WORD("string"), `L_BRACKET`, `R_BRACKET`\]
+    ///
+    /// For `"user" | int`, returns two `UnionMemberParts`:
+    /// - First: `child_nodes`=\[`STRING_LITERAL`\], tokens=\[\]
+    /// - Second: tokens=\[WORD("int")\]
+    pub fn union_member_parts(&self) -> Vec<UnionMemberParts> {
+        let mut members = Vec::new();
+        let mut current = UnionMemberParts::new();
 
         for child in self.syntax.children_with_tokens() {
             match child {
                 rowan::NodeOrToken::Token(token) => {
-                    // Skip trivia tokens (whitespace, comments)
                     if token.kind().is_trivia() {
                         continue;
                     }
                     if token.kind() == SyntaxKind::PIPE {
-                        let trimmed = current_part.trim().to_string();
-                        if !trimmed.is_empty() {
-                            parts.push(trimmed);
+                        if !current.is_empty() {
+                            members.push(current);
+                            current = UnionMemberParts::new();
                         }
-                        current_part = String::new();
                     } else {
-                        current_part.push_str(token.text());
+                        current.tokens.push(token);
                     }
                 }
                 rowan::NodeOrToken::Node(child_node) => {
-                    // For nested nodes (like TYPE_ARGS), include their full text
-                    current_part.push_str(&child_node.text().to_string());
+                    current.child_nodes.push(child_node);
                 }
             }
         }
 
-        // Include the final part
-        let trimmed = current_part.trim().to_string();
-        if !trimmed.is_empty() {
-            parts.push(trimmed);
+        if !current.is_empty() {
+            members.push(current);
         }
 
-        parts
+        members
     }
 
     /// Get the text range of this type expression.

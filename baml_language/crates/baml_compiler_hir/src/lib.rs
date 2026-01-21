@@ -1515,26 +1515,42 @@ fn describe_block_attribute_args(attr: &baml_compiler_syntax::ast::BlockAttribut
     }
 }
 
-/// Count the number of top-level generic parameters in a map type.
+/// Check if a `TYPE_EXPR` has actual content (not empty from parser error recovery).
 ///
-/// For `string, int` returns 2 (correct for map).
-/// For `string, string, string` returns 3 (error: too many params).
-/// For `string` returns 1 (error: too few params).
-fn count_generic_params(s: &str) -> usize {
-    if s.trim().is_empty() {
-        return 0;
+/// The parser creates empty `TYPE_EXPR` nodes for error recovery (e.g., `map<>`).
+/// This function checks if the `TYPE_EXPR` has meaningful content like:
+/// - A base name (int, string, User, etc.)
+/// - A string literal ("admin")
+/// - An integer literal (200)
+/// - A bool literal (true/false)
+/// - An inner parenthesized type
+/// - Is a union type
+fn has_type_content(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> bool {
+    // Check for base name (primitives and named types)
+    if type_expr.base_name().is_some() {
+        return true;
     }
-    let mut depth = 0;
-    let mut count = 1; // Start at 1 because we count separators + 1
-    for c in s.chars() {
-        match c {
-            '<' => depth += 1,
-            '>' => depth -= 1,
-            ',' if depth == 0 => count += 1,
-            _ => {}
-        }
+    // Check for string literal
+    if type_expr.string_literal().is_some() {
+        return true;
     }
-    count
+    // Check for integer literal
+    if type_expr.integer_literal().is_some() {
+        return true;
+    }
+    // Check for bool literal
+    if type_expr.bool_literal().is_some() {
+        return true;
+    }
+    // Check for parenthesized type (has inner content)
+    if type_expr.inner_type_expr().is_some() {
+        return true;
+    }
+    // Check for union type
+    if type_expr.is_union() {
+        return true;
+    }
+    false
 }
 
 /// Validate map type arity in a type expression.
@@ -1545,22 +1561,102 @@ fn validate_map_type_arity(
     type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ctx: &mut LoweringContext,
 ) {
-    // Get all parts (handles union types like `string | map<...>`)
-    for part in type_expr.parts() {
-        validate_map_type_in_text(&part, type_expr, ctx);
+    // For union types, check each member
+    if type_expr.is_union() {
+        for part in type_expr.union_member_parts() {
+            validate_map_type_in_union_member(&part, type_expr, ctx);
+        }
+    } else {
+        // For non-union types, check the type expression directly
+        validate_map_type_in_type_expr(type_expr, ctx);
     }
 }
 
-/// Recursively validate map types in a type text string.
-fn validate_map_type_in_text(
-    text: &str,
+/// Validate map types in a union member (token-based).
+fn validate_map_type_in_union_member(
+    part: &baml_compiler_syntax::ast::UnionMemberParts,
     type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ctx: &mut LoweringContext,
 ) {
+    use rowan::ast::AstNode;
+
+    // Check if this is a map type by looking at first word
+    if let Some(name) = part.first_word() {
+        if name == "map" {
+            // Get TYPE_ARGS and count type parameters
+            // Note: Only count TYPE_EXPR nodes that have actual content (base_name).
+            // The parser creates empty TYPE_EXPR nodes for error recovery (e.g., map<>).
+            if let Some(type_args) = part.type_args() {
+                let param_count = type_args
+                    .children()
+                    .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                    .filter(|n| {
+                        // Check if TYPE_EXPR has actual content (not empty from error recovery)
+                        // Empty TYPE_EXPR nodes have no meaningful tokens/children
+                        baml_compiler_syntax::ast::TypeExpr::cast(n.clone())
+                            .map(|te| has_type_content(&te))
+                            .unwrap_or(false)
+                    })
+                    .count();
+
+                if param_count != 2 {
+                    ctx.push_diagnostic(HirDiagnostic::InvalidMapArity {
+                        expected: 2,
+                        found: param_count,
+                        span: ctx.span(type_expr.syntax().text_range()),
+                    });
+                } else {
+                    // Recursively check nested types in both key and value
+                    for child in type_args.children() {
+                        if child.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR {
+                            if let Some(child_expr) =
+                                baml_compiler_syntax::ast::TypeExpr::cast(child)
+                            {
+                                validate_map_type_in_type_expr(&child_expr, ctx);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Check for nested types in parenthesized expressions
+    if let Some(inner_expr) = part.type_expr() {
+        validate_map_type_in_type_expr(&inner_expr, ctx);
+    }
+}
+
+/// Validate map types in a type expression recursively.
+fn validate_map_type_in_type_expr(
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    ctx: &mut LoweringContext,
+) {
+    // Handle union types
+    if type_expr.is_union() {
+        for part in type_expr.union_member_parts() {
+            validate_map_type_in_union_member(&part, type_expr, ctx);
+        }
+        return;
+    }
+
+    // Handle parenthesized types
+    if let Some(inner) = type_expr.inner_type_expr() {
+        validate_map_type_in_type_expr(&inner, ctx);
+        return;
+    }
+
     // Check if this is a map type
-    if let Some(rest) = text.strip_prefix("map<") {
-        if let Some(inner) = rest.strip_suffix('>') {
-            let param_count = count_generic_params(inner);
+    if let Some(name) = type_expr.base_name() {
+        if name == "map" {
+            // Filter out empty TYPE_EXPR nodes created by parser error recovery (e.g., map<>)
+            let type_args: Vec<_> = type_expr
+                .type_arg_exprs()
+                .into_iter()
+                .filter(has_type_content)
+                .collect();
+            let param_count = type_args.len();
+
             if param_count != 2 {
                 ctx.push_diagnostic(HirDiagnostic::InvalidMapArity {
                     expected: 2,
@@ -1569,39 +1665,12 @@ fn validate_map_type_in_text(
                 });
             } else {
                 // Recursively check nested types in both key and value
-                if let Some(comma_idx) = find_top_level_comma(inner) {
-                    let key_text = inner[..comma_idx].trim();
-                    let value_text = inner[comma_idx + 1..].trim();
-                    validate_map_type_in_text(key_text, type_expr, ctx);
-                    validate_map_type_in_text(value_text, type_expr, ctx);
+                for arg in type_args {
+                    validate_map_type_in_type_expr(&arg, ctx);
                 }
             }
         }
     }
-
-    // Also check for nested maps in array types (e.g., `map<string, string, string>[]`)
-    if let Some(inner_text) = text.strip_suffix("[]") {
-        validate_map_type_in_text(inner_text, type_expr, ctx);
-    }
-
-    // Check for nested maps in optional types (e.g., `map<string, string, string>?`)
-    if let Some(inner_text) = text.strip_suffix('?') {
-        validate_map_type_in_text(inner_text, type_expr, ctx);
-    }
-}
-
-/// Find the index of the first top-level comma in a string.
-fn find_top_level_comma(s: &str) -> Option<usize> {
-    let mut depth = 0;
-    for (i, c) in s.char_indices() {
-        match c {
-            '<' => depth += 1,
-            '>' => depth -= 1,
-            ',' if depth == 0 => return Some(i),
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Helper to check for duplicate names and record errors.
