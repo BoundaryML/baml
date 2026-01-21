@@ -380,12 +380,12 @@ impl TypeExpr {
     /// by token/node kinds instead of string manipulation.
     ///
     /// For `int | string[]`, returns two `UnionMemberParts`:
-    /// - First: tokens=[WORD("int")]
-    /// - Second: tokens=[WORD("string"), `L_BRACKET`, `R_BRACKET`]
+    /// - First: tokens=\[WORD("int")\]
+    /// - Second: tokens=\[WORD("string"), `L_BRACKET`, `R_BRACKET`\]
     ///
     /// For `"user" | int`, returns two `UnionMemberParts`:
-    /// - First: `child_nodes`=[`STRING_LITERAL`], tokens=[]
-    /// - Second: tokens=[WORD("int")]
+    /// - First: `child_nodes`=\[`STRING_LITERAL`\], tokens=\[\]
+    /// - Second: tokens=\[WORD("int")\]
     pub fn union_member_parts(&self) -> Vec<UnionMemberParts> {
         let mut members = Vec::new();
         let mut current = UnionMemberParts::new();
