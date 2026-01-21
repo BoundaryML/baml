@@ -50,61 +50,6 @@ impl Default for BexValue {
     }
 }
 
-impl BexValue {
-    /// Check if this value is null.
-    pub fn is_null(&self) -> bool {
-        matches!(self, BexValue::External(BexExternalValue::Null))
-    }
-
-    /// Try to get as an integer.
-    pub fn as_int(&self) -> Option<i64> {
-        match self {
-            BexValue::External(BexExternalValue::Int(i)) => Some(*i),
-            _ => None,
-        }
-    }
-
-    /// Try to get as a float.
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            BexValue::External(BexExternalValue::Float(f)) => Some(*f),
-            _ => None,
-        }
-    }
-
-    /// Try to get as a boolean.
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            BexValue::External(BexExternalValue::Bool(b)) => Some(*b),
-            _ => None,
-        }
-    }
-
-    /// Try to get as an object handle.
-    pub fn as_object(&self) -> Option<&Handle> {
-        match self {
-            BexValue::Opaque(handle) => Some(handle),
-            _ => None,
-        }
-    }
-
-    /// Get the type name for error messages.
-    pub fn type_name(&self) -> &'static str {
-        match self {
-            BexValue::Opaque(_) => "object",
-            BexValue::External(s) => s.type_name(),
-        }
-    }
-
-    /// Try to get as a snapshot reference.
-    pub fn as_snapshot(&self) -> Option<&BexExternalValue> {
-        match self {
-            BexValue::External(s) => Some(s),
-            _ => None,
-        }
-    }
-}
-
 impl From<i64> for BexValue {
     fn from(value: i64) -> Self {
         BexValue::External(BexExternalValue::Int(value))
@@ -156,67 +101,5 @@ impl PartialEq for BexValue {
             (BexValue::External(a), BexValue::External(b)) => a == b,
             _ => false,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_external_value_primitives() {
-        assert!(BexValue::default().is_null());
-        assert_eq!(BexValue::from(42i64).as_int(), Some(42));
-        assert_eq!(BexValue::from(1.23f64).as_float(), Some(1.23));
-        assert_eq!(BexValue::from(true).as_bool(), Some(true));
-    }
-
-    #[test]
-    fn test_external_value_from() {
-        let v: BexValue = 42i64.into();
-        assert_eq!(v.as_int(), Some(42));
-
-        let v: BexValue = 1.23f64.into();
-        assert_eq!(v.as_float(), Some(1.23));
-
-        let v: BexValue = true.into();
-        assert_eq!(v.as_bool(), Some(true));
-
-        let v: BexValue = "hello".into();
-        assert!(matches!(v, BexValue::External(BexExternalValue::String(_))));
-    }
-
-    #[test]
-    fn test_external_value_object() {
-        let handle = Handle::new_detached(42);
-        let v = BexValue::Opaque(handle);
-
-        assert!(v.as_object().is_some());
-        assert_eq!(v.as_object().unwrap().slab_key(), 42);
-    }
-
-    #[test]
-    fn test_external_value_type_name() {
-        assert_eq!(BexValue::default().type_name(), "null");
-        assert_eq!(BexValue::from(0i64).type_name(), "int");
-        assert_eq!(BexValue::from(0.0f64).type_name(), "float");
-        assert_eq!(BexValue::from(false).type_name(), "bool");
-
-        let handle = Handle::new_detached(0);
-        assert_eq!(BexValue::Opaque(handle).type_name(), "object");
-    }
-
-    #[test]
-    fn test_external_value_equality() {
-        assert_eq!(BexValue::default(), BexValue::default());
-        assert_eq!(BexValue::from(42i64), BexValue::from(42i64));
-        assert_ne!(BexValue::from(42i64), BexValue::from(43i64));
-        assert_ne!(BexValue::from(42i64), BexValue::from(42.0f64));
-    }
-
-    #[test]
-    fn test_external_value_default() {
-        let v: BexValue = Default::default();
-        assert!(v.is_null());
     }
 }
