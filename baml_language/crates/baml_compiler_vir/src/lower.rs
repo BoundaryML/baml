@@ -44,6 +44,8 @@ pub enum LoweringError {
     MissingStatement { span: Option<TextRange> },
     /// Function body is missing.
     MissingBody,
+    /// LLM function - no expression body to lower.
+    LlmFunction,
     /// No root expression in the body.
     NoRootExpression,
 }
@@ -66,6 +68,7 @@ impl std::fmt::Display for LoweringError {
                 Ok(())
             }
             LoweringError::MissingBody => write!(f, "function body is missing"),
+            LoweringError::LlmFunction => write!(f, "LLM function - no MIR"),
             LoweringError::NoRootExpression => write!(f, "no root expression in body"),
         }
     }
@@ -93,7 +96,7 @@ pub fn lower_from_hir(
         }
         FunctionBody::Llm(_) => {
             // LLM bodies don't have expression trees - they're handled specially
-            Err(LoweringError::MissingBody)
+            Err(LoweringError::LlmFunction)
         }
         FunctionBody::Missing => Err(LoweringError::MissingBody),
     }

@@ -534,8 +534,11 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                                 let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
                                 baml_compiler_mir::pretty::display_function(&mir)
                             }
+                            Err(baml_compiler_vir::LoweringError::LlmFunction) => {
+                                format!("fn {}:\n  (LLM function - no MIR)\n", signature.name)
+                            }
                             Err(err) => {
-                                format!("fn {}:\n  (no MIR due to errors: {:?})\n", signature.name, err)
+                                format!("fn {}:\n  (no MIR due to errors: {})\n", signature.name, err)
                             }
                         };
 

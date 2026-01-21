@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -79,304 +79,304 @@ fn DeepExpression() -> Int {
 }
 
 fn Process22:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process54:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process95:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process60:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process68:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process14:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process79:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process84:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process33:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process12:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process74:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process99:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process64:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process52:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process7:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process80:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process58:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process97:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process36:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process63:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process19:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process83:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process18:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process26:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process43:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process46:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process62:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process87:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process44:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process47:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process35:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process38:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process41:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process28:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process65:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process6:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process32:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process92:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process55:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process66:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process56:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process67:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process3:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process75:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process48:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process49:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process61:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process96:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process34:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process59:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process89:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process45:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process86:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process16:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process39:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process82:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process2:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process27:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process53:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process23:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process9:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process72:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process77:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process40:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process30:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process8:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process11:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process37:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process4:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process91:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process31:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process50:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process20:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process98:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process85:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process78:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process1:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process90:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process17:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process81:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process71:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process15:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process42:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process51:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process5:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process13:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process29:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process93:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process70:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process76:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process10:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process21:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process100:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process94:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process25:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process69:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process24:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process88:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process73:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Process57:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn BodyTorture() -> Int {
     // Locals:

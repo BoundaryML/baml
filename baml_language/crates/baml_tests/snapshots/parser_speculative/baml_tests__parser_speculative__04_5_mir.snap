@@ -1,13 +1,13 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn AnotherLLM:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Ambiguous:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn ProcessData(data: Class(FullyQualifiedName { namespace: Local, name: "JsonData" })) -> String {
     // Locals:
@@ -67,7 +67,7 @@ fn ProcessData(data: Class(FullyQualifiedName { namespace: Local, name: "JsonDat
 }
 
 fn ExtractData:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn SimpleCalc(a: Int, b: Int) -> Int {
     // Locals:
@@ -221,7 +221,7 @@ fn ProcessAnalysis(analysis: Class(FullyQualifiedName { namespace: Local, name: 
 }
 
 fn LLMAnalyze:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn ChainedProcess:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)

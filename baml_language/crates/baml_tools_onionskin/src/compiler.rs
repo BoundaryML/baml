@@ -1103,8 +1103,11 @@ impl CompilerRunner {
                             );
                             baml_compiler_mir::pretty::display_function(&mir)
                         }
+                        Err(baml_compiler_vir::LoweringError::LlmFunction) => {
+                            "(LLM function - no MIR)".to_string()
+                        }
                         Err(err) => {
-                            format!("(no MIR due to errors: {:?})", err)
+                            format!("(no MIR due to errors: {})", err)
                         }
                     };
 

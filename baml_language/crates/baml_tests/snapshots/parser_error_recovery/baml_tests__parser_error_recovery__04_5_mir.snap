@@ -1,13 +1,13 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn Foo:
-  (no MIR due to errors: MissingBody)
+  (LLM function - no MIR)
 
 fn Incomplete:
-  (no MIR due to errors: MissingBody)
+  (no MIR due to errors: function body is missing)
 
 fn NextFunction() -> String {
     // Locals:
