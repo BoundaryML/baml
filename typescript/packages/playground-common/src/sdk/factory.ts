@@ -81,6 +81,7 @@ export function createRealBAMLSDK(store: ReturnType<typeof createStore>): BAMLSD
     envVars?: Record<string, string>,
     featureFlags?: string[]
   ) => {
+    console.log('[createRealBAMLSDK] Creating runtime with files', files);
     const { wasm, runtime } = await BamlRuntime.create(files, envVars || {}, featureFlags || []);
     storage.setWasm(wasm);
     return runtime;

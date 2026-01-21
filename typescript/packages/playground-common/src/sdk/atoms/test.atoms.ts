@@ -44,6 +44,7 @@ export interface TestHistoryEntry {
  * A single test run containing multiple test executions
  */
 export interface TestHistoryRun {
+  runId: string;
   timestamp: number;
   tests: TestHistoryEntry[];
 }

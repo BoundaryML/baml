@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 import { apiKeysAtom } from '../../../../components/api-keys-dialog/atoms';
-import { ctxAtom, diagnosticsAtom, filesAtom, runtimeAtom } from '../../atoms';
+import { ctxAtom, diagnosticsAtom } from '../../atoms';
 import { areTestsRunningAtom, selectionAtom } from '../atoms';
 import { Loader } from './components';
 import { vscode } from '../../vscode';
@@ -18,13 +18,13 @@ export const PromptPreviewContent = () => {
   const runtime = useAtomValue(runtimeInstanceAtom);
   const apiKeys = useAtomValue(apiKeysAtom);
   const ctx = useAtomValue(ctxAtom);
-  const files = useAtomValue(filesAtom);
   const { selectedFn, selectedTc } = useAtomValue(selectionAtom);
   const diagnostics = useAtomValue(diagnosticsAtom);
   const setPromptData = useSetAtom(renderedPromptAtom);
   const areTestsRunning = useAtomValue(areTestsRunningAtom);
 
   // Memoize the generatePreview function to prevent unnecessary re-renders
+  // Note: runtime is a new instance each time files change, so including it triggers re-memoization
   const generatePreview = useMemo(
     () => async () => {
       if (
@@ -63,7 +63,7 @@ export const PromptPreviewContent = () => {
         throw error;
       }
     },
-    [runtime, ctx, selectedFn, selectedTc, apiKeys, files, setPromptData],
+    [runtime, ctx, selectedFn, selectedTc, apiKeys, setPromptData],
   );
 
   const [lastKnownPreview, setLastKnownPreview] = useState<
@@ -76,14 +76,15 @@ export const PromptPreviewContent = () => {
     error,
     isLoading,
   } = useSWR(
-    // Include file content in the key so updates trigger when typing
+    // Include runtime in key to re-fetch when runtime is recreated (after file changes)
+    // Runtime is a new instance each time files change, so this triggers re-fetch
     runtime && selectedFn && selectedTc
       ? [
         'prompt-preview',
+        runtime, // Runtime instance changes when files change
         selectedFn.name,
         selectedTc.name,
         JSON.stringify(apiKeys),
-        JSON.stringify(files), // Add file content to trigger updates on typing
       ]
       : null,
     generatePreview,
@@ -97,11 +98,11 @@ export const PromptPreviewContent = () => {
 
   if (isLoading && !preview) {
     if (lastKnownPreview) {
-      console.log('[PromptPreview] Rendering last known preview');
       return <RenderPrompt prompt={lastKnownPreview} testCase={selectedTc ?? undefined} />;
     }
     return <Loader message="Loading..." />;
   }
+
 
   if (error) {
 
