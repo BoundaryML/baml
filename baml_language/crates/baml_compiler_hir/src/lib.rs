@@ -1515,6 +1515,44 @@ fn describe_block_attribute_args(attr: &baml_compiler_syntax::ast::BlockAttribut
     }
 }
 
+/// Check if a `TYPE_EXPR` has actual content (not empty from parser error recovery).
+///
+/// The parser creates empty `TYPE_EXPR` nodes for error recovery (e.g., `map<>`).
+/// This function checks if the `TYPE_EXPR` has meaningful content like:
+/// - A base name (int, string, User, etc.)
+/// - A string literal ("admin")
+/// - An integer literal (200)
+/// - A bool literal (true/false)
+/// - An inner parenthesized type
+/// - Is a union type
+fn has_type_content(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> bool {
+    // Check for base name (primitives and named types)
+    if type_expr.base_name().is_some() {
+        return true;
+    }
+    // Check for string literal
+    if type_expr.string_literal().is_some() {
+        return true;
+    }
+    // Check for integer literal
+    if type_expr.integer_literal().is_some() {
+        return true;
+    }
+    // Check for bool literal
+    if type_expr.bool_literal().is_some() {
+        return true;
+    }
+    // Check for parenthesized type (has inner content)
+    if type_expr.inner_type_expr().is_some() {
+        return true;
+    }
+    // Check for union type
+    if type_expr.is_union() {
+        return true;
+    }
+    false
+}
+
 /// Validate map type arity in a type expression.
 ///
 /// Maps require exactly 2 type parameters: `map<K, V>`.
@@ -1546,10 +1584,19 @@ fn validate_map_type_in_union_member(
     if let Some(name) = part.first_word() {
         if name == "map" {
             // Get TYPE_ARGS and count type parameters
+            // Note: Only count TYPE_EXPR nodes that have actual content (base_name).
+            // The parser creates empty TYPE_EXPR nodes for error recovery (e.g., map<>).
             if let Some(type_args) = part.type_args() {
                 let param_count = type_args
                     .children()
                     .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                    .filter(|n| {
+                        // Check if TYPE_EXPR has actual content (not empty from error recovery)
+                        // Empty TYPE_EXPR nodes have no meaningful tokens/children
+                        baml_compiler_syntax::ast::TypeExpr::cast(n.clone())
+                            .map(|te| has_type_content(&te))
+                            .unwrap_or(false)
+                    })
                     .count();
 
                 if param_count != 2 {
@@ -1602,7 +1649,12 @@ fn validate_map_type_in_type_expr(
     // Check if this is a map type
     if let Some(name) = type_expr.base_name() {
         if name == "map" {
-            let type_args = type_expr.type_arg_exprs();
+            // Filter out empty TYPE_EXPR nodes created by parser error recovery (e.g., map<>)
+            let type_args: Vec<_> = type_expr
+                .type_arg_exprs()
+                .into_iter()
+                .filter(has_type_content)
+                .collect();
             let param_count = type_args.len();
 
             if param_count != 2 {
