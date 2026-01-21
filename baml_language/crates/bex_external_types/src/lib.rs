@@ -21,12 +21,12 @@
 //! (internal)       (external)              (memory)     (exec)     (async)
 //! ```
 
+mod bex_external_value;
+mod bex_value;
 mod epoch_guard;
-mod external_value;
 mod handle;
-mod snapshot;
 
+pub use bex_external_value::{BexExternalValue, Ty, UnionMetadata};
+pub use bex_value::BexValue;
 pub use epoch_guard::EpochGuard;
-pub use external_value::BexValue;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
-pub use snapshot::{BexExternalValue, Ty, UnionMetadata};

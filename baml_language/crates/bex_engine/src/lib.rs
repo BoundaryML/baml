@@ -332,7 +332,7 @@ impl BexEngine {
         declared_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
         match value {
-            BexValue::External(s) => Ok(Self::maybe_wrap_union(s, declared_type)),
+            BexValue::External(s) => Self::maybe_wrap_union(s, declared_type),
             BexValue::Opaque(handle) => self.handle_to_external(&handle, declared_type),
         }
     }
@@ -363,15 +363,18 @@ impl BexEngine {
     }
 
     /// Wrap a value in Union metadata if the declared type is a union.
-    fn maybe_wrap_union(value: BexExternalValue, declared_type: &Ty) -> BexExternalValue {
+    fn maybe_wrap_union(
+        value: BexExternalValue,
+        declared_type: &Ty,
+    ) -> Result<BexExternalValue, EngineError> {
         match declared_type {
             Ty::Union(members) => {
-                let selected = Self::find_matching_member(&value, members);
+                let selected = Self::find_matching_member(&value, members)?;
                 let metadata = UnionMetadata::new(declared_type.clone(), selected);
-                BexExternalValue::Union {
+                Ok(BexExternalValue::Union {
                     value: Box::new(value),
                     metadata,
-                }
+                })
             }
             Ty::Optional(inner) => {
                 let selected = if matches!(value, BexExternalValue::Null) {
@@ -380,24 +383,30 @@ impl BexEngine {
                     (**inner).clone()
                 };
                 let metadata = UnionMetadata::new(declared_type.clone(), selected);
-                BexExternalValue::Union {
+                Ok(BexExternalValue::Union {
                     value: Box::new(value),
                     metadata,
-                }
+                })
             }
-            _ => value,
+            _ => Ok(value),
         }
     }
 
     /// Find which union member matches a value.
-    fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Ty {
+    fn find_matching_member(value: &BexExternalValue, members: &[Ty]) -> Result<Ty, EngineError> {
         for member in members {
             if Self::value_matches_type(value, member) {
-                return member.clone();
+                return Ok(member.clone());
             }
         }
-        // Fallback: shouldn't happen if type checking is correct
-        members.first().cloned().unwrap_or(Ty::Null)
+        // This indicates a type system inconsistency - the value should match one of the members
+        Err(EngineError::TypeMismatch {
+            message: format!(
+                "Value of type '{}' does not match any member of union {:?}",
+                value.type_name(),
+                members
+            ),
+        })
     }
 
     /// Check if a value matches a declared type.
@@ -448,7 +457,7 @@ impl BexEngine {
         };
 
         // Wrap in Union if declared type is a union
-        Ok(Self::maybe_wrap_union(external, declared_type))
+        Self::maybe_wrap_union(external, declared_type)
     }
 
     /// Convert an object to a `BexExternalValue` using the effective (non-union) type.
@@ -522,23 +531,27 @@ impl BexEngine {
                     }
                 })?;
 
+                // Build field type lookup map once (O(n) instead of O(n^2))
+                let field_types: std::collections::HashMap<&str, &Ty> = class_def
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.as_str(), &f.field_type))
+                    .collect();
+
                 // Convert fields with their declared types
                 let fields: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
                     field_names
                         .iter()
                         .zip(instance.fields.iter())
                         .map(|(name, value)| {
-                            // Look up the field's declared type from schema
-                            let field_type = class_def
-                                .fields
-                                .iter()
-                                .find(|f| &f.name == name)
-                                .map(|f| &f.field_type)
-                                .ok_or_else(|| EngineError::SchemaInconsistency {
+                            // Look up the field's declared type from the pre-built map (O(1))
+                            let field_type = field_types.get(name.as_str()).ok_or_else(|| {
+                                EngineError::SchemaInconsistency {
                                     message: format!(
                                         "Field '{name}' not found in class '{class_name}'"
                                     ),
-                                })?;
+                                }
+                            })?;
 
                             Ok((name.clone(), self.vm_value_to_external(value, field_type)?))
                         })
