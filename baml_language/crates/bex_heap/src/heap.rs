@@ -28,7 +28,28 @@ use bex_vm_types::{Object, ObjectIndex};
 use crate::{chunked_vec::ChunkedVec, tlab::TlabChunk};
 
 /// Default TLAB chunk size (number of object slots).
+///
+/// This is the number of object slots each VM gets when it requests a new TLAB.
+/// When a VM exhausts its TLAB, it atomically reserves the next `tlab_size` slots.
+///
+/// # Relationship to ChunkedVec chunk size
+///
+/// The underlying storage uses `ChunkedVec` with `DEFAULT_CHUNK_SIZE` (4096).
+/// For optimal memory locality, TLAB size should divide evenly into the chunk size:
+///
+/// - `DEFAULT_CHUNK_SIZE = 4096` (storage chunks)
+/// - `DEFAULT_TLAB_SIZE = 1024` (TLAB allocation unit)
+/// - Result: 4 TLABs fit per storage chunk
+///
+/// This isn't strictly required (TLABs can span chunk boundaries), but aligned
+/// TLABs have better cache behavior since all objects in a TLAB are contiguous.
 pub const DEFAULT_TLAB_SIZE: usize = 1024;
+
+// Compile-time assertion that default TLAB size divides evenly into chunk size
+const _: () = assert!(
+    crate::chunked_vec::DEFAULT_CHUNK_SIZE.is_multiple_of(DEFAULT_TLAB_SIZE),
+    "DEFAULT_TLAB_SIZE should divide evenly into DEFAULT_CHUNK_SIZE for optimal alignment"
+);
 
 /// Statistics about heap usage.
 #[derive(Clone, Copy, Debug, Default)]

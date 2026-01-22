@@ -42,6 +42,44 @@
 //! - Using raw pointer operations to avoid `&mut` reborrows that conflict with Miri's
 //!   stacked borrows model
 //! - Using `UnsafeCell` for each element
+//!
+//! # Future Optimization: Virtual Memory Approach
+//!
+//! The current chunked approach requires `index / chunk_size` and `index % chunk_size`
+//! for every access. With power-of-2 chunk sizes this compiles to a shift and AND,
+//! which is cheap but not free.
+//!
+//! Production VMs like V8 and the JVM use a more efficient approach: reserve a large
+//! contiguous virtual address space upfront using `mmap` (Unix) or `VirtualAlloc`
+//! (Windows), then commit physical memory incrementally as needed.
+//!
+//! ```text
+//! Virtual Memory Approach:
+//!
+//!   mmap reserves 4GB of ADDRESS SPACE (no physical RAM used yet)
+//!   ┌────────────────────────────────────────────────────────────┐
+//!   │ COMMITTED (1MB)  │         RESERVED (not backed by RAM)   │
+//!   │ [objects here]   │         (grows by committing more)     │
+//!   └────────────────────────────────────────────────────────────┘
+//!   ▲
+//!   base pointer (NEVER MOVES)
+//!
+//!   Access: base_ptr.add(index)  // Single addition, no division!
+//! ```
+//!
+//! Benefits of virtual memory approach:
+//! - Access is `base + offset` (one addition) vs chunked lookup
+//! - Better cache locality for sequential access
+//! - How V8's "pointer cage" and JVM's compressed oops work
+//!
+//! Why we use ChunkedVec instead:
+//! - Pure Rust, no platform-specific `mmap`/`VirtualAlloc` code
+//! - Works with Miri for memory safety verification
+//! - Simpler implementation and maintenance
+//! - BAML's workload is I/O-bound (LLM API calls), not CPU-bound
+//!
+//! If profiling shows object access as a bottleneck, the virtual memory approach
+//! would be the next optimization to consider.
 
 use std::{
     cell::UnsafeCell,
@@ -49,14 +87,39 @@ use std::{
 };
 
 /// Default chunk size (number of elements per chunk).
-/// This should be >= the TLAB size to minimize chunk allocations.
+///
+/// This MUST be a power of 2 for efficient index calculation (shift + AND
+/// instead of division + modulo). It should also be >= the TLAB size to
+/// minimize chunk allocations during TLAB refills.
+///
+/// Current value: 4096 = 2^12
 pub const DEFAULT_CHUNK_SIZE: usize = 4096;
+
+// Compile-time assertion that DEFAULT_CHUNK_SIZE is a power of 2
+const _: () = assert!(
+    DEFAULT_CHUNK_SIZE.is_power_of_two(),
+    "DEFAULT_CHUNK_SIZE must be a power of 2 for efficient index calculation"
+);
 
 /// A vector that stores elements in fixed-size chunks.
 ///
 /// Provides stable pointers to elements: growing the storage never moves
 /// existing elements, only adds new chunks.
-pub struct ChunkedVec<T> {
+///
+/// The `CHUNK_SIZE` const generic must be a power of 2, which enables the compiler
+/// to optimize `index / CHUNK_SIZE` to a right shift and `index % CHUNK_SIZE` to
+/// a bitwise AND. This is enforced at compile time.
+///
+/// # Example
+///
+/// ```ignore
+/// // Use default chunk size (4096)
+/// let vec: ChunkedVec<i32> = ChunkedVec::new();
+///
+/// // Use custom chunk size
+/// let vec: ChunkedVec<i32, 1024> = ChunkedVec::new();
+/// ```
+pub struct ChunkedVec<T, const CHUNK_SIZE: usize = DEFAULT_CHUNK_SIZE> {
     /// Storage chunks. Each chunk is heap-allocated and never moves.
     /// This is wrapped in UnsafeCell for interior mutability during resize.
     /// Access to this field must be synchronized externally for resize operations.
@@ -69,24 +132,31 @@ pub struct ChunkedVec<T> {
     /// Number of elements in the vec (not capacity).
     /// Uses AtomicUsize for safe concurrent reads.
     len: AtomicUsize,
-
-    /// Elements per chunk.
-    chunk_size: usize,
 }
 
-impl<T> ChunkedVec<T> {
-    /// Create a new empty ChunkedVec with the default chunk size.
+impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
+    /// Create a new empty ChunkedVec.
+    ///
+    /// Uses the default chunk size (4096) unless a custom size is specified
+    /// via the const generic parameter.
+    ///
+    /// # Compile-time Requirements
+    ///
+    /// `CHUNK_SIZE` must be a power of 2. This is enforced at compile time
+    /// and enables the compiler to optimize division/modulo to shift/AND.
     pub fn new() -> Self {
-        Self::with_chunk_size(DEFAULT_CHUNK_SIZE)
-    }
+        // Compile-time assertion that CHUNK_SIZE is a power of 2.
+        // Using const block ensures this is evaluated at compile time.
+        const {
+            assert!(
+                CHUNK_SIZE.is_power_of_two(),
+                "CHUNK_SIZE must be a power of 2"
+            )
+        };
 
-    /// Create a new empty ChunkedVec with a custom chunk size.
-    pub fn with_chunk_size(chunk_size: usize) -> Self {
-        assert!(chunk_size > 0, "chunk_size must be positive");
         Self {
             chunks: UnsafeCell::new(Vec::new()),
             len: AtomicUsize::new(0),
-            chunk_size,
         }
     }
 
@@ -102,10 +172,10 @@ impl<T> ChunkedVec<T> {
         self.len() == 0
     }
 
-    /// Get the chunk size.
+    /// Get the chunk size (compile-time constant).
     #[inline]
-    pub fn chunk_size(&self) -> usize {
-        self.chunk_size
+    pub const fn chunk_size(&self) -> usize {
+        CHUNK_SIZE
     }
 
     /// Get the total capacity (number of slots across all chunks).
@@ -114,14 +184,19 @@ impl<T> ChunkedVec<T> {
         // SAFETY: We only read the length of the Vec via raw pointer
         unsafe {
             let chunks_ptr = self.chunks.get();
-            (*chunks_ptr).len() * self.chunk_size
+            (*chunks_ptr).len() * CHUNK_SIZE
         }
     }
 
     /// Calculate chunk index and offset within chunk for a given index.
+    ///
+    /// Because CHUNK_SIZE is a compile-time constant power of 2, the compiler
+    /// optimizes this to:
+    /// - `index >> log2(CHUNK_SIZE)` (right shift)
+    /// - `index & (CHUNK_SIZE - 1)` (bitwise AND)
     #[inline]
     fn chunk_location(&self, index: usize) -> (usize, usize) {
-        (index / self.chunk_size, index % self.chunk_size)
+        (index / CHUNK_SIZE, index % CHUNK_SIZE)
     }
 
     /// Get a raw pointer to the element at (chunk_idx, offset) without creating references.
@@ -129,7 +204,7 @@ impl<T> ChunkedVec<T> {
     /// # Safety
     ///
     /// - chunk_idx must be < number of chunks
-    /// - offset must be < chunk_size
+    /// - offset must be < CHUNK_SIZE
     #[inline]
     unsafe fn element_ptr(&self, chunk_idx: usize, offset: usize) -> *mut T {
         unsafe {
@@ -162,7 +237,7 @@ impl<T> ChunkedVec<T> {
     }
 }
 
-impl<T> ChunkedVec<T> {
+impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// Ensure capacity for at least `min_len` elements, using a factory function.
     ///
     /// If the current capacity is insufficient, new chunks are allocated.
@@ -182,7 +257,7 @@ impl<T> ChunkedVec<T> {
         }
 
         // Calculate how many chunks we need
-        let needed_chunks = min_len.div_ceil(self.chunk_size);
+        let needed_chunks = min_len.div_ceil(CHUNK_SIZE);
 
         // SAFETY: Caller ensures only one thread is resizing at a time.
         // Other threads may be accessing existing chunks via set(), but we only
@@ -200,7 +275,7 @@ impl<T> ChunkedVec<T> {
             // Allocate new chunks as needed
             for _ in current_chunk_count..needed_chunks {
                 // Create a boxed slice of UnsafeCell<T>
-                let chunk: Box<[UnsafeCell<T>]> = (0..self.chunk_size)
+                let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
                     .map(|_| UnsafeCell::new(factory()))
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
@@ -232,8 +307,8 @@ impl<T> ChunkedVec<T> {
             let current_chunk_count = (*chunks_ptr).len();
 
             // Allocate new chunk if needed
-            if index >= current_chunk_count * self.chunk_size {
-                let chunk: Box<[UnsafeCell<T>]> = (0..self.chunk_size)
+            if index >= current_chunk_count * CHUNK_SIZE {
+                let chunk: Box<[UnsafeCell<T>]> = (0..CHUNK_SIZE)
                     .map(|_| UnsafeCell::new(factory()))
                     .collect::<Vec<_>>()
                     .into_boxed_slice();
@@ -252,7 +327,7 @@ impl<T> ChunkedVec<T> {
     }
 }
 
-impl<T> ChunkedVec<T> {
+impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// Get a reference to an element.
     ///
     /// # Panics
@@ -354,12 +429,11 @@ impl<T> ChunkedVec<T> {
     /// Must have exclusive access to the ChunkedVec.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         let len = self.len.load(Ordering::Acquire);
-        let chunk_size = self.chunk_size;
         let chunks_ptr = self.chunks.get();
 
         (0..len).map(move |i| {
-            let chunk_idx = i / chunk_size;
-            let offset = i % chunk_size;
+            let chunk_idx = i / CHUNK_SIZE;
+            let offset = i % CHUNK_SIZE;
             // SAFETY: We have &mut self, each index is unique in the iteration
             unsafe {
                 let chunks_data_ptr = (*chunks_ptr).as_ptr();
@@ -372,7 +446,7 @@ impl<T> ChunkedVec<T> {
     }
 }
 
-impl<T: Default> ChunkedVec<T> {
+impl<T: Default, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// Ensure capacity for at least `min_len` elements.
     ///
     /// # Safety
@@ -394,35 +468,35 @@ impl<T: Default> ChunkedVec<T> {
     }
 }
 
-impl<T> Default for ChunkedVec<T> {
+impl<T, const CHUNK_SIZE: usize> Default for ChunkedVec<T, CHUNK_SIZE> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for ChunkedVec<T> {
+impl<T: std::fmt::Debug, const CHUNK_SIZE: usize> std::fmt::Debug for ChunkedVec<T, CHUNK_SIZE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChunkedVec")
             .field("len", &self.len())
-            .field("chunk_size", &self.chunk_size)
-            .field("num_chunks", &(self.capacity() / self.chunk_size))
+            .field("chunk_size", &CHUNK_SIZE)
+            .field("num_chunks", &(self.capacity() / CHUNK_SIZE))
             .finish()
     }
 }
 
-// SAFETY: ChunkedVec<T> is Send if T is Send
+// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Send if T is Send
 // The UnsafeCell fields are properly synchronized:
 // - len uses AtomicUsize
 // - chunks is accessed with proper external synchronization
-unsafe impl<T: Send> Send for ChunkedVec<T> {}
+unsafe impl<T: Send, const CHUNK_SIZE: usize> Send for ChunkedVec<T, CHUNK_SIZE> {}
 
-// SAFETY: ChunkedVec<T> is Sync if T is Sync
+// SAFETY: ChunkedVec<T, CHUNK_SIZE> is Sync if T is Sync
 // This is safe because:
 // 1. Read-only methods use atomic loads with proper ordering
 // 2. The unsafe methods require external synchronization
 // 3. set() uses UnsafeCell for element access (different indices are independent)
 // 4. All operations use raw pointers to avoid &mut reborrow conflicts
-unsafe impl<T: Sync> Sync for ChunkedVec<T> {}
+unsafe impl<T: Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE> {}
 
 #[cfg(test)]
 mod tests {
@@ -437,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_push_and_get() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let vec: ChunkedVec<i32, 4> = ChunkedVec::new();
 
         unsafe {
             let idx0 = vec.push(10);
@@ -457,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_push_across_chunks() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(2);
+        let vec: ChunkedVec<i32, 2> = ChunkedVec::new();
 
         unsafe {
             // Push 5 elements (requires 3 chunks with chunk_size=2)
@@ -476,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_resize_to() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let vec: ChunkedVec<i32, 4> = ChunkedVec::new();
 
         unsafe { vec.resize_to(10) };
 
@@ -491,7 +565,7 @@ mod tests {
 
     #[test]
     fn test_set() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let vec: ChunkedVec<i32, 4> = ChunkedVec::new();
         unsafe { vec.resize_to(5) };
 
         unsafe {
@@ -503,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_clear() {
-        let mut vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let mut vec: ChunkedVec<i32, 4> = ChunkedVec::new();
 
         unsafe {
             for i in 0..10 {
@@ -521,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_get_mut() {
-        let mut vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let mut vec: ChunkedVec<i32, 4> = ChunkedVec::new();
 
         unsafe {
             vec.push(10);
@@ -535,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(2);
+        let vec: ChunkedVec<i32, 2> = ChunkedVec::new();
 
         unsafe {
             for i in 0..5 {
@@ -549,7 +623,7 @@ mod tests {
 
     #[test]
     fn test_iter_mut() {
-        let mut vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(2);
+        let mut vec: ChunkedVec<i32, 2> = ChunkedVec::new();
 
         unsafe {
             for i in 0..5 {
@@ -567,7 +641,7 @@ mod tests {
 
     #[test]
     fn test_pointer_stability() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(2);
+        let vec: ChunkedVec<i32, 2> = ChunkedVec::new();
 
         unsafe { vec.push(42) };
 
@@ -590,13 +664,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "out of bounds")]
     fn test_get_out_of_bounds() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(4);
+        let vec: ChunkedVec<i32, 4> = ChunkedVec::new();
         let _ = vec.get(0);
     }
 
     #[test]
     fn test_large_allocation() {
-        let vec: ChunkedVec<i32> = ChunkedVec::with_chunk_size(1024);
+        let vec: ChunkedVec<i32, 1024> = ChunkedVec::new();
 
         unsafe {
             for i in 0..10_000 {
