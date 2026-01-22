@@ -600,7 +600,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
- "baml_compiler_diagnostics",
  "baml_db",
  "baml_ide",
  "baml_lsp_types",
@@ -721,58 +720,6 @@ dependencies = [
  "syn 2.0.114",
  "tempfile",
  "walkdir",
-]
-
-[[package]]
-name = "baml_tools_onionskin"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arboard",
- "ariadne",
- "baml_base",
- "baml_compiler_diagnostics",
- "baml_compiler_emit",
- "baml_compiler_hir",
- "baml_compiler_lexer",
- "baml_compiler_mir",
- "baml_compiler_parser",
- "baml_compiler_tir",
- "baml_compiler_vir",
- "baml_db",
- "baml_project",
- "baml_workspace",
- "bex_vm",
- "bex_vm_types",
- "clap",
- "crossterm",
- "notify",
- "ratatui",
- "regex",
- "rowan 0.16.1",
- "salsa",
- "similar",
- "text-size",
-]
-
-[[package]]
-name = "baml_tools_rig"
-version = "0.0.0"
-dependencies = [
- "baml_codegen_tests",
-]
-
-[[package]]
-name = "baml_tools_stow"
-version = "0.0.0"
-dependencies = [
- "clap",
- "glob",
- "serde",
- "taplo",
- "thiserror 2.0.17",
- "toml",
- "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -981,6 +928,39 @@ name = "bytes"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
+
+[[package]]
+name = "camino"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e629a66d692cb9ff1a1c664e41771b3dcaf961985a9774c0eb0bd1b51cf60a48"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87a0c0e6148f11f01f32650a2ea02d532b2ad4e81d8bd41e6e565b5adc5e6082"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+]
 
 [[package]]
 name = "cassowary"
@@ -1558,6 +1538,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dot-generator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aaac7ada45f71873ebce336491d1c1bc4a7c8042c7cea978168ad59e805b871"
+dependencies = [
+ "dot-structures",
+]
+
+[[package]]
+name = "dot-structures"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cfcded997a93eb31edd639361fa33fd229a8784e953b37d71035fe3890b7b"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1875,6 +1870,22 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax 0.8.8",
+]
+
+[[package]]
+name = "graphviz-rust"
+version = "0.9.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db134cb611668917cabf340af9a39518426f9a10827b4cedcb4cdcf84443f6d0"
+dependencies = [
+ "dot-generator",
+ "dot-structures",
+ "into-attr",
+ "into-attr-derive",
+ "pest",
+ "pest_derive",
+ "rand 0.9.2",
+ "tempfile",
 ]
 
 [[package]]
@@ -2339,6 +2350,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if 1.0.4",
+]
+
+[[package]]
+name = "into-attr"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18b48c537e49a709e678caec3753a7dba6854661a1eaa27675024283b3f8b376"
+dependencies = [
+ "dot-structures",
+]
+
+[[package]]
+name = "into-attr-derive"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecac7c1ae6cd2c6a3a64d1061a8bdc7f52ff62c26a831a2301e54c1b5d70d5b1"
+dependencies = [
+ "dot-generator",
+ "dot-structures",
+ "into-attr",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3820,6 +3853,10 @@ name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"
@@ -4565,6 +4602,58 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tools_onionskin"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "ariadne",
+ "baml_base",
+ "baml_compiler_diagnostics",
+ "baml_compiler_emit",
+ "baml_compiler_hir",
+ "baml_compiler_lexer",
+ "baml_compiler_mir",
+ "baml_compiler_parser",
+ "baml_compiler_tir",
+ "baml_compiler_vir",
+ "baml_db",
+ "baml_project",
+ "baml_workspace",
+ "bex_vm",
+ "bex_vm_types",
+ "clap",
+ "crossterm",
+ "notify",
+ "ratatui",
+ "regex",
+ "rowan 0.16.1",
+ "salsa",
+ "similar",
+ "text-size",
+]
+
+[[package]]
+name = "tools_rig"
+version = "0.0.0"
+dependencies = [
+ "baml_codegen_tests",
+]
+
+[[package]]
+name = "tools_stow"
+version = "0.0.0"
+dependencies = [
+ "cargo_metadata",
+ "clap",
+ "graphviz-rust",
+ "serde",
+ "taplo",
+ "toml",
+ "toml_edit 0.22.27",
 ]
 
 [[package]]

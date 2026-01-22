@@ -19,10 +19,10 @@ Run the tool by specifying a BAML file or directory to watch:
 
 ```bash
 # Watch a single file
-cargo run --bin baml_tools_onionskin -- --from path/to/your/file.baml
+cargo run --bin tools_onionskin -- --from path/to/your/file.baml
 
 # Watch an entire directory
-cargo run --bin baml_tools_onionskin -- --from path/to/your/directory
+cargo run --bin tools_onionskin -- --from path/to/your/directory
 ```
 
 ### Compiler Hot-Reload 🔥
@@ -32,13 +32,13 @@ When running from within the `baml_language` workspace, onionskin **automaticall
 ```bash
 # Hot-reload is automatic when running from the workspace
 cd /path/to/baml_language
-cargo run --bin baml_tools_onionskin -- --from test.baml
+cargo run --bin tools_onionskin -- --from test.baml
 
 # Explicitly specify workspace root (if auto-detection fails)
-cargo run --bin baml_tools_onionskin -- --from path/to/file.baml --workspace /path/to/baml_language
+cargo run --bin tools_onionskin -- --from path/to/file.baml --workspace /path/to/baml_language
 
 # Disable hot-reload if you don't want it
-cargo run --bin baml_tools_onionskin -- --from test.baml --no-hot-reload
+cargo run --bin tools_onionskin -- --from test.baml --no-hot-reload
 ```
 
 With hot-reload enabled (shown as `🔥 Hot-Reload` in the header):
@@ -105,7 +105,7 @@ This is useful for:
 
 1. Start watching a file:
    ```bash
-   cargo run --bin baml_tools_onionskin -- --from test.baml
+   cargo run --bin tools_onionskin -- --from test.baml
    ```
 
 2. The TUI shows the lexer output by default
@@ -125,7 +125,7 @@ This is useful for:
 ## Building
 
 ```bash
-cargo build --bin baml_tools_onionskin
+cargo build --bin tools_onionskin
 ```
 
 ## Implementation Details

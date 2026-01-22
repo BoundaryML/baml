@@ -2,7 +2,7 @@
 # ==================
 #
 # Stow validates crate naming conventions and dependency rules in the workspace.
-# Install: cargo install --path crates/baml_tools_stow
+# Install: cargo install --path crates/tools_stow
 # Usage:   cargo stow --check    (validate)
 #          cargo stow --fix      (auto-fix sorting issues)
 #
@@ -22,28 +22,37 @@
 #   reason               - Error message shown when rule is violated
 #
 # Auto-allowed naming suffixes: _types, _test, _tests (no prefix needed)
-# Auto-allowed dependency access: _test/_tests crates and *_tools_* crates
+# Auto-allowed dependency access: _test/_tests crates
+# Ignore crates by name pattern (glob)
+# ignore_crates = ["rig_*"]
 #
 # ===========================================================================
+
+# Ignore all rig test crates
+ignore_crates = ["rig_*"]
+
+# External dependencies to show in dependency graph visualization
+# Run: cargo stow --graph /tmp/deps.svg
+graph_external_deps = ["serde", "tokio", "clap", "anyhow", "salsa", "rowan"]
 
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
 allowed_prefixes = ["lsp"]
-allowed_crates = ["*_cli"]
+allowed_crates = ["*_cli", "tools_*"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["tools", "compiler", "builtins", "playground", "codegen"]
+approved_prefixes = ["compiler", "builtins", "playground", "codegen"]
 test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
-allowed_prefixes = ["compiler", "lsp"]
+allowed_prefixes = ["compiler"]
 allowed_crates = ["baml_db", "baml_project"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
@@ -57,6 +66,10 @@ pattern.select = "bex_vm_types"
 allowed_crates = ["baml_compiler_emit", "baml_snapshot"]
 reason = "Only compiler and snapshot crates should depend on bex_vm_types (pure data layer)."
 
+
+# tools namespace configuration
+[[namespaces]]
+name = "tools"
 
 # bex namespace configuration
 [[namespaces]]

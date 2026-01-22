@@ -1,10 +1,10 @@
 [package]
-name = "baml_tools_rig"
+name = "tools_rig"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "baml_tools_rig"
+name = "tools_rig"
 path = "src/main.rs"
 
 [dependencies]

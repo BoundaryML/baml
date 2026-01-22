@@ -1,5 +1,5 @@
 [package]
-name = "baml_tools_stow"
+name = "tools_stow"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
@@ -14,10 +14,10 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
+cargo_metadata = { workspace = true }
 clap = { workspace = true, features = [ "derive" ] }
-glob = { workspace = true }
+graphviz-rust = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 taplo = { workspace = true }
-thiserror = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }

@@ -1,5 +1,5 @@
 [package]
-name = "baml_tools_onionskin"
+name = "tools_onionskin"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -11,7 +11,7 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [[bin]]
-name = "baml_tools_onionskin"
+name = "tools_onionskin"
 path = "src/main.rs"
 
 [dependencies]

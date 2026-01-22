@@ -240,7 +240,7 @@ impl App {
         // Spawn background thread to run cargo build
         thread::spawn(move || {
             let result = Command::new("cargo")
-                .args(["build", "--bin", "baml_tools_onionskin"])
+                .args(["build", "--bin", "tools_onionskin"])
                 .current_dir(&workspace_dir)
                 .output();
 
