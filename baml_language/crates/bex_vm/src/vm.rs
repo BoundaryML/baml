@@ -4,8 +4,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, GlobalPool, Instruction, Object, ObjectIndex, ObjectPool,
-    ObjectType, StackIndex, UnaryOp, Value, Variant,
+    BinOp, CmpOp, FunctionKind, GlobalPool, HttpRequest, Instruction, Object, ObjectIndex,
+    ObjectPool, ObjectType, PrimitiveClient, PromptAst, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
 };
@@ -332,6 +332,9 @@ fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::Media(_) => type_tags::MEDIA,
+                Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
+                Object::PromptAst(_) => type_tags::PROMPT_AST,
+                Object::HttpRequest(_) => type_tags::HTTP_REQUEST,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -559,6 +562,45 @@ impl BexVm {
         Err(InternalError::InvalidObjectRef(index.into_raw()))
     }
 
+    /// Get primitive client from a Value.
+    pub fn as_primitive_client(&self, value: &Value) -> Result<&PrimitiveClient, InternalError> {
+        let index = self.as_object_index(value, ObjectType::PrimitiveClient)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::PrimitiveClient(client) => Ok(client),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::PrimitiveClient.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Get prompt AST from a Value.
+    pub fn as_prompt_ast(&self, value: &Value) -> Result<&PromptAst, InternalError> {
+        let index = self.as_object_index(value, ObjectType::PromptAst)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::PromptAst(ast) => Ok(ast),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::PromptAst.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Get HTTP request from a Value.
+    pub fn as_http_request(&self, value: &Value) -> Result<&HttpRequest, InternalError> {
+        let index = self.as_object_index(value, ObjectType::HttpRequest)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::HttpRequest(request) => Ok(request),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::HttpRequest.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
@@ -694,6 +736,21 @@ impl BexVm {
     /// Allocate a future object.
     pub fn alloc_future(&mut self, future: Future) -> Value {
         Value::Object(self.tlab.alloc(Object::Future(future)))
+    }
+
+    /// Allocate a primitive client object.
+    pub fn alloc_primitive_client(&mut self, client: PrimitiveClient) -> Value {
+        Value::Object(self.tlab.alloc(Object::PrimitiveClient(client)))
+    }
+
+    /// Allocate a prompt AST object.
+    pub fn alloc_prompt_ast(&mut self, ast: PromptAst) -> Value {
+        Value::Object(self.tlab.alloc(Object::PromptAst(ast)))
+    }
+
+    /// Allocate an HTTP request object.
+    pub fn alloc_http_request(&mut self, request: HttpRequest) -> Value {
+        Value::Object(self.tlab.alloc(Object::HttpRequest(request)))
     }
 
     // pub fn alloc_media(&mut self, media: BamlMedia) -> Value {

@@ -611,6 +611,15 @@ impl BexEngine {
             Object::Media(_) => Err(EngineError::CannotConvert {
                 type_name: "media".to_string(),
             }),
+            Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
+                type_name: "primitive_client".to_string(),
+            }),
+            Object::PromptAst(_) => Err(EngineError::CannotConvert {
+                type_name: "prompt_ast".to_string(),
+            }),
+            Object::HttpRequest(_) => Err(EngineError::CannotConvert {
+                type_name: "http_request".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1113,6 +1122,19 @@ impl BexEngine {
                                     });
                                 }
                             }
+                        }
+                        ExternalOp::SpecializePrompt => {
+                            // SpecializePrompt operation (not yet implemented)
+                            let pending_futures = pending_futures.clone();
+                            tokio::spawn(async move {
+                                let result = Err(OpError::Other(
+                                    "SpecializePrompt operations not yet implemented".into(),
+                                ));
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
                         }
                     }
                 }

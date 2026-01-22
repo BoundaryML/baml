@@ -146,6 +146,15 @@ impl Object {
             VmObject::Enum(e) => Ok(Object::Enum(e.name.clone())),
 
             VmObject::Future(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
+            VmObject::PrimitiveClient(_) => {
+                anyhow::bail!("Unsupported object type for testing: {obj:?}")
+            }
+            VmObject::PromptAst(_) => {
+                anyhow::bail!("Unsupported object type for testing: {obj:?}")
+            }
+            VmObject::HttpRequest(_) => {
+                anyhow::bail!("Unsupported object type for testing: {obj:?}")
+            }
             #[cfg(feature = "heap_debug")]
             VmObject::Sentinel(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
         }

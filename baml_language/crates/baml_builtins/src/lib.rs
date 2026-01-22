@@ -198,6 +198,25 @@ macro_rules! with_builtins {
                     #[external]
                     fn connect(addr: String) -> Socket;
                 }
+
+                // =====================================================================
+                // LLM primitives (hidden from type checker)
+                // =====================================================================
+                #[hide]
+                mod llm {
+                    struct PrimitiveClient {
+                        fn name(self: PrimitiveClient) -> String;
+                        fn provider(self: PrimitiveClient) -> String;
+                        #[external]
+                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
+                        fn build_request(self: PrimitiveClient, prompt: PromptAst) -> HttpRequest;
+                    }
+
+                    // PromptAst and HttpRequest have no builtin methods - they're
+                    // manipulated directly in Rust code.
+                    struct PromptAst {}
+                    struct HttpRequest {}
+                }
             }
 
             mod env {

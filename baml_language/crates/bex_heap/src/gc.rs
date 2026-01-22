@@ -310,6 +310,14 @@ impl<F: Clone> BexHeap<F> {
                     }
                 }
             }
+            // PrimitiveClient has options ObjectIndex
+            Object::PrimitiveClient(client) => {
+                worklist.push(client.options);
+            }
+            // PromptAst is recursive with ObjectIndex references
+            Object::PromptAst(prompt) => {
+                add_prompt_ast_refs_to_worklist(prompt, worklist);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -317,10 +325,64 @@ impl<F: Clone> BexHeap<F> {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
-            | Object::Media(_) => {}
+            | Object::Media(_)
+            | Object::HttpRequest(_) => {}
         }
     }
+}
 
+/// Recursively add ObjectIndex references from a PromptAst to the worklist.
+fn add_prompt_ast_refs_to_worklist(prompt: &bex_vm_types::PromptAst, worklist: &mut Vec<ObjectIndex>) {
+    use bex_vm_types::PromptAst;
+    match prompt {
+        PromptAst::String(_) => {}
+        PromptAst::Media(idx) => worklist.push(*idx),
+        PromptAst::Message { content, metadata, .. } => {
+            add_prompt_ast_refs_to_worklist(content, worklist);
+            if let Value::Object(idx) = metadata {
+                worklist.push(*idx);
+            }
+        }
+        PromptAst::Vec(nodes) => {
+            for node in nodes {
+                add_prompt_ast_refs_to_worklist(node, worklist);
+            }
+        }
+        PromptAst::PrintType { .. } => {}
+    }
+}
+
+/// Recursively fix up ObjectIndex references in a PromptAst.
+fn fixup_prompt_ast_refs(
+    prompt: &mut bex_vm_types::PromptAst,
+    forwarding: &std::collections::HashMap<ObjectIndex, ObjectIndex>,
+) {
+    use bex_vm_types::PromptAst;
+    match prompt {
+        PromptAst::String(_) => {}
+        PromptAst::Media(idx) => {
+            if let Some(&new_idx) = forwarding.get(idx) {
+                *idx = new_idx;
+            }
+        }
+        PromptAst::Message { content, metadata, .. } => {
+            fixup_prompt_ast_refs(content, forwarding);
+            if let Value::Object(idx) = metadata {
+                if let Some(&new_idx) = forwarding.get(idx) {
+                    *idx = new_idx;
+                }
+            }
+        }
+        PromptAst::Vec(nodes) => {
+            for node in nodes {
+                fixup_prompt_ast_refs(node, forwarding);
+            }
+        }
+        PromptAst::PrintType { .. } => {}
+    }
+}
+
+impl<F: Clone> BexHeap<F> {
     /// Fix up all object references in the new space to use forwarded addresses.
     ///
     /// # Safety
@@ -386,6 +448,16 @@ impl<F: Clone> BexHeap<F> {
                     }
                 }
             }
+            // PrimitiveClient has options ObjectIndex
+            Object::PrimitiveClient(client) => {
+                if let Some(&new_idx) = forwarding.get(&client.options) {
+                    client.options = new_idx;
+                }
+            }
+            // PromptAst is recursive with ObjectIndex references
+            Object::PromptAst(prompt) => {
+                fixup_prompt_ast_refs(prompt, forwarding);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -393,7 +465,8 @@ impl<F: Clone> BexHeap<F> {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
-            | Object::Media(_) => {}
+            | Object::Media(_)
+            | Object::HttpRequest(_) => {}
         }
     }
 

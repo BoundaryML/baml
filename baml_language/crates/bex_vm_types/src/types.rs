@@ -40,6 +40,12 @@ pub mod type_tags {
     pub const FUTURE: i64 = 9;
     /// Media type tag.
     pub const MEDIA: i64 = 10;
+    /// PrimitiveClient type tag.
+    pub const PRIMITIVE_CLIENT: i64 = 11;
+    /// PromptAst type tag.
+    pub const PROMPT_AST: i64 = 12;
+    /// HttpRequest type tag.
+    pub const HTTP_REQUEST: i64 = 13;
     /// Base value for class type tags (classes start at 100).
     pub const CLASS_BASE: i64 = 100;
     /// Unknown/invalid type tag.
@@ -111,6 +117,8 @@ pub enum ExternalOp {
     Llm,
     /// System operation (file I/O, shell, HTTP, etc.).
     Sys(SysOp),
+    /// Project a prompt through a client (resolve media URLs, etc.).
+    SpecializePrompt,
 }
 
 /// System operations that run outside the VM.
@@ -143,6 +151,7 @@ impl std::fmt::Display for ExternalOp {
         match self {
             ExternalOp::Llm => write!(f, "llm"),
             ExternalOp::Sys(sys_op) => write!(f, "{sys_op}"),
+            ExternalOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
         }
     }
 }
@@ -417,6 +426,15 @@ pub enum Object<F> {
     // /// Images, audio, pdf, video.
     Media(MediaValue),
 
+    /// LLM primitive client.
+    PrimitiveClient(PrimitiveClient),
+
+    /// Prompt AST tree node.
+    PromptAst(PromptAst),
+
+    /// HTTP request.
+    HttpRequest(HttpRequest),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -442,6 +460,13 @@ impl<F> std::fmt::Display for Object<F> {
                 }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
+            Object::PrimitiveClient(client) => {
+                write!(f, "<client {}:{}>", client.provider, client.name)
+            }
+            Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
+            Object::HttpRequest(req) => {
+                write!(f, "<http_request {} {}>", req.method, req.url)
+            }
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -492,6 +517,75 @@ pub enum MediaContent {
         file: String,
         base64_data: Option<String>,
     },
+}
+
+// ============================================================================
+// PrimitiveClient - represents a single LLM provider client
+// ============================================================================
+
+/// A primitive LLM client (single provider, not composite).
+#[derive(Debug, Clone)]
+pub struct PrimitiveClient {
+    /// Client name (e.g., "GPT4")
+    pub name: String,
+    /// Provider type (e.g., "openai", "anthropic")
+    pub provider: String,
+    /// Provider-specific options (heap-allocated map/object)
+    pub options: ObjectIndex,
+}
+
+// ============================================================================
+// PromptAst - represents a structured prompt (recursive tree)
+// ============================================================================
+
+/// Options for printing a type in a prompt.
+#[derive(Debug, Clone)]
+pub struct PrintTypeOptions {
+    /// Separator for union/or types (e.g., " | " or " or ")
+    pub or_splitter: String,
+}
+
+/// A node in the prompt AST tree.
+#[derive(Debug, Clone)]
+pub enum PromptAst {
+    /// A plain string.
+    String(String),
+
+    /// A media value (image, audio, video, etc.) - references heap object.
+    Media(ObjectIndex),
+
+    /// A message with a role, content, and optional metadata.
+    Message {
+        role: String,
+        content: Box<PromptAst>,
+        metadata: Value,
+    },
+
+    /// A sequence of prompt nodes.
+    Vec(Vec<PromptAst>),
+
+    /// Output format - prints a type definition for the LLM.
+    PrintType {
+        ty: String, // TODO: Use proper type representation
+        options: PrintTypeOptions,
+    },
+}
+
+// ============================================================================
+// HttpRequest - represents an HTTP request to send
+// ============================================================================
+
+/// An HTTP request ready to be sent.
+#[derive(Debug, Clone)]
+pub struct HttpRequest {
+    /// Request URL
+    pub url: String,
+    /// HTTP method (GET, POST, etc.)
+    pub method: String,
+    /// Request headers
+    pub headers: IndexMap<String, String>,
+    /// Request body (typically JSON string)
+    pub body: String,
 }
 
 impl std::fmt::Display for MediaValue {
@@ -579,6 +673,9 @@ pub enum ObjectType {
     Variant,
     Media(MediaKind),
     Future(FutureType),
+    PrimitiveClient,
+    PromptAst,
+    HttpRequest,
 }
 
 impl ObjectType {
@@ -594,6 +691,9 @@ impl ObjectType {
             Object::Map(_) => Self::Map,
             Object::Media(media) => Self::Media(media.kind),
             Object::Future(fut) => Self::Future(fut.into()),
+            Object::PrimitiveClient(_) => Self::PrimitiveClient,
+            Object::PromptAst(_) => Self::PromptAst,
+            Object::HttpRequest(_) => Self::HttpRequest,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -627,6 +727,9 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
+            ObjectType::PrimitiveClient => write!(f, "primitive_client"),
+            ObjectType::PromptAst => write!(f, "prompt_ast"),
+            ObjectType::HttpRequest => write!(f, "http_request"),
         }
     }
 }

@@ -60,7 +60,13 @@ impl Parse for BuiltinsInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut modules = Vec::new();
         while !input.is_empty() {
-            modules.push(input.parse()?);
+            // Check for attributes before mod
+            if input.peek(Token![#]) {
+                let attrs = input.call(Attribute::parse_outer)?;
+                modules.push(ModuleItem::parse_with_attrs(input, &attrs)?);
+            } else {
+                modules.push(input.parse()?);
+            }
         }
         Ok(BuiltinsInput { modules })
     }
@@ -70,6 +76,8 @@ impl Parse for BuiltinsInput {
 struct ModuleItem {
     name: Ident,
     items: Vec<ModuleContent>,
+    /// Whether this module is marked with #[hide] (hidden from type checker).
+    is_hidden: bool,
 }
 
 /// Content inside a module.
@@ -106,8 +114,10 @@ struct FunctionItem {
     is_external: bool,
 }
 
-impl Parse for ModuleItem {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl ModuleItem {
+    fn parse_with_attrs(input: ParseStream, attrs: &[Attribute]) -> Result<Self> {
+        let is_hidden = attrs.iter().any(|attr| attr.path().is_ident("hide"));
+
         // Parse: mod name { ... }
         input.parse::<Token![mod]>()?;
         let name: Ident = input.parse()?;
@@ -117,14 +127,16 @@ impl Parse for ModuleItem {
         let mut items = Vec::new();
         while !content.is_empty() {
             // Peek to determine what kind of item this is
-            // Handle attributes first (for #[opaque] struct or #[uses(vm)]/#[external] fn)
+            // Handle attributes first (for #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod)
             let lookahead = content.lookahead1();
             if lookahead.peek(Token![mod]) {
-                items.push(ModuleContent::Module(content.parse()?));
+                items.push(ModuleContent::Module(ModuleItem::parse_with_attrs(
+                    &content, &[],
+                )?));
             } else if lookahead.peek(Token![struct]) {
                 items.push(ModuleContent::Struct(content.parse()?));
             } else if lookahead.peek(Token![#]) {
-                // Could be #[opaque] struct or #[uses(vm)]/#[external] fn
+                // Could be #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod
                 // Parse attributes first, then peek again
                 let attrs = content.call(Attribute::parse_outer)?;
                 let lookahead2 = content.lookahead1();
@@ -136,6 +148,10 @@ impl Parse for ModuleItem {
                     items.push(ModuleContent::Function(Box::new(
                         FunctionItem::parse_with_attrs(&content, &attrs)?,
                     )));
+                } else if lookahead2.peek(Token![mod]) {
+                    items.push(ModuleContent::Module(ModuleItem::parse_with_attrs(
+                        &content, &attrs,
+                    )?));
                 } else {
                     return Err(lookahead2.error());
                 }
@@ -146,7 +162,17 @@ impl Parse for ModuleItem {
             }
         }
 
-        Ok(ModuleItem { name, items })
+        Ok(ModuleItem {
+            name,
+            items,
+            is_hidden,
+        })
+    }
+}
+
+impl Parse for ModuleItem {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Self::parse_with_attrs(input, &[])
     }
 }
 
@@ -502,6 +528,8 @@ fn unwrap_result_type(ty: &Type) -> (&Type, bool) {
 }
 
 /// Collect all builtin definitions from a module.
+/// When `is_hidden` is true, items are not added to `defs` (signatures)
+/// but are still added to `native_defs` (native function implementations).
 fn collect_builtins(
     module: &ModuleItem,
     path_prefix: &str,
@@ -510,6 +538,7 @@ fn collect_builtins(
     defs: &mut Vec<BuiltinDef>,
     native_defs: &mut Vec<NativeFnDef>,
     builtin_types: &HashMap<String, String>,
+    is_hidden: bool,
 ) {
     let module_name = module.name.to_string();
     let new_path_prefix = if path_prefix.is_empty() {
@@ -530,6 +559,9 @@ fn collect_builtins(
         format!("{}_{}", fn_name_prefix, to_snake_case(&module_name))
     };
 
+    // If this module is hidden, propagate to children
+    let hidden = is_hidden || module.is_hidden;
+
     for item in &module.items {
         match item {
             ModuleContent::Struct(s) => {
@@ -541,6 +573,7 @@ fn collect_builtins(
                     defs,
                     native_defs,
                     builtin_types,
+                    hidden,
                 );
             }
             ModuleContent::Function(f) => {
@@ -552,6 +585,7 @@ fn collect_builtins(
                     defs,
                     native_defs,
                     builtin_types,
+                    hidden,
                 );
             }
             ModuleContent::Module(m) => {
@@ -563,6 +597,7 @@ fn collect_builtins(
                     defs,
                     native_defs,
                     builtin_types,
+                    hidden,
                 );
             }
         }
@@ -578,6 +613,7 @@ fn collect_struct_builtins(
     defs: &mut Vec<BuiltinDef>,
     native_defs: &mut Vec<NativeFnDef>,
     builtin_types: &HashMap<String, String>,
+    is_hidden: bool,
 ) {
     let struct_name = s.name.to_string();
     let struct_path = format!("{path_prefix}.{struct_name}");
@@ -627,14 +663,17 @@ fn collect_struct_builtins(
         let (inner_return_ty, _) = unwrap_result_type(&method.return_type);
         let returns = type_to_pattern(inner_return_ty, &all_generics, builtin_types);
 
-        defs.push(BuiltinDef {
-            path: path.clone(),
-            const_name: const_name.clone(),
-            receiver,
-            params,
-            returns,
-            is_external: method.is_external,
-        });
+        // Only add to defs (signatures) if not hidden
+        if !is_hidden {
+            defs.push(BuiltinDef {
+                path: path.clone(),
+                const_name: const_name.clone(),
+                receiver,
+                params,
+                returns,
+                is_external: method.is_external,
+            });
+        }
 
         // Build native fn def
         let native_receiver = method.receiver.as_ref().map(|(ty, is_mut)| {
@@ -683,6 +722,7 @@ fn collect_function_builtin(
     defs: &mut Vec<BuiltinDef>,
     native_defs: &mut Vec<NativeFnDef>,
     builtin_types: &HashMap<String, String>,
+    is_hidden: bool,
 ) {
     let fn_generics: Vec<String> = f
         .generics
@@ -720,14 +760,17 @@ fn collect_function_builtin(
     let (inner_return_ty, _) = unwrap_result_type(&f.return_type);
     let returns = type_to_pattern(inner_return_ty, &fn_generics, builtin_types);
 
-    defs.push(BuiltinDef {
-        path: path.clone(),
-        const_name: const_name.clone(),
-        receiver,
-        params,
-        returns,
-        is_external: f.is_external,
-    });
+    // Only add to defs (signatures) if not hidden
+    if !is_hidden {
+        defs.push(BuiltinDef {
+            path: path.clone(),
+            const_name: const_name.clone(),
+            receiver,
+            params,
+            returns,
+            is_external: f.is_external,
+        });
+    }
 
     // Build native fn def
     let native_receiver = f.receiver.as_ref().map(|(ty, is_mut)| {
@@ -785,6 +828,7 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
             &mut defs,
             &mut native_defs,
             &builtin_types,
+            false, // Not hidden at root level; modules handle their own is_hidden flag
         );
     }
 
@@ -973,6 +1017,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
             &mut defs,
             &mut native_defs,
             &builtin_types,
+            false, // Not hidden at root level; modules handle their own is_hidden flag
         );
     }
 
@@ -1185,6 +1230,28 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
             let inner_type = rust_type_for_input(inner, false, is_mut);
             quote!(Option<#inner_type>)
         }
+        // Builtin types from baml.llm module
+        "PrimitiveClient" => {
+            if is_mut {
+                quote!(&mut PrimitiveClient)
+            } else {
+                quote!(&PrimitiveClient)
+            }
+        }
+        "PromptAst" => {
+            if is_mut {
+                quote!(&mut PromptAst)
+            } else {
+                quote!(&PromptAst)
+            }
+        }
+        "HttpRequest" => {
+            if is_mut {
+                quote!(&mut HttpRequest)
+            } else {
+                quote!(&HttpRequest)
+            }
+        }
         _ => {
             if is_mut {
                 quote!(&mut Value)
@@ -1216,6 +1283,10 @@ fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
             let inner_type = rust_type_for_output(inner, false);
             quote!(Option<#inner_type>)
         }
+        // Builtin types from baml.llm module
+        "PrimitiveClient" => quote!(PrimitiveClient),
+        "PromptAst" => quote!(PromptAst),
+        "HttpRequest" => quote!(HttpRequest),
         _ => quote!(Value), // Fallback
     }
 }
@@ -1369,6 +1440,22 @@ fn generate_single_extraction(
                 }
             }
         }
+        // Builtin types from baml.llm module
+        "PrimitiveClient" => {
+            quote! {
+                let #var_name = vm.as_primitive_client(&args[#idx])?;
+            }
+        }
+        "PromptAst" => {
+            quote! {
+                let #var_name = vm.as_prompt_ast(&args[#idx])?;
+            }
+        }
+        "HttpRequest" => {
+            quote! {
+                let #var_name = vm.as_http_request(&args[#idx])?;
+            }
+        }
         _ => {
             if is_mut {
                 quote! {
@@ -1424,8 +1511,10 @@ fn needs_reference(type_name: &str, is_generic: bool) -> bool {
         return false; // Generic types are already passed as &Value
     }
 
-    matches!(type_name, "String" | "Media")
-        || type_name.starts_with("Array")
+    matches!(
+        type_name,
+        "String" | "Media" | "PrimitiveClient" | "PromptAst" | "HttpRequest"
+    ) || type_name.starts_with("Array")
         || type_name.starts_with("Map")
 }
 
@@ -1457,6 +1546,10 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         },
         t if t.starts_with("Array") => quote!(Ok(vm.alloc_array(result))),
         t if t.starts_with("Map") => quote!(Ok(vm.alloc_map(result))),
+        // Builtin types from baml.llm module
+        "PrimitiveClient" => quote!(Ok(vm.alloc_primitive_client(result))),
+        "PromptAst" => quote!(Ok(vm.alloc_prompt_ast(result))),
+        "HttpRequest" => quote!(Ok(vm.alloc_http_request(result))),
         _ => quote!(Ok(result)),
     }
 }

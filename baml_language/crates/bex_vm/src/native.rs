@@ -13,7 +13,10 @@ use std::{collections::HashMap, fmt::Write};
 
 use bex_vm_types::{
     ObjectIndex,
-    types::{Future, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value},
+    types::{
+        Future, HttpRequest, Instance, MediaContent, MediaKind, MediaValue, Object,
+        PrimitiveClient, PromptAst, Type, Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -193,6 +196,34 @@ impl NativeFunctions for VmNatives {
             )))
         })
     }
+
+    // =========================================================================
+    // LLM primitive client functions (hidden from type checker)
+    // =========================================================================
+
+    fn baml_llm_primitive_client_name(client: &PrimitiveClient) -> String {
+        client.name.clone()
+    }
+
+    fn baml_llm_primitive_client_provider(client: &PrimitiveClient) -> String {
+        client.provider.clone()
+    }
+
+    // Note: specialize_prompt is #[external] - handled by engine, not here
+
+    fn baml_llm_primitive_client_build_request(
+        client: &PrimitiveClient,
+        prompt: &PromptAst,
+    ) -> HttpRequest {
+        // TODO: Implement provider-specific request building
+        let _ = prompt; // Will be used when implementing proper request building
+        HttpRequest {
+            url: format!("https://api.{}.com/v1/chat/completions", client.provider),
+            method: "POST".to_string(),
+            headers: IndexMap::new(),
+            body: "{}".to_string(),
+        }
+    }
 }
 
 // =============================================================================
@@ -288,6 +319,9 @@ fn deep_copy_value_recursive(
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::Media(m) => vm.tlab.alloc(Object::Media(m)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
+                Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
+                Object::PromptAst(a) => vm.tlab.alloc(Object::PromptAst(a)),
+                Object::HttpRequest(r) => vm.tlab.alloc(Object::HttpRequest(r)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
@@ -512,6 +546,9 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
             Object::Media(m) => Ok(format!("<type {}>", m.kind)),
             Object::Future(_) => Ok("<future>".to_string()),
+            Object::PrimitiveClient(c) => Ok(format!("<primitive_client {}>", c.name)),
+            Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
+            Object::HttpRequest(_) => Ok("<http_request>".to_string()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },
@@ -557,6 +594,9 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
         Object::Map(index_map) => Object::Map(index_map),
         Object::Future(future) => Object::Future(future),
         Object::Media(media_value) => Object::Media(media_value),
+        Object::PrimitiveClient(client) => Object::PrimitiveClient(client),
+        Object::PromptAst(ast) => Object::PromptAst(ast),
+        Object::HttpRequest(request) => Object::HttpRequest(request),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(kind) => Object::Sentinel(kind),
     })
