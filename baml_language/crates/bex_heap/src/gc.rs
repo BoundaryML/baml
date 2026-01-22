@@ -74,6 +74,11 @@ impl<F: Clone> BexHeap<F> {
         let from_space = self.active_space_index();
         let to_space = 1 - from_space;
 
+        self.debug_verify_tlab_canaries();
+
+        // Advance epoch before creating any new runtime indices.
+        self.bump_epoch();
+
         // Get the old space size for stats calculation
         let old_space_size = unsafe { (*self.spaces[from_space].get()).len() };
 
@@ -123,11 +128,10 @@ impl<F: Clone> BexHeap<F> {
 
         // Reset TLAB allocation pointer to end of new space
         self.reset_next_chunk(live_count);
+        self.clear_tlab_canaries();
 
-        // Clear the old (now inactive) space
-        unsafe {
-            (*self.spaces[from_space].get()).clear();
-        }
+        // Clear or poison the old (now inactive) space
+        self.finalize_from_space(from_space);
 
         // Remap roots to their new locations
         let remapped_roots: Vec<ObjectIndex> = roots
@@ -158,6 +162,11 @@ impl<F: Clone> BexHeap<F> {
         // Get current and next space indices
         let from_space = self.active_space_index();
         let to_space = 1 - from_space;
+
+        self.debug_verify_tlab_canaries();
+
+        // Advance epoch before creating any new runtime indices.
+        self.bump_epoch();
 
         // Get the old space size for stats calculation
         let old_space_size = unsafe { (*self.spaces[from_space].get()).len() };
@@ -200,11 +209,10 @@ impl<F: Clone> BexHeap<F> {
         // Swap spaces
         self.active_space.store(to_space, Ordering::Release);
         self.reset_next_chunk(live_count);
+        self.clear_tlab_canaries();
 
-        // Clear the old space
-        unsafe {
-            (*self.spaces[from_space].get()).clear();
-        }
+        // Clear or poison the old space
+        self.finalize_from_space(from_space);
 
         // Remap roots to their new locations
         let remapped_roots: Vec<ObjectIndex> = roots
@@ -249,7 +257,7 @@ impl<F: Clone> BexHeap<F> {
         };
 
         // Calculate global index for new object
-        let new_idx = ObjectIndex::from_raw(ct_len + new_runtime_idx);
+        let new_idx = self.make_object_index(ct_len + new_runtime_idx);
 
         // Record forwarding pointer
         forwarding.insert(old_idx, new_idx);
@@ -303,6 +311,8 @@ impl<F: Clone> BexHeap<F> {
                 }
             }
             // Primitives have no references
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => {}
             Object::String(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -377,6 +387,8 @@ impl<F: Clone> BexHeap<F> {
                 }
             }
             // Primitives have no references
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => {}
             Object::String(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -399,7 +411,10 @@ impl<F: Clone> BexHeap<F> {
 mod tests {
     use std::sync::Arc;
 
-    use bex_vm_types::Object;
+    use bex_vm_types::{
+        Object, Value,
+        types::{Class, Enum, Instance},
+    };
 
     use super::*;
     use crate::Tlab;
@@ -450,6 +465,127 @@ mod tests {
 
         assert_eq!(stats.live_count, 0);
         assert!(stats.collected_count > 0);
+    }
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn test_gc_stale_runtime_index_panics() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Off,
+        };
+        let heap = BexHeap::<()>::with_tlab_size_and_debug(vec![], 8, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let old_idx = tlab.alloc_string("alive".to_string());
+        let (_, remapped) = unsafe { heap.collect_garbage(&[old_idx]) };
+        let new_idx = remapped[0];
+        assert_ne!(old_idx, new_idx);
+
+        let stale_read = catch_unwind(AssertUnwindSafe(|| unsafe {
+            let _ = heap.get_object(old_idx);
+        }));
+        assert!(stale_read.is_err());
+
+        let obj = unsafe { heap.get_object(new_idx) };
+        assert!(matches!(obj, Object::String(_)));
+    }
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn test_handle_resolved_index_stale_after_gc_panics() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Off,
+        };
+        let heap = BexHeap::<()>::with_tlab_size_and_debug(vec![], 8, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let obj = tlab.alloc_string("alive".to_string());
+        let _handle = heap.create_handle(obj);
+
+        let roots = heap.collect_handle_roots();
+        assert_eq!(roots.len(), 1);
+        let old_idx = roots[0];
+
+        let (_, remapped) = unsafe { heap.collect_garbage(&roots) };
+        let new_idx = remapped[0];
+        let roots_after = heap.collect_handle_roots();
+        assert_eq!(roots_after.len(), 1);
+        assert_eq!(roots_after[0], new_idx);
+        assert_ne!(old_idx, new_idx);
+
+        let stale_read = catch_unwind(AssertUnwindSafe(|| unsafe {
+            let _ = heap.get_object(old_idx);
+        }));
+        assert!(stale_read.is_err());
+    }
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn test_full_verify_panics_on_bad_variant() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+
+        let compile_time = vec![Object::Enum(Enum {
+            name: "E".to_string(),
+            variant_names: vec!["A".to_string()],
+        })];
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Full,
+        };
+        let heap = BexHeap::<()>::with_tlab_size_and_debug(compile_time, 4, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let _bad_variant = tlab.alloc(Object::Variant(bex_vm_types::types::Variant {
+            enm: ObjectIndex::from_raw(0),
+            index: 3,
+        }));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            heap.verify_quick();
+        }));
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn test_full_verify_panics_on_instance_field_mismatch() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+
+        let compile_time = vec![Object::Class(Class {
+            name: "C".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+            type_tag: 1,
+        })];
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Full,
+        };
+        let heap = BexHeap::<()>::with_tlab_size_and_debug(compile_time, 4, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let _bad_instance = tlab.alloc(Object::Instance(Instance {
+            class: ObjectIndex::from_raw(0),
+            fields: vec![Value::Null],
+        }));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            heap.verify_quick();
+        }));
+        assert!(result.is_err());
     }
 
     #[test]

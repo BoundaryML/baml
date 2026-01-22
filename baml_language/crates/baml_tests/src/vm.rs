@@ -146,6 +146,8 @@ impl Object {
             VmObject::Enum(e) => Ok(Object::Enum(e.name.clone())),
 
             VmObject::Future(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
+            #[cfg(feature = "heap_debug")]
+            VmObject::Sentinel(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
         }
     }
 

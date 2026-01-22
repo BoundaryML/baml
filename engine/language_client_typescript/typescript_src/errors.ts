@@ -22,6 +22,31 @@ export class BamlClientError extends BamlError {
   }
 }
 
+/**
+ * Error thrown when invalid arguments are passed to a BAML function.
+ */
+export class BamlInvalidArgumentError extends BamlError {
+  constructor(message: string) {
+    super(message);
+    this.name = "BamlInvalidArgumentError";
+    Object.setPrototypeOf(this, BamlInvalidArgumentError.prototype);
+  }
+
+  toJSON(): string {
+    return JSON.stringify({
+      name: this.name,
+      message: this.message,
+    });
+  }
+
+  static from(error: Error): BamlInvalidArgumentError | undefined {
+    if (error.message.includes("BamlInvalidArgumentError")) {
+      return new BamlInvalidArgumentError(error.message);
+    }
+    return undefined;
+  }
+}
+
 export class BamlClientFinishReasonError extends BamlError {
   prompt: string;
   raw_output: string;
@@ -274,7 +299,8 @@ export type BamlErrors =
   | BamlValidationError
   | BamlClientFinishReasonError
   | BamlAbortError
-  | BamlTimeoutError;
+  | BamlTimeoutError
+  | BamlInvalidArgumentError;
 
 function isError(error: unknown): error is Error {
   if (typeof error === "string") {
@@ -296,6 +322,11 @@ function isError(error: unknown): error is Error {
 function createBamlErrorUnsafe(error: unknown): BamlError | Error {
   if (!isError(error)) {
     return new Error(String(error));
+  }
+
+  const bamlInvalidArgumentError = BamlInvalidArgumentError.from(error);
+  if (bamlInvalidArgumentError) {
+    return bamlInvalidArgumentError;
   }
 
   const bamlAbortError = BamlAbortError.from(error);
@@ -321,6 +352,11 @@ function createBamlErrorUnsafe(error: unknown): BamlError | Error {
   const bamlClientFinishReasonError = BamlClientFinishReasonError.from(error);
   if (bamlClientFinishReasonError) {
     return bamlClientFinishReasonError;
+  }
+
+  // If the error message contains "BamlError", wrap it in a generic BamlError
+  if (error.message.includes("BamlError")) {
+    return new BamlError(error.message);
   }
 
   // otherwise return the original error
@@ -350,24 +386,15 @@ export function isBamlError(error: unknown): error is BamlError {
   return error instanceof BamlError;
 }
 
-export function toBamlError(error: unknown): BamlError | null {
+export function toBamlError(error: unknown): BamlError | Error {
   try {
     if (isBamlError(error)) {
       return error;
     }
 
-    if (isError(error)) {
-      const converted = createBamlErrorUnsafe(error);
-      // Only return if we successfully converted to a BamlError
-      if (converted instanceof BamlError) {
-        return converted;
-      }
-    }
-
-    // Return null if not convertible
-    return null;
-  } catch {
-    return null;
+    return createBamlErrorUnsafe(error);
+  } catch (e) {
+    return e as Error;
   }
 }
 

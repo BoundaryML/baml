@@ -45,3 +45,8 @@ text-size = { workspace = true }
 [lints.clippy]
 print_stdout = "allow"
 print_stderr = "allow"
+
+
+[features]
+default = []
+heap_debug = ["bex_vm/heap_debug", "bex_vm_types/heap_debug"]
