@@ -152,9 +152,7 @@ describe("AWS Provider", () => {
 
         await expect(async () => {
           await b.TestAws("Dr. Pepper", { clientRegistry: crEmptyRegion });
-        }).rejects.toMatchObject({
-          code: "GenericFailure",
-        });
+        }).rejects.toThrow("region cannot be empty");
 
         const crNoEnvRegion = new ClientRegistry();
         crNoEnvRegion.addLlmClient("DynamicAWSClient", "aws-bedrock", {
@@ -365,9 +363,7 @@ describe("AWS Provider", () => {
 
       await expect(async () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
-      }).rejects.toMatchObject({
-        code: "GenericFailure",
-      });
+      }).rejects.toThrow("region must be a string");
     });
 
     it("should throw error when using invalid profile", async () => {
@@ -384,9 +380,7 @@ describe("AWS Provider", () => {
 
       await expect(async () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
-      }).rejects.toMatchObject({
-        code: "GenericFailure",
-      });
+      }).rejects.toThrow("access_key_id must be a string");
     });
 
     it("should support both AWS_REGION and AWS_DEFAULT_REGION environment variables", async () => {
