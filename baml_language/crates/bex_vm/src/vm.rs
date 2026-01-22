@@ -420,7 +420,8 @@ impl BexVm {
             "Cannot mutate compile-time object at index {global_idx}"
         );
         let runtime_idx = global_idx - ct_len;
-        unsafe { &mut (&mut (*self.heap.objects_ptr()))[runtime_idx] }
+        // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
+        unsafe { self.heap.get_runtime_object_mut(runtime_idx) }
     }
 
     /// Helper method to get `ObjectIndex` from a Value, with type checking.

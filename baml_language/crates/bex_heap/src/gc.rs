@@ -75,11 +75,13 @@ impl<F: Clone> BexHeap<F> {
         let to_space = 1 - from_space;
 
         // Get the old space size for stats calculation
-        let old_space_size = unsafe { (*self.spaces[from_space].get()).len() };
+        // SAFETY: GC runs at safepoints, no VMs are executing
+        let old_space_size = unsafe { self.space_ref(from_space).len() };
 
         // Clear the target space and prepare for copying
+        // SAFETY: GC runs at safepoints, no VMs are executing
         unsafe {
-            (*self.spaces[to_space].get()).clear();
+            self.space_mut(to_space).clear();
         }
 
         // Worklist for BFS traversal: (old_index) pairs
@@ -105,7 +107,7 @@ impl<F: Clone> BexHeap<F> {
             // Add this object's references to the worklist
             // SAFETY: We just copied the object, so it exists in to_space
             let ct_len = self.compile_time_len();
-            let obj = unsafe { &(&(*self.spaces[to_space].get()))[new_idx.into_raw() - ct_len] };
+            let obj = unsafe { self.space_ref(to_space).get(new_idx.into_raw() - ct_len) };
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
@@ -115,7 +117,8 @@ impl<F: Clone> BexHeap<F> {
         }
 
         // Calculate stats before swapping
-        let live_count = unsafe { (*self.spaces[to_space].get()).len() };
+        // SAFETY: GC runs at safepoints
+        let live_count = unsafe { self.space_ref(to_space).len() };
         let collected_count = old_space_size.saturating_sub(live_count);
 
         // Swap spaces: make to_space the new active space
@@ -125,8 +128,9 @@ impl<F: Clone> BexHeap<F> {
         self.reset_next_chunk(live_count);
 
         // Clear the old (now inactive) space
+        // SAFETY: GC runs at safepoints, no VMs are executing
         unsafe {
-            (*self.spaces[from_space].get()).clear();
+            self.space_mut(from_space).clear();
         }
 
         // Remap roots to their new locations
@@ -160,11 +164,13 @@ impl<F: Clone> BexHeap<F> {
         let to_space = 1 - from_space;
 
         // Get the old space size for stats calculation
-        let old_space_size = unsafe { (*self.spaces[from_space].get()).len() };
+        // SAFETY: GC runs at safepoints, no VMs are executing
+        let old_space_size = unsafe { self.space_ref(from_space).len() };
 
         // Clear the target space and prepare for copying
+        // SAFETY: GC runs at safepoints, no VMs are executing
         unsafe {
-            (*self.spaces[to_space].get()).clear();
+            self.space_mut(to_space).clear();
         }
 
         // Worklist for BFS traversal
@@ -184,7 +190,8 @@ impl<F: Clone> BexHeap<F> {
             let new_idx = self.copy_object_to_new_space(old_idx, to_space, &mut forwarding);
 
             let ct_len = self.compile_time_len();
-            let obj = unsafe { &(&(*self.spaces[to_space].get()))[new_idx.into_raw() - ct_len] };
+            // SAFETY: GC runs at safepoints
+            let obj = unsafe { self.space_ref(to_space).get(new_idx.into_raw() - ct_len) };
             self.add_references_to_worklist(obj, &mut worklist);
         }
 
@@ -194,7 +201,8 @@ impl<F: Clone> BexHeap<F> {
         }
 
         // Calculate stats before swapping
-        let live_count = unsafe { (*self.spaces[to_space].get()).len() };
+        // SAFETY: GC runs at safepoints
+        let live_count = unsafe { self.space_ref(to_space).len() };
         let collected_count = old_space_size.saturating_sub(live_count);
 
         // Swap spaces
@@ -202,8 +210,9 @@ impl<F: Clone> BexHeap<F> {
         self.reset_next_chunk(live_count);
 
         // Clear the old space
+        // SAFETY: GC runs at safepoints, no VMs are executing
         unsafe {
-            (*self.spaces[from_space].get()).clear();
+            self.space_mut(from_space).clear();
         }
 
         // Remap roots to their new locations
@@ -238,13 +247,15 @@ impl<F: Clone> BexHeap<F> {
         let runtime_old_idx = old_idx.into_raw() - ct_len;
 
         // Clone the object
-        let obj = unsafe { (&(*self.spaces[from_space].get()))[runtime_old_idx].clone() };
+        // SAFETY: GC runs at safepoints, no VMs are executing
+        let obj = unsafe { self.space_ref(from_space).get(runtime_old_idx).clone() };
 
         // Append to new space
+        // SAFETY: GC runs at safepoints, no VMs are executing
         let new_runtime_idx = unsafe {
-            let to_vec = &mut *self.spaces[to_space].get();
+            let to_vec = self.space_mut(to_space);
             let idx = to_vec.len();
-            to_vec.push(obj);
+            to_vec.push_with(obj, || Object::String(String::new()));
             idx
         };
 
@@ -322,7 +333,7 @@ impl<F: Clone> BexHeap<F> {
     ) {
         // SAFETY: All live objects have been copied to to_space, and no VMs are executing
         unsafe {
-            let to_vec = &mut *self.spaces[to_space].get();
+            let to_vec = self.space_mut(to_space);
 
             for obj in to_vec.iter_mut() {
                 self.fixup_object_references(obj, forwarding);

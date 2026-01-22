@@ -125,8 +125,9 @@ impl<F> Tlab<F> {
 
         // SAFETY: This TLAB has exclusive access to indices in [chunk.start, chunk.end)
         // and we've ensured alloc_ptr < alloc_limit after potential refill.
+        // ChunkedVec guarantees stable pointers during concurrent growth.
         unsafe {
-            (&mut *self.heap.objects_ptr())[runtime_idx] = obj;
+            self.heap.write_runtime_object(runtime_idx, obj);
         }
 
         // Track allocation for GC heuristic
@@ -221,7 +222,7 @@ impl<F> Tlab<F> {
         if global_idx >= ct_len {
             let runtime_idx = global_idx - ct_len;
             unsafe {
-                (&mut *self.heap.objects_ptr())[runtime_idx] = obj;
+                self.heap.write_runtime_object(runtime_idx, obj);
             }
         }
     }
@@ -551,18 +552,15 @@ mod tests {
     /// This verifies that TLABs correctly provide non-overlapping regions
     /// when used from multiple threads simultaneously.
     ///
-    /// KNOWN ISSUE: Miri detects a potential data race between TLAB writes
-    /// (via `objects_ptr()`) and Vec resizing (in `alloc_tlab_chunk`). The
-    /// growth_lock only protects chunk allocation, not concurrent writes.
-    /// If the Vec reallocates while another thread holds a pointer from
-    /// `objects_ptr()`, that's UB. In practice this works because:
-    /// - The engine pre-warms TLABs before concurrent execution
-    /// - GC resets allocation, preventing unbounded growth
+    /// Tests concurrent TLAB allocation from multiple threads.
     ///
-    /// This should be fixed by either pre-allocating or using a different
-    /// data structure.
+    /// This verifies that TLABs correctly provide non-overlapping regions
+    /// when used from multiple threads simultaneously.
+    ///
+    /// This test previously failed under Miri due to a data race between
+    /// TLAB writes and Vec resizing. The fix: replace Vec with ChunkedVec,
+    /// which never moves existing data when growing.
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_miri_concurrent_tlab_allocation() {
         use std::thread;
 
@@ -635,9 +633,10 @@ mod tests {
     /// Multiple threads exhaust their TLAB chunks and refill, verifying
     /// the atomic chunk allocation doesn't cause races.
     ///
-    /// KNOWN ISSUE: See test_miri_concurrent_tlab_allocation.
+    /// This test previously failed under Miri due to a data race between
+    /// TLAB writes and Vec resizing. The fix: replace Vec with ChunkedVec,
+    /// which never moves existing data when growing.
     #[test]
-    #[cfg_attr(miri, ignore)]
     fn test_miri_concurrent_tlab_refill() {
         use std::thread;
 
