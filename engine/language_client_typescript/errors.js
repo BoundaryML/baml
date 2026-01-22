@@ -301,18 +301,10 @@ function toBamlError(error) {
         if (isBamlError(error)) {
             return error;
         }
-        if (isError(error)) {
-            const converted = createBamlErrorUnsafe(error);
-            // Only return if we successfully converted to a BamlError
-            if (converted instanceof BamlError) {
-                return converted;
-            }
-        }
-        // Return null if not convertible
-        return null;
+        return createBamlErrorUnsafe(error);
     }
-    catch {
-        return null;
+    catch (e) {
+        return e;
     }
 }
 // No need for a separate throwBamlValidationError function in TypeScript

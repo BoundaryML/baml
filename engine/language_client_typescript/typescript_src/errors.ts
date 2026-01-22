@@ -386,24 +386,15 @@ export function isBamlError(error: unknown): error is BamlError {
   return error instanceof BamlError;
 }
 
-export function toBamlError(error: unknown): BamlError | null {
+export function toBamlError(error: unknown): BamlError | Error {
   try {
     if (isBamlError(error)) {
       return error;
     }
 
-    if (isError(error)) {
-      const converted = createBamlErrorUnsafe(error);
-      // Only return if we successfully converted to a BamlError
-      if (converted instanceof BamlError) {
-        return converted;
-      }
-    }
-
-    // Return null if not convertible
-    return null;
-  } catch {
-    return null;
+    return createBamlErrorUnsafe(error);
+  } catch (e) {
+    return e as Error;
   }
 }
 

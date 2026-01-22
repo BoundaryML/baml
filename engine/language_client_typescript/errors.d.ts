@@ -81,5 +81,5 @@ export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientF
  * ```
  */
 export declare function isBamlError(error: unknown): error is BamlError;
-export declare function toBamlError(error: unknown): BamlError | null;
+export declare function toBamlError(error: unknown): BamlError | Error;
 //# sourceMappingURL=errors.d.ts.map
