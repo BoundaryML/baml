@@ -321,6 +321,19 @@ impl std::fmt::Display for Variant {
     }
 }
 
+#[cfg(feature = "heap_debug")]
+#[derive(Clone, Debug)]
+pub enum SentinelKind {
+    Uninit,
+    FromSpacePoison {
+        epoch: u32,
+    },
+    TlabCanary {
+        chunk_start: usize,
+        chunk_end: usize,
+    },
+}
+
 /// Runtime values.
 ///
 /// This struct should not contain allocated objects and should be [`Copy`].
@@ -403,6 +416,9 @@ pub enum Object<F> {
     // TODO: Figure out media.
     // /// Images, audio, pdf, video.
     Media(MediaValue),
+
+    #[cfg(feature = "heap_debug")]
+    Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
     // /// Used for `baml.fetch_as` function.
     // BamlType(TypeIR),
@@ -426,6 +442,8 @@ impl<F> std::fmt::Display for Object<F> {
                 }
                 Future::Ready(value) => write!(f, "<ready: {value}>"),
             },
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
         }
     }
@@ -576,6 +594,8 @@ impl ObjectType {
             Object::Map(_) => Self::Map,
             Object::Media(media) => Self::Media(media.kind),
             Object::Future(fut) => Self::Future(fut.into()),
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
         }
     }

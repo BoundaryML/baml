@@ -333,6 +333,8 @@ fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
                 Object::Enum(_) => type_tags::ENUM,
                 Object::Media(_) => type_tags::MEDIA,
                 Object::Class(_) => type_tags::UNKNOWN,
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
                     let class_obj = unsafe { heap.get_object(instance.class) };
                     let Object::Class(class) = class_obj else {
@@ -405,8 +407,14 @@ impl BexVm {
             global_idx >= ct_len,
             "Cannot mutate compile-time object at index {global_idx}"
         );
+        self.heap.debug_assert_valid_index(idx);
         let runtime_idx = global_idx - ct_len;
-        unsafe { &mut (&mut (*self.heap.objects_ptr()))[runtime_idx] }
+        let obj = unsafe { &mut (&mut (*self.heap.objects_ptr()))[runtime_idx] };
+        #[cfg(feature = "heap_debug")]
+        if let Object::Sentinel(kind) = obj {
+            panic!("heap sentinel write: {kind:?}");
+        }
+        obj
     }
 
     /// Helper method to get `ObjectIndex` from a Value, with type checking.

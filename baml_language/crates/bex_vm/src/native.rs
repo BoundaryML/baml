@@ -288,6 +288,8 @@ fn deep_copy_value_recursive(
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::Media(m) => vm.tlab.alloc(Object::Media(m)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
 
             // Record the mapping if not already done (for non-circular cases)
@@ -510,6 +512,8 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
             Object::Media(m) => Ok(format!("<type {}>", m.kind)),
             Object::Future(_) => Ok("<future>".to_string()),
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },
     }
 }
@@ -553,5 +557,7 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
         Object::Map(index_map) => Object::Map(index_map),
         Object::Future(future) => Object::Future(future),
         Object::Media(media_value) => Object::Media(media_value),
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(kind) => Object::Sentinel(kind),
     })
 }

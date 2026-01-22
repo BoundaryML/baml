@@ -33,3 +33,6 @@ divan = { workspace = true }
 indexmap = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
+[features]
+default = []
+heap_debug = []
