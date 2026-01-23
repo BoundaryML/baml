@@ -1006,4 +1006,84 @@ mod tests {
             }
         }
     }
+
+    /// Tests active space swap atomics during GC cycles.
+    #[test]
+    fn test_miri_active_space_swap() {
+        let heap = BexHeap::<()>::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let obj1 = tlab.alloc_string("object1".to_string());
+        let obj2 = tlab.alloc_string("object2".to_string());
+
+        let initial_space = heap.active_space_index();
+
+        // GC triggers space swap
+        let (stats, remapped, _) = unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
+
+        assert_eq!(heap.active_space_index(), 1 - initial_space);
+        assert_eq!(stats.live_count, 2);
+
+        // Verify objects accessible in new space
+        for idx in &remapped {
+            assert!(matches!(
+                unsafe { heap.get_object(*idx) },
+                Object::String(_)
+            ));
+        }
+
+        // Second GC swaps back
+        let (stats2, remapped2, _) = unsafe { heap.collect_garbage_with_forwarding(&remapped) };
+
+        assert_eq!(heap.active_space_index(), initial_space);
+        assert_eq!(stats2.live_count, 2);
+
+        for idx in &remapped2 {
+            assert!(matches!(
+                unsafe { heap.get_object(*idx) },
+                Object::String(_)
+            ));
+        }
+    }
+
+    /// Tests handle table updates during GC.
+    #[test]
+    fn test_miri_handle_table_concurrent_access() {
+        use bex_external_types::WeakHeapRef;
+
+        let heap = BexHeap::<()>::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let obj1 = tlab.alloc_string("handle_obj_1".to_string());
+        let obj2 = tlab.alloc_string("handle_obj_2".to_string());
+        let _obj3 = tlab.alloc_string("no_handle".to_string()); // Will be collected
+
+        let handle1 = heap.create_handle(obj1);
+        let handle2 = heap.create_handle(obj2);
+
+        assert_eq!(heap.resolve_handle(handle1.slab_key()), Some(obj1));
+        assert_eq!(heap.resolve_handle(handle2.slab_key()), Some(obj2));
+
+        let roots = heap.collect_handle_roots();
+        let (stats, _, forwarding) = unsafe { heap.collect_garbage_with_forwarding(&roots) };
+
+        assert_eq!(stats.live_count, 2);
+        assert!(stats.collected_count > 0);
+
+        // Handles updated to new locations
+        let new1 = heap.resolve_handle(handle1.slab_key()).unwrap();
+        let new2 = heap.resolve_handle(handle2.slab_key()).unwrap();
+
+        if let Some(&expected) = forwarding.get(&obj1) {
+            assert_eq!(new1, expected);
+        }
+        if let Some(&expected) = forwarding.get(&obj2) {
+            assert_eq!(new2, expected);
+        }
+
+        // Objects accessible through updated handles
+        assert!(
+            matches!(unsafe { heap.get_object(new1) }, Object::String(s) if s == "handle_obj_1")
+        );
+    }
 }
