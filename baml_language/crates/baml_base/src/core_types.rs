@@ -74,7 +74,7 @@ impl ariadne::Span for Span {
 pub type Name = SmolStr;
 
 /// The types of media we support
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum MediaKind {
     Image,
     Audio,

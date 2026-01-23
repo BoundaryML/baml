@@ -223,7 +223,7 @@ fn normalize_impl(
         Ty::String => StructuralTy::String,
         Ty::Bool => StructuralTy::Bool,
         Ty::Null => StructuralTy::Null,
-        Ty::Media(kind) => StructuralTy::Media(kind.clone()),
+        Ty::Media(kind) => StructuralTy::Media(*kind),
         Ty::Unknown => StructuralTy::Unknown,
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,

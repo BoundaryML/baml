@@ -42,7 +42,6 @@ divan = { workspace = true }
 name = "compiler_benchmark"
 harness = false
 
-
 [features]
-default = []
-heap_debug = ["bex_vm/heap_debug", "bex_vm_types/heap_debug"]
+default = [  ]
+heap_debug = [ "bex_vm/heap_debug", "bex_vm_types/heap_debug" ]

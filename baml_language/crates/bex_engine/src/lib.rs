@@ -616,8 +616,9 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::Media(_) => Err(EngineError::CannotConvert {
-                type_name: "media".to_string(),
+            Object::Media(m) => Ok(BexExternalValue::Media {
+                handle: self.heap().create_handle(idx),
+                kind: m.kind,
             }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
@@ -940,12 +941,16 @@ impl BexEngine {
                     .expect("Handle should be valid - object was returned to external code");
                 Value::Object(idx)
             }
-            BexValue::External(ext) => Self::allocate_from_external(vm, ext),
+            BexValue::External(ext) => Self::allocate_from_external(vm, ext, guard),
         }
     }
 
     /// Recursively allocate a `BexExternalValue` onto the heap, returning a `Value`.
-    fn allocate_from_external(vm: &mut BexVm, external: &BexExternalValue) -> Value {
+    fn allocate_from_external(
+        vm: &mut BexVm,
+        external: &BexExternalValue,
+        guard: &EpochGuard<'_>,
+    ) -> Value {
         match external {
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(*i),
@@ -955,7 +960,7 @@ impl BexEngine {
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .iter()
-                    .map(|item| Self::allocate_from_external(vm, item))
+                    .map(|item| Self::allocate_from_external(vm, item, guard))
                     .collect();
                 vm.alloc_array(values)
             }
@@ -963,26 +968,32 @@ impl BexEngine {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .iter()
                     .map(|(k, v): (&String, &BexExternalValue)| {
-                        (k.clone(), Self::allocate_from_external(vm, v))
+                        (k.clone(), Self::allocate_from_external(vm, v, guard))
                     })
                     .collect();
                 vm.alloc_map(values)
             }
             BexExternalValue::Instance { .. } => {
                 // Instance allocation requires class lookup - not supported from external
-                // External callers should use the class constructor functions
-                panic!(
-                    "Cannot allocate Instance from BexExternalValue - use class constructor functions"
+                todo!(
+                    "Cannot allocate Instance from BexExternalValue. We need to do a string lookup for the right type in the schema."
                 )
             }
             BexExternalValue::Variant { .. } => {
                 // Variant allocation requires enum lookup - not supported from external
-                // External callers should use enum variant values
-                panic!("Cannot allocate Variant from BexExternalValue - use enum values")
+                todo!(
+                    "Cannot allocate Variant from BexExternalValue. We need to do a string lookup for the right type in the schema."
+                )
             }
             BexExternalValue::Union { value, .. } => {
                 // Unwrap the union and allocate the inner value
-                Self::allocate_from_external(vm, value)
+                Self::allocate_from_external(vm, value, guard)
+            }
+            BexExternalValue::Media { handle, .. } => {
+                let idx = handle
+                    .object_index(guard)
+                    .expect("Handle should be valid - object was returned to external code");
+                Value::Object(idx)
             }
         }
     }

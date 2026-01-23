@@ -529,7 +529,7 @@ impl BexVm {
     pub fn as_media(
         &self,
         value: &Value,
-        media_kind: bex_vm_types::types::MediaKind,
+        media_kind: baml_base::MediaKind,
     ) -> Result<&bex_vm_types::types::MediaValue, InternalError> {
         let index = self.as_object_index(value, ObjectType::Media(media_kind))?;
         let obj = self.get_object(index);
@@ -547,7 +547,7 @@ impl BexVm {
     pub fn as_media_mut(
         &mut self,
         value: &Value,
-        media_kind: bex_vm_types::types::MediaKind,
+        media_kind: baml_base::MediaKind,
     ) -> Result<&mut bex_vm_types::types::MediaValue, InternalError> {
         let index = self.as_object_index(value, ObjectType::Media(media_kind))?;
         // Check type first to avoid borrow issues
@@ -574,6 +574,7 @@ impl BexVm {
         Err(InternalError::InvalidObjectRef(index.into_raw()))
     }
 
+    /// TODO: We should remove this API in favor of using `bex_engine` only (vbv)
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
@@ -623,7 +624,6 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
-        self.collect_garbage();
     }
 
     /// Returns a reference to the pending future.
@@ -667,16 +667,6 @@ impl BexVm {
         }
 
         Ok(())
-    }
-
-    /// Stub for garbage collection.
-    ///
-    /// In the unified heap architecture, GC is coordinated by the engine
-    /// at safepoints (when all VMs are yielded). This method is kept for
-    /// API compatibility but is a no-op.
-    pub fn collect_garbage(&mut self) {
-        // GC is now coordinated by the engine at safepoints.
-        // This is a no-op in the unified heap architecture.
     }
 
     /// Allocates an array on the heap and returns it to the caller.

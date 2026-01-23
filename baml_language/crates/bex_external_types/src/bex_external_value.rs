@@ -150,6 +150,11 @@ pub enum BexExternalValue {
         /// Metadata about the union type.
         metadata: UnionMetadata,
     },
+
+    Media {
+        handle: crate::Handle,
+        kind: baml_base::MediaKind,
+    },
 }
 
 impl BexExternalValue {
@@ -166,6 +171,13 @@ impl BexExternalValue {
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
+            BexExternalValue::Media { kind, .. } => match kind {
+                baml_base::MediaKind::Image => "image",
+                baml_base::MediaKind::Audio => "audio",
+                baml_base::MediaKind::Video => "video",
+                baml_base::MediaKind::Pdf => "pdf",
+                baml_base::MediaKind::Generic => "media",
+            },
         }
     }
 }

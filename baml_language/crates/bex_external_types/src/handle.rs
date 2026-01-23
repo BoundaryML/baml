@@ -51,6 +51,14 @@ pub struct Handle {
     pub(crate) inner: Arc<HandleInner>,
 }
 
+impl PartialEq for Handle {
+    fn eq(&self, other: &Self) -> bool {
+        self.slab_key() == other.slab_key()
+    }
+}
+
+impl Eq for Handle {}
+
 /// Internal handle data.
 ///
 /// This is public for use by `bex_heap` but should not be constructed

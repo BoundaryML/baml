@@ -11,9 +11,10 @@
 
 use std::{collections::HashMap, fmt::Write};
 
+use baml_base::MediaKind;
 use bex_vm_types::{
     ObjectIndex,
-    types::{Future, Instance, MediaContent, MediaKind, MediaValue, Object, Type, Value},
+    types::{Future, Instance, MediaContent, MediaValue, Object, Type, Value},
 };
 use indexmap::IndexMap;
 

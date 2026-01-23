@@ -474,7 +474,7 @@ pub struct PendingFuture {
 
 #[derive(Clone, Debug)]
 pub struct MediaValue {
-    pub kind: MediaKind,
+    pub kind: baml_base::MediaKind,
     pub content: MediaContent,
     pub mime_type: Option<String>,
 }
@@ -577,7 +577,7 @@ pub enum ObjectType {
     String,
     Enum,
     Variant,
-    Media(MediaKind),
+    Media(baml_base::MediaKind),
     Future(FutureType),
 }
 
@@ -682,27 +682,6 @@ impl From<&Future> for FutureType {
         match value {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MediaKind {
-    Image,
-    Audio,
-    Video,
-    Pdf,
-    Generic,
-}
-
-impl std::fmt::Display for MediaKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MediaKind::Image => write!(f, "image"),
-            MediaKind::Audio => write!(f, "audio"),
-            MediaKind::Video => write!(f, "video"),
-            MediaKind::Pdf => write!(f, "pdf"),
-            MediaKind::Generic => write!(f, "media"),
         }
     }
 }
