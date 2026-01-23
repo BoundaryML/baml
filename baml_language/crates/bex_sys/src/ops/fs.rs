@@ -1,103 +1,81 @@
 //! File system operations.
-//!
-//! Implements `baml.fs.open`, `baml.fs.File.read`, and `baml.fs.File.close`.
 
 use std::sync::Arc;
 
 use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::{FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue};
+use crate::{BexExternalValue, FileHandle, OpError, ResourceKind};
 
-// ============================================================================
-// baml.fs.open
-// ============================================================================
-
-/// Opens a file and returns a resource ID.
+/// Opens a file and returns a resource.
 ///
 /// Signature: `fn open(path: String) -> File`
-pub async fn open(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the path argument
-    let path = match args.args.into_iter().next() {
-        Some(ResolvedValue::String(s)) => s,
+pub async fn open(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let path = match args.into_iter().next() {
+        Some(BexExternalValue::String(s)) => s,
         other => {
-            let msg = format!("Expected string path argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "string path",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Open the file
     let file = File::open(&path)
         .await
         .map_err(|e| OpError::Other(format!("Failed to open file '{path}': {e}")))?;
 
-    // Store in resources and return the ID
     let handle = FileHandle::new(file, path);
-    let id = ctx.add_resource(handle);
-
-    Ok(ResolvedValue::ResourceId(id))
+    Ok(BexExternalValue::Resource(Arc::new(ResourceKind::File(
+        handle,
+    ))))
 }
-
-// ============================================================================
-// baml.fs.File.read
-// ============================================================================
 
 /// Reads the contents of a file.
 ///
 /// Signature: `fn read(self: File) -> String`
-pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the file resource ID from the first argument
-    // Note: ResourceId is passed as Int from the VM
-    let file_id = match args.args.into_iter().next() {
-        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
-        Some(ResolvedValue::ResourceId(id)) => id,
+pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let file_arc = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(arc)) => arc,
         other => {
-            let msg = format!("Expected file resource ID as first argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "file resource",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Get the file handle from resources
-    // Clone the Arc<Mutex<File>> so we can release the lock before awaiting
-    let file_mutex = {
-        let guard = ctx.resources.lock().unwrap();
-        let file_handle = guard
-            .get_file(file_id)
-            .ok_or(OpError::ResourceNotFound(file_id))?;
-        Arc::clone(&file_handle.file)
-    }; // lock guard dropped here
+    let ResourceKind::File(file_handle) = file_arc.as_ref() else {
+        return Err(OpError::ResourceTypeMismatch { expected: "file" });
+    };
 
-    // Now we can safely await the file mutex
-    let mut file = file_mutex.lock().await;
+    let mut file = file_handle.file.lock().await;
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .await
         .map_err(|e| OpError::Other(format!("Failed to read file: {e}")))?;
 
-    Ok(ResolvedValue::String(contents))
+    Ok(BexExternalValue::String(contents))
 }
-
-// ============================================================================
-// baml.fs.File.close
-// ============================================================================
 
 /// Closes a file, releasing the resource.
 ///
 /// Signature: `fn close(self: File)`
-pub fn close(ctx: &Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the file resource ID from the first argument
-    let file_id = match args.args.into_iter().next() {
-        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
-        Some(ResolvedValue::ResourceId(id)) => id,
+pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let file_arc = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(arc)) => arc,
         other => {
-            let msg = format!("Expected file resource ID as first argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "file resource",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Remove the resource from the registry
-    // This drops the Arc<Mutex<File>>, closing it when the last reference is dropped
-    ctx.remove_resource(file_id)
-        .ok_or(OpError::ResourceNotFound(file_id))?;
+    let ResourceKind::File(_) = file_arc.as_ref() else {
+        return Err(OpError::ResourceTypeMismatch { expected: "file" });
+    };
 
-    Ok(ResolvedValue::Null)
+    // Resource closes when Arc is dropped
+    drop(file_arc);
+    Ok(BexExternalValue::Null)
 }

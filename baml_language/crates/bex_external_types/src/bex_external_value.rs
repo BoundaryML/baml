@@ -23,7 +23,10 @@
 //! ```
 
 // Re-export Ty from baml_snapshot for convenience
+use std::sync::Arc;
+
 pub use baml_snapshot::Ty;
+use bex_resource_types::ResourceKind;
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -155,6 +158,9 @@ pub enum BexExternalValue {
         handle: crate::Handle,
         kind: baml_base::MediaKind,
     },
+
+    /// Resource handle (file, socket, etc.) for sys operations.
+    Resource(Arc<ResourceKind>),
 }
 
 impl BexExternalValue {
@@ -178,6 +184,35 @@ impl BexExternalValue {
                 baml_base::MediaKind::Pdf => "pdf",
                 baml_base::MediaKind::Generic => "media",
             },
+            BexExternalValue::Resource(r) => match r.as_ref() {
+                bex_resource_types::ResourceKind::File(_) => "file",
+                bex_resource_types::ResourceKind::Socket(_) => "socket",
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_resource_variant_construction() {
+        // Create a temporary file for testing
+        let temp_path = std::env::temp_dir().join("bex_test_file.txt");
+        let file = tokio::fs::File::create(&temp_path).await.unwrap();
+        let file_handle =
+            bex_resource_types::FileHandle::new(file, temp_path.to_string_lossy().to_string());
+
+        // Test that we can construct a Resource variant
+        let resource = BexExternalValue::Resource(Arc::new(
+            bex_resource_types::ResourceKind::File(file_handle),
+        ));
+
+        // Test type_name returns "file"
+        assert_eq!(resource.type_name(), "file");
+
+        // Clean up
+        let _ = tokio::fs::remove_file(&temp_path).await;
     }
 }

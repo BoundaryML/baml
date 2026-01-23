@@ -326,7 +326,8 @@ impl<F: Clone> BexHeap<F> {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
-            | Object::Media(_) => {}
+            | Object::Media(_)
+            | Object::Resource(_) => {}
         }
     }
 
@@ -402,7 +403,8 @@ impl<F: Clone> BexHeap<F> {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Function(_)
-            | Object::Media(_) => {}
+            | Object::Media(_)
+            | Object::Resource(_) => {}
         }
     }
 

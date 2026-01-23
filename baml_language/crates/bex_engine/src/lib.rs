@@ -67,10 +67,7 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 // Re-export bex_sys types for convenience
-pub use bex_sys::{
-    FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
-    ResourceRegistry, SocketHandle, SysOpResult, ops,
-};
+pub use bex_sys::{FileHandle, OpError, ResourceKind, SocketHandle, SysOpResult, ops};
 use bex_vm::{BexVm, NativeFunction, VmExecState};
 use bex_vm_types::{ExternalOp, GlobalPool, Object, ObjectIndex, SysOp, Value};
 use thiserror::Error;
@@ -83,7 +80,7 @@ use tokio::sync::{Notify, mpsc};
 /// Result of an external future.
 struct FutureResult {
     id: ObjectIndex,
-    result: Result<ResolvedValue, EngineError>,
+    result: Result<BexExternalValue, EngineError>,
 }
 
 /// Wrapper for VM pointer that implements Send.
@@ -620,6 +617,7 @@ impl BexEngine {
                 handle: self.heap().create_handle(idx),
                 kind: m.kind,
             }),
+            Object::Resource(arc) => Ok(BexExternalValue::Resource(std::sync::Arc::clone(arc))),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -905,11 +903,8 @@ impl BexEngine {
         // Set entry point with converted args
         vm.set_entry_point(function_index, &vm_args);
 
-        // Create a resource registry for this call
-        let ctx = Arc::new(OpContext::new());
-
         // Run the event loop with epoch tracking
-        let result = self.run_event_loop_with_epoch(&mut vm, ctx, my_epoch).await;
+        let result = self.run_event_loop_with_epoch(&mut vm, my_epoch).await;
 
         // Unregister from epoch
         if self.epoch_states[slot]
@@ -995,6 +990,7 @@ impl BexEngine {
                     .expect("Handle should be valid - object was returned to external code");
                 Value::Object(idx)
             }
+            BexExternalValue::Resource(arc) => vm.alloc_resource(Arc::clone(arc)),
         }
     }
 
@@ -1064,7 +1060,6 @@ impl BexEngine {
     async fn run_event_loop_with_epoch(
         &self,
         vm: &mut BexVm,
-        ctx: Arc<OpContext>,
         my_epoch: u64,
     ) -> Result<BexValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
@@ -1079,18 +1074,11 @@ impl BexEngine {
                 VmExecState::ScheduleFuture(id) => {
                     let pending = vm.pending_future(id)?;
 
-                    // Resolve arguments from VM values to ResolvedValues
-                    let resolved_args = ResolvedArgs {
-                        args: pending
-                            .args
-                            .iter()
-                            .map(|v| Self::resolve_value(vm, v))
-                            .collect(),
-                    };
+                    // Convert arguments to BexExternalValue
+                    let args = Self::vm_args_to_external(vm, &pending.args);
 
                     match pending.operation {
                         ExternalOp::Llm => {
-                            // LLM operations are always async (not yet implemented)
                             let pending_futures = pending_futures.clone();
                             tokio::spawn(async move {
                                 let result = Err(OpError::Other(
@@ -1103,10 +1091,10 @@ impl BexEngine {
                             });
                         }
                         ExternalOp::Sys(sys_op) => {
-                            match Self::execute_sys_op(sys_op, Arc::clone(&ctx), resolved_args) {
+                            match Self::execute_sys_op(sys_op, args) {
                                 SysOpResult::Ready(result) => {
                                     // Sync operation - fulfill immediately
-                                    let value = Self::unresolve_value(
+                                    let value = Self::external_to_vm_value(
                                         vm,
                                         result.map_err(EngineError::from)?,
                                     );
@@ -1174,11 +1162,9 @@ impl BexEngine {
 
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
-                        // TODO: When there's an error in the future, we must handle somehow.
-                        let resolved = future.result?;
-                        let value = Self::unresolve_value(vm, resolved);
+                        let external = future.result?;
+                        let value = Self::external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
-                        // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1191,11 +1177,9 @@ impl BexEngine {
                             .await
                             .ok_or(EngineError::FutureChannelClosed)?;
 
-                        // TODO: When there's an error in the future, we must handle somehow.
-                        let resolved = future.result?;
-                        let value = Self::unresolve_value(vm, resolved);
+                        let external = future.result?;
+                        let value = Self::external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
-                        // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             break;
                         }
@@ -1210,76 +1194,105 @@ impl BexEngine {
     }
 
     /// Execute a system operation, returning either an immediate result or a future.
-    fn execute_sys_op(op: SysOp, ctx: Arc<OpContext>, args: ResolvedArgs) -> SysOpResult {
+    fn execute_sys_op(op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
         match op {
             // Async operations - return boxed futures
-            SysOp::FsOpen => SysOpResult::Async(Box::pin(ops::fs::open(ctx, args))),
-            SysOp::FsRead => SysOpResult::Async(Box::pin(ops::fs::read(ctx, args))),
-            SysOp::Shell => SysOpResult::Async(Box::pin(ops::sys::shell(ctx, args))),
-            SysOp::NetConnect => SysOpResult::Async(Box::pin(ops::net::connect(ctx, args))),
-            SysOp::NetRead => SysOpResult::Async(Box::pin(ops::net::read(ctx, args))),
+            SysOp::FsOpen => SysOpResult::Async(Box::pin(ops::fs::open(args))),
+            SysOp::FsRead => SysOpResult::Async(Box::pin(ops::fs::read(args))),
+            SysOp::Shell => SysOpResult::Async(Box::pin(ops::sys::shell(args))),
+            SysOp::NetConnect => SysOpResult::Async(Box::pin(ops::net::connect(args))),
+            SysOp::NetRead => SysOpResult::Async(Box::pin(ops::net::read(args))),
             // Sync operations - return immediate results
-            SysOp::FsClose => SysOpResult::Ready(ops::fs::close(&ctx, args)),
-            SysOp::NetClose => SysOpResult::Ready(ops::net::close(&ctx, args)),
+            SysOp::FsClose => SysOpResult::Ready(ops::fs::close(args)),
+            SysOp::NetClose => SysOpResult::Ready(ops::net::close(args)),
         }
     }
 
-    /// Resolve a VM value to a `ResolvedValue`.
-    fn resolve_value(vm: &BexVm, value: &Value) -> ResolvedValue {
+    /// Convert VM values to `BexExternalValues` for sys ops.
+    ///
+    /// This is simpler than `vm_value_to_external` because sys ops only receive
+    /// primitives, strings, arrays, maps, and resources - not instances/variants.
+    fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
+        args.iter()
+            .map(|v| Self::vm_arg_to_external(vm, v))
+            .collect()
+    }
+
+    fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
         match value {
-            Value::Null => ResolvedValue::Null,
-            Value::Int(i) => ResolvedValue::Int(*i),
-            Value::Float(f) => ResolvedValue::Float(*f),
-            Value::Bool(b) => ResolvedValue::Bool(*b),
+            Value::Null => BexExternalValue::Null,
+            Value::Int(i) => BexExternalValue::Int(*i),
+            Value::Float(f) => BexExternalValue::Float(*f),
+            Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(idx) => {
                 let obj = vm.get_object(*idx);
                 match obj {
-                    Object::String(s) => ResolvedValue::String(s.clone()),
+                    Object::String(s) => BexExternalValue::String(s.clone()),
                     Object::Array(arr) => {
-                        let resolved: Vec<ResolvedValue> =
-                            arr.iter().map(|v| Self::resolve_value(vm, v)).collect();
-                        ResolvedValue::Array(resolved)
+                        let items: Vec<BexExternalValue> = arr
+                            .iter()
+                            .map(|v| Self::vm_arg_to_external(vm, v))
+                            .collect();
+                        BexExternalValue::Array {
+                            element_type: bex_external_types::Ty::Null,
+                            items,
+                        }
                     }
                     Object::Map(map) => {
-                        let resolved: indexmap::IndexMap<String, ResolvedValue> = map
+                        let entries: indexmap::IndexMap<String, BexExternalValue> = map
                             .iter()
-                            .map(|(k, v)| (k.clone(), Self::resolve_value(vm, v)))
+                            .map(|(k, v)| (k.clone(), Self::vm_arg_to_external(vm, v)))
                             .collect();
-                        ResolvedValue::Map(resolved)
+                        BexExternalValue::Map {
+                            key_type: bex_external_types::Ty::String,
+                            value_type: bex_external_types::Ty::Null,
+                            entries,
+                        }
                     }
+                    Object::Resource(arc) => BexExternalValue::Resource(Arc::clone(arc)),
                     other => {
-                        panic!("Cannot resolve object type to ResolvedValue: {other:?}")
+                        panic!(
+                            "Cannot convert object type to BexExternalValue for sys op: {other:?}"
+                        )
                     }
                 }
             }
         }
     }
 
-    /// Convert a `ResolvedValue` back to a VM Value.
-    fn unresolve_value(vm: &mut BexVm, resolved: ResolvedValue) -> Value {
-        match resolved {
-            ResolvedValue::Null => Value::Null,
-            ResolvedValue::Int(i) => Value::Int(i),
-            ResolvedValue::Float(f) => Value::Float(f),
-            ResolvedValue::Bool(b) => Value::Bool(b),
-            ResolvedValue::String(s) => vm.alloc_string(s),
-            ResolvedValue::Array(arr) => {
-                let values: Vec<Value> = arr
+    /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
+    fn external_to_vm_value(vm: &mut BexVm, external: BexExternalValue) -> Value {
+        match external {
+            BexExternalValue::Null => Value::Null,
+            BexExternalValue::Int(i) => Value::Int(i),
+            BexExternalValue::Float(f) => Value::Float(f),
+            BexExternalValue::Bool(b) => Value::Bool(b),
+            BexExternalValue::String(s) => vm.alloc_string(s),
+            BexExternalValue::Array { items, .. } => {
+                let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| Self::unresolve_value(vm, v))
+                    .map(|v| Self::external_to_vm_value(vm, v))
                     .collect();
                 vm.alloc_array(values)
             }
-            ResolvedValue::Map(map) => {
-                let values: indexmap::IndexMap<String, Value> = map
+            BexExternalValue::Map { entries, .. } => {
+                let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, Self::unresolve_value(vm, v)))
+                    .map(|(k, v)| (k, Self::external_to_vm_value(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
-            ResolvedValue::ResourceId(id) => {
-                // Store resource ID as an integer value
-                Value::Int(id.cast_signed())
+            BexExternalValue::Resource(arc) => vm.alloc_resource(arc),
+            // These shouldn't come from sys ops, but handle gracefully
+            BexExternalValue::Instance { .. } => {
+                panic!("Unexpected Instance from sys op")
+            }
+            BexExternalValue::Variant { .. } => {
+                panic!("Unexpected Variant from sys op")
+            }
+            BexExternalValue::Union { value, .. } => Self::external_to_vm_value(vm, *value),
+            BexExternalValue::Media { .. } => {
+                panic!("Unexpected Media from sys op")
             }
         }
     }

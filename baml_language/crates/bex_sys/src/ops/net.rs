@@ -1,105 +1,82 @@
 //! Network operations.
-//!
-//! Implements `baml.net.connect`, `baml.net.Socket.read`, and `baml.net.Socket.close`.
 
 use std::sync::Arc;
 
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
-use crate::{OpContext, OpError, ResolvedArgs, ResolvedValue, SocketHandle};
+use crate::{BexExternalValue, OpError, ResourceKind, SocketHandle};
 
-// ============================================================================
-// baml.net.connect
-// ============================================================================
-
-/// Connect to a TCP address and return a resource ID.
+/// Connect to a TCP address and return a resource.
 ///
 /// Signature: `fn connect(addr: String) -> Socket`
-pub async fn connect(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the address argument
-    let addr = match args.args.into_iter().next() {
-        Some(ResolvedValue::String(s)) => s,
+pub async fn connect(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let addr = match args.into_iter().next() {
+        Some(BexExternalValue::String(s)) => s,
         other => {
-            let msg = format!("Expected string address argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "string address",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Connect to the address
     let stream = TcpStream::connect(&addr)
         .await
         .map_err(|e| OpError::Other(format!("Failed to connect to '{addr}': {e}")))?;
 
-    // Store in resources and return the ID
     let handle = SocketHandle::new(stream, addr);
-    let id = ctx.add_resource(handle);
-
-    Ok(ResolvedValue::ResourceId(id))
+    Ok(BexExternalValue::Resource(Arc::new(ResourceKind::Socket(
+        handle,
+    ))))
 }
-
-// ============================================================================
-// baml.net.Socket.read
-// ============================================================================
 
 /// Read data from a socket.
 ///
 /// Signature: `fn read(self: Socket) -> String`
-pub async fn read(ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the socket resource ID from the first argument
-    let socket_id = match args.args.into_iter().next() {
-        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
-        Some(ResolvedValue::ResourceId(id)) => id,
+pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let socket_arc = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(arc)) => arc,
         other => {
-            let msg = format!("Expected socket resource ID as first argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "socket resource",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Get the socket handle from resources
-    // Clone the Arc<Mutex<TcpStream>> so we can release the lock before awaiting
-    let stream_mutex = {
-        let guard = ctx.resources.lock().unwrap();
-        let socket_handle = guard
-            .get_socket(socket_id)
-            .ok_or(OpError::ResourceNotFound(socket_id))?;
-        Arc::clone(&socket_handle.stream)
-    }; // lock guard dropped here
+    let ResourceKind::Socket(socket_handle) = socket_arc.as_ref() else {
+        return Err(OpError::ResourceTypeMismatch { expected: "socket" });
+    };
 
-    // Read available data from the socket
-    let mut stream = stream_mutex.lock().await;
+    let mut stream = socket_handle.stream.lock().await;
     let mut buffer = vec![0u8; 4096];
     let n = stream
         .read(&mut buffer)
         .await
         .map_err(|e| OpError::Other(format!("Failed to read from socket: {e}")))?;
 
-    // Convert to string (lossy for non-UTF8 data)
     let contents = String::from_utf8_lossy(&buffer[..n]).into_owned();
-    Ok(ResolvedValue::String(contents))
+    Ok(BexExternalValue::String(contents))
 }
-
-// ============================================================================
-// baml.net.Socket.close
-// ============================================================================
 
 /// Closes a socket, releasing the resource.
 ///
 /// Signature: `fn close(self: Socket)`
-pub fn close(ctx: &Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the socket resource ID from the first argument
-    let socket_id = match args.args.into_iter().next() {
-        Some(ResolvedValue::Int(id)) => id.cast_unsigned(),
-        Some(ResolvedValue::ResourceId(id)) => id,
+pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let socket_arc = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(arc)) => arc,
         other => {
-            let msg = format!("Expected socket resource ID as first argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "socket resource",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Remove the resource from the registry
-    // This drops the Arc<Mutex<TcpStream>>, closing it when the last reference is dropped
-    ctx.remove_resource(socket_id)
-        .ok_or(OpError::ResourceNotFound(socket_id))?;
+    let ResourceKind::Socket(_) = socket_arc.as_ref() else {
+        return Err(OpError::ResourceTypeMismatch { expected: "socket" });
+    };
 
-    Ok(ResolvedValue::Null)
+    drop(socket_arc);
+    Ok(BexExternalValue::Null)
 }

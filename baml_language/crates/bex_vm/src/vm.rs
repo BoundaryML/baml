@@ -17,6 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
+use bex_resource_types::ResourceKind;
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
@@ -346,6 +347,7 @@ fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::Media(_) => type_tags::MEDIA,
+                Object::Resource(_) => type_tags::RESOURCE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -699,6 +701,11 @@ impl BexVm {
     /// Allocate a future object.
     pub fn alloc_future(&mut self, future: Future) -> Value {
         Value::Object(self.tlab.alloc(Object::Future(future)))
+    }
+
+    /// Allocate a resource object on the heap.
+    pub fn alloc_resource(&mut self, resource: Arc<ResourceKind>) -> Value {
+        Value::Object(self.tlab.alloc(Object::Resource(resource)))
     }
 
     // pub fn alloc_media(&mut self, media: BamlMedia) -> Value {

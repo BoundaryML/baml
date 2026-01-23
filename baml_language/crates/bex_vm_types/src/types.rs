@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
+use bex_resource_types::ResourceKind;
 use indexmap::IndexMap;
 
 use crate::{
@@ -40,6 +41,8 @@ pub mod type_tags {
     pub const FUTURE: i64 = 9;
     /// Media type tag.
     pub const MEDIA: i64 = 10;
+    /// Resource type tag (file handle, socket, etc.).
+    pub const RESOURCE: i64 = 11;
     /// Base value for class type tags (classes start at 100).
     pub const CLASS_BASE: i64 = 100;
     /// Unknown/invalid type tag.
@@ -417,6 +420,9 @@ pub enum Object<F> {
     // /// Images, audio, pdf, video.
     Media(MediaValue),
 
+    /// External resource (file handle, socket, etc.).
+    Resource(Arc<ResourceKind>),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -436,6 +442,7 @@ impl<F> std::fmt::Display for Object<F> {
             Object::Array(array) => write!(f, "{array:?}"),
             Object::Map(map) => write!(f, "{map:?}"),
             Object::Media(media) => media.fmt(f),
+            Object::Resource(r) => write!(f, "<{r}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -579,6 +586,7 @@ pub enum ObjectType {
     Variant,
     Media(baml_base::MediaKind),
     Future(FutureType),
+    Resource,
 }
 
 impl ObjectType {
@@ -593,6 +601,7 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::Media(media) => Self::Media(media.kind),
+            Object::Resource(_) => Self::Resource,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -627,6 +636,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
+            ObjectType::Resource => write!(f, "resource"),
         }
     }
 }
