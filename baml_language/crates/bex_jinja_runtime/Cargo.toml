@@ -1,0 +1,29 @@
+[package]
+name = "bex_jinja_runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lints.rust]
+dead_code = "allow"
+
+[dependencies]
+baml_base.workspace = true
+bex_llm_types.workspace = true
+bex_vm_types.workspace = true
+ir_stub.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+minijinja.workspace = true
+
+[dev-dependencies]
+bex_llm_types = { workspace = true, features = ["test-utils"] }
+baml_compiler_hir = { workspace = true }
+baml_compiler_tir = { workspace = true }
+
+[features]
+default = []
