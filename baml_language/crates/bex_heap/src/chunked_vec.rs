@@ -319,6 +319,8 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
             let (chunk_idx, offset) = self.chunk_location(index);
             // SAFETY: Index is within allocated range, we have exclusive push access
             let elem_ptr = self.element_ptr(chunk_idx, offset);
+            // Drop the factory-created placeholder before writing the actual value
+            std::ptr::drop_in_place(elem_ptr);
             std::ptr::write(elem_ptr, value);
         }
 
@@ -388,7 +390,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         unsafe { self.element_ptr(chunk_idx, offset) }
     }
 
-    /// Set an element at the given index.
+    /// Set an element at the given index, dropping the previous value.
     ///
     /// # Safety
     ///
@@ -412,6 +414,8 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         // concurrent resize_with calls.
         unsafe {
             let elem_ptr = self.element_ptr(chunk_idx, offset);
+            // Drop the old value before writing the new one to prevent leaks
+            std::ptr::drop_in_place(elem_ptr);
             std::ptr::write(elem_ptr, value);
         }
     }
