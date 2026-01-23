@@ -720,4 +720,69 @@ mod tests {
         assert_eq!(*vec.get(1024), 1024);
         assert_eq!(*vec.get(9999), 9999);
     }
+
+    /// Test for data race when Vec of chunk pointers reallocates during concurrent read.
+    ///
+    /// This test attempts to trigger the following race:
+    /// 1. Reader thread calls get() which internally does:
+    ///    - chunks_data_ptr = (*chunks_ptr).as_ptr()  // reads Vec's buffer address
+    ///    - ... later dereferences chunks_data_ptr
+    /// 2. Writer thread calls resize_with() which does:
+    ///    - (*chunks_ptr).push(chunk)  // may reallocate Vec, freeing old buffer
+    ///
+    /// If the reader reads the old buffer address, then the writer frees it,
+    /// the reader's subsequent dereference is use-after-free.
+    ///
+    /// We use chunk_size=2 so that adding elements quickly creates many chunks,
+    /// forcing the Vec<Box<[...]>> to reallocate its internal buffer.
+    #[test]
+    fn test_miri_concurrent_read_during_vec_reallocation() {
+        use std::{sync::Arc, thread};
+
+        // Chunk size of 2 means we need a new chunk every 2 elements.
+        // This will force the Vec of chunk pointers to grow and reallocate.
+        let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
+
+        // Pre-populate with some initial data (1 chunk, 2 elements)
+        unsafe {
+            vec.resize_to(2);
+            vec.set(0, 42);
+            vec.set(1, 43);
+        }
+
+        let vec_reader = Arc::clone(&vec);
+        let vec_writer = Arc::clone(&vec);
+
+        // Reader thread: repeatedly read from index 0
+        // This exercises element_ptr() which reads the Vec's buffer pointer
+        let reader = thread::spawn(move || {
+            for _ in 0..1000 {
+                let val = *vec_reader.get(0);
+                assert_eq!(val, 42);
+            }
+        });
+
+        // Writer thread: keep adding chunks to force Vec reallocation
+        // Vec typically starts with small capacity and doubles: 0 -> 1 -> 2 -> 4 -> 8 -> ...
+        // Each resize_to adds more chunks, eventually triggering reallocation
+        let writer = thread::spawn(move || {
+            for i in 1..100 {
+                // Each iteration adds 2 more elements = 1 more chunk
+                // After ~8 iterations, Vec needs capacity > 4, triggers realloc
+                // After ~16 iterations, Vec needs capacity > 8, triggers realloc
+                // etc.
+                let new_len = 2 + (i * 2);
+                unsafe {
+                    vec_writer.resize_to(new_len);
+                }
+            }
+        });
+
+        reader.join().expect("reader panicked");
+        writer.join().expect("writer panicked");
+
+        // Verify final state
+        assert_eq!(*vec.get(0), 42);
+        assert_eq!(*vec.get(1), 43);
+    }
 }
