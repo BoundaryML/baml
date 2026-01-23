@@ -28,7 +28,7 @@ fn parse_phase(name: &str) -> Option<CompilerPhase> {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "baml_tools_onionskin")]
+#[command(name = "tools_onionskin")]
 #[command(about = "A live TUI for exploring BAML compiler phases with snapshot diffing")]
 struct Args {
     #[command(subcommand)]

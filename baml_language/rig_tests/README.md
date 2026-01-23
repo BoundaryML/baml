@@ -6,13 +6,13 @@ E2E test crates for BAML code generation. Each language+fixture combination gets
 
 ```bash
 # Generate all test crates from templates
-cargo run -p baml_tools_rig
+cargo run -p tools_rig
 
 # Run tests for a specific fixture
 cargo test -p python_empty
 
 # Check if crates are in sync with templates
-cargo run -p baml_tools_rig -- --check
+cargo run -p tools_rig -- --check
 ```
 
 ## How to Add a New Fixture
@@ -37,7 +37,7 @@ define_fixtures! {
 ### Step 2: Generate test crates
 
 ```bash
-cargo run -p baml_tools_rig
+cargo run -p tools_rig
 ```
 
 This creates test crates for all languages:
@@ -225,7 +225,7 @@ def test_fixture_specific():
 ### Step 3: Generate test crates
 
 ```bash
-cargo run -p baml_tools_rig
+cargo run -p tools_rig
 ```
 
 Creates `<language>_<fixture>` crates for all fixtures.
@@ -259,7 +259,7 @@ rig_tests/
 ## How It Works
 
 1. **Templates** in `crate_templates/<language>/` define structure
-2. **`baml_tools_rig`** generates crates by replacing `{{fixture_name}}`
+2. **`tools_rig`** generates crates by replacing `{{fixture_name}}`
 3. **`build.rs`** (at compile time):
    - Calls `baml_codegen_<language>::to_source_code(fixture)`
    - Writes code to `generated/`
@@ -281,7 +281,7 @@ rig_tests/
 ## CI
 
 ```bash
-cargo run -p baml_tools_rig -- --check
+cargo run -p tools_rig -- --check
 ```
 
 Fails if crates are out of sync with templates.

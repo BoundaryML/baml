@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.218.0](https://github.com/boundaryml/baml/compare/0.217.0..0.218.0) - 2026-01-22
+
+### Bug Fixes
+- Fix Go serde decoding for dynamic types (#2978) - ([f3e48fd](https://github.com/boundaryml/baml/commit/f3e48fdc3f5f686b10ba6fa2638495ca7539fcee)) - hellovai
+- Fix Go codegen for pure-dynamic classes (@@dynamic with no static fields) (#2995) - ([dcc2323](https://github.com/boundaryml/baml/commit/dcc2323639ac5b5ad777dd935f2527a3b6b97b41)) - hellovai
+- **(cffi)** wrap result and error callbacks in block_in_place (#2989) - ([c31ae86](https://github.com/boundaryml/baml/commit/c31ae8666c3d1a4e26d046cd6aa5b58ffc37ca18)) - Tsvetomir Bonev
+- **(go)** handle optional image encoding (*types.Image) (#2996) - ([d3d76dc](https://github.com/boundaryml/baml/commit/d3d76dc7634472d3673ea88a3913b938c7ea99d0)) - hellovai
+- **(react)** use NDJSON format for streaming to handle TCP chunk boundaries (#3000) - ([d4edca7](https://github.com/boundaryml/baml/commit/d4edca77c6bf7e9f2e7d898082adc4093ced7e01)) - Antonio Sarosi
+- **(ts)** add BamlError base class and improve error hierarchy (#2993) (#3012) - ([807e702](https://github.com/boundaryml/baml/commit/807e702e8dfd8caff3acd23e4865e2b7701ced5d)) - Antonio Sarosi
+
+- fix playground index on test history (#3005)
+- Fix API key dialog not showing for new users (#2999) - ([6cb3b60](https://github.com/boundaryml/baml/commit/6cb3b60efe8eb2b2fcb7a37cdf9e0a479ad41b42)) - Paulo Rossi Rodrigues
+
+### Documentation
+
+- Azure AI Foundary -> Foundry typo (#2965) - ([48da42a](https://github.com/boundaryml/baml/commit/48da42ae4ce611df50c38e541a8bd56025b9f014)) - Sam Lijin
+
+
 ## [0.217.0](https://github.com/boundaryml/baml/compare/0.216.0..0.217.0) - 2026-01-10
 
 ### Bug Fixes

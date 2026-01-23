@@ -1,7 +1,7 @@
 "use strict";
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlTimeoutError = exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = exports.BamlClientError = exports.BamlError = void 0;
+exports.BamlTimeoutError = exports.BamlAbortError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = exports.BamlInvalidArgumentError = exports.BamlClientError = exports.BamlError = void 0;
 exports.isBamlError = isBamlError;
 exports.toBamlError = toBamlError;
 /**
@@ -26,6 +26,29 @@ class BamlClientError extends BamlError {
     }
 }
 exports.BamlClientError = BamlClientError;
+/**
+ * Error thrown when invalid arguments are passed to a BAML function.
+ */
+class BamlInvalidArgumentError extends BamlError {
+    constructor(message) {
+        super(message);
+        this.name = "BamlInvalidArgumentError";
+        Object.setPrototypeOf(this, BamlInvalidArgumentError.prototype);
+    }
+    toJSON() {
+        return JSON.stringify({
+            name: this.name,
+            message: this.message,
+        });
+    }
+    static from(error) {
+        if (error.message.includes("BamlInvalidArgumentError")) {
+            return new BamlInvalidArgumentError(error.message);
+        }
+        return undefined;
+    }
+}
+exports.BamlInvalidArgumentError = BamlInvalidArgumentError;
 class BamlClientFinishReasonError extends BamlError {
     prompt;
     raw_output;
@@ -220,6 +243,10 @@ function createBamlErrorUnsafe(error) {
     if (!isError(error)) {
         return new Error(String(error));
     }
+    const bamlInvalidArgumentError = BamlInvalidArgumentError.from(error);
+    if (bamlInvalidArgumentError) {
+        return bamlInvalidArgumentError;
+    }
     const bamlAbortError = BamlAbortError.from(error);
     if (bamlAbortError) {
         return bamlAbortError;
@@ -239,6 +266,10 @@ function createBamlErrorUnsafe(error) {
     const bamlClientFinishReasonError = BamlClientFinishReasonError.from(error);
     if (bamlClientFinishReasonError) {
         return bamlClientFinishReasonError;
+    }
+    // If the error message contains "BamlError", wrap it in a generic BamlError
+    if (error.message.includes("BamlError")) {
+        return new BamlError(error.message);
     }
     // otherwise return the original error
     return error;
@@ -270,18 +301,10 @@ function toBamlError(error) {
         if (isBamlError(error)) {
             return error;
         }
-        if (isError(error)) {
-            const converted = createBamlErrorUnsafe(error);
-            // Only return if we successfully converted to a BamlError
-            if (converted instanceof BamlError) {
-                return converted;
-            }
-        }
-        // Return null if not convertible
-        return null;
+        return createBamlErrorUnsafe(error);
     }
-    catch {
-        return null;
+    catch (e) {
+        return e;
     }
 }
 // No need for a separate throwBamlValidationError function in TypeScript

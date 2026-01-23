@@ -10,6 +10,14 @@ export declare class BamlError extends Error {
 export declare class BamlClientError extends BamlError {
     constructor(message: string);
 }
+/**
+ * Error thrown when invalid arguments are passed to a BAML function.
+ */
+export declare class BamlInvalidArgumentError extends BamlError {
+    constructor(message: string);
+    toJSON(): string;
+    static from(error: Error): BamlInvalidArgumentError | undefined;
+}
 export declare class BamlClientFinishReasonError extends BamlError {
     prompt: string;
     raw_output: string;
@@ -52,7 +60,7 @@ export declare class BamlTimeoutError extends BamlClientHttpError {
     constructor(client_name: string, message: string);
     static from(error: Error): BamlTimeoutError | undefined;
 }
-export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError;
+export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientFinishReasonError | BamlAbortError | BamlTimeoutError | BamlInvalidArgumentError;
 /**
  * Check if an error is an instance of BamlError.
  *
@@ -73,5 +81,5 @@ export type BamlErrors = BamlClientHttpError | BamlValidationError | BamlClientF
  * ```
  */
 export declare function isBamlError(error: unknown): error is BamlError;
-export declare function toBamlError(error: unknown): BamlError | null;
+export declare function toBamlError(error: unknown): BamlError | Error;
 //# sourceMappingURL=errors.d.ts.map

@@ -1,11 +1,11 @@
-# baml_tools_stow
+# tools_stow
 
 A cargo subcommand that validates and fixes `Cargo.toml` files in the BAML workspace.
 
 ## Installation
 
 ```bash
-cargo install --path crates/baml_tools_stow
+cargo install --path crates/tools_stow
 ```
 
 ## Usage

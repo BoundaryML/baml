@@ -478,6 +478,36 @@ impl<T, const CHUNK_SIZE: usize> Default for ChunkedVec<T, CHUNK_SIZE> {
     }
 }
 
+/// Allows read access via indexing: `&vec[idx]`
+///
+/// # Why `IndexMut` is NOT implemented
+///
+/// `IndexMut` requires `&mut self` to return `&mut T`. However, `ChunkedVec` is
+/// designed for concurrent access where multiple threads can write to *different*
+/// indices simultaneously via interior mutability (`UnsafeCell`).
+///
+/// The `set()` method intentionally takes `&self` (not `&mut self`) to enable this
+/// pattern. If we implemented `IndexMut`, callers would need exclusive (`&mut`)
+/// access to the entire `ChunkedVec` just to mutate one element, defeating the
+/// purpose of the interior mutability design.
+///
+/// Use `set()` for writes:
+/// ```ignore
+/// // Read: use indexing
+/// let value = &vec[idx];
+///
+/// // Write: use set() which takes &self
+/// unsafe { vec.set(idx, new_value); }
+/// ```
+impl<T, const CHUNK_SIZE: usize> std::ops::Index<usize> for ChunkedVec<T, CHUNK_SIZE> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: usize) -> &Self::Output {
+        self.get(index)
+    }
+}
+
 impl<T: std::fmt::Debug, const CHUNK_SIZE: usize> std::fmt::Debug for ChunkedVec<T, CHUNK_SIZE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChunkedVec")

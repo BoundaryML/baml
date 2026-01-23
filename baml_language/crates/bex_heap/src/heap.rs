@@ -25,7 +25,7 @@ use std::{
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{Object, ObjectIndex};
 
-use crate::{chunked_vec::ChunkedVec, tlab::TlabChunk};
+use crate::{HeapDebuggerConfig, HeapDebuggerState, chunked_vec::ChunkedVec, tlab::TlabChunk};
 
 /// Default TLAB chunk size (number of object slots).
 ///
@@ -155,6 +155,9 @@ pub struct BexHeap<F> {
     /// Allocations since last GC (for triggering heuristic).
     allocs_since_gc: AtomicUsize,
 
+    /// Debug instrumentation state and config.
+    debug_state: HeapDebuggerState,
+
     /// Phantom data to hold the type parameter.
     _marker: PhantomData<F>,
 }
@@ -195,11 +198,28 @@ impl<F> BexHeap<F> {
     /// The provided objects become permanent (never garbage collected).
     /// Runtime allocations will start after these objects.
     pub fn new(compile_time_objects: Vec<Object<F>>) -> Arc<Self> {
-        Self::with_tlab_size(compile_time_objects, DEFAULT_TLAB_SIZE)
+        Self::with_tlab_size_and_debug(
+            compile_time_objects,
+            DEFAULT_TLAB_SIZE,
+            HeapDebuggerConfig::from_env(),
+        )
     }
 
     /// Create a new heap with custom TLAB size.
     pub fn with_tlab_size(compile_time_objects: Vec<Object<F>>, tlab_size: usize) -> Arc<Self> {
+        Self::with_tlab_size_and_debug(
+            compile_time_objects,
+            tlab_size,
+            HeapDebuggerConfig::from_env(),
+        )
+    }
+
+    /// Create a new heap with explicit debug configuration.
+    pub fn with_tlab_size_and_debug(
+        compile_time_objects: Vec<Object<F>>,
+        tlab_size: usize,
+        debug: HeapDebuggerConfig,
+    ) -> Arc<Self> {
         Arc::new(Self {
             compile_time: compile_time_objects,
             spaces: [
@@ -213,6 +233,7 @@ impl<F> BexHeap<F> {
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
+            debug_state: HeapDebuggerState::new(debug),
             _marker: PhantomData,
         })
     }
@@ -280,7 +301,7 @@ impl<F> BexHeap<F> {
     /// Convert a runtime space index to a global ObjectIndex.
     #[inline]
     pub fn runtime_to_global(&self, runtime_idx: usize) -> ObjectIndex {
-        ObjectIndex::from_raw(self.compile_time.len() + runtime_idx)
+        self.make_object_index(self.compile_time.len() + runtime_idx)
     }
 
     /// Convert a global ObjectIndex to a runtime space index.
@@ -379,31 +400,50 @@ impl<F> BexHeap<F> {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
+        self.debug_verify_tlab_canaries();
+
+        let use_canary = self.debug_config().enabled;
+        let canary_slots = if use_canary { 1 } else { 0 };
+
         // Atomically reserve a chunk range within active space
-        let runtime_start = self.next_chunk.fetch_add(self.tlab_size, Ordering::SeqCst);
+        let step = self.tlab_size + canary_slots;
+        let runtime_start = self.next_chunk.fetch_add(step, Ordering::SeqCst);
         let runtime_end = runtime_start + self.tlab_size;
+        let reserve_end = runtime_end + canary_slots;
 
         // Lock only for growth (serializes chunk allocation)
         let _guard = self.growth_lock.lock().unwrap();
 
         // Grow active space if needed - ChunkedVec never moves existing data
         let active = self.active_space_index();
+        let ct_len = self.compile_time.len();
         // SAFETY: We hold the growth_lock, so no other thread is resizing.
         // ChunkedVec's resize_with never moves existing elements, and takes &self
         // so we don't need a mutable reference - which avoids the data race.
         let space = unsafe { &*self.spaces[active].get() };
-        if space.len() < runtime_end {
+        if space.len() < reserve_end {
             // SAFETY: We hold the growth_lock, ensuring only one thread resizes at a time.
             unsafe {
-                space.resize_with(runtime_end, || {
+                space.resize_with(reserve_end, || {
                     // Placeholder object - will be overwritten by TLAB alloc
-                    Object::String(String::new())
+                    self.placeholder_object()
                 });
+            }
+        }
+        if use_canary {
+            let chunk_start = ct_len + runtime_start;
+            let chunk_end = ct_len + runtime_end;
+            // SAFETY: We hold the growth_lock, index is within bounds
+            unsafe {
+                space.set(runtime_end, self.tlab_canary_object(chunk_start, chunk_end));
             }
         }
 
         // Return global indices (compile_time_len + runtime indices)
-        let ct_len = self.compile_time.len();
+        if use_canary {
+            let canary_idx = ct_len + runtime_end;
+            self.record_tlab_canary(canary_idx);
+        }
         TlabChunk {
             start: ct_len + runtime_start,
             end: ct_len + runtime_end,
@@ -419,7 +459,9 @@ impl<F> BexHeap<F> {
         let raw = idx.into_raw();
         let ct_len = self.compile_time.len();
 
-        if raw < ct_len {
+        self.debug_assert_valid_index(idx);
+
+        let obj = if raw < ct_len {
             // Compile-time object - always safe to read
             &self.compile_time[raw]
         } else {
@@ -427,7 +469,10 @@ impl<F> BexHeap<F> {
             let runtime_idx = raw - ct_len;
             // SAFETY: Caller ensures no concurrent writes to runtime objects
             unsafe { (*self.spaces[self.active_space_index()].get()).get(runtime_idx) }
-        }
+        };
+
+        self.debug_assert_not_sentinel(obj);
+        obj
     }
 
     /// Get statistics about heap usage.
@@ -474,6 +519,14 @@ impl<F> BexHeap<F> {
     /// Reset the TLAB allocation pointer (called by GC after collection).
     pub(crate) fn reset_next_chunk(&self, new_value: usize) {
         self.next_chunk.store(new_value, Ordering::Release);
+    }
+
+    pub(crate) fn next_chunk_value(&self) -> usize {
+        self.next_chunk.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn debug_state(&self) -> &HeapDebuggerState {
+        &self.debug_state
     }
 
     /// Update handle entries after GC with new object indices.
