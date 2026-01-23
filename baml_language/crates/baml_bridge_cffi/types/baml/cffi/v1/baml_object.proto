@@ -1,0 +1,65 @@
+syntax = "proto3";
+package baml.cffi.v1;
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// BamlObject definition
+// -----------------------------------------------------------------------------
+
+// Raw pointer type
+message BamlPointerType { int64 pointer = 1; }
+
+// Raw object with type information
+message BamlObjectHandle {
+  oneof object {
+    BamlPointerType collector = 1;
+    BamlPointerType function_log = 2;
+    BamlPointerType usage = 3;
+    BamlPointerType timing = 4;
+    BamlPointerType stream_timing = 5;
+    BamlPointerType llm_call = 6;
+    BamlPointerType llm_stream_call = 7;
+    BamlPointerType http_request = 8;
+    BamlPointerType http_response = 9;
+    BamlPointerType http_body = 10;
+    BamlPointerType sse_response = 11;
+    BamlPointerType media_image = 12;
+    BamlPointerType media_audio = 13;
+    BamlPointerType media_pdf = 14;
+    BamlPointerType media_video = 15;
+    BamlPointerType type_builder = 16;
+    BamlPointerType type = 17;
+    BamlPointerType enum_builder = 18;
+    BamlPointerType enum_value_builder = 19;
+    BamlPointerType class_builder = 20;
+    BamlPointerType class_property_builder = 21;
+  }
+}
+
+
+// Enum for all possible object types
+enum BamlObjectType {
+  OBJECT_UNSPECIFIED = 0;
+  OBJECT_COLLECTOR = 1;
+  OBJECT_FUNCTION_LOG = 2;
+  OBJECT_USAGE = 3;
+  OBJECT_TIMING = 4;
+  OBJECT_STREAM_TIMING = 5;
+  OBJECT_LLM_CALL = 6;
+  OBJECT_LLM_STREAM_CALL = 7;
+  OBJECT_HTTP_REQUEST = 8;
+  OBJECT_HTTP_RESPONSE = 9;
+  OBJECT_HTTP_BODY = 10;
+  OBJECT_SSE_RESPONSE = 11;
+  OBJECT_MEDIA_IMAGE = 12;
+  OBJECT_MEDIA_AUDIO = 13;
+  OBJECT_MEDIA_PDF = 14;
+  OBJECT_MEDIA_VIDEO = 15;
+  OBJECT_TYPE_BUILDER = 16;
+  OBJECT_TYPE = 17;
+  OBJECT_ENUM_BUILDER = 18;
+  OBJECT_ENUM_VALUE_BUILDER = 19;
+  OBJECT_CLASS_BUILDER = 20;
+  OBJECT_CLASS_PROPERTY_BUILDER = 21;
+}

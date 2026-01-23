@@ -1,0 +1,139 @@
+//! Function call FFI entry points.
+
+use std::ffi::CStr;
+
+use anyhow::Result;
+use prost::Message;
+
+use crate::Buffer;
+use crate::baml::cffi::{
+    HostFunctionArguments, InvocationResponse,
+    invocation_response::Response as CResponse,
+};
+use crate::ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
+use crate::engine::{get_engine, get_runtime};
+use crate::ffi::callbacks::{send_error_to_callback, send_result_to_callback};
+
+/// Encode a success response (task spawned successfully).
+fn encode_success_response() -> Buffer {
+    let msg = InvocationResponse { response: None };
+    Buffer::from(msg.encode_to_vec())
+}
+
+/// Encode an error response (failed to spawn task).
+fn encode_error_response(error: anyhow::Error) -> Buffer {
+    let msg = InvocationResponse {
+        response: Some(CResponse::Error(error.to_string())),
+    };
+    Buffer::from(msg.encode_to_vec())
+}
+
+/// Call a BAML function asynchronously.
+///
+/// Returns immediately after spawning the async task.
+/// Result is delivered via the registered callback.
+///
+/// Note: `_runtime` is unused since we use a global engine.
+#[unsafe(no_mangle)]
+pub extern "C" fn call_function_from_c(
+    _runtime: *const libc::c_void,
+    function_name: *const libc::c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> Buffer {
+    match call_function_inner(function_name, encoded_args, length, id) {
+        Ok(()) => encode_success_response(),
+        Err(e) => encode_error_response(e),
+    }
+}
+
+fn call_function_inner(
+    function_name: *const libc::c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> Result<()> {
+    // Get engine (must be initialized)
+    let engine = get_engine()?.clone();
+
+    // Parse function name
+    let func_name = unsafe {
+        CStr::from_ptr(function_name)
+            .to_str()
+            .map_err(|e| anyhow::anyhow!("Invalid function name: {e}"))?
+            .to_owned()
+    };
+
+    // Decode protobuf arguments
+    let args = HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length)?;
+
+    // Convert kwargs to BexValue
+    let kwargs = kwargs_to_bex_values(args.kwargs)?;
+
+    // Silently ignore collectors and type_builder (not supported)
+    // TODO: Support collectors when bex_engine adds support
+    // TODO: Support type_builder when bex_engine adds support
+
+    // Convert kwargs to positional args for call_function
+    // bex_engine.call_function takes &[BexValue], so we need to convert
+    let bex_args: Vec<bex_external_types::BexValue> = kwargs.into_values().collect();
+
+    // Spawn async task
+    let rt = get_runtime().clone();
+    rt.spawn(async move {
+        let result = engine.call_function(&func_name, &bex_args).await;
+
+        match result {
+            Ok(value) => {
+                send_result_to_callback(id, true, &value);
+            }
+            Err(e) => {
+                send_error_to_callback(id, &anyhow::anyhow!("{}", e));
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Parse LLM response (call_function_parse).
+#[unsafe(no_mangle)]
+pub extern "C" fn call_function_parse_from_c(
+    _runtime: *const libc::c_void,
+    _function_name: *const libc::c_char,
+    _encoded_args: *const libc::c_char,
+    _length: usize,
+    id: u32,
+) -> Buffer {
+    // TODO: Implement when bex_engine supports parsing
+    send_error_to_callback(
+        id,
+        &anyhow::anyhow!("call_function_parse not implemented in baml_bridge_cffi"),
+    );
+    encode_success_response()
+}
+
+/// Stream a function call (placeholder).
+#[unsafe(no_mangle)]
+pub extern "C" fn call_function_stream_from_c(
+    _runtime: *const libc::c_void,
+    _function_name: *const libc::c_char,
+    _encoded_args: *const libc::c_char,
+    _length: usize,
+    id: u32,
+) -> Buffer {
+    // TODO: Implement when bex_engine supports streaming
+    send_error_to_callback(
+        id,
+        &anyhow::anyhow!("Streaming not implemented in baml_bridge_cffi"),
+    );
+    encode_success_response()
+}
+
+/// Cancel a function call (placeholder).
+#[unsafe(no_mangle)]
+pub extern "C" fn cancel_function_call(_id: u32) -> Buffer {
+    // TODO: Implement cancellation
+    encode_success_response()
+}

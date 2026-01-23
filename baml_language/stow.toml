@@ -39,14 +39,14 @@ graph_external_deps = ["serde", "tokio", "clap", "anyhow", "salsa", "rowan"]
 [[dependency_rules]]
 pattern = "anyhow"
 allowed_prefixes = ["lsp"]
-allowed_crates = ["*_cli", "tools_*"]
+allowed_crates = ["*_cli", "tools_*", "baml_bridge_cffi"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "playground", "codegen"]
+approved_prefixes = ["compiler", "builtins", "playground", "codegen", "bridge"]
 test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 
 # baml-specific dependency rules
@@ -59,6 +59,7 @@ reason = "Use baml_db or baml_project to access compiler interfaces."
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
+allowed_crates = ["baml_bridge_cffi"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
