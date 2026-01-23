@@ -93,11 +93,11 @@ pub fn collect_diagnostics(
 
         for item in items {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *func_loc);
+                let (signature, sig_source_map) = function_signature(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Only infer types for expression functions (not LLM functions)
-                if let FunctionBody::Expr(expr_body) = &*body {
+                if let FunctionBody::Expr(expr_body, _source_map) = &*body {
                     // Collect body lowering diagnostics (e.g., missing semicolons)
                     for diag in &expr_body.diagnostics {
                         diagnostics.push(diag.to_diagnostic());
@@ -106,6 +106,7 @@ pub fn collect_diagnostics(
                     let inference_result = baml_compiler_tir::infer_function(
                         db,
                         &signature,
+                        &sig_source_map,
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),

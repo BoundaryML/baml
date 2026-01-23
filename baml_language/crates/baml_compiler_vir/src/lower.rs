@@ -23,7 +23,7 @@
 
 use baml_base::Span;
 use baml_compiler_hir::{
-    ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId,
+    ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, HirSourceMap, StmtId as HirStmtId,
 };
 use baml_compiler_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
@@ -90,8 +90,8 @@ pub fn lower_from_hir(
     resolution_ctx: &TypeResolutionContext,
 ) -> Result<ExprBody, LoweringError> {
     match body {
-        FunctionBody::Expr(hir_body) => {
-            let ctx = LoweringContext::new(db, inference, resolution_ctx);
+        FunctionBody::Expr(hir_body, source_map) => {
+            let ctx = LoweringContext::new(db, inference, resolution_ctx, source_map);
             ctx.lower_expr_body(hir_body)
         }
         FunctionBody::Llm(_) => {
@@ -173,6 +173,7 @@ struct LoweringContext<'a> {
     db: &'a dyn baml_compiler_tir::Db,
     inference: &'a InferenceResult,
     resolution_ctx: &'a TypeResolutionContext,
+    source_map: &'a HirSourceMap,
     builder: ExprBodyBuilder,
 }
 
@@ -181,11 +182,13 @@ impl<'a> LoweringContext<'a> {
         db: &'a dyn baml_compiler_tir::Db,
         inference: &'a InferenceResult,
         resolution_ctx: &'a TypeResolutionContext,
+        source_map: &'a HirSourceMap,
     ) -> Self {
         Self {
             db,
             inference,
             resolution_ctx,
+            source_map,
             builder: ExprBodyBuilder::new(),
         }
     }
@@ -206,7 +209,7 @@ impl<'a> LoweringContext<'a> {
         use baml_compiler_hir::Expr as HirExpr;
 
         let hir_expr = &hir_body.exprs[hir_id];
-        let span = hir_body.get_expr_span(hir_id);
+        let span = self.source_map.expr_span(hir_id);
 
         // Get type from TIR inference
         let ty = self
@@ -449,7 +452,8 @@ impl<'a> LoweringContext<'a> {
             HirExpr::Match { scrutinee, arms } => {
                 let scrutinee_id = self.lower_expr(*scrutinee, hir_body)?;
                 let mut lowered_arms = Vec::with_capacity(arms.len());
-                for arm in arms {
+                for arm_id in arms {
+                    let arm = &hir_body.match_arms[*arm_id];
                     let pattern_id = self.lower_pattern(arm.pattern, hir_body)?;
                     let guard = match arm.guard {
                         Some(g) => Some(self.lower_expr(g, hir_body)?),
@@ -586,7 +590,7 @@ impl<'a> LoweringContext<'a> {
         use baml_compiler_hir::Stmt as HirStmt;
 
         let stmt = &hir_body.stmts[stmt_id];
-        let span = hir_body.get_stmt_span(stmt_id);
+        let span = self.source_map.stmt_span(stmt_id);
         let text_range = span.map(|s| s.range);
 
         match stmt {

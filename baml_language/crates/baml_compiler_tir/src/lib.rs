@@ -18,9 +18,20 @@ use std::{
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
+    ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
+    MatchArmId, Pattern, StmtId, TirContext,
 };
 use baml_workspace::Project;
+
+/// Type alias for TIR type errors.
+///
+/// Uses `TirContext<Ty>` which has:
+/// - `Ty` as the type representation
+/// - `ErrorLocation` as the location (position-independent IDs)
+///
+/// This enables Salsa caching to work correctly - whitespace changes don't
+/// invalidate type inference results because locations use IDs instead of spans.
+pub type TirTypeError = TypeError<TirContext<Ty>>;
 
 pub mod builtins;
 mod exhaustiveness;
@@ -400,7 +411,7 @@ impl TypeResolutionContext {
         &self,
         type_ref: &baml_compiler_hir::TypeRef,
         span: Span,
-    ) -> (Ty, Vec<TypeError<Ty>>) {
+    ) -> (Ty, Vec<TirTypeError>) {
         lower_type_ref_validated_resolved(
             type_ref,
             &self.known_types,
@@ -437,7 +448,7 @@ pub struct InferenceResult {
     /// enabling phi-like optimization for match results.
     pub exhaustive_matches: HashSet<ExprId>,
     /// Type checking errors.
-    pub errors: Vec<TypeError<Ty>>,
+    pub errors: Vec<TirTypeError>,
     /// Resolution information for IDE features (go-to-definition, find-references).
     /// Maps expression IDs to what they resolve to.
     pub expr_resolutions: ResolutionMap,
@@ -485,7 +496,7 @@ pub struct TypeContext<'db> {
     /// Used to validate that all return paths match the declared return type.
     return_types: Vec<(Ty, Span)>,
     /// Accumulated type errors.
-    errors: Vec<TypeError<Ty>>,
+    errors: Vec<TirTypeError>,
     /// The current file being typechecked
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
@@ -589,7 +600,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Add a type error.
-    pub fn push_error(&mut self, error: TypeError<Ty>) {
+    pub fn push_error(&mut self, error: TirTypeError) {
         self.errors.push(error);
     }
 
@@ -927,7 +938,7 @@ pub fn infer_function<'db>(
     // Use a placeholder span for now - ideally we'd have spans on TypeRef
     let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
 
-    let mut type_errors: Vec<TypeError<Ty>> = Vec::new();
+    let mut type_errors: Vec<TirTypeError> = Vec::new();
 
     // Convert parameter TypeRefs to Tys with validation and resolution
     let param_types: HashMap<Name, Ty> = signature

@@ -5,8 +5,8 @@
 
 use std::fmt::Write;
 
+use crate::TirTypeError;
 use baml_base::Span;
-use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
     Stmt, StmtId, UnaryOp,
@@ -139,7 +139,7 @@ impl<'a> TreeRenderer<'a> {
 
     fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult) {
         match body {
-            FunctionBody::Expr(expr_body) => {
+            FunctionBody::Expr(expr_body, _source_map) => {
                 if let Some(root_expr) = expr_body.root_expr {
                     self.render_expr(root_expr, expr_body, result, true);
                 }
@@ -354,7 +354,8 @@ impl<'a> TreeRenderer<'a> {
                 self.pop_continuation();
 
                 // Render each arm
-                for (i, arm) in arms.iter().enumerate() {
+                for (i, arm_id) in arms.iter().enumerate() {
+                    let arm = &body.match_arms[*arm_id];
                     let is_last_arm = i == arms.len() - 1;
                     let arm_prefix = self.make_prefix(is_last_arm);
                     writeln!(self.output, "{arm_prefix}arm[{i}]:").ok();
@@ -624,7 +625,8 @@ fn unary_op_to_str(op: UnaryOp) -> &'static str {
     }
 }
 
-pub fn short_display(error: &TypeError<Ty>) -> String {
+pub fn short_display(error: &TirTypeError) -> String {
+    use baml_compiler_diagnostics::TypeError;
     match error {
         TypeError::TypeMismatch {
             expected, found, ..

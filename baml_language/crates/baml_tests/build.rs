@@ -433,9 +433,9 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                 let items = items_struct.items(&db);
                 for item in items.iter() {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
-                        let signature = function_signature(&db, *func_id);
+                        let (signature, sig_source_map) = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
+                        let result = baml_compiler_tir::infer_function(&db, &signature, &sig_source_map, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -524,9 +524,9 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                 let items = items_struct.items(&db);
                 for item in items.iter() {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
-                        let signature = function_signature(&db, *func_id);
+                        let (signature, sig_source_map) = function_signature(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
+                        let inference = baml_compiler_tir::infer_function(&db, &signature, &sig_source_map, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
                         let mir_output = match baml_compiler_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {

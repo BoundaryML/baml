@@ -101,7 +101,7 @@ pub fn compile_files(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *func_loc);
+                let (signature, _sig_source_map) = function_signature(db, *func_loc);
                 globals.insert(signature.name.to_string(), global_idx);
                 global_idx += 1;
             }
@@ -218,7 +218,7 @@ pub fn compile_files(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *func_loc);
+                let (signature, sig_source_map) = function_signature(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Handle different function body types
@@ -263,7 +263,7 @@ pub fn compile_files(
                             viz_nodes: Vec::new(),
                         }
                     }
-                    baml_compiler_hir::FunctionBody::Expr(_) => {
+                    baml_compiler_hir::FunctionBody::Expr(_, _) => {
                         // Run type inference
                         // Note: type_aliases is not passed here, so exhaustiveness
                         // checking for type aliases won't work. This is acceptable
@@ -272,6 +272,7 @@ pub fn compile_files(
                         let inference = baml_compiler_tir::infer_function(
                             db,
                             &signature,
+                            &sig_source_map,
                             &body,
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
@@ -340,7 +341,7 @@ fn build_typing_context(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *func_loc);
+                let (signature, _sig_source_map) = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<baml_compiler_tir::Ty> = signature

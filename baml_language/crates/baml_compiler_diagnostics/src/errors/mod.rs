@@ -18,4 +18,4 @@ mod type_error;
 pub use hir_diagnostic::HirDiagnostic;
 pub use name_error::NameError;
 pub use parse_error::ParseError;
-pub use type_error::TypeError;
+pub use type_error::{ErrorContext, SpanContext, TypeError};

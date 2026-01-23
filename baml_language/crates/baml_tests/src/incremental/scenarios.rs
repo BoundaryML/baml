@@ -25,7 +25,7 @@ fn query_all_function_signatures(db: &baml_project::ProjectDatabase, file: Sourc
     let items = baml_compiler_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::Function(func_id) = item {
-            let _ = function_signature(db, *func_id);
+            let (_sig, _source_map) = function_signature(db, *func_id);
         }
     }
 }

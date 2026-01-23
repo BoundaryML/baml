@@ -159,7 +159,7 @@ fn format_hir_file(
         match item {
             ItemId::Function(func_id) => {
                 let func = &item_tree[func_id.id(db)];
-                let sig = function_signature(db, *func_id);
+                let (sig, _sig_source_map) = function_signature(db, *func_id);
                 let body = function_body(db, *func_id);
 
                 // Format as: function Name(param: Type, ...) -> ReturnType { body }
@@ -194,7 +194,7 @@ fn format_hir_file(
                             writeln!(result, "  \"#").unwrap();
                         }
                     }
-                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => {
+                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
                         // Print as code for readability
                         let code = baml_compiler_hir::body_to_code(expr_body);
                         // Indent the code (skip the outer braces since we already have them)
