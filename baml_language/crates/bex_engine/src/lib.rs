@@ -61,11 +61,11 @@ use std::{
     },
 };
 
-use baml_snapshot::BamlSnapshot;
 pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
+use bex_program::BexProgram;
 // Re-export bex_sys types for convenience
 pub use bex_sys::{FileHandle, OpError, ResourceKind, SocketHandle, SysOpResult, ops};
 use bex_vm::{BexVm, NativeFunction, VmExecState};
@@ -225,7 +225,7 @@ pub enum EngineError {
 /// ```
 pub struct BexEngine {
     /// The original snapshot (for metadata access)
-    snapshot: BamlSnapshot,
+    snapshot: BexProgram,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap<NativeFunction>>,
     /// Global variables pool
@@ -259,7 +259,7 @@ impl BexEngine {
     /// (functions, classes, enums). Each function call creates a VM that
     /// shares this heap and allocates runtime objects into its own TLAB.
     pub fn new(
-        snapshot: BamlSnapshot,
+        snapshot: BexProgram,
         env_vars: HashMap<String, String>,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
@@ -288,7 +288,7 @@ impl BexEngine {
     }
 
     /// Get a reference to the program snapshot.
-    pub fn program(&self) -> &BamlSnapshot {
+    pub fn program(&self) -> &BexProgram {
         &self.snapshot
     }
 
@@ -1315,7 +1315,7 @@ mod concurrent_tests {
 
         // This test is a placeholder demonstrating the concurrent execution pattern.
         // In a real implementation, you would:
-        // 1. Create a test BamlSnapshot with a simple function
+        // 1. Create a test BexProgram with a simple function
         // 2. Create a BexEngine from the snapshot
         // 3. Wrap it in Arc and spawn concurrent calls
         // 4. Verify all calls complete successfully

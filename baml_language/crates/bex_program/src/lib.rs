@@ -1,6 +1,6 @@
 //! BAML Snapshot representation.
 //!
-//! This crate defines `BamlSnapshot`, the final compiled artifact that contains
+//! This crate defines `BexProgram`, the final compiled artifact that contains
 //! everything needed to execute BAML code at runtime:
 //! - Type definitions (classes, enums)
 //! - Function definitions (LLM and expression functions)
@@ -31,7 +31,7 @@ pub enum Ty {
     // Literal types
     Literal(LiteralValue),
 
-    // Named types (references into BamlSnapshot.classes/enums)
+    // Named types (references into BexProgram.classes/enums)
     Class(String),
     Enum(String),
 
@@ -177,7 +177,7 @@ pub enum RetryStrategy {
 /// - Infrastructure (clients, retry policies)
 /// - Bytecode for VM execution
 #[derive(Clone, Debug)]
-pub struct BamlSnapshot {
+pub struct BexProgram {
     /// Class definitions, keyed by name.
     pub classes: HashMap<String, ClassDef>,
 
@@ -197,8 +197,8 @@ pub struct BamlSnapshot {
     pub bytecode: Program<()>,
 }
 
-impl BamlSnapshot {
-    /// Create a new `BamlSnapshot` with the given bytecode program.
+impl BexProgram {
+    /// Create a new `BexProgram` with the given bytecode program.
     pub fn new(bytecode: Program<()>) -> Self {
         Self {
             classes: HashMap::new(),

@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-baml_snapshot = { workspace = true }
+bex_program = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }

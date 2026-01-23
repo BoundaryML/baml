@@ -8,9 +8,9 @@
 
 use std::{collections::HashMap, io::Write};
 
-use baml_snapshot::BamlSnapshot;
 use baml_tests::bytecode::compile_source_with_schema;
 use bex_engine::{BexEngine, BexExternalValue};
+use bex_program::BexProgram;
 use indexmap::IndexMap;
 use tempfile::TempDir;
 
@@ -38,7 +38,7 @@ impl Default for EngineProgram {
 }
 
 /// Compile BAML source code into a snapshot with schema populated.
-pub(crate) fn compile_for_engine(source: &str) -> BamlSnapshot {
+pub(crate) fn compile_for_engine(source: &str) -> BexProgram {
     compile_source_with_schema(source)
 }
 

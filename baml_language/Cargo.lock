@@ -687,13 +687,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_snapshot"
-version = "0.0.0"
-dependencies = [
- "bex_vm_types",
-]
-
-[[package]]
 name = "baml_tests"
 version = "0.0.0"
 dependencies = [
@@ -706,8 +699,8 @@ dependencies = [
  "baml_compiler_tir",
  "baml_db",
  "baml_project",
- "baml_snapshot",
  "baml_workspace",
+ "bex_program",
  "bex_vm",
  "bex_vm_types",
  "codspeed-divan-compat",
@@ -764,10 +757,10 @@ name = "bex_engine"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "baml_snapshot",
  "baml_tests",
  "bex_external_types",
  "bex_heap",
+ "bex_program",
  "bex_resource_types",
  "bex_sys",
  "bex_vm",
@@ -784,7 +777,7 @@ name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
  "baml_base",
- "baml_snapshot",
+ "bex_program",
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
@@ -800,6 +793,13 @@ dependencies = [
  "crossbeam-queue",
  "indexmap 2.13.0",
  "sharded-slab",
+]
+
+[[package]]
+name = "bex_program"
+version = "0.0.0"
+dependencies = [
+ "bex_vm_types",
 ]
 
 [[package]]

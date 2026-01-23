@@ -22,10 +22,10 @@
 //! }
 //! ```
 
-// Re-export Ty from baml_snapshot for convenience
+// Re-export Ty from bex_program for convenience
 use std::sync::Arc;
 
-pub use baml_snapshot::Ty;
+pub use bex_program::Ty;
 use bex_resource_types::ResourceKind;
 use indexmap::IndexMap;
 
