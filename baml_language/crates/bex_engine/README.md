@@ -42,8 +42,8 @@ Async runtime for the BEX virtual machine, coordinating concurrent execution and
 │  │  • No dependencies (leaf crate)                                         │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                               │
-│  KEY INSIGHT: bex_vm and bex_sys are SIBLINGS - they never depend on each    │
-│               other. BexEngine is the ONLY component that talks to both.     │
+│  KEY INSIGHT: bex_vm and bex_sys are SIBLINGS - they never depend on each     │
+│               other. BexEngine is the ONLY component that talks to both.      │
 │                                                                               │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
