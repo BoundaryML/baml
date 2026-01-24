@@ -4532,6 +4532,7 @@ dependencies = [
  "baml-lsp-types",
  "baml-runtime",
  "baml-types",
+ "chrono",
  "colored",
  "console-subscriber",
  "crossbeam",

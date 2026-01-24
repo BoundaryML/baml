@@ -748,6 +748,7 @@ dependencies = [
 name = "zed_baml"
 version = "0.218.0"
 dependencies = [
+ "log",
  "zed_extension_api",
 ]
 

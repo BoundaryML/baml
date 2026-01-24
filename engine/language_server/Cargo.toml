@@ -20,6 +20,7 @@ baml-runtime = { path = "../baml-runtime", features = [
     "internal",
 ], default-features = false }
 baml-lsp-types = { path = "../baml-lsp-types" }
+chrono.workspace = true
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 generators-lib = { path = "../generators/utils/generators_lib" }

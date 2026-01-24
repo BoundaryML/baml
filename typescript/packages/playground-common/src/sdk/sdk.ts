@@ -85,16 +85,12 @@ export class BAMLSDK {
       return;
     }
     this.initialized = true;
-    if (Object.keys(initialFiles).length === 0) {
-      throw new Error('Cannot initialize SDK with empty files');
-    }
 
     // Load VSCode settings (in VSCode environment only)
+    // This must happen even if no files are provided (browser-served playground needs proxy port)
     await this.loadVSCodeSettings();
 
-    // Store initial state in atoms
-    this.storage.setBAMLFiles(initialFiles);
-
+    // Store env vars and feature flags (these are needed even without files)
     if (options?.envVars) {
       this.storage.setEnvVars(options.envVars);
     }
@@ -102,7 +98,14 @@ export class BAMLSDK {
       this.storage.setFeatureFlags(options.featureFlags);
     }
 
-    // Create the runtime with the initial files
+    // If no files provided, we're done - runtime will be created when files arrive via files.update()
+    if (Object.keys(initialFiles).length === 0) {
+      console.log('SDK: No initial files, skipping runtime creation (will create on first file update)');
+      return;
+    }
+
+    // Store initial files and create runtime
+    this.storage.setBAMLFiles(initialFiles);
     await this.recreateRuntime();
   }
 
