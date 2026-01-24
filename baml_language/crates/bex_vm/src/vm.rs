@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, FunctionKind, GlobalPool, Instruction, Object, ObjectIndex, ObjectPool,
+    BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
     types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
@@ -45,8 +45,8 @@ pub const MAX_FRAMES: usize = 256;
 /// be [`Copy`].
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
-    /// The running function.
-    pub function: ObjectIndex,
+    /// Pointer to the running function object.
+    pub function: HeapPtr,
 
     /// Instruction pointer (IP) or program counter (PC).
     ///
@@ -183,10 +183,10 @@ pub struct BexVm {
     pub stack: EvalStack,
 
     /// Reference to the shared heap (long-lived, shared across VMs).
-    pub heap: Arc<BexHeap<NativeFunction>>,
+    pub heap: Arc<BexHeap>,
 
     /// Thread-local allocation buffer (exclusive to this VM).
-    pub tlab: Tlab<NativeFunction>,
+    pub tlab: Tlab,
 
     /// Global variables.
     ///
@@ -224,13 +224,13 @@ pub struct BexVm {
 #[derive(Debug, PartialEq)]
 pub enum VmExecState {
     /// VM cannot proceed. It is awaiting a pending future to complete.
-    Await(ObjectIndex),
+    Await(HeapPtr),
 
     /// VM notifies caller about a future that needs to be scheduled.
     ///
     /// Bytecode execution continues when control flow is handled back to the
     /// VM.
-    ScheduleFuture(ObjectIndex),
+    ScheduleFuture(HeapPtr),
 
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
@@ -271,24 +271,25 @@ pub enum WatchNotification {
 /// See `BexEngine::new()` for the handoff to unified heap architecture.
 #[derive(Clone, Debug)]
 pub struct BytecodeProgram {
-    pub objects: ObjectPool<NativeFunction>,
-    pub globals: GlobalPool,
-    pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind<NativeFunction>)>,
+    pub objects: ObjectPool,
+    /// Compile-time globals (converted to runtime Values in `BexEngine::new`).
+    pub globals: Vec<bex_vm_types::ConstValue>,
+    pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
     pub resolved_class_names: HashMap<String, ObjectIndex>,
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
 }
 
-/// Convert a compiled `Program<()>` to a `BytecodeProgram` with native functions attached.
+/// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
 ///
 /// This is the bridge between compilation output and VM execution. It:
 /// 1. Attaches native function implementations to builtin functions
 /// 2. Builds resolved name lookups for functions, classes, and enums
-pub fn convert_program(program: bex_vm_types::Program<()>) -> Result<BytecodeProgram, VmError> {
+pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram, VmError> {
     // Convert objects, attaching native functions
-    let objects: Vec<Object<NativeFunction>> = program
+    let objects: Vec<Object> = program
         .objects
         .into_iter()
-        .map(|o| crate::native::attach_builtins(o))
+        .map(crate::native::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
 
     // Build resolved name maps by scanning objects
@@ -325,7 +326,7 @@ pub fn convert_program(program: bex_vm_types::Program<()>) -> Result<BytecodePro
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
-fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
+fn value_type_tag(value: &Value) -> i64 {
     use bex_vm_types::types::type_tags;
 
     match value {
@@ -333,10 +334,9 @@ fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
         Value::Float(_) => type_tags::FLOAT,
         Value::Bool(_) => type_tags::BOOL,
         Value::Null => type_tags::NULL,
-        Value::Object(object_idx) => {
-            // SAFETY: Reading type information from objects. The heap's get_object
-            // handles compile-time vs runtime dispatch.
-            let obj = unsafe { heap.get_object(*object_idx) };
+        Value::Object(ptr) => {
+            // SAFETY: Reading type information from objects via HeapPtr.
+            let obj = unsafe { ptr.get() };
             match obj {
                 Object::String(_) => type_tags::STRING,
                 Object::Variant(_) => type_tags::ENUM,
@@ -350,7 +350,7 @@ fn value_type_tag(value: &Value, heap: &BexHeap<NativeFunction>) -> i64 {
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
                 Object::Instance(instance) => {
-                    let class_obj = unsafe { heap.get_object(instance.class) };
+                    let class_obj = unsafe { instance.class.get() };
                     let Object::Class(class) = class_obj else {
                         unreachable!("Instance.class does not point to a Class object")
                     };
@@ -366,11 +366,7 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
-    pub fn new(
-        heap: Arc<BexHeap<NativeFunction>>,
-        globals: GlobalPool,
-        env_vars: HashMap<String, String>,
-    ) -> Self {
+    pub fn new(heap: Arc<BexHeap>, globals: GlobalPool, env_vars: HashMap<String, String>) -> Self {
         let runtime_allocs_offset = ObjectIndex::from_raw(heap.compile_time_boundary());
         let tlab = Tlab::new(Arc::clone(&heap));
 
@@ -388,7 +384,7 @@ impl BexVm {
         }
     }
 
-    /// Read an object from the heap.
+    /// Read an object from the heap via `HeapPtr`.
     ///
     /// # Safety
     ///
@@ -397,77 +393,74 @@ impl BexVm {
     /// - Objects allocated by this VM's TLAB
     /// - Objects from other VMs when they're not being mutated
     #[inline]
-    pub fn get_object(&self, idx: ObjectIndex) -> &Object<NativeFunction> {
+    pub fn get_object(&self, ptr: HeapPtr) -> &Object {
         // SAFETY: Single-threaded execution within a VM. Objects are only
         // written during allocation or field writes, both controlled by this VM.
-        // The heap's get_object handles compile-time vs runtime dispatch.
-        unsafe { self.heap.get_object(idx) }
+        unsafe { ptr.get() }
     }
 
-    /// Get mutable access to an object.
+    /// Get mutable access to an object via `HeapPtr`.
     ///
     /// # Safety
     ///
     /// Caller must ensure exclusive access (typically via TLAB ownership
     /// or single-threaded execution). Only runtime objects can be mutated.
     #[inline]
-    pub fn get_object_mut(&mut self, idx: ObjectIndex) -> &mut Object<NativeFunction> {
+    pub fn get_object_mut(&mut self, ptr: HeapPtr) -> &mut Object {
         // SAFETY: We have &mut self, so no other code can access the VM.
         // The TLAB ensures this VM has exclusive access to its allocated objects.
-        // Only runtime objects (those after compile_time_len) can be mutated.
-        let global_idx = idx.into_raw();
-        let ct_len = self.heap.compile_time_len();
         assert!(
-            global_idx >= ct_len,
-            "Cannot mutate compile-time object at index {global_idx}"
+            !self.heap.is_compile_time_ptr(ptr),
+            "Cannot mutate compile-time object"
         );
-        self.heap.debug_assert_valid_index(idx);
-        let runtime_idx = global_idx - ct_len;
         // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
-        let obj = unsafe { self.heap.get_runtime_object_mut(runtime_idx) };
-        #[cfg(feature = "heap_debug")]
-        if let Object::Sentinel(kind) = obj {
-            panic!("heap sentinel write: {kind:?}");
-        }
-        obj
+        unsafe { ptr.get_mut() }
     }
 
-    /// Helper method to get `ObjectIndex` from a Value, with type checking.
-    fn as_object_index(
+    /// Convert an `ObjectIndex` to `HeapPtr` (for compile-time objects).
+    ///
+    /// Used during the transition from index-based to pointer-based access.
+    #[inline]
+    pub fn idx_to_ptr(&self, idx: ObjectIndex) -> HeapPtr {
+        self.heap.compile_time_ptr(idx.into_raw())
+    }
+
+    /// Helper method to get `HeapPtr` from a Value, with type checking.
+    fn as_object_ptr(
         &self,
         value: &Value,
         object_type: ObjectType,
-    ) -> Result<ObjectIndex, InternalError> {
-        let Value::Object(index) = value else {
+    ) -> Result<HeapPtr, InternalError> {
+        let Value::Object(ptr) = value else {
             return Err(InternalError::TypeError {
                 expected: object_type.into(),
                 got: self.type_of(value),
             });
         };
-        Ok(*index)
+        Ok(*ptr)
     }
 
     /// Get string from a Value.
     pub fn as_string(&self, value: &Value) -> Result<&String, InternalError> {
-        let index = self.as_object_index(value, ObjectType::String)?;
-        self.get_object(index).as_string()
+        let ptr = self.as_object_ptr(value, ObjectType::String)?;
+        self.get_object(ptr).as_string()
     }
 
     /// Get type of a value.
     pub fn type_of(&self, value: &Value) -> Type {
-        Type::of(value, |index| ObjectType::of(self.get_object(index)))
+        Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
     }
 
     /// Get mutable string from a Value.
     pub fn as_string_mut(&mut self, value: &Value) -> Result<&mut String, InternalError> {
-        let index = self.as_object_index(value, ObjectType::String)?;
-        self.get_object_mut(index).as_string_mut()
+        let ptr = self.as_object_ptr(value, ObjectType::String)?;
+        self.get_object_mut(ptr).as_string_mut()
     }
 
     /// Get array from a Value.
     pub fn as_array(&self, value: &Value) -> Result<&[Value], InternalError> {
-        let index = self.as_object_index(value, ObjectType::Array)?;
-        let obj = self.get_object(index);
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        let obj = self.get_object(ptr);
         match obj {
             Object::Array(arr) => Ok(arr.as_slice()),
             _ => Err(InternalError::TypeError {
@@ -479,15 +472,15 @@ impl BexVm {
 
     /// Get mutable array from a Value.
     pub fn as_array_mut(&mut self, value: &Value) -> Result<&mut Vec<Value>, InternalError> {
-        let index = self.as_object_index(value, ObjectType::Array)?;
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
         // Check type first to avoid borrow issues
-        if !matches!(self.get_object(index), Object::Array(_)) {
+        if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(InternalError::TypeError {
                 expected: ObjectType::Array.into(),
-                got: ObjectType::of(self.get_object(index)).into(),
+                got: ObjectType::of(self.get_object(ptr)).into(),
             });
         }
-        match self.get_object_mut(index) {
+        match self.get_object_mut(ptr) {
             Object::Array(arr) => Ok(arr),
             _ => unreachable!("type was just checked"),
         }
@@ -495,7 +488,7 @@ impl BexVm {
 
     /// Get map from a Value.
     pub fn as_map(&self, value: &Value) -> Result<&IndexMap<String, Value>, InternalError> {
-        let index = self.as_object_index(value, ObjectType::Map)?;
+        let index = self.as_object_ptr(value, ObjectType::Map)?;
         let obj = self.get_object(index);
         match obj {
             Object::Map(map) => Ok(map),
@@ -511,7 +504,7 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<&mut IndexMap<String, Value>, InternalError> {
-        let index = self.as_object_index(value, ObjectType::Map)?;
+        let index = self.as_object_ptr(value, ObjectType::Map)?;
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(InternalError::TypeError {
@@ -531,7 +524,7 @@ impl BexVm {
         value: &Value,
         media_kind: bex_vm_types::types::MediaKind,
     ) -> Result<&bex_vm_types::types::MediaValue, InternalError> {
-        let index = self.as_object_index(value, ObjectType::Media(media_kind))?;
+        let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
         let obj = self.get_object(index);
         match obj {
             Object::Media(media) => Ok(media),
@@ -549,7 +542,7 @@ impl BexVm {
         value: &Value,
         media_kind: bex_vm_types::types::MediaKind,
     ) -> Result<&mut bex_vm_types::types::MediaValue, InternalError> {
-        let index = self.as_object_index(value, ObjectType::Media(media_kind))?;
+        let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Media(_)) {
             return Err(InternalError::TypeError {
@@ -568,32 +561,39 @@ impl BexVm {
     pub fn as_value_mut(&mut self, value: &Value) -> Result<&mut Value, InternalError> {
         // This is used by macro-generated code for generic type parameters.
         // For now, we don't support mutable access to generic values.
-        let Value::Object(index) = value else {
+        let Value::Object(ptr) = value else {
             return Err(InternalError::InvalidObjectRef(0));
         };
-        Err(InternalError::InvalidObjectRef(index.into_raw()))
+        Err(InternalError::InvalidObjectRef(ptr.as_ptr() as usize))
     }
 
     /// Creates a VM from a compiled [`bex_vm_types::Program`].
     ///
     /// This is primarily for testing. In production, use `BexEngine` which
     /// manages the heap across multiple VM instances.
-    pub fn from_program(program: bex_vm_types::Program<()>) -> Result<Self, VmError> {
+    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmError> {
         let bytecode = convert_program(program)?;
 
         // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object<NativeFunction>> =
-            bytecode.objects.into_iter().collect();
+        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
         // Create heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
-        Ok(Self::new(heap, bytecode.globals, HashMap::new()))
+        // Convert compile-time globals (ConstValue) to runtime globals (Value)
+        let globals_vec: Vec<Value> = bytecode
+            .globals
+            .into_iter()
+            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+            .collect();
+        let globals = GlobalPool::from_vec(globals_vec);
+
+        Ok(Self::new(heap, globals, HashMap::new()))
     }
 
     /// Bootstraps the VM preparing the given function to run.
     #[allow(clippy::print_stderr)] // intentional debug warning for developer feedback
-    pub fn set_entry_point(&mut self, function: ObjectIndex, args: &[Value]) {
+    pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
         debug_assert!(
             matches!(self.get_object(function), Object::Function(_)),
             "expect function as entry point, got {:?}",
@@ -629,8 +629,8 @@ impl BexVm {
     /// Returns a reference to the pending future.
     ///
     /// Returns [`InternalError::TypeError`] if the future is not pending, or not a future.
-    pub fn pending_future(&self, future: ObjectIndex) -> Result<&PendingFuture, InternalError> {
-        match self.get_object(future) {
+    pub fn pending_future(&self, future_ptr: HeapPtr) -> Result<&PendingFuture, InternalError> {
+        match self.get_object(future_ptr) {
             Object::Future(Future::Pending(future)) => Ok(future),
             other => Err(InternalError::TypeError {
                 expected: FutureType::Pending.into(),
@@ -641,13 +641,13 @@ impl BexVm {
 
     pub fn fulfil_future(
         &mut self,
-        future_index: ObjectIndex,
+        future_ptr: HeapPtr,
         value: Value,
     ) -> Result<(), InternalError> {
-        let Object::Future(future) = self.get_object_mut(future_index) else {
+        let Object::Future(future) = self.get_object_mut(future_ptr) else {
             return Err(InternalError::TypeError {
                 expected: FutureType::Any.into(),
-                got: ObjectType::of(self.get_object(future_index)).into(),
+                got: ObjectType::of(self.get_object(future_ptr)).into(),
             });
         };
 
@@ -659,8 +659,8 @@ impl BexVm {
         // the future on the stack with the ready value so that the next
         // instruction that the VM runs can use the value, not the future
         // object.
-        if let Some(Value::Object(index)) = self.stack.last() {
-            if *index == future_index {
+        if let Some(Value::Object(ptr)) = self.stack.last() {
+            if *ptr == future_ptr {
                 self.stack.pop();
                 self.stack.push(value);
             }
@@ -694,7 +694,7 @@ impl BexVm {
 
     /// TODO: Seems to low level for an embedder, provide an API that takes
     /// class name and mapping of field name => value instead.
-    pub fn alloc_instance(&mut self, class: ObjectIndex, fields: Vec<Value>) -> Value {
+    pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
         Value::Object(
             self.tlab
                 .alloc(Object::Instance(Instance { class, fields })),
@@ -702,7 +702,7 @@ impl BexVm {
     }
 
     // TODO: Same problem as above. Ideally takes (&str, &str) instead.
-    pub fn alloc_variant(&mut self, enm: ObjectIndex, index: usize) -> Value {
+    pub fn alloc_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
         Value::Object(self.tlab.alloc(Object::Variant(Variant { enm, index })))
     }
 
@@ -759,12 +759,8 @@ impl BexVm {
     ///
     /// When the new control flow ends (given functions pops from the stack)
     /// then the previosly running bytecode resumes execution.
-    fn interrupt(
-        &mut self,
-        function_index: ObjectIndex,
-        args: &[Value],
-    ) -> Result<VmExecState, VmError> {
-        if !matches!(self.get_object(function_index), Object::Function(_)) {
+    fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
+        if !matches!(self.get_object(function_ptr), Object::Function(_)) {
             return Err(RuntimeError::Other("Invalid interrupt function".to_string()).into());
         }
 
@@ -774,12 +770,12 @@ impl BexVm {
         let locals_offset = self.stack.len();
 
         // Params.
-        self.stack.push(Value::Object(function_index));
+        self.stack.push(Value::Object(function_ptr));
         self.stack.extend(args.iter().copied());
 
         // Push the new frame.
         self.frames.push(Frame {
-            function: function_index,
+            function: function_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
         });
@@ -884,7 +880,7 @@ impl BexVm {
 
         if let Value::Object(new) = new_value {
             // Track dependencies first (using closure to avoid borrow conflicts)
-            watch::track_watch_dependencies(&mut self.watch, Value::Object(new), &self.heap);
+            watch::track_watch_dependencies(&mut self.watch, Value::Object(new));
             // Then link the edge
             self.watch
                 .link_edge(watched_node, path, NodeId::HeapObject(new));
@@ -1031,8 +1027,9 @@ impl BexVm {
                     }));
                 }
                 Instruction::LoadConst(index) => {
-                    let value = &function.bytecode.constants[index];
-                    self.stack.push(*value);
+                    // Use pre-resolved constants (resolved at load time)
+                    let value = function.bytecode.resolved_constants[index];
+                    self.stack.push(value);
                 }
 
                 Instruction::LoadVar(index) => {
@@ -1068,7 +1065,7 @@ impl BexVm {
                         // If we have a new binding, link it so it emits.
                         if let Value::Object(new_node) = value {
                             // Track dependencies first (using closure to avoid borrow conflicts)
-                            watch::track_watch_dependencies(&mut self.watch, value, &self.heap);
+                            watch::track_watch_dependencies(&mut self.watch, value);
                             // Then link the edge
                             self.watch.link_edge(
                                 watched_node,
@@ -1116,7 +1113,7 @@ impl BexVm {
                 Instruction::LoadField(index) => {
                     let top = self.stack.ensure_pop()?;
 
-                    let reference = self.as_object_index(&top, ObjectType::Instance)?;
+                    let reference = self.as_object_ptr(&top, ObjectType::Instance)?;
 
                     // Extract the field value before pushing to stack
                     let field_value = {
@@ -1141,7 +1138,7 @@ impl BexVm {
                     // Consume the instance value from the stack.
                     let instance_value = self.stack.ensure_pop()?;
                     let instance_index =
-                        self.as_object_index(&instance_value, ObjectType::Instance)?;
+                        self.as_object_ptr(&instance_value, ObjectType::Instance)?;
 
                     // Read old value (and typecheck).
                     let old_value = match self.get_object(instance_index) {
@@ -1477,7 +1474,7 @@ impl BexVm {
                             CmpOp::NotEq => left != right,
 
                             CmpOp::InstanceOf => {
-                                let left = self.as_object_index(&left, ObjectType::Instance)?;
+                                let left = self.as_object_ptr(&left, ObjectType::Instance)?;
 
                                 let Object::Instance(instance) = self.get_object(left) else {
                                     return Err(InternalError::TypeError {
@@ -1487,7 +1484,7 @@ impl BexVm {
                                     .into());
                                 };
 
-                                let right = self.as_object_index(&right, ObjectType::Class)?;
+                                let right = self.as_object_ptr(&right, ObjectType::Class)?;
 
                                 instance.class == right
                             }
@@ -1548,7 +1545,7 @@ impl BexVm {
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
 
-                    let array_obj_index = self.as_object_index(&array_value, ObjectType::Array)?;
+                    let array_obj_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
                     // Get the index
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -1614,7 +1611,7 @@ impl BexVm {
                     let key_value = self.stack.ensure_pop()?;
                     let map_value = self.stack.ensure_pop()?;
 
-                    let map_index = self.as_object_index(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
                     let Object::Map(map) = self.get_object(map_index) else {
                         return Err(VmError::from(InternalError::TypeError {
@@ -1624,7 +1621,7 @@ impl BexVm {
                     };
 
                     // Get the string key from the objects pool
-                    let key_index = self.as_object_index(&key_value, ObjectType::String)?;
+                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?;
 
                     // Look up the value in the map
@@ -1639,8 +1636,7 @@ impl BexVm {
                     let new_value = self.stack.ensure_pop()?;
                     let index_value = self.stack.ensure_pop()?;
                     let array_value = self.stack.ensure_pop()?;
-                    let array_object_index =
-                        self.as_object_index(&array_value, ObjectType::Array)?;
+                    let array_object_index = self.as_object_ptr(&array_value, ObjectType::Array)?;
 
                     // Verify index.
                     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
@@ -1719,10 +1715,10 @@ impl BexVm {
                     let map_value = self.stack.ensure_pop()?;
 
                     // Get the string key from the objects pool.
-                    let key_index = self.as_object_index(&key_value, ObjectType::String)?;
+                    let key_index = self.as_object_ptr(&key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
 
-                    let map_index = self.as_object_index(&map_value, ObjectType::Map)?;
+                    let map_index = self.as_object_ptr(&map_value, ObjectType::Map)?;
 
                     // Read old value (and typecheck).
                     //
@@ -1771,10 +1767,12 @@ impl BexVm {
                 }
 
                 Instruction::AllocInstance(index) => {
-                    let Object::Class(class) = self.get_object(index) else {
+                    // Convert compile-time ObjectIndex to HeapPtr
+                    let class_ptr = self.idx_to_ptr(index);
+                    let Object::Class(class) = self.get_object(class_ptr) else {
                         return Err(InternalError::TypeError {
                             expected: ObjectType::Class.into(),
-                            got: ObjectType::of(self.get_object(index)).into(),
+                            got: ObjectType::of(self.get_object(class_ptr)).into(),
                         }
                         .into());
                     };
@@ -1784,13 +1782,13 @@ impl BexVm {
                     fields.resize(class.field_names.len(), Value::Null);
 
                     // Allocate an instance of the class.
-                    let instance_index = self.tlab.alloc(Object::Instance(Instance {
-                        class: index,
+                    let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
+                        class: class_ptr,
                         fields,
                     }));
 
                     // Push the instance object on top of the stack.
-                    self.stack.push(Value::Object(instance_index));
+                    self.stack.push(Value::Object(instance_ptr));
 
                     // borrow check.
                     function = self
@@ -1802,12 +1800,14 @@ impl BexVm {
                 // TODO: Contains a lot of typechecking, we know at compile time
                 // that all this stuff is right. Should do something about it.
                 Instruction::AllocVariant(enum_index) => {
+                    // Convert compile-time ObjectIndex to HeapPtr
+                    let enum_ptr = self.idx_to_ptr(enum_index);
                     // Extract the variant count before popping from stack to avoid borrow conflicts
                     let variant_count = {
-                        let Object::Enum(enm) = self.get_object(enum_index) else {
+                        let Object::Enum(enm) = self.get_object(enum_ptr) else {
                             return Err(InternalError::TypeError {
                                 expected: ObjectType::Enum.into(),
-                                got: ObjectType::of(self.get_object(enum_index)).into(),
+                                got: ObjectType::of(self.get_object(enum_ptr)).into(),
                             }
                             .into());
                         };
@@ -1840,13 +1840,13 @@ impl BexVm {
                         .into());
                     }
 
-                    let object_index = self.tlab.alloc(Object::Variant(Variant {
-                        enm: enum_index,
+                    let variant_ptr = self.tlab.alloc(Object::Variant(Variant {
+                        enm: enum_ptr,
                         index: variant_usize,
                     }));
 
                     // Push the variant object on top of the stack.
-                    self.stack.push(Value::Object(object_index));
+                    self.stack.push(Value::Object(variant_ptr));
 
                     // borrow check.
                     function = self
@@ -1861,7 +1861,7 @@ impl BexVm {
                     let expected_type = FunctionType::External;
 
                     let index =
-                        self.as_object_index(&self.stack[args_offset], expected_type.into())?;
+                        self.as_object_ptr(&self.stack[args_offset], expected_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
                     let Object::Function(callable_future) = self.get_object(index) else {
@@ -1918,7 +1918,7 @@ impl BexVm {
 
                     let wanted_type = FutureType::Any;
 
-                    let index = self.as_object_index(&self.stack[value], wanted_type.into())?;
+                    let index = self.as_object_ptr(&self.stack[value], wanted_type.into())?;
 
                     // Check if future is ready and extract value if so
                     let ready_value = {
@@ -2000,7 +2000,7 @@ impl BexVm {
                     if let Value::Object(object_index) = value {
                         // Build the graph.
                         // Track dependencies first (using closure to avoid borrow conflicts)
-                        watch::track_watch_dependencies(&mut self.watch, value, &self.heap);
+                        watch::track_watch_dependencies(&mut self.watch, value);
 
                         // Link the root emittable variable to the object
                         self.watch.link_edge(
@@ -2067,7 +2067,7 @@ impl BexVm {
 
                     let function_type = FunctionType::Callable;
 
-                    let index = self.as_object_index(local, function_type.into())?;
+                    let index = self.as_object_ptr(local, function_type.into())?;
 
                     // Can't call a function if it's not a function ¯\_(ツ)_/¯
                     let Object::Function(callee) = self.get_object(index) else {
@@ -2093,7 +2093,17 @@ impl BexVm {
                     }
 
                     match callee.kind {
-                        FunctionKind::Native(func) => {
+                        FunctionKind::Native(func_ptr) => {
+                            // Cast the type-erased pointer back to NativeFunction.
+                            //
+                            // SAFETY: The pointer was created by casting a NativeFunction to *const ()
+                            // in attach_builtins, so it's safe to cast it back. We use transmute
+                            // because Rust doesn't allow `as` casts from *const () to fn pointers.
+                            // The explicit type parameters document exactly what we're doing.
+                            let func = unsafe {
+                                std::mem::transmute::<*const (), NativeFunction>(func_ptr)
+                            };
+
                             // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
                             // reference in the stack, using `swap` to insert the result.
                             let args = self.stack
@@ -2142,6 +2152,15 @@ impl BexVm {
                                 got: FunctionType::from(&callee.kind).into(),
                             }
                             .into());
+                        }
+
+                        FunctionKind::NativeUnresolved => {
+                            // This should never happen - native functions should be resolved
+                            // by attach_builtins() before the VM runs.
+                            panic!(
+                                "Unresolved native function '{}' - did you forget to call attach_builtins()?",
+                                callee.name
+                            );
                         }
                     }
                 }
@@ -2243,7 +2262,7 @@ impl BexVm {
                         // branches which is not ideal for performance. Might want to consider this
                         // in map accesses.
                         let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                            let obj_index = self.as_object_index(k, ObjectType::String)?;
+                            let obj_index = self.as_object_ptr(k, ObjectType::String)?;
 
                             self.get_object(obj_index).as_string().cloned()
                         });
@@ -2330,7 +2349,7 @@ impl BexVm {
 
                 Instruction::TypeTag => {
                     let value = self.stack.ensure_pop()?;
-                    let tag = value_type_tag(&value, &self.heap);
+                    let tag = value_type_tag(&value);
                     self.stack.push(Value::Int(tag));
                 }
 

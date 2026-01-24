@@ -194,12 +194,12 @@ pub struct BamlSnapshot {
     pub retry_policies: HashMap<String, RetryPolicyDef>,
 
     /// Bytecode program for VM execution (pure data, no native functions attached).
-    pub bytecode: Program<()>,
+    pub bytecode: Program,
 }
 
 impl BamlSnapshot {
     /// Create a new `BamlSnapshot` with the given bytecode program.
-    pub fn new(bytecode: Program<()>) -> Self {
+    pub fn new(bytecode: Program) -> Self {
         Self {
             classes: HashMap::new(),
             enums: HashMap::new(),

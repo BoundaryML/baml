@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -14,7 +14,7 @@ Function ConsecutiveHeaders (arity: 0, kind: Bytecode):
      3   NOTIFY_BLOCK 3   (SubsectionA)
      4   NOTIFY_BLOCK 4   (SubsectionB)
      5   NOTIFY_BLOCK 5   (SubsectionC)
-     6   LOAD_CONST 0     (multiple consecutive headers)
+     6   LOAD_CONST 0     ("multiple consecutive headers")
      7   RETURN           
 
 Function HeaderLevels (arity: 0, kind: Bytecode):
@@ -27,7 +27,7 @@ Function HeaderLevels (arity: 0, kind: Bytecode):
      6    NOTIFY_BLOCK 6   (Level7-Morethan6levels)
      7    NOTIFY_BLOCK 7   (Level8)
      8    NOTIFY_BLOCK 8   (Level9)
-     9    LOAD_CONST 0     (deep nesting)
+     9    LOAD_CONST 0     ("deep nesting")
      10   RETURN           
 
 Function HeaderOnlyFunction (arity: 0, kind: Bytecode):
@@ -37,14 +37,14 @@ Function HeaderOnlyFunction (arity: 0, kind: Bytecode):
      3   NOTIFY_BLOCK 3   (PureAnnotation)
      4   NOTIFY_BLOCK 4   (NoExpressions)
      5   NOTIFY_BLOCK 5   (UntilTheEnd)
-     6   LOAD_CONST 0     (default)
+     6   LOAD_CONST 0     ("default")
      7   RETURN           
 
 Function HeadersAndComments (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (HeaderBeforeComment)
      1   NOTIFY_BLOCK 1   (HeaderAfterComment)
      2   NOTIFY_BLOCK 2   (HeaderAfterDocComment)
-     3   LOAD_CONST 0     (test)
+     3   LOAD_CONST 0     ("test")
      4   RETURN           
 
 Function HeadersAroundExpressions (arity: 0, kind: Bytecode):
@@ -109,12 +109,12 @@ Function HeadersInComplexNesting (arity: 0, kind: Bytecode):
      5    POP_JUMP_IF_FALSE +2   (to 7)
      6    JUMP +4                (to 10)
      7    NOTIFY_BLOCK 2         (InsideElse)
-     8    LOAD_CONST 2           (else value)
+     8    LOAD_CONST 2           ("else value")
      9    JUMP +5                (to 14)
      10   NOTIFY_BLOCK 3         (InsideIfTrue)
      11   NOTIFY_BLOCK 4         (VeryDeepBlock)
      12   NOTIFY_BLOCK 5         (BacktoIfLevel)
-     13   LOAD_CONST 3           (deep value)
+     13   LOAD_CONST 3           ("deep value")
      14   VIZ_EXIT 0             (InsideBlockExpression)
      15   NOTIFY_BLOCK 6         (BacktoBlockLevel)
      16   STORE_VAR 1            (result)
@@ -129,7 +129,7 @@ Function HeadersWithSpecialChars (arity: 0, kind: Bytecode):
      3   NOTIFY_BLOCK 3   (HeaderWithSlashes)
      4   NOTIFY_BLOCK 4   (Header\With\Backslashes)
      5   NOTIFY_BLOCK 5   (Header|With|Pipes)
-     6   LOAD_CONST 0     (special chars)
+     6   LOAD_CONST 0     ("special chars")
      7   RETURN           
 
 Function HeadersWithWhitespace (arity: 0, kind: Bytecode):
@@ -138,18 +138,18 @@ Function HeadersWithWhitespace (arity: 0, kind: Bytecode):
      2   NOTIFY_BLOCK 2   (AllTabs)
      3   NOTIFY_BLOCK 3   (TrailingSpaces)
      4   NOTIFY_BLOCK 4   (MultipleSpacesBetweenWords)
-     5   LOAD_CONST 0     (whitespace test)
+     5   LOAD_CONST 0     ("whitespace test")
      6   RETURN           
 
 Function UnicodeHeaders (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (你好世界)
      1   NOTIFY_BLOCK 1   (Émojis🎉🎊)
      2   NOTIFY_BLOCK 2   (Special«Characters»™)
-     3   LOAD_CONST 0     (test)
+     3   LOAD_CONST 0     ("test")
      4   RETURN           
 
 Function VeryLongHeaderTitle (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader)
      1   NOTIFY_BLOCK 1   (AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890)
-     2   LOAD_CONST 0     (long headers)
+     2   LOAD_CONST 0     ("long headers")
      3   RETURN

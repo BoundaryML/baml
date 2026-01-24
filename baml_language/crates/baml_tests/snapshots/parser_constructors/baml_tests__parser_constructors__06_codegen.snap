@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -17,8 +17,8 @@ Function boolArray (arity: 0, kind: Bytecode):
 Function boolValues (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (true)
      1   LOAD_CONST 1   (false)
-     2   LOAD_CONST 2   (hello)
-     3   LOAD_CONST 3   (test)
+     2   LOAD_CONST 2   ("hello")
+     3   LOAD_CONST 3   ("test")
      4   ALLOC_MAP 2    
      5   RETURN         
 
@@ -32,8 +32,8 @@ Function floatArray (arity: 0, kind: Bytecode):
 Function floatValues (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (1)
      1   LOAD_CONST 1   (2)
-     2   LOAD_CONST 2   (hello)
-     3   LOAD_CONST 3   (test)
+     2   LOAD_CONST 2   ("hello")
+     3   LOAD_CONST 3   ("test")
      4   ALLOC_MAP 2    
      5   RETURN         
 
@@ -47,14 +47,14 @@ Function intArray (arity: 0, kind: Bytecode):
 Function intValues (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (1)
      1   LOAD_CONST 1   (2)
-     2   LOAD_CONST 2   (hello)
-     3   LOAD_CONST 3   (test)
+     2   LOAD_CONST 2   ("hello")
+     3   LOAD_CONST 3   ("test")
      4   ALLOC_MAP 2    
      5   RETURN         
 
 Function mixedArray (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0    (1)
-     1   LOAD_CONST 1    (two)
+     1   LOAD_CONST 1    ("two")
      2   LOAD_CONST 2    (3)
      3   ALLOC_ARRAY 3   
      4   RETURN          
@@ -95,17 +95,17 @@ Function pointArray (arity: 0, kind: Bytecode):
      22   RETURN             
 
 Function stringArray (arity: 0, kind: Bytecode):
-     0   LOAD_CONST 0    (hello)
-     1   LOAD_CONST 1    (world)
-     2   LOAD_CONST 2    (test)
+     0   LOAD_CONST 0    ("hello")
+     1   LOAD_CONST 1    ("world")
+     2   LOAD_CONST 2    ("test")
      3   ALLOC_ARRAY 3   
      4   RETURN          
 
 Function stringValues (arity: 0, kind: Bytecode):
-     0   LOAD_CONST 0   (world)
-     1   LOAD_CONST 1   (test)
-     2   LOAD_CONST 2   (hello)
-     3   LOAD_CONST 3   (test)
+     0   LOAD_CONST 0   ("world")
+     1   LOAD_CONST 1   ("test")
+     2   LOAD_CONST 2   ("hello")
+     3   LOAD_CONST 3   ("test")
      4   ALLOC_MAP 2    
      5   RETURN         
 

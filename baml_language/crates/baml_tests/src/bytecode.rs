@@ -33,7 +33,7 @@ use baml_base::{FileId, SourceFile};
 // Re-export BamlSnapshot for engine tests
 pub use baml_snapshot::BamlSnapshot;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
+use bex_vm_types::{ConstValue, ObjectIndex, Program as VmProgram};
 
 // Re-export test types from crate::vm
 pub use crate::vm::{
@@ -113,7 +113,7 @@ impl TestDatabase {
 //
 
 /// Compile BAML source code into a VM program.
-pub fn compile_source(source: &str) -> VmProgram<()> {
+pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
@@ -401,7 +401,8 @@ pub fn collect_vm_exec_states(
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    vm.set_entry_point(function_ptr, &[]);
 
     let mut states = Vec::new();
 
@@ -463,7 +464,8 @@ fn setup_and_exec_program(
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    vm.set_entry_point(function_ptr, &[]);
     let result = vm.exec();
     Ok((vm, result))
 }
@@ -476,7 +478,7 @@ fn setup_and_exec_program(
 pub struct BytecodeProgram {
     pub arity: usize,
     pub instructions: Vec<bex_vm_types::Instruction>,
-    pub constants: Vec<VmValue>,
+    pub constants: Vec<ConstValue>,
     pub expected: VmExecState,
 }
 
@@ -498,6 +500,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
+            resolved_constants: Vec::new(), // Populated by BexHeap at load time
             jump_tables: Vec::new(),
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
@@ -514,17 +517,15 @@ pub fn assert_vm_executes_bytecode_with_inspection(
 
     let mut program = VmProgram::new();
     let fn_idx = program.add_object(bex_vm_types::Object::Function(function));
-    program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
+    program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_idx)));
     program
         .function_indices
         .insert("test_fn".to_string(), fn_idx);
 
-    let function_index = program
-        .function_index("test_fn")
-        .expect("test_fn should exist");
-
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    // Get HeapPtr for function from the heap
+    let function_ptr = vm.heap.compile_time_ptr(fn_idx);
+    vm.set_entry_point(function_ptr, &[]);
 
     let result = vm.exec()?;
 

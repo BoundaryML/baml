@@ -6,8 +6,6 @@
 
 use std::sync::Arc;
 
-use bex_vm_types::ObjectIndex;
-
 use crate::EpochGuard;
 
 /// Trait for releasing handles back to the heap.
@@ -18,9 +16,9 @@ pub trait WeakHeapRef: Send + Sync {
     /// Release a handle slot by its slab key.
     fn release_handle(&self, slab_key: usize);
 
-    /// Resolve a handle to its current ObjectIndex.
+    /// Resolve a handle to its current object pointer.
     /// Returns None if handle is invalid.
-    fn resolve_handle(&self, slab_key: usize) -> Option<ObjectIndex>;
+    fn resolve_handle_ptr(&self, slab_key: usize) -> Option<bex_vm_types::HeapPtr>;
 }
 
 /// Opaque handle to a heap object.
@@ -87,17 +85,16 @@ impl Handle {
         }
     }
 
-    /// Get the ObjectIndex this handle points to.
+    /// Get a raw pointer to the object this handle points to.
     ///
     /// Requires an `EpochGuard` to prove the caller is in epoch-protected code.
-    /// This ensures GC cannot run and invalidate the returned index before
+    /// This ensures GC cannot run and invalidate the returned pointer before
     /// the caller uses it.
     ///
     /// # When to use
     ///
-    /// Use this method when you need the raw `ObjectIndex` for VM operations
-    /// (e.g., pushing to stack, storing in objects). Only callable from
-    /// epoch-protected code paths.
+    /// Use this method when you need the HeapPtr for VM operations.
+    /// Only callable from epoch-protected code paths.
     ///
     /// # For external code
     ///
@@ -106,11 +103,11 @@ impl Handle {
     /// - `heap.with_object(handle, |obj| ...)`
     ///
     /// Returns None if the handle has been invalidated.
-    pub fn object_index(&self, _guard: &EpochGuard<'_>) -> Option<ObjectIndex> {
+    pub fn object_ptr(&self, _guard: &EpochGuard<'_>) -> Option<bex_vm_types::HeapPtr> {
         self.inner
             .heap
             .as_ref()?
-            .resolve_handle(self.inner.slab_key)
+            .resolve_handle_ptr(self.inner.slab_key)
     }
 
     /// Get the slab key for this handle.
@@ -149,7 +146,7 @@ mod tests {
 
         assert_eq!(handle1.slab_key(), 42);
         assert_eq!(handle2.slab_key(), 42);
-        // Note: object_index() requires EpochGuard and returns None for detached handles
+        // Note: object_ptr() requires EpochGuard and returns None for detached handles
     }
 
     #[test]

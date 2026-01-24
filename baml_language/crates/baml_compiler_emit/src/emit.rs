@@ -12,8 +12,8 @@ use baml_compiler_mir::{
 };
 use baml_compiler_tir::Ty;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, Function, FunctionKind, GlobalIndex, Instruction, Object,
-    ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp, Value,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
+    Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{BlockNotification, BlockNotificationType, JumpTableData},
 };
 
@@ -117,7 +117,7 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Enum variant mappings (enum name -> variant name -> variant index).
     enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool.
-    objects: &'obj mut ObjectPool<()>,
+    objects: &'obj mut ObjectPool,
 
     /// Analysis results (classifications, def-use, etc.).
     analysis: AnalysisResult,
@@ -176,7 +176,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Compile a MIR function to bytecode.
-    fn compile(mut self, mir: &MirFunction) -> Function<()> {
+    fn compile(mut self, mir: &MirFunction) -> Function {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
@@ -286,7 +286,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Pre-allocate only the real locals (not virtuals)
         if slots_to_allocate > 0 {
-            let null_idx = self.add_constant(Value::Null);
+            let null_idx = self.add_constant(ConstValue::Null);
             for _ in 0..slots_to_allocate {
                 self.emit(Instruction::LoadConst(null_idx));
             }
@@ -308,7 +308,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 
     /// Add a constant to the pool and return its index.
-    fn add_constant(&mut self, value: Value) -> usize {
+    fn add_constant(&mut self, value: ConstValue) -> usize {
         // Try to find existing constant
         for (i, existing) in self.bytecode.constants.iter().enumerate() {
             if *existing == value {
@@ -430,11 +430,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                                     local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
                                 let channel_obj_idx = self.objects.len();
                                 self.objects.push(Object::String(channel.to_string()));
-                                let channel_const_idx = self.add_constant(Value::Object(
+                                let channel_const_idx = self.add_constant(ConstValue::Object(
                                     ObjectIndex::from_raw(channel_obj_idx),
                                 ));
                                 self.emit(Instruction::LoadConst(channel_const_idx));
-                                let null_const_idx = self.add_constant(Value::Null);
+                                let null_const_idx = self.add_constant(ConstValue::Null);
                                 self.emit(Instruction::LoadConst(null_const_idx));
                                 self.emit(Instruction::Watch(slot));
                             }
@@ -473,8 +473,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
                     let channel_obj_idx = self.objects.len();
                     self.objects.push(Object::String(channel.to_string()));
-                    let channel_const_idx =
-                        self.add_constant(Value::Object(ObjectIndex::from_raw(channel_obj_idx)));
+                    let channel_const_idx = self
+                        .add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
                     self.emit(Instruction::LoadConst(channel_const_idx));
                     // Push filter value
                     self.emit_operand_pull(filter, mir);
@@ -661,7 +661,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                         // Load variant index onto stack, then allocate variant
                         #[allow(clippy::cast_possible_wrap)]
-                        let idx = self.add_constant(Value::Int(variant_idx as i64));
+                        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
                         self.emit(Instruction::LoadConst(idx));
                         self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
                             enum_obj_idx,
@@ -692,19 +692,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let class_name_str = fqn.name.as_str();
                     if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                         // Load the Class object for the type check
-                        let class_const =
-                            self.add_constant(Value::Object(ObjectIndex::from_raw(class_obj_idx)));
+                        let class_const = self
+                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
                         self.emit(Instruction::LoadConst(class_const));
                         // Emit instanceof comparison
                         self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
                     } else {
                         // Unknown class - treat as always false
-                        let idx = self.add_constant(Value::Bool(false));
+                        let idx = self.add_constant(ConstValue::Bool(false));
                         self.emit(Instruction::LoadConst(idx));
                     }
                 } else {
                     // Non-class type - not supported yet, return false
-                    let idx = self.add_constant(Value::Bool(false));
+                    let idx = self.add_constant(ConstValue::Bool(false));
                     self.emit(Instruction::LoadConst(idx));
                 }
             }
@@ -715,25 +715,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn emit_constant(&mut self, constant: &Constant) {
         match constant {
             Constant::Int(v) => {
-                let idx = self.add_constant(Value::Int(*v));
+                let idx = self.add_constant(ConstValue::Int(*v));
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::Float(v) => {
-                let idx = self.add_constant(Value::Float(*v));
+                let idx = self.add_constant(ConstValue::Float(*v));
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::String(s) => {
                 let obj_idx = self.objects.len();
                 self.objects.push(Object::String(s.clone()));
-                let idx = self.add_constant(Value::Object(ObjectIndex::from_raw(obj_idx)));
+                let idx = self.add_constant(ConstValue::Object(ObjectIndex::from_raw(obj_idx)));
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::Bool(v) => {
-                let idx = self.add_constant(Value::Bool(*v));
+                let idx = self.add_constant(ConstValue::Bool(*v));
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::Null => {
-                let idx = self.add_constant(Value::Null);
+                let idx = self.add_constant(ConstValue::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::Function(name) => {
@@ -745,7 +745,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
             }
             Constant::Ty(_) => {
-                let idx = self.add_constant(Value::Null);
+                let idx = self.add_constant(ConstValue::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
             Constant::EnumVariant { enum_name, variant } => {
@@ -766,7 +766,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 // Load variant index onto stack, then allocate variant
                 #[allow(clippy::cast_possible_wrap)]
-                let idx = self.add_constant(Value::Int(variant_idx as i64));
+                let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
                 self.emit(Instruction::LoadConst(idx));
                 self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
                     enum_obj_idx,
@@ -1017,7 +1017,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         for (value, target) in arms {
             self.emit(Instruction::Copy(0));
-            let idx = self.add_constant(Value::Int(*value));
+            let idx = self.add_constant(ConstValue::Int(*value));
             self.emit(Instruction::LoadConst(idx));
             self.emit(Instruction::CmpOp(CmpOp::Eq));
             let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
@@ -1106,7 +1106,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // Single arm - emit direct comparison
                 let (value, target) = &arms[0];
                 self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(Value::Int(*value));
+                let idx = self.add_constant(ConstValue::Int(*value));
                 self.emit(Instruction::LoadConst(idx));
                 self.emit(Instruction::CmpOp(CmpOp::Eq));
                 let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
@@ -1119,7 +1119,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // Two arms - emit both comparisons sequentially
                 for (value, target) in arms {
                     self.emit(Instruction::Copy(0));
-                    let idx = self.add_constant(Value::Int(*value));
+                    let idx = self.add_constant(ConstValue::Int(*value));
                     self.emit(Instruction::LoadConst(idx));
                     self.emit(Instruction::CmpOp(CmpOp::Eq));
                     let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
@@ -1138,7 +1138,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 // Compare with pivot
                 self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(Value::Int(*value));
+                let idx = self.add_constant(ConstValue::Int(*value));
                 self.emit(Instruction::LoadConst(idx));
                 self.emit(Instruction::CmpOp(CmpOp::Eq));
                 let eq_jump = self.emit(Instruction::PopJumpIfFalse(0));
@@ -1239,10 +1239,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(
-    mir: &MirFunction,
-    ctx: MirCodegenContext<'_, '_>,
-) -> Function<()> {
+pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
 

@@ -124,14 +124,20 @@ impl<K> std::fmt::Display for Index<K> {
 }
 
 /// Generic pool type that uses a concrete [`Index`] for indexing.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct Pool<T, K>(pub Vec<T>, PhantomData<K>);
+
+impl<T, K> Default for Pool<T, K> {
+    fn default() -> Self {
+        Self(Vec::new(), PhantomData)
+    }
+}
 
 impl<T, K> Pool<T, K> {
     /// Creates a new empty vec.
     pub fn new() -> Self {
-        Self(Vec::new(), PhantomData)
+        Self::default()
     }
 
     /// Create a new pool from a [`Vec`].
@@ -234,7 +240,7 @@ impl<'a, T, K> std::iter::IntoIterator for &'a mut Pool<T, K> {
 }
 
 pub type GlobalPool = Pool<Value, GlobalKind>;
-pub type ObjectPool<F> = Pool<Object<F>, ObjectKind>;
+pub type ObjectPool = Pool<Object, ObjectKind>;
 
 pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;

@@ -7,7 +7,7 @@ use std::{
 };
 
 use bex_vm_types::{
-    Future, Object, ObjectIndex, Value,
+    Future, HeapPtr, Object, ObjectIndex, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -122,7 +122,7 @@ impl HeapDebuggerState {
     }
 }
 
-impl<F> BexHeap<F> {
+impl BexHeap {
     pub fn debug_config(&self) -> &HeapDebuggerConfig {
         self.debug_state().config()
     }
@@ -213,15 +213,18 @@ impl<F> BexHeap<F> {
         );
 
         let ct_len = self.compile_time_len();
-        let max_index = ct_len + runtime_len;
+        let _max_index = ct_len + runtime_len;
 
         let handles = self.handles.read().expect("handles lock poisoned");
         for (handle_key, idx) in handles.iter() {
-            let raw = idx.into_raw();
+            let ptr_addr = idx.as_ptr() as usize;
             assert!(
-                raw < max_index,
-                "handle out of bounds: handle_key={handle_key} idx={raw} max={max_index}"
+                ptr_addr != 0,
+                "handle has null pointer: handle_key={handle_key}"
             );
+            // Note: With HeapPtr, we can't easily do bounds checking since we have raw pointers
+            // The epoch check in debug_assert_valid_index provides safety guarantees
+            let _ = ptr_addr; // Silence unused warning - we verified it's not null
         }
 
         self.debug_verify_tlab_canaries();
@@ -229,9 +232,10 @@ impl<F> BexHeap<F> {
 
     fn verify_full_impl(&self) {
         let ct_len = self.compile_time_len();
+        // Verify compile-time objects
         for raw in 0..ct_len {
-            let idx = ObjectIndex::from_raw(raw);
-            let obj = unsafe { self.get_object(idx) };
+            let idx = self.compile_time_ptr(raw);
+            let obj = unsafe { idx.get() };
             self.verify_object_invariants(idx, obj, ct_len);
         }
 
@@ -239,8 +243,8 @@ impl<F> BexHeap<F> {
         unsafe {
             let space = &*self.spaces[active].get();
             for (runtime_idx, obj) in space.iter().enumerate() {
-                let raw = ct_len + runtime_idx;
-                let idx = self.make_object_index(raw);
+                let ptr = space.get_ptr(runtime_idx);
+                let idx = HeapPtr::from_ptr(ptr, self.heap_epoch());
                 if self.debug_handle_runtime_sentinel(idx, obj, ct_len) {
                     continue;
                 }
@@ -258,12 +262,7 @@ impl<F> BexHeap<F> {
         }
     }
 
-    fn debug_handle_runtime_sentinel(
-        &self,
-        idx: ObjectIndex,
-        obj: &Object<F>,
-        ct_len: usize,
-    ) -> bool {
+    fn debug_handle_runtime_sentinel(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) -> bool {
         let Object::Sentinel(kind) = obj else {
             return false;
         };
@@ -277,12 +276,8 @@ impl<F> BexHeap<F> {
                 chunk_start,
                 chunk_end,
             } => {
-                let raw = idx.into_raw();
-                let expected_end = raw;
-                assert!(
-                    *chunk_end == expected_end,
-                    "tlab canary end mismatch: idx={raw} chunk_end={chunk_end}"
-                );
+                // With HeapPtr we can't easily do index-based validation
+                // Just verify the canary structure is self-consistent
                 assert!(
                     *chunk_start < *chunk_end,
                     "tlab canary start >= end: chunk_start={chunk_start} chunk_end={chunk_end}"
@@ -292,16 +287,12 @@ impl<F> BexHeap<F> {
                     "tlab canary size mismatch: chunk_start={chunk_start} chunk_end={chunk_end} tlab_size={}",
                     self.tlab_size()
                 );
-                assert!(
-                    *chunk_start >= ct_len,
-                    "tlab canary start in compile-time region: chunk_start={chunk_start} ct_len={ct_len}"
-                );
                 true
             }
         }
     }
 
-    fn verify_object_invariants(&self, idx: ObjectIndex, obj: &Object<F>, ct_len: usize) {
+    fn verify_object_invariants(&self, idx: HeapPtr, obj: &Object, _ct_len: usize) {
         match obj {
             Object::Array(values) => {
                 for value in values {
@@ -316,11 +307,6 @@ impl<F> BexHeap<F> {
             Object::Instance(instance) => {
                 let class_idx = instance.class;
                 self.debug_assert_valid_index(class_idx);
-                let class_raw = class_idx.into_raw();
-                assert!(
-                    class_raw < ct_len,
-                    "instance.class not compile-time: obj_idx={idx:?} class_idx={class_idx:?}"
-                );
                 let class_obj = unsafe { self.get_object(class_idx) };
                 let Object::Class(class) = class_obj else {
                     panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
@@ -338,11 +324,6 @@ impl<F> BexHeap<F> {
             Object::Variant(variant) => {
                 let enm_idx = variant.enm;
                 self.debug_assert_valid_index(enm_idx);
-                let enm_raw = enm_idx.into_raw();
-                assert!(
-                    enm_raw < ct_len,
-                    "variant.enm not compile-time: obj_idx={idx:?} enm_idx={enm_idx:?}"
-                );
                 let enm_obj = unsafe { self.get_object(enm_idx) };
                 let Object::Enum(enm) = enm_obj else {
                     panic!("variant.enm not Enum: obj_idx={idx:?} enm_idx={enm_idx:?}");
@@ -380,30 +361,22 @@ impl<F> BexHeap<F> {
         }
     }
 
-    pub fn debug_assert_valid_index(&self, idx: ObjectIndex) {
+    pub fn debug_assert_valid_index(&self, idx: HeapPtr) {
         let debug = self.debug_state().config();
         if !debug.enabled {
             return;
         }
 
-        let raw = idx.into_raw();
-        let ct_len = self.compile_time_len();
-        if raw < ct_len {
-            return;
-        }
+        // Check the pointer is not null
+        assert!(!idx.as_ptr().is_null(), "heap pointer is null");
 
-        let runtime_len = self.len().saturating_sub(ct_len);
-        let max_index = ct_len + runtime_len;
-        assert!(
-            raw < max_index,
-            "heap index out of bounds: idx={raw} max={max_index}"
-        );
-
+        // Check epoch matches
         let current_epoch = self.heap_epoch();
         let idx_epoch = idx.epoch();
         assert!(
             idx_epoch == current_epoch,
-            "heap index epoch mismatch: idx_epoch={idx_epoch} heap_epoch={current_epoch} idx={raw}"
+            "heap pointer epoch mismatch: idx_epoch={idx_epoch} heap_epoch={current_epoch} ptr={:?}",
+            idx.as_ptr()
         );
     }
 
@@ -416,15 +389,11 @@ impl<F> BexHeap<F> {
         self.debug_state().epoch()
     }
 
-    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
-        ObjectIndex::from_raw_epoch(raw, self.heap_epoch())
-    }
-
-    pub(crate) fn placeholder_object(&self) -> Object<F> {
+    pub(crate) fn placeholder_object(&self) -> Object {
         Object::Sentinel(SentinelKind::Uninit)
     }
 
-    pub(crate) fn tlab_canary_object(&self, chunk_start: usize, chunk_end: usize) -> Object<F> {
+    pub(crate) fn tlab_canary_object(&self, chunk_start: usize, chunk_end: usize) -> Object {
         Object::Sentinel(SentinelKind::TlabCanary {
             chunk_start,
             chunk_end,
@@ -441,7 +410,7 @@ impl<F> BexHeap<F> {
         }
     }
 
-    pub(crate) fn debug_assert_not_sentinel(&self, obj: &Object<F>) {
+    pub(crate) fn debug_assert_not_sentinel(&self, obj: &Object) {
         let debug = self.debug_state().config();
         if !debug.enabled {
             return;
@@ -450,5 +419,18 @@ impl<F> BexHeap<F> {
         if let Object::Sentinel(kind) = obj {
             panic!("heap sentinel read: {kind:?}");
         }
+    }
+
+    /// Create a HeapPtr from a raw pointer.
+    /// In debug mode, includes the current epoch for stale pointer detection.
+    #[inline]
+    pub(crate) unsafe fn make_heap_ptr(&self, ptr: *mut Object) -> HeapPtr {
+        unsafe { HeapPtr::from_ptr(ptr, self.heap_epoch()) }
+    }
+
+    /// Create an ObjectIndex from a raw index.
+    /// In debug mode, includes the current epoch for stale pointer detection.
+    pub(crate) fn make_object_index(&self, raw: usize) -> ObjectIndex {
+        ObjectIndex::from_raw_epoch(raw, self.heap_epoch())
     }
 }

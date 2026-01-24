@@ -10,7 +10,7 @@ use bex_vm::{
     watch::{self},
 };
 use bex_vm_types::{
-    Object as VmObject, ObjectIndex, Value as VmValue,
+    HeapPtr, Object as VmObject, Value as VmValue,
     bytecode::{
         BinOp, BlockNotification as VmBlockNotification, BlockNotificationType, CmpOp, UnaryOp,
     },
@@ -90,8 +90,8 @@ pub enum Object {
 }
 
 impl Object {
-    pub fn from_vm_object(index: ObjectIndex, vm: &BexVm) -> anyhow::Result<Self> {
-        let obj = vm.get_object(index);
+    pub fn from_vm_object(ptr: HeapPtr, vm: &BexVm) -> anyhow::Result<Self> {
+        let obj = vm.get_object(ptr);
         match obj {
             VmObject::String(s) => Ok(Object::String(s.clone())),
 

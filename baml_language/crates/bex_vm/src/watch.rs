@@ -153,14 +153,14 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use bex_vm_types::{Object, ObjectIndex, StackIndex, Value};
+use bex_vm_types::{HeapPtr, Object, StackIndex, Value};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WatchFilter {
     Default,
     Manual,
     Paused,
-    Function(ObjectIndex),
+    Function(HeapPtr),
 }
 
 /// State associated with a watched root.
@@ -184,7 +184,7 @@ pub enum NodeId {
     /// Local variable on the stack.
     LocalVar(StackIndex),
     /// Heap-allocated object.
-    HeapObject(ObjectIndex),
+    HeapObject(HeapPtr),
 }
 
 /// Edge label for parent -> child relationships.
@@ -458,36 +458,34 @@ impl Watch {
 /// dependency edges. It does not declare any root, call `Watch::register_root` separately.
 ///
 /// This is a free function to avoid borrow checker issues when calling from `BexVm`.
-/// Takes a reference to the heap for object access to allow split borrows.
-pub fn track_watch_dependencies<NF>(watch: &mut Watch, value: Value, heap: &bex_heap::BexHeap<NF>) {
+pub fn track_watch_dependencies(watch: &mut Watch, value: Value) {
     let mut stack = vec![value];
     let mut visited = HashSet::new();
 
     while let Some(v) = stack.pop() {
-        let Value::Object(index) = v else {
+        let Value::Object(ptr) = v else {
             continue;
         };
 
-        if !visited.insert(index) {
+        if !visited.insert(ptr) {
             continue;
         }
 
-        let node = NodeId::HeapObject(index);
+        let node = NodeId::HeapObject(ptr);
 
         // Now traverse the object's contents
         // SAFETY: We access the heap directly using unsafe code here to avoid
         // borrow checker issues. This is safe because we're only reading immutably.
-        // The heap's get_object handles compile-time vs runtime dispatch.
-        let obj = unsafe { heap.get_object(index) };
+        let obj = unsafe { ptr.get() };
         match obj {
             Object::Instance(instance) => {
                 // For each field in the instance, build edges
                 for (field_idx, field_value) in instance.fields.iter().enumerate() {
-                    if let Value::Object(child_obj) = field_value {
+                    if let Value::Object(child_ptr) = field_value {
                         watch.add_edge(
                             node,
                             Path::InstanceField(field_idx),
-                            NodeId::HeapObject(*child_obj),
+                            NodeId::HeapObject(*child_ptr),
                         );
 
                         stack.push(*field_value);
@@ -498,8 +496,8 @@ pub fn track_watch_dependencies<NF>(watch: &mut Watch, value: Value, heap: &bex_
             Object::Array(array) => {
                 // For each element in the array, build edges
                 for (idx, elem_value) in array.iter().enumerate() {
-                    if let Value::Object(child_obj) = elem_value {
-                        watch.add_edge(node, Path::ArrayIndex(idx), NodeId::HeapObject(*child_obj));
+                    if let Value::Object(child_ptr) = elem_value {
+                        watch.add_edge(node, Path::ArrayIndex(idx), NodeId::HeapObject(*child_ptr));
 
                         stack.push(*elem_value);
                     }
@@ -509,11 +507,11 @@ pub fn track_watch_dependencies<NF>(watch: &mut Watch, value: Value, heap: &bex_
             Object::Map(map) => {
                 // For each entry in the map, build edges
                 for (key, map_value) in map {
-                    if let Value::Object(child_obj) = map_value {
+                    if let Value::Object(child_ptr) = map_value {
                         watch.add_edge(
                             node,
                             Path::MapKey(key.clone()),
-                            NodeId::HeapObject(*child_obj),
+                            NodeId::HeapObject(*child_ptr),
                         );
 
                         stack.push(*map_value);
@@ -543,6 +541,21 @@ mod tests {
         }
     }
 
+    /// Creates a fake `HeapPtr` for testing graph structure.
+    /// These pointers should never be dereferenced - they're just unique identifiers.
+    fn fake_heap_ptr(id: usize) -> HeapPtr {
+        // SAFETY: We're creating a fake pointer that will never be dereferenced.
+        // The tests only check graph connectivity, not object contents.
+        #[cfg(feature = "heap_debug")]
+        unsafe {
+            HeapPtr::from_ptr(id as *mut Object, 0)
+        }
+        #[cfg(not(feature = "heap_debug"))]
+        unsafe {
+            HeapPtr::from_ptr(id as *mut Object)
+        }
+    }
+
     #[test]
     fn test_basic_notify_registration() {
         let mut emit = Watch::new();
@@ -563,7 +576,7 @@ mod tests {
         let mut emit = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        let obj = NodeId::HeapObject(ObjectIndex::from_raw(0));
+        let obj = NodeId::HeapObject(fake_heap_ptr(0));
 
         // Register root at var
         emit.register_root(var, test_root_state());
@@ -587,8 +600,8 @@ mod tests {
     fn test_cycle_handling() {
         let mut emit = Watch::new();
 
-        let a = NodeId::HeapObject(ObjectIndex::from_raw(0));
-        let b = NodeId::HeapObject(ObjectIndex::from_raw(1));
+        let a = NodeId::HeapObject(fake_heap_ptr(0));
+        let b = NodeId::HeapObject(fake_heap_ptr(1));
         let root_node = NodeId::LocalVar(StackIndex::from_raw(0));
 
         // Create cycle: A -> B -> A
@@ -619,7 +632,7 @@ mod tests {
 
         let var1 = NodeId::LocalVar(StackIndex::from_raw(0));
         let var2 = NodeId::LocalVar(StackIndex::from_raw(1));
-        let obj = NodeId::HeapObject(ObjectIndex::from_raw(0));
+        let obj = NodeId::HeapObject(fake_heap_ptr(0));
 
         // Register two roots
         emit.register_root(var1, test_root_state());
@@ -650,9 +663,9 @@ mod tests {
         let mut emit = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        let obj1 = NodeId::HeapObject(ObjectIndex::from_raw(0));
-        let obj2 = NodeId::HeapObject(ObjectIndex::from_raw(1));
-        let obj3 = NodeId::HeapObject(ObjectIndex::from_raw(2));
+        let obj1 = NodeId::HeapObject(fake_heap_ptr(0));
+        let obj2 = NodeId::HeapObject(fake_heap_ptr(1));
+        let obj3 = NodeId::HeapObject(fake_heap_ptr(2));
 
         // Create chain: var -> obj1 -> obj2 -> obj3
         emit.register_root(var, test_root_state());

@@ -71,8 +71,8 @@ pub use bex_sys::{
     FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
     ResourceRegistry, SocketHandle, SysOpResult, ops,
 };
-use bex_vm::{BexVm, NativeFunction, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, Object, ObjectIndex, SysOp, Value};
+use bex_vm::{BexVm, VmExecState};
+use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, Object, SysOp, Value};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
@@ -82,7 +82,7 @@ use tokio::sync::{Notify, mpsc};
 
 /// Result of an external future.
 struct FutureResult {
-    id: ObjectIndex,
+    id: HeapPtr,
     result: Result<ResolvedValue, EngineError>,
 }
 
@@ -230,12 +230,11 @@ pub struct BexEngine {
     /// The original snapshot (for metadata access)
     snapshot: BamlSnapshot,
     /// The unified heap (shared across all VM instances)
-    heap: Arc<BexHeap<NativeFunction>>,
+    heap: Arc<BexHeap>,
     /// Global variables pool
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
-    resolved_function_names:
-        HashMap<String, (ObjectIndex, bex_vm_types::FunctionKind<NativeFunction>)>,
+    resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
 
@@ -269,17 +268,36 @@ impl BexEngine {
         let bytecode = bex_vm::convert_program(snapshot.bytecode.clone())?;
 
         // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object<NativeFunction>> =
-            bytecode.objects.into_iter().collect();
+        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
         // Create the unified heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
+        // Convert ObjectIndex -> HeapPtr for function lookup table.
+        // Now that the heap exists, we can get stable pointers to compile-time objects.
+        let resolved_function_names = bytecode
+            .resolved_function_names
+            .into_iter()
+            .map(|(name, (idx, kind))| {
+                let ptr = heap.compile_time_ptr(idx.into_raw());
+                (name, (ptr, kind))
+            })
+            .collect();
+
+        // Convert compile-time globals (ConstValue) to runtime globals (Value).
+        // Object references are converted from ObjectIndex to HeapPtr.
+        let globals_vec: Vec<Value> = bytecode
+            .globals
+            .into_iter()
+            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+            .collect();
+        let globals = GlobalPool::from_vec(globals_vec);
+
         Ok(Self {
             snapshot,
             heap,
-            globals: bytecode.globals,
-            resolved_function_names: bytecode.resolved_function_names,
+            globals,
+            resolved_function_names,
             env_vars,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
@@ -296,7 +314,7 @@ impl BexEngine {
     }
 
     /// Get a reference to the shared heap.
-    pub fn heap(&self) -> &Arc<BexHeap<NativeFunction>> {
+    pub fn heap(&self) -> &Arc<BexHeap> {
         &self.heap
     }
 
@@ -461,7 +479,7 @@ impl BexEngine {
         declared_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
-        let effective_type = self.resolve_effective_type(value, declared_type);
+        let effective_type = Self::resolve_effective_type(value, declared_type);
 
         let external = match value {
             Value::Null => BexExternalValue::Null,
@@ -479,16 +497,16 @@ impl BexEngine {
     ///
     /// # Safety
     ///
-    /// This method uses unsafe calls to `heap.get_object()`. It is safe because:
+    /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
-    /// - The caller ensures the index is valid (from a handle which is a GC root)
+    /// - The caller ensures the pointer is valid (from a handle which is a GC root)
     fn vm_object_to_external(
         &self,
-        idx: ObjectIndex,
+        ptr: HeapPtr,
         effective_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
-        // SAFETY: We only read objects, and the index comes from a valid handle.
-        let obj = unsafe { self.heap().get_object(idx) };
+        // SAFETY: We only read objects, and the pointer comes from a valid handle.
+        let obj = unsafe { ptr.get() };
 
         match obj {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -538,7 +556,7 @@ impl BexEngine {
 
             Object::Instance(instance) => {
                 // Get class name from the Class object
-                let class_obj = unsafe { self.heap().get_object(instance.class) };
+                let class_obj = unsafe { instance.class.get() };
                 let (class_name, field_names) = match class_obj {
                     Object::Class(class) => (class.name.clone(), &class.field_names),
                     _ => panic!("Instance.class should point to a Class object"),
@@ -585,7 +603,7 @@ impl BexEngine {
 
             Object::Variant(variant) => {
                 // Get enum name and variant name from the Enum object
-                let enum_obj = unsafe { self.heap().get_object(variant.enm) };
+                let enum_obj = unsafe { variant.enm.get() };
                 let (enum_name, variant_name) = match enum_obj {
                     Object::Enum(enm) => {
                         let variant_name = enm
@@ -629,28 +647,27 @@ impl BexEngine {
     /// For union types, find which member matches the actual runtime value.
     ///
     /// If the declared type is not a union, returns it unchanged.
-    fn resolve_effective_type<'a>(&self, value: &Value, declared_type: &'a Ty) -> &'a Ty {
+    fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
         match declared_type {
-            Ty::Union(members) => self
-                .find_matching_union_member(value, members)
+            Ty::Union(members) => Self::find_matching_union_member(value, members)
                 .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
             _ => declared_type,
         }
     }
 
     /// Find the union member that matches the runtime value's type.
-    fn find_matching_union_member<'a>(&self, value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
+    fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
         match value {
             Value::Null => members.iter().find(|m| matches!(m, Ty::Null)),
             Value::Int(_) => members.iter().find(|m| matches!(m, Ty::Int)),
             Value::Float(_) => members.iter().find(|m| matches!(m, Ty::Float)),
             Value::Bool(_) => members.iter().find(|m| matches!(m, Ty::Bool)),
-            Value::Object(idx) => {
-                let obj = unsafe { self.heap().get_object(*idx) };
+            Value::Object(ptr) => {
+                let obj = unsafe { ptr.get() };
                 match obj {
                     Object::String(_) => members.iter().find(|m| matches!(m, Ty::String)),
                     Object::Instance(inst) => {
-                        let class_obj = unsafe { self.heap().get_object(inst.class) };
+                        let class_obj = unsafe { inst.class.get() };
                         if let Object::Class(class) = class_obj {
                             members
                                 .iter()
@@ -660,7 +677,7 @@ impl BexEngine {
                         }
                     }
                     Object::Variant(variant) => {
-                        let enum_obj = unsafe { self.heap().get_object(variant.enm) };
+                        let enum_obj = unsafe { variant.enm.get() };
                         if let Object::Enum(enm) = enum_obj {
                             members
                                 .iter()
@@ -674,7 +691,7 @@ impl BexEngine {
                         if let Some(first) = elements.first() {
                             members.iter().find(|m| {
                                 if let Ty::List(elem_ty) = m {
-                                    self.find_matching_union_member(
+                                    Self::find_matching_union_member(
                                         first,
                                         &[elem_ty.as_ref().clone()],
                                     )
@@ -929,16 +946,16 @@ impl BexEngine {
     /// Requires `EpochGuard` because resolving handles returns an `ObjectIndex`
     /// that must remain valid while we use it.
     ///
-    /// - `Opaque(Handle)` extracts the `ObjectIndex`
+    /// - `Opaque(Handle)` extracts the `HeapPtr`
     /// - `External(...)` recursively allocates on the heap
     fn externalize_to_value(vm: &mut BexVm, external: &BexValue, guard: &EpochGuard<'_>) -> Value {
         match external {
             BexValue::Opaque(handle) => {
-                // Resolve through table to get current index after any GC
-                let idx = handle
-                    .object_index(guard)
+                // Resolve through table to get current pointer after any GC
+                let ptr = handle
+                    .object_ptr(guard)
                     .expect("Handle should be valid - object was returned to external code");
-                Value::Object(idx)
+                Value::Object(ptr)
             }
             BexValue::External(ext) => Self::allocate_from_external(vm, ext),
         }
@@ -987,24 +1004,24 @@ impl BexEngine {
         }
     }
 
-    /// Look up a function by name and return its bytecode index.
-    fn lookup_function(&self, function_name: &str) -> Result<ObjectIndex, EngineError> {
+    /// Look up a function by name and return its heap pointer.
+    fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
         self.resolved_function_names
             .get(function_name)
-            .map(|(idx, _kind)| *idx)
+            .map(|(ptr, _kind)| *ptr)
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
     /// Collect roots from a yielded VM.
-    fn collect_vm_roots(vm: &BexVm) -> Vec<ObjectIndex> {
+    fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
 
         // Stack values
         for value in &vm.stack.0 {
-            if let Value::Object(idx) = value {
-                roots.push(*idx);
+            if let Value::Object(ptr) = value {
+                roots.push(*ptr);
             }
         }
 
@@ -1025,9 +1042,9 @@ impl BexEngine {
 
                 // Update VM stack with forwarding pointers
                 for value in &mut vm.stack.0 {
-                    if let Value::Object(idx) = value {
-                        if let Some(&new_idx) = forwarding.get(idx) {
-                            *idx = new_idx;
+                    if let Value::Object(ptr) = value {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
                         }
                     }
                 }

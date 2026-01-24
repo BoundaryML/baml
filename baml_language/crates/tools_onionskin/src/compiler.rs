@@ -1356,11 +1356,15 @@ impl CompilerRunner {
                 writeln!(output, "{}", func_header).ok();
                 output_annotated.push((func_header, LineStatus::Unknown));
 
+                // Use empty GlobalPool for compile-time display (no heap available)
+                // Pass ObjectPool and compile-time globals to resolve names
+                let empty_globals = bex_vm_types::indexable::GlobalPool::new();
                 let bytecode_table = bex_vm::debug::display_bytecode(
                     func,
                     &bex_vm::EvalStack::new(),
-                    &program.objects,
-                    &program.globals,
+                    &empty_globals,
+                    Some(&program.objects),
+                    Some(&program.globals),
                     false, // no colors for static display
                 );
 
@@ -1582,7 +1586,7 @@ impl CompilerRunner {
         };
 
         // Check function arity
-        if let Some(Object::Function(func)) = program.objects.get(func_index.raw())
+        if let Some(Object::Function(func)) = program.objects.get(func_index)
             && func.arity > 0
         {
             self.vm_runner_state.execution_result =
@@ -1599,7 +1603,9 @@ impl CompilerRunner {
                 return;
             }
         };
-        vm.set_entry_point(func_index, &[]);
+        // Convert compile-time index to runtime HeapPtr
+        let func_ptr = vm.heap.compile_time_ptr(func_index);
+        vm.set_entry_point(func_ptr, &[]);
 
         match vm.exec() {
             Ok(VmExecState::Complete(value)) => {
