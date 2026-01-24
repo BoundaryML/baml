@@ -28,7 +28,8 @@
 #
 # ===========================================================================
 
-# Ignore all rig test crates
+# Ignore crates that don't follow the namespace convention
+# - rig_*: Third-party rig test crates
 ignore_crates = ["rig_*"]
 
 # External dependencies to show in dependency graph visualization
@@ -70,6 +71,8 @@ reason = "Only compiler_emit crates should depend on bex_vm_types (pure data lay
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
+# Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
+name_exceptions = { "tools_stow" = "cargo-stow" }
 
 # bex namespace configuration
 [[namespaces]]

@@ -9,7 +9,7 @@ To regenerate:
 Or directly:
 
 ```bash
-cargo run -p tools_stow -- stow --graph architecture/architecture.svg
+cargo run -p cargo-stow -- stow --graph architecture/architecture.svg
 ```
 
 Options:

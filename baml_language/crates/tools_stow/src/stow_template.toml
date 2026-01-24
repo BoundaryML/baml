@@ -1,0 +1,81 @@
+# cargo-stow configuration file
+# See https://github.com/boundaryml/baml/tree/main/baml_language/crates/tools_stow for full documentation
+#
+# This file configures workspace linting rules for your Rust monorepo.
+# Run `cargo stow` to validate, `cargo stow --fix` to auto-fix.
+
+# =============================================================================
+# NAMESPACES
+# =============================================================================
+# Define one or more namespaces for your crates. Each namespace defines a crate
+# prefix (e.g., "myapp" for myapp_* crates) and its associated rules.
+#
+# Crate naming convention: <namespace>_<word> or <namespace>_<prefix>_<word>
+# Examples: myapp_core, myapp_api_client, myapp_utils
+
+[[namespaces]]
+name = "myapp"
+
+# Approved prefixes for multi-word crate names
+# E.g., if "api" is approved, then myapp_api_client is valid
+approved_prefixes = ["api", "cli"]
+
+# Test crates exempt from "must have a base crate" rule
+# E.g., myapp_integration_tests doesn't need myapp_integration to exist
+test_crate_exceptions = []
+
+# Name exceptions: allows a crate folder to have a different package name
+# Useful for cargo subcommands (cargo-foo convention) or published crates
+# E.g., { "myapp_tool" = "cargo-myapp" } allows the myapp_tool folder
+# to contain a crate named "cargo-myapp"
+# name_exceptions = { "myapp_tool" = "cargo-myapp" }
+
+# Namespace-specific dependency rules (see below for syntax)
+# [[namespaces.dependency_rules]]
+# pattern = "some_internal_crate"
+# allowed_crates = ["myapp_core"]
+# reason = "Only core should use this directly."
+
+# =============================================================================
+# GLOBAL DEPENDENCY RULES
+# =============================================================================
+# Control which crates can depend on what. Rules apply to all namespaces.
+#
+# Each rule specifies:
+# - pattern: Dependency name or glob pattern to match
+# - allowed_prefixes: Crate prefixes that can use this dependency
+# - allowed_crates: Specific crate names/patterns that can use this dependency
+# - regular_deps_only: If true, rule only applies to [dependencies], not [dev-dependencies]
+# - reason: Message shown when the rule is violated
+
+# Example: Restrict anyhow to CLI/binary crates
+# [[dependency_rules]]
+# pattern = "anyhow"
+# allowed_prefixes = []
+# allowed_crates = ["*_cli", "*_bin"]
+# regular_deps_only = true
+# reason = "Use thiserror for proper error types in library crates."
+
+# Example: Restrict access to internal implementation crates
+# [[dependency_rules]]
+# pattern = "myapp_internal_*"
+# allowed_prefixes = ["internal"]
+# allowed_crates = ["myapp_core"]
+# regular_deps_only = true
+# reason = "Internal crates should only be used by core and internal_* crates."
+
+# =============================================================================
+# IGNORE PATTERNS
+# =============================================================================
+# Crate patterns to exclude from validation entirely.
+# Useful for vendored dependencies or generated code.
+
+# ignore_crates = ["vendored_*", "generated_*"]
+
+# =============================================================================
+# DEPENDENCY GRAPH
+# =============================================================================
+# External dependencies to include when generating dependency graphs.
+# By default, only workspace crates are shown.
+
+# graph_external_deps = ["tokio", "serde"]

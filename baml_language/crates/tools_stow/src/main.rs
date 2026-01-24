@@ -1,6 +1,16 @@
-//! cargo-stow: Validates and fixes Cargo.toml files in the workspace.
+//! cargo-stow: Workspace linting and structure validation for Rust monorepos.
 //!
-//! Rules:
+//! A cargo subcommand that validates workspace structure, enforces naming conventions,
+//! and keeps dependencies organized.
+//!
+//! ## Features
+//! - **Dependency sorting**: Keep deps organized (internal first, then external)
+//! - **Structure validation**: Enforce flat crate layout, naming conventions
+//! - **Dependency rules**: Control who can depend on what
+//! - **Dependency graph**: Visualize workspace structure as SVG
+//! - **Auto-fix**: Automatically fix sortable issues
+//!
+//! ## Rules
 //! 1. No nested crates (flat structure only)
 //! 2. Crate names must match folder names
 //! 3. Crate names must be `<namespace>_<word>` or `<namespace>_<approved_prefix>_<word>`
@@ -14,9 +24,13 @@
 //! 7. Dependencies must be sorted: internal deps first (sorted), then external deps (sorted)
 //! 8. Internal deps must be grouped together (not interleaved with external deps)
 //!
-//! Usage:
-//!     cargo stow --check
-//!     cargo stow --fix
+//! ## Usage
+//! ```bash
+//! cargo stow              # Validate (default)
+//! cargo stow --fix        # Auto-fix sortable issues
+//! cargo stow --graph out.svg  # Generate dependency graph
+//! cargo stow init         # Generate config file
+//! ```
 
 // CLI tool - print statements and exit are expected
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::exit)]
@@ -54,11 +68,17 @@ pub struct Namespace {
     /// Dependency rules that only apply to crates in this namespace
     #[serde(default)]
     pub dependency_rules: Vec<DependencyRule>,
+    /// Name exceptions: allows a crate folder to have a different package name
+    /// Key is folder name, value is allowed package name
+    /// Example: { "`tools_stow`" = "cargo-stow" }
+    #[serde(default)]
+    pub name_exceptions: HashMap<String, String>,
 }
 
 /// Stow configuration - can be loaded from stow.toml or [workspace.metadata.stow]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct Config {
     /// Crate namespaces (e.g., baml, bex)
     pub namespaces: Vec<Namespace>,
@@ -79,84 +99,30 @@ pub struct Config {
     test_crate_exceptions: Vec<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            namespaces: vec![
-                Namespace {
-                    name: "baml".into(),
-                    // Note: lsp, vm, ide removed - auto-allowed via _types/_tests suffix
-                    approved_prefixes: vec![
-                        "compiler".into(),
-                        "builtins".into(),
-                        "playground".into(),
-                    ],
-                    test_crate_exceptions: vec!["baml_tests".into()],
-                    dependency_rules: vec![
-                        DependencyRule {
-                            pattern: Pattern::Simple("baml_compiler*".into()),
-                            allowed_prefixes: vec!["compiler".into(), "lsp".into()],
-                            allowed_crates: vec!["baml_db".into(), "baml_project".into()],
-                            regular_deps_only: true,
-                            reason: "Use baml_db or baml_project to access compiler interfaces."
-                                .into(),
-                        },
-                        DependencyRule {
-                            pattern: Pattern::WithExclusions {
-                                select: "bex_*".into(),
-                                exclude: vec!["bex_vm_types".into()],
-                            },
-                            allowed_prefixes: vec![],
-                            allowed_crates: vec![],
-                            regular_deps_only: true,
-                            reason: "baml_* crates should not depend on bex_* crates.".into(),
-                        },
-                    ],
-                },
-                Namespace {
-                    name: "bex".into(),
-                    approved_prefixes: vec![], // bex_vm_types auto-allowed via _types suffix
-                    test_crate_exceptions: vec![],
-                    dependency_rules: vec![],
-                },
-            ],
-            dependency_rules: vec![
-                // Global rule: anyhow is only for CLI/LSP crates
-                DependencyRule {
-                    pattern: Pattern::Simple("anyhow".into()),
-                    allowed_prefixes: vec!["lsp".into()],
-                    allowed_crates: vec!["*_cli".into()],
-                    regular_deps_only: true,
-                    reason: "Use thiserror for proper error types in library crates.".into(),
-                },
-            ],
-            ignore_crates: vec![],
-            graph_external_deps: vec![],
-            // Legacy fields (empty when using namespaces)
-            approved_prefixes: vec![],
-            test_crate_exceptions: vec![],
-        }
-    }
+/// Error type for configuration loading
+#[derive(Debug)]
+pub enum ConfigError {
+    /// No configuration file found
+    NotFound,
+    /// Configuration file exists but failed to parse
+    ParseError(String),
 }
 
 impl Config {
     /// Load config from stow.toml or [workspace.metadata.stow] in Cargo.toml
-    /// Priority: stow.toml > Cargo.toml metadata > defaults
-    pub fn load(workspace_root: &Path) -> Self {
+    /// Priority: stow.toml > Cargo.toml metadata
+    /// Returns an error if no configuration is found.
+    pub fn load(workspace_root: &Path) -> Result<Self, ConfigError> {
         // Try stow.toml first
         let stow_toml = workspace_root.join("stow.toml");
         if stow_toml.exists() {
-            if let Ok(content) = std::fs::read_to_string(&stow_toml) {
-                match toml::from_str::<Config>(&content) {
-                    Ok(config) => {
-                        eprintln!("Loaded config from {}", stow_toml.display());
-                        return config.normalize();
-                    }
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse {}: {}", stow_toml.display(), e);
-                    }
-                }
-            }
+            let content = std::fs::read_to_string(&stow_toml)
+                .map_err(|e| ConfigError::ParseError(format!("Failed to read stow.toml: {e}")))?;
+            let config = toml::from_str::<Config>(&content).map_err(|e| {
+                ConfigError::ParseError(format!("Failed to parse {}: {e}", stow_toml.display()))
+            })?;
+            eprintln!("Loaded config from {}", stow_toml.display());
+            return Ok(config.normalize());
         }
 
         // Try [workspace.metadata.stow] in Cargo.toml
@@ -168,20 +134,16 @@ impl Config {
                         if let Some(metadata) = workspace.get("metadata").and_then(|m| m.as_table())
                         {
                             if let Some(stow) = metadata.get("stow") {
-                                match stow.clone().try_into::<Config>() {
-                                    Ok(config) => {
-                                        eprintln!(
-                                            "Loaded config from [workspace.metadata.stow] in {}",
-                                            cargo_toml.display()
-                                        );
-                                        return config.normalize();
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "Warning: Failed to parse [workspace.metadata.stow]: {e}"
-                                        );
-                                    }
-                                }
+                                let config = stow.clone().try_into::<Config>().map_err(|e| {
+                                    ConfigError::ParseError(format!(
+                                        "Failed to parse [workspace.metadata.stow]: {e}"
+                                    ))
+                                })?;
+                                eprintln!(
+                                    "Loaded config from [workspace.metadata.stow] in {}",
+                                    cargo_toml.display()
+                                );
+                                return Ok(config.normalize());
                             }
                         }
                     }
@@ -189,9 +151,13 @@ impl Config {
             }
         }
 
-        // Fall back to defaults
-        eprintln!("Using default config (no stow.toml or [workspace.metadata.stow] found)");
-        Config::default()
+        // No configuration found
+        Err(ConfigError::NotFound)
+    }
+
+    /// Check if a stow.toml file already exists
+    pub fn config_exists(workspace_root: &Path) -> bool {
+        workspace_root.join("stow.toml").exists()
     }
 
     /// Normalize config by converting legacy flat format to namespace format
@@ -203,21 +169,36 @@ impl Config {
                 approved_prefixes: std::mem::take(&mut self.approved_prefixes),
                 test_crate_exceptions: std::mem::take(&mut self.test_crate_exceptions),
                 dependency_rules: vec![],
+                name_exceptions: HashMap::new(),
             }];
         }
         self
     }
 
-    /// Get the namespace for a given crate name
+    /// Get the namespace for a given crate name (by prefix match)
     pub fn get_namespace(&self, crate_name: &str) -> Option<&Namespace> {
         self.namespaces
             .iter()
             .find(|ns| crate_name.starts_with(&format!("{}_", ns.name)))
     }
 
+    /// Get the namespace for a crate, considering `name_exceptions`
+    /// This checks both the standard prefix match AND if the crate name
+    /// is listed as an exception in any namespace
+    pub fn get_namespace_for_crate(&self, crate_name: &str) -> Option<&Namespace> {
+        // First try standard prefix match
+        if let Some(ns) = self.get_namespace(crate_name) {
+            return Some(ns);
+        }
+        // Then check if it's a name exception in any namespace
+        self.namespaces
+            .iter()
+            .find(|ns| ns.name_exceptions.values().any(|v| v == crate_name))
+    }
+
     /// Check if a crate name belongs to any known namespace
     pub fn is_internal_crate(&self, crate_name: &str) -> bool {
-        self.get_namespace(crate_name).is_some()
+        self.get_namespace_for_crate(crate_name).is_some()
     }
 
     /// Check if a crate should be ignored based on config patterns
@@ -328,10 +309,20 @@ enum Cargo {
 }
 
 #[derive(Parser)]
-#[command(author, version, about = "Validate and fix Cargo.toml files")]
+#[command(
+    author,
+    version,
+    about = "Workspace linting and structure validation for Rust monorepos",
+    long_about = "cargo-stow validates workspace structure, enforces naming conventions, and keeps dependencies organized.\n\n\
+    Run `cargo stow init` to generate a configuration file, then `cargo stow` to validate."
+)]
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
-    /// Check for validation errors without fixing
+    /// Subcommand to run
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// Check for validation errors (default if no subcommand)
     #[arg(long, conflicts_with = "fix")]
     check: bool,
 
@@ -350,6 +341,16 @@ struct Args {
     /// Include test crates (*_test, *_tests) in the dependency graph
     #[arg(long)]
     include_tests: bool,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Initialize a new stow.toml configuration file
+    Init {
+        /// Generate a minimal configuration instead of a fully commented template
+        #[arg(long)]
+        minimal: bool,
+    },
 }
 
 // =============================================================================
@@ -740,18 +741,28 @@ fn check_crate_name_matches_folder(
     folder_name: &str,
     doc: &DocumentMut,
     cargo_path: &Path,
+    config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     if let Some(package) = doc.get("package").and_then(|p| p.as_table()) {
         if let Some(name) = package.get("name").and_then(|n| n.as_str()) {
             if name != folder_name {
-                errors.push(ValidationError {
-                    crate_name: folder_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
-                    message: format!(
-                        "Crate name '{name}' does not match folder name '{folder_name}'"
-                    ),
+                // Check if there's a name exception for this folder
+                let has_exception = config.namespaces.iter().any(|ns| {
+                    ns.name_exceptions
+                        .get(folder_name)
+                        .is_some_and(|allowed| allowed == name)
                 });
+
+                if !has_exception {
+                    errors.push(ValidationError {
+                        crate_name: folder_name.to_string(),
+                        file_path: cargo_path.to_path_buf(),
+                        message: format!(
+                            "Crate name '{name}' does not match folder name '{folder_name}'"
+                        ),
+                    });
+                }
             }
         }
     }
@@ -774,6 +785,17 @@ fn check_crate_naming_convention(
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
         .unwrap_or(folder_name);
+
+    // Check if this folder has a name exception - if so, skip naming convention check
+    // (the folder name determines the namespace, not the crate name)
+    let has_name_exception = config.namespaces.iter().any(|ns| {
+        ns.name_exceptions
+            .get(folder_name)
+            .is_some_and(|allowed| allowed == crate_name)
+    });
+    if has_name_exception {
+        return errors;
+    }
 
     // Find which namespace this crate belongs to
     let Some(namespace) = config.get_namespace(crate_name) else {
@@ -1357,7 +1379,7 @@ fn parse_path_points(path_data: &str) -> Vec<(f64, f64)> {
             ' ' | ',' => {
                 flush_num(&mut num_buf, &mut nums);
                 // Every 6 numbers in a C command = one curve segment, take the endpoint
-                if nums.len() >= 6 && nums.len().is_multiple_of(6) {
+                if nums.len() >= 6 && nums.len() % 6 == 0 {
                     points.push((nums[nums.len() - 2], nums[nums.len() - 1]));
                 }
             }
@@ -1418,8 +1440,8 @@ fn generate_midpoint_arrows(points: &[(f64, f64)]) -> Vec<String> {
         }
 
         // Midpoint arrow
-        let mx = f64::midpoint(x1, x2);
-        let my = f64::midpoint(y1, y2);
+        let mx = (x1 + x2) / 2.0;
+        let my = (y1 + y2) / 2.0;
         arrows.push(make_chevron_arrow(mx, my, angle));
     }
 
@@ -1477,7 +1499,7 @@ fn generate_dependency_graph_svg(
 
     // Helper to check if a crate should be included in the graph
     let should_include_crate = |name: &str| -> bool {
-        if config.get_namespace(name).is_some() && !config.is_ignored_crate(name) {
+        if config.get_namespace_for_crate(name).is_some() && !config.is_ignored_crate(name) {
             return true;
         }
         graph_external_deps.contains(name)
@@ -1489,7 +1511,8 @@ fn generate_dependency_graph_svg(
         .iter()
         .filter(|id| {
             if let Some(pkg) = packages_by_id.get(id) {
-                config.get_namespace(&pkg.name).is_some() && !config.is_ignored_crate(&pkg.name)
+                config.get_namespace_for_crate(&pkg.name).is_some()
+                    && !config.is_ignored_crate(&pkg.name)
             } else {
                 false
             }
@@ -1639,6 +1662,11 @@ fn generate_dependency_graph_svg(
     // Extract namespace and tag from crate name
     let get_crate_parts = |name: &str| -> (String, Option<String>) {
         for ns in &config.namespaces {
+            // Check if this crate is a name exception for this namespace
+            if ns.name_exceptions.values().any(|v| v == name) {
+                return (ns.name.clone(), None);
+            }
+            // Standard prefix match
             if let Some(suffix) = name.strip_prefix(&format!("{}_", ns.name)) {
                 let parts: Vec<&str> = suffix.split('_').collect();
                 if parts.len() >= 2 {
@@ -1907,6 +1935,47 @@ fn load_crates(crate_dirs: &[PathBuf], config: &Config) -> Vec<CrateInfo> {
         .collect()
 }
 
+/// Embedded template for stow.toml
+const STOW_TEMPLATE: &str = include_str!("stow_template.toml");
+
+/// Embedded minimal template for stow.toml
+const STOW_TEMPLATE_MINIMAL: &str = r#"# cargo-stow configuration
+# See https://github.com/boundaryml/baml/tree/main/baml_language/crates/tools_stow for documentation
+
+[[namespaces]]
+name = "myproject"
+approved_prefixes = []
+test_crate_exceptions = []
+"#;
+
+fn run_init(workspace_root: &Path, minimal: bool) {
+    let stow_toml = workspace_root.join("stow.toml");
+
+    if stow_toml.exists() {
+        eprintln!("Error: stow.toml already exists at {}", stow_toml.display());
+        eprintln!("Remove it first if you want to regenerate.");
+        std::process::exit(1);
+    }
+
+    let template = if minimal {
+        STOW_TEMPLATE_MINIMAL
+    } else {
+        STOW_TEMPLATE
+    };
+
+    if let Err(e) = std::fs::write(&stow_toml, template) {
+        eprintln!("Error: Failed to write stow.toml: {e}");
+        std::process::exit(1);
+    }
+
+    println!("✅ Created {}", stow_toml.display());
+    println!();
+    println!("Next steps:");
+    println!("  1. Edit stow.toml to configure your namespace(s)");
+    println!("  2. Run `cargo stow` to validate your workspace");
+    println!("  3. Run `cargo stow --fix` to auto-fix sortable issues");
+}
+
 fn main() {
     let Cargo::Stow(args) = Cargo::parse();
 
@@ -1919,8 +1988,28 @@ fn main() {
     let metadata = load_metadata(&workspace_cargo);
     let workspace_root = PathBuf::from(metadata.workspace_root.as_str());
 
-    // Load configuration
-    let config = Config::load(&workspace_root);
+    // Handle init subcommand first (doesn't require config to exist)
+    if let Some(Command::Init { minimal }) = args.command {
+        run_init(&workspace_root, minimal);
+        return;
+    }
+
+    // Load configuration (required for all other operations)
+    let config = match Config::load(&workspace_root) {
+        Ok(config) => config,
+        Err(ConfigError::NotFound) => {
+            eprintln!("Error: No stow.toml found.");
+            eprintln!();
+            eprintln!("Run `cargo stow init` to create a configuration file.");
+            eprintln!();
+            eprintln!("Alternatively, add [workspace.metadata.stow] to your Cargo.toml.");
+            std::process::exit(1);
+        }
+        Err(ConfigError::ParseError(msg)) => {
+            eprintln!("Error: {msg}");
+            std::process::exit(1);
+        }
+    };
 
     // Handle graph generation mode
     if let Some(graph_path) = &args.graph {
@@ -2040,6 +2129,7 @@ fn main() {
             &crate_info.folder_name,
             &crate_info.doc,
             &crate_info.cargo_path,
+            &config,
         ));
         all_errors.extend(check_crate_naming_convention(
             &crate_info.folder_name,

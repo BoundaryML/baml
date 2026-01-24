@@ -964,6 +964,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-stow"
+version = "0.1.0"
+dependencies = [
+ "cargo_metadata",
+ "clap",
+ "graphviz-rust",
+ "serde",
+ "taplo",
+ "toml",
+ "toml_edit 0.22.27",
+]
+
+[[package]]
 name = "cargo_metadata"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4656,19 +4669,6 @@ name = "tools_rig"
 version = "0.0.0"
 dependencies = [
  "baml_codegen_tests",
-]
-
-[[package]]
-name = "tools_stow"
-version = "0.0.0"
-dependencies = [
- "cargo_metadata",
- "clap",
- "graphviz-rust",
- "serde",
- "taplo",
- "toml",
- "toml_edit 0.22.27",
 ]
 
 [[package]]
