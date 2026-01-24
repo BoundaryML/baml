@@ -4557,6 +4557,7 @@ dependencies = [
  "parking_lot",
  "path-absolutize",
  "pathdiff 0.2.3",
+ "percent-encoding",
  "playground-server",
  "regex",
  "reqwest",

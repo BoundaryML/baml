@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use lsp_server::{ErrorCode, Notification};
 use lsp_types::{request, ExecuteCommandParams, MessageType};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use playground_server::WebviewRouterMessage;
 use serde_json::json;
 use tokio::time::sleep;
@@ -39,8 +40,23 @@ impl SyncRequestHandler for ExecuteCommand {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
-            // Construct the URL
-            let url = format!("http://localhost:{}", session.playground_port);
+            // Extract function name from arguments if provided
+            // Arguments come as: ["FunctionName"] (single string in array)
+            let function_name: Option<String> = params
+                .arguments
+                .first()
+                .and_then(|val| val.as_str())
+                .map(|s| s.to_string());
+
+            // Construct the URL with optional function parameter
+            let url = match &function_name {
+                Some(name) => format!(
+                    "http://localhost:{}?function={}",
+                    session.playground_port,
+                    utf8_percent_encode(name, NON_ALPHANUMERIC)
+                ),
+                None => format!("http://localhost:{}", session.playground_port),
+            };
 
             // Open the browser
             if let Err(e) = webbrowser::open(&url) {

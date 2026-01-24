@@ -90,6 +90,10 @@ export class BAMLSDK {
     // This must happen even if no files are provided (browser-served playground needs proxy port)
     await this.loadVSCodeSettings();
 
+    // Check for function selection from URL parameter (e.g., ?function=MyFunction)
+    // This is used when the playground is opened via "Open Playground" code action
+    this.captureUrlFunctionParameter();
+
     // Store env vars and feature flags (these are needed even without files)
     if (options?.envVars) {
       this.storage.setEnvVars(options.envVars);
@@ -196,6 +200,9 @@ export class BAMLSDK {
     // Retry pending navigation if in loading state
     await this.retryPendingNavigation();
 
+    // Execute pending function selection if one was captured from URL parameter
+    this.executePendingFunctionSelection();
+
     // Execute pending test command if one was queued before runtime was ready
     await this.executePendingTestCommand();
 
@@ -284,6 +291,67 @@ export class BAMLSDK {
     } catch (error) {
       console.error('[SDK] Pending test execution failed:', error);
     }
+  }
+
+  /**
+   * Capture function selection from URL parameter
+   * Called during initialization to store any ?function= parameter
+   * The selection will be applied after runtime is first created
+   */
+  private captureUrlFunctionParameter() {
+    // Only run in browser environment
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const functionName = urlParams.get('function');
+
+      if (functionName) {
+        console.log('[SDK] Captured function from URL parameter:', functionName);
+        this.storage.setPendingFunctionSelection({
+          functionName,
+          timestamp: Date.now(),
+        });
+
+        // Clear the URL parameter to prevent re-triggering on refresh
+        // Use replaceState to avoid adding to browser history
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('function');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+    } catch (e) {
+      console.warn('[SDK] Failed to read URL parameters:', e);
+    }
+  }
+
+  /**
+   * Execute pending function selection if one was captured from URL parameter
+   * Called after runtime recreation to navigate to the function
+   */
+  private executePendingFunctionSelection() {
+    const pendingSelection = this.storage.getPendingFunctionSelection();
+
+    if (!pendingSelection) {
+      return; // No pending selection
+    }
+
+    // Clear the pending selection before executing
+    this.storage.setPendingFunctionSelection(null);
+
+    // Check if the selection is stale (older than 30 seconds)
+    const THIRTY_SECONDS = 30000;
+    const selectionAge = Date.now() - pendingSelection.timestamp;
+    if (selectionAge > THIRTY_SECONDS) {
+      console.log('[SDK] Pending function selection is stale (age:', selectionAge, 'ms), skipping');
+      return;
+    }
+
+    console.log('[SDK] Executing pending function selection:', pendingSelection.functionName);
+
+    // Select the function
+    this.navigation.selectFunction(pendingSelection.functionName);
   }
 
   // ============================================================================

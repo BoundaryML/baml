@@ -84,6 +84,7 @@ tokio-stream = "0.1.17"
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
 webbrowser = "1.0.5"
+percent-encoding = "2.3.1"
 mime_guess = "2.0.5"
 
 [dev-dependencies]

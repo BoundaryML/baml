@@ -1,9 +1,10 @@
 use std::fs;
 
-use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
+use zed_extension_api::{self as zed, LanguageServerId, Result};
 
 #[derive(Debug)]
 enum BamlExtensionLspSource {
+    #[allow(dead_code)]
     LocalBuild,
     GithubRelease,
 }
@@ -14,22 +15,17 @@ struct HardcodedExtensionConfig {
 }
 
 const HARDCODED_EXTENSION_CONFIG: HardcodedExtensionConfig = HardcodedExtensionConfig {
-    #[cfg(feature = "debug")]
-    lsp_source: BamlExtensionLspSource::LocalBuild,
-    // lsp_source: BamlExtensionLspSource::GithubRelease,
-    #[cfg(not(feature = "debug"))]
-    lsp_source: BamlExtensionLspSource::LocalBuild,
-    // lsp_source: BamlExtensionLspSource::GithubRelease,
+    // uncomment this to use the local build
+    // THIS MUST BE COMMENTED OUT WHEN MERGING
+    // lsp_source: BamlExtensionLspSource::LocalBuild,
+    lsp_source: BamlExtensionLspSource::GithubRelease,
 };
-
-// Follows csharp extension as a template:
-// https://github.com/zed-extensions/csharp/blob/main/src/csharp.rs
 
 const GITHUB_REPO: &str = "BoundaryML/baml";
 
 fn language_server_binary(
     language_server_id: &LanguageServerId,
-    worktree: &zed::Worktree,
+    _worktree: &zed::Worktree,
 ) -> Result<zed::Command> {
     log::info!(
         "Retrieving language server binary with settings: {:?}",
@@ -125,11 +121,7 @@ fn language_server_binary(
                 }
             }
 
-            Ok(zed::Command {
-                command: binary_path,
-                args: vec!["lsp".into()],
-                env: Default::default(),
-            })
+            Ok(zed::Command::new(binary_path).arg("lsp"))
         }
         BamlExtensionLspSource::LocalBuild => Ok(zed::Command::new(format!(
             "{}/../target/debug/language-server-hot-reload",
