@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -13,9 +13,9 @@ Function BoolLiteralAfterTypedBool (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (unreachable)
+     5   LOAD_CONST 1           ("unreachable")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (any bool)
+     7   LOAD_CONST 2           ("any bool")
      8   RETURN                 
 
 Function BoolUnionPattern (arity: 1, kind: Bytecode):
@@ -25,7 +25,7 @@ Function BoolUnionPattern (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (covered)
+     6   LOAD_CONST 1           ("covered")
      7   RETURN                 
 
 Function BoolWithCatchAll (arity: 1, kind: Bytecode):
@@ -34,9 +34,9 @@ Function BoolWithCatchAll (arity: 1, kind: Bytecode):
      2   CMP_OP ==              
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +3                (to 7)
-     5   LOAD_CONST 1           (no)
+     5   LOAD_CONST 1           ("no")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (yes)
+     7   LOAD_CONST 2           ("yes")
      8   RETURN                 
 
 Function DeeplyNestedLiterals (arity: 1, kind: Bytecode):
@@ -60,7 +60,7 @@ Function DeeplyNestedLiterals (arity: 1, kind: Bytecode):
      17   POP 1                  
      18   JUMP +2                (to 20)
      19   POP 1                  
-     20   LOAD_CONST 3           (all success codes)
+     20   LOAD_CONST 3           ("all success codes")
      21   RETURN                 
 
 Function DuplicateBoolLiteral (arity: 1, kind: Bytecode):
@@ -75,11 +75,11 @@ Function DuplicateBoolLiteral (arity: 1, kind: Bytecode):
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +4                (to 13)
      10   JUMP +1                (to 11)
-     11   LOAD_CONST 1           (false)
+     11   LOAD_CONST 1           ("false")
      12   JUMP +4                (to 16)
-     13   LOAD_CONST 2           (second true)
+     13   LOAD_CONST 2           ("second true")
      14   JUMP +2                (to 16)
-     15   LOAD_CONST 3           (first true)
+     15   LOAD_CONST 3           ("first true")
      16   RETURN                 
 
 Function DuplicateEnumVariant (arity: 1, kind: Bytecode):
@@ -102,13 +102,13 @@ Function DuplicateEnumVariant (arity: 1, kind: Bytecode):
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   JUMP +4                (to 21)
      18   JUMP +1                (to 19)
-     19   LOAD_CONST 2           (pending)
+     19   LOAD_CONST 2           ("pending")
      20   JUMP +6                (to 26)
-     21   LOAD_CONST 3           (inactive)
+     21   LOAD_CONST 3           ("inactive")
      22   JUMP +4                (to 26)
-     23   LOAD_CONST 4           (second)
+     23   LOAD_CONST 4           ("second")
      24   JUMP +2                (to 26)
-     25   LOAD_CONST 5           (first)
+     25   LOAD_CONST 5           ("first")
      26   RETURN                 
 
 Function DuplicateIntLiteral (arity: 1, kind: Bytecode):
@@ -126,42 +126,42 @@ Function DuplicateIntLiteral (arity: 1, kind: Bytecode):
      11   POP 1                  
      12   JUMP +4                (to 16)
      13   POP 1                  
-     14   LOAD_CONST 1           (other)
+     14   LOAD_CONST 1           ("other")
      15   JUMP +4                (to 19)
-     16   LOAD_CONST 2           (second one)
+     16   LOAD_CONST 2           ("second one")
      17   JUMP +2                (to 19)
-     18   LOAD_CONST 3           (first one)
+     18   LOAD_CONST 3           ("first one")
      19   RETURN                 
 
 Function DuplicateStringLiteral (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1              (role)
-     1    LOAD_CONST 0            (user)
+     1    LOAD_CONST 0            ("user")
      2    CMP_OP ==               
      3    POP_JUMP_IF_FALSE +2    (to 5)
      4    JUMP +23                (to 27)
      5    LOAD_VAR 1              (role)
-     6    LOAD_CONST 1            (user)
+     6    LOAD_CONST 1            ("user")
      7    CMP_OP ==               
      8    POP_JUMP_IF_FALSE +2    (to 10)
      9    JUMP +16                (to 25)
      10   LOAD_VAR 1              (role)
-     11   LOAD_CONST 2            (assistant)
+     11   LOAD_CONST 2            ("assistant")
      12   CMP_OP ==               
      13   POP_JUMP_IF_FALSE +2    (to 15)
      14   JUMP +9                 (to 23)
      15   LOAD_VAR 1              (role)
-     16   LOAD_CONST 3            (system)
+     16   LOAD_CONST 3            ("system")
      17   CMP_OP ==               
      18   POP_JUMP_IF_FALSE +10   (to 28)
      19   JUMP +2                 (to 21)
      20   JUMP +8                 (to 28)
-     21   LOAD_CONST 4            (system)
+     21   LOAD_CONST 4            ("system")
      22   JUMP +6                 (to 28)
-     23   LOAD_CONST 5            (assistant)
+     23   LOAD_CONST 5            ("assistant")
      24   JUMP +4                 (to 28)
-     25   LOAD_CONST 6            (second user)
+     25   LOAD_CONST 6            ("second user")
      26   JUMP +2                 (to 28)
-     27   LOAD_CONST 7            (first user)
+     27   LOAD_CONST 7            ("first user")
      28   RETURN                  
 
 Function EnumVariantAfterTypedEnum (arity: 1, kind: Bytecode):
@@ -170,9 +170,9 @@ Function EnumVariantAfterTypedEnum (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (unreachable)
+     5   LOAD_CONST 1           ("unreachable")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (any status)
+     7   LOAD_CONST 2           ("any status")
      8   RETURN                 
 
 Function EnumVariantUnion (arity: 1, kind: Bytecode):
@@ -189,9 +189,9 @@ Function EnumVariantUnion (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +4                (to 15)
      12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           (inactive)
+     13   LOAD_CONST 2           ("inactive")
      14   JUMP +2                (to 16)
-     15   LOAD_CONST 3           (actionable)
+     15   LOAD_CONST 3           ("actionable")
      16   RETURN                 
 
 Function EnumVariantUnionWithCatchAll (arity: 1, kind: Bytecode):
@@ -207,9 +207,9 @@ Function EnumVariantUnionWithCatchAll (arity: 1, kind: Bytecode):
      9    CMP_OP ==              
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +3                (to 14)
-     12   LOAD_CONST 2           (other)
+     12   LOAD_CONST 2           ("other")
      13   JUMP +2                (to 15)
-     14   LOAD_CONST 3           (actionable)
+     14   LOAD_CONST 3           ("actionable")
      15   RETURN                 
 
 Function ExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
@@ -227,9 +227,9 @@ Function ExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
      11   POP 1                  
      12   JUMP +2                (to 14)
      13   POP 1                  
-     14   LOAD_CONST 2           (created)
+     14   LOAD_CONST 2           ("created")
      15   JUMP +2                (to 17)
-     16   LOAD_CONST 3           (ok)
+     16   LOAD_CONST 3           ("ok")
      17   RETURN                 
 
 Function ExhaustiveBool (arity: 1, kind: Bytecode):
@@ -239,9 +239,9 @@ Function ExhaustiveBool (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +4                (to 8)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (no)
+     6   LOAD_CONST 1           ("no")
      7   JUMP +2                (to 9)
-     8   LOAD_CONST 2           (yes)
+     8   LOAD_CONST 2           ("yes")
      9   RETURN                 
 
 Function ExhaustiveClassPlusLiteral (arity: 1, kind: Bytecode):
@@ -256,7 +256,7 @@ Function ExhaustiveClassPlusLiteral (arity: 1, kind: Bytecode):
      8    POP_JUMP_IF_FALSE +7   (to 15)
      9    JUMP +2                (to 11)
      10   JUMP +5                (to 15)
-     11   LOAD_CONST 2           (http ok)
+     11   LOAD_CONST 2           ("http ok")
      12   JUMP +3                (to 15)
      13   LOAD_VAR 1             (x)
      14   LOAD_FIELD 0           
@@ -274,9 +274,9 @@ Function ExhaustiveCustomBool (arity: 1, kind: Bytecode):
      8    POP_JUMP_IF_FALSE +6   (to 14)
      9    JUMP +2                (to 11)
      10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (no)
+     11   LOAD_CONST 2           ("no")
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (yes)
+     13   LOAD_CONST 3           ("yes")
      14   RETURN                 
 
 Function ExhaustiveDoubleMaybe (arity: 1, kind: Bytecode):
@@ -296,7 +296,7 @@ Function ExhaustiveDoubleMaybe (arity: 1, kind: Bytecode):
      13   POP_JUMP_IF_FALSE +10   (to 23)
      14   JUMP +2                 (to 16)
      15   JUMP +8                 (to 23)
-     16   LOAD_CONST 3            (nothing)
+     16   LOAD_CONST 3            ("nothing")
      17   JUMP +6                 (to 23)
      18   LOAD_VAR 1              (dm)
      19   LOAD_FIELD 0            
@@ -319,11 +319,11 @@ Function ExhaustiveEnumAllVariants (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +4                (to 15)
      12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           (pending)
+     13   LOAD_CONST 2           ("pending")
      14   JUMP +4                (to 18)
-     15   LOAD_CONST 3           (inactive)
+     15   LOAD_CONST 3           ("inactive")
      16   JUMP +2                (to 18)
-     17   LOAD_CONST 4           (active)
+     17   LOAD_CONST 4           ("active")
      18   RETURN                 
 
 Function ExhaustiveEnumWithCatchAll (arity: 1, kind: Bytecode):
@@ -333,14 +333,14 @@ Function ExhaustiveEnumWithCatchAll (arity: 1, kind: Bytecode):
      3   CMP_OP ==              
      4   POP_JUMP_IF_FALSE +2   (to 6)
      5   JUMP +3                (to 8)
-     6   LOAD_CONST 1           (other)
+     6   LOAD_CONST 1           ("other")
      7   JUMP +2                (to 9)
-     8   LOAD_CONST 2           (active)
+     8   LOAD_CONST 2           ("active")
      9   RETURN                 
 
 Function ExhaustiveEnumWithTypedPattern (arity: 1, kind: Bytecode):
      0   JUMP +1        (to 1)
-     1   LOAD_CONST 0   (any status)
+     1   LOAD_CONST 0   ("any status")
      2   RETURN         
 
 Function ExhaustiveFalseType (arity: 1, kind: Bytecode):
@@ -350,7 +350,7 @@ Function ExhaustiveFalseType (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (always false)
+     6   LOAD_CONST 1           ("always false")
      7   RETURN                 
 
 Function ExhaustiveIntLiterals (arity: 1, kind: Bytecode):
@@ -374,11 +374,11 @@ Function ExhaustiveIntLiterals (arity: 1, kind: Bytecode):
      17   POP 1                  
      18   JUMP +2                (to 20)
      19   POP 1                  
-     20   LOAD_CONST 3           (No Content)
+     20   LOAD_CONST 3           ("No Content")
      21   JUMP +4                (to 25)
-     22   LOAD_CONST 4           (Created)
+     22   LOAD_CONST 4           ("Created")
      23   JUMP +2                (to 25)
-     24   LOAD_CONST 5           (OK)
+     24   LOAD_CONST 5           ("OK")
      25   RETURN                 
 
 Function ExhaustiveLiteralWithBaseType (arity: 1, kind: Bytecode):
@@ -388,9 +388,9 @@ Function ExhaustiveLiteralWithBaseType (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +4                (to 8)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (other)
+     6   LOAD_CONST 1           ("other")
      7   JUMP +2                (to 9)
-     8   LOAD_CONST 2           (ok)
+     8   LOAD_CONST 2           ("ok")
      9   RETURN                 
 
 Function ExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
@@ -400,7 +400,7 @@ Function ExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +16               (to 20)
      5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 1           (success)
+     6    LOAD_CONST 1           ("success")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +9                (to 18)
@@ -410,11 +410,11 @@ Function ExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
      13   POP_JUMP_IF_FALSE +8   (to 21)
      14   JUMP +2                (to 16)
      15   JUMP +6                (to 21)
-     16   LOAD_CONST 3           (boolean true)
+     16   LOAD_CONST 3           ("boolean true")
      17   JUMP +4                (to 21)
-     18   LOAD_CONST 4           (string success)
+     18   LOAD_CONST 4           ("string success")
      19   JUMP +2                (to 21)
-     20   LOAD_CONST 5           (http ok)
+     20   LOAD_CONST 5           ("http ok")
      21   RETURN                 
 
 Function ExhaustiveNullableEnum (arity: 1, kind: Bytecode):
@@ -437,13 +437,13 @@ Function ExhaustiveNullableEnum (arity: 1, kind: Bytecode):
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   JUMP +4                (to 21)
      18   JUMP +1                (to 19)
-     19   LOAD_CONST 3           (no status)
+     19   LOAD_CONST 3           ("no status")
      20   JUMP +6                (to 26)
-     21   LOAD_CONST 4           (pending)
+     21   LOAD_CONST 4           ("pending")
      22   JUMP +4                (to 26)
-     23   LOAD_CONST 5           (inactive)
+     23   LOAD_CONST 5           ("inactive")
      24   JUMP +2                (to 26)
-     25   LOAD_CONST 6           (active)
+     25   LOAD_CONST 6           ("active")
      26   RETURN                 
 
 Function ExhaustiveNullableEnumWithTypedPattern (arity: 1, kind: Bytecode):
@@ -452,9 +452,9 @@ Function ExhaustiveNullableEnumWithTypedPattern (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (no status)
+     5   LOAD_CONST 1           ("no status")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (some status)
+     7   LOAD_CONST 2           ("some status")
      8   RETURN                 
 
 Function ExhaustiveOptional (arity: 1, kind: Bytecode):
@@ -463,9 +463,9 @@ Function ExhaustiveOptional (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (no value)
+     5   LOAD_CONST 1           ("no value")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (has value)
+     7   LOAD_CONST 2           ("has value")
      8   RETURN                 
 
 Function ExhaustiveOptionalSingleton (arity: 1, kind: Bytecode):
@@ -480,9 +480,9 @@ Function ExhaustiveOptionalSingleton (arity: 1, kind: Bytecode):
      8    POP_JUMP_IF_FALSE +6   (to 14)
      9    JUMP +2                (to 11)
      10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (no code)
+     11   LOAD_CONST 2           ("no code")
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (OK)
+     13   LOAD_CONST 3           ("OK")
      14   RETURN                 
 
 Function ExhaustiveSingletonInt (arity: 1, kind: Bytecode):
@@ -494,31 +494,31 @@ Function ExhaustiveSingletonInt (arity: 1, kind: Bytecode):
      5   POP 1                  
      6   JUMP +2                (to 8)
      7   POP 1                  
-     8   LOAD_CONST 1           (OK)
+     8   LOAD_CONST 1           ("OK")
      9   RETURN                 
 
 Function ExhaustiveStringLiterals (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (role)
-     1    LOAD_CONST 0           (user)
+     1    LOAD_CONST 0           ("user")
      2    CMP_OP ==              
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +16               (to 20)
      5    LOAD_VAR 1             (role)
-     6    LOAD_CONST 1           (assistant)
+     6    LOAD_CONST 1           ("assistant")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +9                (to 18)
      10   LOAD_VAR 1             (role)
-     11   LOAD_CONST 2           (system)
+     11   LOAD_CONST 2           ("system")
      12   CMP_OP ==              
      13   POP_JUMP_IF_FALSE +8   (to 21)
      14   JUMP +2                (to 16)
      15   JUMP +6                (to 21)
-     16   LOAD_CONST 3           (System)
+     16   LOAD_CONST 3           ("System")
      17   JUMP +4                (to 21)
-     18   LOAD_CONST 4           (Assistant)
+     18   LOAD_CONST 4           ("Assistant")
      19   JUMP +2                (to 21)
-     20   LOAD_CONST 5           (User)
+     20   LOAD_CONST 5           ("User")
      21   RETURN                 
 
 Function ExhaustiveTrueType (arity: 1, kind: Bytecode):
@@ -528,7 +528,7 @@ Function ExhaustiveTrueType (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (always true)
+     6   LOAD_CONST 1           ("always true")
      7   RETURN                 
 
 Function ExhaustiveTypeAlias (arity: 1, kind: Bytecode):
@@ -556,7 +556,7 @@ Function ExhaustiveTypeAliasWithCatchAll (arity: 1, kind: Bytecode):
      2   CMP_OP instanceof      
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +3                (to 7)
-     5   LOAD_CONST 1           (fallback)
+     5   LOAD_CONST 1           ("fallback")
      6   JUMP +3                (to 9)
      7   LOAD_VAR 1             (r)
      8   LOAD_FIELD 0           
@@ -657,7 +657,7 @@ Function HighLineNumberNonExhaustive (arity: 1, kind: Bytecode):
      4   POP_JUMP_IF_FALSE +3   (to 7)
      5   JUMP +2                (to 7)
      6   JUMP +1                (to 7)
-     7   LOAD_CONST 1           (active only)
+     7   LOAD_CONST 1           ("active only")
      8   RETURN                 
 
 Function IntLiteralUnionPattern (arity: 1, kind: Bytecode):
@@ -681,9 +681,9 @@ Function IntLiteralUnionPattern (arity: 1, kind: Bytecode):
      17   POP 1                  
      18   JUMP +2                (to 20)
      19   POP 1                  
-     20   LOAD_CONST 3           (no content)
+     20   LOAD_CONST 3           ("no content")
      21   JUMP +2                (to 23)
-     22   LOAD_CONST 4           (success with body)
+     22   LOAD_CONST 4           ("success with body")
      23   RETURN                 
 
 Function LiteralAfterTypedPattern (arity: 1, kind: Bytecode):
@@ -692,9 +692,9 @@ Function LiteralAfterTypedPattern (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (unreachable)
+     5   LOAD_CONST 1           ("unreachable")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (int)
+     7   LOAD_CONST 2           ("int")
      8   RETURN                 
 
 Function LiteralUnionWithCatchAll (arity: 1, kind: Bytecode):
@@ -728,11 +728,11 @@ Function LiteralUnionWithCatchAll (arity: 1, kind: Bytecode):
      27   POP 1                   
      28   JUMP +4                 (to 32)
      29   POP 1                   
-     30   LOAD_CONST 4            (other)
+     30   LOAD_CONST 4            ("other")
      31   JUMP +4                 (to 35)
-     32   LOAD_CONST 5            (client error)
+     32   LOAD_CONST 5            ("client error")
      33   JUMP +2                 (to 35)
-     34   LOAD_CONST 6            (success)
+     34   LOAD_CONST 6            ("success")
      35   RETURN                  
 
 Function MatchArithmeticScrutinee (arity: 2, kind: Bytecode):
@@ -752,11 +752,11 @@ Function MatchArithmeticScrutinee (arity: 2, kind: Bytecode):
      13   POP 1                  
      14   JUMP +4                (to 18)
      15   POP 1                  
-     16   LOAD_CONST 2           (other)
+     16   LOAD_CONST 2           ("other")
      17   JUMP +4                (to 21)
-     18   LOAD_CONST 3           (one)
+     18   LOAD_CONST 3           ("one")
      19   JUMP +2                (to 21)
-     20   LOAD_CONST 4           (zero)
+     20   LOAD_CONST 4           ("zero")
      21   RETURN                 
 
 Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
@@ -778,11 +778,11 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
      15   POP 1                  
      16   JUMP +4                (to 20)
      17   POP 1                  
-     18   LOAD_CONST 3           (other)
+     18   LOAD_CONST 3           ("other")
      19   JUMP +4                (to 23)
-     20   LOAD_CONST 4           (x was 1)
+     20   LOAD_CONST 4           ("x was 1")
      21   JUMP +2                (to 23)
-     22   LOAD_CONST 5           (x was 0)
+     22   LOAD_CONST 5           ("x was 0")
      23   RETURN                 
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
@@ -803,11 +803,11 @@ Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
      14   POP_JUMP_IF_FALSE +2   (to 16)
      15   JUMP +4                (to 19)
      16   JUMP +1                (to 17)
-     17   LOAD_CONST 3           (pending)
+     17   LOAD_CONST 3           ("pending")
      18   JUMP +4                (to 22)
-     19   LOAD_CONST 4           (inactive)
+     19   LOAD_CONST 4           ("inactive")
      20   JUMP +2                (to 22)
-     21   LOAD_CONST 5           (active)
+     21   LOAD_CONST 5           ("active")
      22   RETURN                 
 
 Function MixedPatterns (arity: 1, kind: Bytecode):
@@ -829,13 +829,13 @@ Function MixedPatterns (arity: 1, kind: Bytecode):
      15   CMP_OP >               
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   JUMP +3                (to 20)
-     18   LOAD_CONST 3           (negative)
+     18   LOAD_CONST 3           ("negative")
      19   JUMP +6                (to 25)
-     20   LOAD_CONST 4           (positive)
+     20   LOAD_CONST 4           ("positive")
      21   JUMP +4                (to 25)
-     22   LOAD_CONST 5           (one)
+     22   LOAD_CONST 5           ("one")
      23   JUMP +2                (to 25)
-     24   LOAD_CONST 6           (zero)
+     24   LOAD_CONST 6           ("zero")
      25   RETURN                 
 
 Function MultipleUnreachableSpans (arity: 1, kind: Bytecode):
@@ -864,15 +864,15 @@ Function MultipleUnreachableSpans (arity: 1, kind: Bytecode):
      22   POP_JUMP_IF_FALSE +2   (to 24)
      23   JUMP +4                (to 27)
      24   JUMP +1                (to 25)
-     25   LOAD_CONST 2           (pending)
+     25   LOAD_CONST 2           ("pending")
      26   JUMP +8                (to 34)
-     27   LOAD_CONST 3           (duplicate 2)
+     27   LOAD_CONST 3           ("duplicate 2")
      28   JUMP +6                (to 34)
-     29   LOAD_CONST 4           (inactive)
+     29   LOAD_CONST 4           ("inactive")
      30   JUMP +4                (to 34)
-     31   LOAD_CONST 5           (duplicate 1)
+     31   LOAD_CONST 5           ("duplicate 1")
      32   JUMP +2                (to 34)
-     33   LOAD_CONST 6           (active)
+     33   LOAD_CONST 6           ("active")
      34   RETURN                 
 
 Function NestedEnumMatch (arity: 2, kind: Bytecode):
@@ -889,9 +889,9 @@ Function NestedEnumMatch (arity: 2, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +4                (to 15)
      12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           (first pending)
+     13   LOAD_CONST 2           ("first pending")
      14   JUMP +21               (to 35)
-     15   LOAD_CONST 3           (first inactive)
+     15   LOAD_CONST 3           ("first inactive")
      16   JUMP +19               (to 35)
      17   LOAD_VAR 2             (s2)
      18   LOAD_CONST 0           (0)
@@ -906,11 +906,11 @@ Function NestedEnumMatch (arity: 2, kind: Bytecode):
      27   POP_JUMP_IF_FALSE +2   (to 29)
      28   JUMP +4                (to 32)
      29   JUMP +1                (to 30)
-     30   LOAD_CONST 4           (first active, second pending)
+     30   LOAD_CONST 4           ("first active, second pending")
      31   JUMP +4                (to 35)
-     32   LOAD_CONST 5           (first active, second inactive)
+     32   LOAD_CONST 5           ("first active, second inactive")
      33   JUMP +2                (to 35)
-     34   LOAD_CONST 6           (both active)
+     34   LOAD_CONST 6           ("both active")
      35   RETURN                 
 
 Function NestedEnumVariantUnions (arity: 1, kind: Bytecode):
@@ -927,7 +927,7 @@ Function NestedEnumVariantUnions (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +2                (to 13)
      12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           (all statuses)
+     13   LOAD_CONST 2           ("all statuses")
      14   RETURN                 
 
 Function NestedLiteralUnions (arity: 1, kind: Bytecode):
@@ -999,11 +999,11 @@ Function NestedLiteralUnions (arity: 1, kind: Bytecode):
      65   POP 1                   
      66   JUMP +4                 (to 70)
      67   POP 1                   
-     68   LOAD_CONST 9            (other)
+     68   LOAD_CONST 9            ("other")
      69   JUMP +4                 (to 73)
-     70   LOAD_CONST 10           (client error)
+     70   LOAD_CONST 10           ("client error")
      71   JUMP +2                 (to 73)
-     72   LOAD_CONST 11           (success)
+     72   LOAD_CONST 11           ("success")
      73   RETURN                  
 
 Function NestedMatchSpans (arity: 2, kind: Bytecode):
@@ -1015,7 +1015,7 @@ Function NestedMatchSpans (arity: 2, kind: Bytecode):
      5    POP 1                  
      6    JUMP +4                (to 10)
      7    POP 1                  
-     8    LOAD_CONST 1           (other)
+     8    LOAD_CONST 1           ("other")
      9    JUMP +17               (to 26)
      10   LOAD_VAR 2             (y)
      11   LOAD_CONST 2           (true)
@@ -1028,11 +1028,11 @@ Function NestedMatchSpans (arity: 2, kind: Bytecode):
      18   POP_JUMP_IF_FALSE +2   (to 20)
      19   JUMP +4                (to 23)
      20   JUMP +1                (to 21)
-     21   LOAD_CONST 4           (unreachable nested)
+     21   LOAD_CONST 4           ("unreachable nested")
      22   JUMP +4                (to 26)
-     23   LOAD_CONST 5           (zero false)
+     23   LOAD_CONST 5           ("zero false")
      24   JUMP +2                (to 26)
-     25   LOAD_CONST 6           (zero true)
+     25   LOAD_CONST 6           ("zero true")
      26   RETURN                 
 
 Function NestedTypeAlias (arity: 1, kind: Bytecode):
@@ -1052,7 +1052,7 @@ Function NestedTypeAlias (arity: 1, kind: Bytecode):
      13   POP_JUMP_IF_FALSE +10   (to 23)
      14   JUMP +2                 (to 16)
      15   JUMP +8                 (to 23)
-     16   LOAD_CONST 3            (nothing)
+     16   LOAD_CONST 3            ("nothing")
      17   JUMP +6                 (to 23)
      18   LOAD_VAR 1              (mr)
      19   LOAD_FIELD 0            
@@ -1086,7 +1086,7 @@ Function NonExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
      5   POP 1                  
      6   JUMP +2                (to 8)
      7   POP 1                  
-     8   LOAD_CONST 1           (ok)
+     8   LOAD_CONST 1           ("ok")
      9   RETURN                 
 
 Function NonExhaustiveBoolMissingFalse (arity: 1, kind: Bytecode):
@@ -1096,7 +1096,7 @@ Function NonExhaustiveBoolMissingFalse (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (yes)
+     6   LOAD_CONST 1           ("yes")
      7   RETURN                 
 
 Function NonExhaustiveBoolMissingTrue (arity: 1, kind: Bytecode):
@@ -1106,7 +1106,7 @@ Function NonExhaustiveBoolMissingTrue (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (no)
+     6   LOAD_CONST 1           ("no")
      7   RETURN                 
 
 Function NonExhaustiveClassPlusLiteralMissingClass (arity: 1, kind: Bytecode):
@@ -1118,7 +1118,7 @@ Function NonExhaustiveClassPlusLiteralMissingClass (arity: 1, kind: Bytecode):
      5   POP 1                  
      6   JUMP +2                (to 8)
      7   POP 1                  
-     8   LOAD_CONST 1           (http ok)
+     8   LOAD_CONST 1           ("http ok")
      9   RETURN                 
 
 Function NonExhaustiveClassPlusLiteralMissingLiteral (arity: 1, kind: Bytecode):
@@ -1139,7 +1139,7 @@ Function NonExhaustiveCustomBoolMissing (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (yes)
+     6   LOAD_CONST 1           ("yes")
      7   RETURN                 
 
 Function NonExhaustiveDoubleMaybeMissingNull (arity: 1, kind: Bytecode):
@@ -1169,7 +1169,7 @@ Function NonExhaustiveEnumMissingMultiple (arity: 1, kind: Bytecode):
      4   POP_JUMP_IF_FALSE +3   (to 7)
      5   JUMP +2                (to 7)
      6   JUMP +1                (to 7)
-     7   LOAD_CONST 1           (active)
+     7   LOAD_CONST 1           ("active")
      8   RETURN                 
 
 Function NonExhaustiveEnumMissingOne (arity: 1, kind: Bytecode):
@@ -1186,9 +1186,9 @@ Function NonExhaustiveEnumMissingOne (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +6   (to 16)
      11   JUMP +2                (to 13)
      12   JUMP +4                (to 16)
-     13   LOAD_CONST 2           (inactive)
+     13   LOAD_CONST 2           ("inactive")
      14   JUMP +2                (to 16)
-     15   LOAD_CONST 3           (active)
+     15   LOAD_CONST 3           ("active")
      16   RETURN                 
 
 Function NonExhaustiveFullResultMissingOne (arity: 1, kind: Bytecode):
@@ -1225,9 +1225,9 @@ Function NonExhaustiveIntLiteral (arity: 1, kind: Bytecode):
      11   POP 1                  
      12   JUMP +2                (to 14)
      13   POP 1                  
-     14   LOAD_CONST 2           (Created)
+     14   LOAD_CONST 2           ("Created")
      15   JUMP +2                (to 17)
-     16   LOAD_CONST 3           (OK)
+     16   LOAD_CONST 3           ("OK")
      17   RETURN                 
 
 Function NonExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
@@ -1237,14 +1237,14 @@ Function NonExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +9                (to 13)
      5    LOAD_VAR 1             (x)
-     6    LOAD_CONST 1           (success)
+     6    LOAD_CONST 1           ("success")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +6   (to 14)
      9    JUMP +2                (to 11)
      10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (string success)
+     11   LOAD_CONST 2           ("string success")
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (http ok)
+     13   LOAD_CONST 3           ("http ok")
      14   RETURN                 
 
 Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
@@ -1267,11 +1267,11 @@ Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
      16   POP_JUMP_IF_FALSE +8   (to 24)
      17   JUMP +2                (to 19)
      18   JUMP +6                (to 24)
-     19   LOAD_CONST 3           (pending)
+     19   LOAD_CONST 3           ("pending")
      20   JUMP +4                (to 24)
-     21   LOAD_CONST 4           (inactive)
+     21   LOAD_CONST 4           ("inactive")
      22   JUMP +2                (to 24)
-     23   LOAD_CONST 5           (active)
+     23   LOAD_CONST 5           ("active")
      24   RETURN                 
 
 Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
@@ -1293,11 +1293,11 @@ Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      15   POP_JUMP_IF_FALSE +8   (to 23)
      16   JUMP +2                (to 18)
      17   JUMP +6                (to 23)
-     18   LOAD_CONST 3           (no status)
+     18   LOAD_CONST 3           ("no status")
      19   JUMP +4                (to 23)
-     20   LOAD_CONST 4           (inactive)
+     20   LOAD_CONST 4           ("inactive")
      21   JUMP +2                (to 23)
-     22   LOAD_CONST 5           (active)
+     22   LOAD_CONST 5           ("active")
      23   RETURN                 
 
 Function NonExhaustiveOptionalMissingNull (arity: 1, kind: Bytecode):
@@ -1309,7 +1309,7 @@ Function NonExhaustiveOptionalMissingNull (arity: 1, kind: Bytecode):
      5   POP 1                  
      6   JUMP +2                (to 8)
      7   POP 1                  
-     8   LOAD_CONST 1           (OK)
+     8   LOAD_CONST 1           ("OK")
      9   RETURN                 
 
 Function NonExhaustiveOptionalMissingValue (arity: 1, kind: Bytecode):
@@ -1319,24 +1319,24 @@ Function NonExhaustiveOptionalMissingValue (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (no code)
+     6   LOAD_CONST 1           ("no code")
      7   RETURN                 
 
 Function NonExhaustiveStringLiteral (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (role)
-     1    LOAD_CONST 0           (user)
+     1    LOAD_CONST 0           ("user")
      2    CMP_OP ==              
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +9                (to 13)
      5    LOAD_VAR 1             (role)
-     6    LOAD_CONST 1           (assistant)
+     6    LOAD_CONST 1           ("assistant")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +6   (to 14)
      9    JUMP +2                (to 11)
      10   JUMP +4                (to 14)
-     11   LOAD_CONST 2           (Assistant)
+     11   LOAD_CONST 2           ("Assistant")
      12   JUMP +2                (to 14)
-     13   LOAD_CONST 3           (User)
+     13   LOAD_CONST 3           ("User")
      14   RETURN                 
 
 Function NonExhaustiveTrueTypeWrongLiteral (arity: 1, kind: Bytecode):
@@ -1346,7 +1346,7 @@ Function NonExhaustiveTrueTypeWrongLiteral (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (wrong!)
+     6   LOAD_CONST 1           ("wrong!")
      7   RETURN                 
 
 Function NonExhaustiveTypeAliasMissingOne (arity: 1, kind: Bytecode):
@@ -1366,9 +1366,9 @@ Function OptionalWithCatchAll (arity: 1, kind: Bytecode):
      2   CMP_OP ==              
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +3                (to 7)
-     5   LOAD_CONST 1           (has value)
+     5   LOAD_CONST 1           ("has value")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (no value)
+     7   LOAD_CONST 2           ("no value")
      8   RETURN                 
 
 Function OverlappingTypedPatterns (arity: 1, kind: Bytecode):
@@ -1382,9 +1382,9 @@ Function OverlappingTypedPatterns (arity: 1, kind: Bytecode):
      7    POP_JUMP_IF_FALSE +6   (to 13)
      8    JUMP +2                (to 10)
      9    JUMP +4                (to 13)
-     10   LOAD_CONST 2           (covers failure only (success already handled))
+     10   LOAD_CONST 2           ("covers failure only (success already handled)")
      11   JUMP +2                (to 13)
-     12   LOAD_CONST 3           (success)
+     12   LOAD_CONST 3           ("success")
      13   RETURN                 
 
 Function OverlappingWithBindings (arity: 1, kind: Bytecode):
@@ -1398,7 +1398,7 @@ Function OverlappingWithBindings (arity: 1, kind: Bytecode):
      7    POP_JUMP_IF_FALSE +7   (to 14)
      8    JUMP +2                (to 10)
      9    JUMP +5                (to 14)
-     10   LOAD_CONST 2           (remaining)
+     10   LOAD_CONST 2           ("remaining")
      11   JUMP +3                (to 14)
      12   LOAD_VAR 1             (r)
      13   LOAD_FIELD 0           
@@ -1411,9 +1411,9 @@ Function ParenthesizedSingleLiteral (arity: 1, kind: Bytecode):
      3   POP_JUMP_IF_FALSE +2   (to 5)
      4   JUMP +4                (to 8)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (no)
+     6   LOAD_CONST 1           ("no")
      7   JUMP +2                (to 9)
-     8   LOAD_CONST 2           (yes)
+     8   LOAD_CONST 2           ("yes")
      9   RETURN                 
 
 Function PartialUnionPatternCoverage (arity: 1, kind: Bytecode):
@@ -1422,7 +1422,7 @@ Function PartialUnionPatternCoverage (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +3   (to 5)
      3   JUMP +2                (to 5)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (not pending)
+     5   LOAD_CONST 1           ("not pending")
      6   RETURN                 
 
 Function PartialUnionPlusCatchAll (arity: 1, kind: Bytecode):
@@ -1436,9 +1436,9 @@ Function PartialUnionPlusCatchAll (arity: 1, kind: Bytecode):
      7    POP_JUMP_IF_FALSE +6   (to 13)
      8    JUMP +2                (to 10)
      9    JUMP +4                (to 13)
-     10   LOAD_CONST 2           (pending)
+     10   LOAD_CONST 2           ("pending")
      11   JUMP +2                (to 13)
-     12   LOAD_CONST 3           (success or failure)
+     12   LOAD_CONST 3           ("success or failure")
      13   RETURN                 
 
 Function StringLiteralAfterStringType (arity: 1, kind: Bytecode):
@@ -1447,49 +1447,49 @@ Function StringLiteralAfterStringType (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +2   (to 4)
      3   JUMP +4                (to 7)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (unreachable)
+     5   LOAD_CONST 1           ("unreachable")
      6   JUMP +2                (to 8)
-     7   LOAD_CONST 2           (any string)
+     7   LOAD_CONST 2           ("any string")
      8   RETURN                 
 
 Function StringLiteralUnionPattern (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (role)
-     1    LOAD_CONST 0           (user)
+     1    LOAD_CONST 0           ("user")
      2    CMP_OP ==              
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +14               (to 18)
      5    LOAD_VAR 1             (role)
-     6    LOAD_CONST 1           (assistant)
+     6    LOAD_CONST 1           ("assistant")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +9                (to 18)
      10   LOAD_VAR 1             (role)
-     11   LOAD_CONST 2           (system)
+     11   LOAD_CONST 2           ("system")
      12   CMP_OP ==              
      13   POP_JUMP_IF_FALSE +6   (to 19)
      14   JUMP +2                (to 16)
      15   JUMP +4                (to 19)
-     16   LOAD_CONST 3           (system)
+     16   LOAD_CONST 3           ("system")
      17   JUMP +2                (to 19)
-     18   LOAD_CONST 4           (chat participant)
+     18   LOAD_CONST 4           ("chat participant")
      19   RETURN                 
 
 Function StringLiteralWithCatchAll (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (role)
-     1    LOAD_CONST 0           (user)
+     1    LOAD_CONST 0           ("user")
      2    CMP_OP ==              
      3    POP_JUMP_IF_FALSE +2   (to 5)
      4    JUMP +10               (to 14)
      5    LOAD_VAR 1             (role)
-     6    LOAD_CONST 1           (assistant)
+     6    LOAD_CONST 1           ("assistant")
      7    CMP_OP ==              
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +3                (to 12)
-     10   LOAD_CONST 2           (Other)
+     10   LOAD_CONST 2           ("Other")
      11   JUMP +4                (to 15)
-     12   LOAD_CONST 3           (Assistant message)
+     12   LOAD_CONST 3           ("Assistant message")
      13   JUMP +2                (to 15)
-     14   LOAD_CONST 4           (User message)
+     14   LOAD_CONST 4           ("User message")
      15   RETURN                 
 
 Function ThreeLevelNestedMatch (arity: 3, kind: Bytecode):
@@ -1501,7 +1501,7 @@ Function ThreeLevelNestedMatch (arity: 3, kind: Bytecode):
      5    POP 1                  
      6    JUMP +4                (to 10)
      7    POP 1                  
-     8    LOAD_CONST 1           (x nonzero)
+     8    LOAD_CONST 1           ("x nonzero")
      9    JUMP +22               (to 31)
      10   LOAD_VAR 2             (y)
      11   COPY 0                 
@@ -1511,7 +1511,7 @@ Function ThreeLevelNestedMatch (arity: 3, kind: Bytecode):
      15   POP 1                  
      16   JUMP +4                (to 20)
      17   POP 1                  
-     18   LOAD_CONST 2           (y nonzero)
+     18   LOAD_CONST 2           ("y nonzero")
      19   JUMP +12               (to 31)
      20   LOAD_VAR 3             (z)
      21   COPY 0                 
@@ -1521,9 +1521,9 @@ Function ThreeLevelNestedMatch (arity: 3, kind: Bytecode):
      25   POP 1                  
      26   JUMP +4                (to 30)
      27   POP 1                  
-     28   LOAD_CONST 3           (z nonzero)
+     28   LOAD_CONST 3           ("z nonzero")
      29   JUMP +2                (to 31)
-     30   LOAD_CONST 4           (all zero)
+     30   LOAD_CONST 4           ("all zero")
      31   RETURN                 
 
 Function UnionPatternCoversAll (arity: 1, kind: Bytecode):
@@ -1532,15 +1532,15 @@ Function UnionPatternCoversAll (arity: 1, kind: Bytecode):
      2   POP_JUMP_IF_FALSE +3   (to 5)
      3   JUMP +2                (to 5)
      4   JUMP +1                (to 5)
-     5   LOAD_CONST 1           (covered)
+     5   LOAD_CONST 1           ("covered")
      6   RETURN                 
 
 Function UnreachableAfterCatchAll (arity: 1, kind: Bytecode):
-     0   LOAD_CONST 0   (catch all)
+     0   LOAD_CONST 0   ("catch all")
      1   RETURN         
 
 Function UnreachableMultiple (arity: 1, kind: Bytecode):
-     0   LOAD_CONST 0   (catch all)
+     0   LOAD_CONST 0   ("catch all")
      1   RETURN         
 
 Function WrongLiteralTypeBoolWithInt (arity: 1, kind: Bytecode):
@@ -1552,15 +1552,15 @@ Function WrongLiteralTypeBoolWithInt (arity: 1, kind: Bytecode):
      5   POP 1                  
      6   JUMP +2                (to 8)
      7   POP 1                  
-     8   LOAD_CONST 1           (wrong type)
+     8   LOAD_CONST 1           ("wrong type")
      9   RETURN                 
 
 Function WrongLiteralTypeIntWithString (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (x)
-     1   LOAD_CONST 0           (hello)
+     1   LOAD_CONST 0           ("hello")
      2   CMP_OP ==              
      3   POP_JUMP_IF_FALSE +3   (to 6)
      4   JUMP +2                (to 6)
      5   JUMP +1                (to 6)
-     6   LOAD_CONST 1           (wrong type)
+     6   LOAD_CONST 1           ("wrong type")
      7   RETURN

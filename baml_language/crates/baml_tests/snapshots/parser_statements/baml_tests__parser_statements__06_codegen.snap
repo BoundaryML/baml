@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -18,11 +18,11 @@ Function ConditionalLogic (arity: 1, kind: Bytecode):
      7    CMP_OP <               
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +3                (to 12)
-     10   LOAD_CONST 2           (senior)
+     10   LOAD_CONST 2           ("senior")
      11   RETURN                 
-     12   LOAD_CONST 3           (adult)
+     12   LOAD_CONST 3           ("adult")
      13   RETURN                 
-     14   LOAD_CONST 4           (minor)
+     14   LOAD_CONST 4           ("minor")
      15   RETURN                 
 
 Function add_assign (arity: 0, kind: Bytecode):

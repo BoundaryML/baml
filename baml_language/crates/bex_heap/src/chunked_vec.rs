@@ -720,4 +720,129 @@ mod tests {
         assert_eq!(*vec.get(1024), 1024);
         assert_eq!(*vec.get(9999), 9999);
     }
+
+    /// Test for data race when Vec of chunk pointers reallocates during concurrent read.
+    ///
+    /// This test demonstrates a real data race in ChunkedVec when using `get()`:
+    /// 1. Reader thread calls get() which internally reads the Vec's buffer pointer
+    /// 2. Writer thread calls resize_with() which may reallocate the Vec
+    /// 3. If the Vec reallocates after reader gets the buffer pointer but before
+    ///    dereferencing it, we get use-after-free
+    ///
+    /// # Why this race cannot happen in practice
+    ///
+    /// The VM uses `HeapPtr` (raw pointers) instead of `ObjectIndex` (indices).
+    /// HeapPtr is obtained once at allocation time via `get_ptr()` and stored in
+    /// `Value::Object(HeapPtr)`. When the VM reads an object, it calls
+    /// `HeapPtr::get()` which is a direct pointer dereference - it never goes
+    /// through `ChunkedVec::get()`.
+    ///
+    /// See `test_miri_heap_ptr_access_is_race_free` which proves the HeapPtr
+    /// approach is race-free.
+    #[test]
+    #[ignore = "Demonstrates ChunkedVec::get() race that VM avoids by using HeapPtr"]
+    fn test_miri_concurrent_read_during_vec_reallocation() {
+        use std::{sync::Arc, thread};
+
+        let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
+
+        unsafe {
+            vec.resize_to(2);
+            vec.set(0, 42);
+            vec.set(1, 43);
+        }
+
+        let vec_reader = Arc::clone(&vec);
+        let vec_writer = Arc::clone(&vec);
+
+        // Reader uses get() which has the race
+        let reader = thread::spawn(move || {
+            for _ in 0..1000 {
+                let val = *vec_reader.get(0);
+                assert_eq!(val, 42);
+            }
+        });
+
+        let writer = thread::spawn(move || {
+            for i in 1..100 {
+                let new_len = 2 + (i * 2);
+                unsafe {
+                    vec_writer.resize_to(new_len);
+                }
+            }
+        });
+
+        reader.join().expect("reader panicked");
+        writer.join().expect("writer panicked");
+    }
+
+    /// Test that HeapPtr-style access (raw pointers obtained upfront) is race-free.
+    ///
+    /// This is the fixed code path that the VM uses. Instead of calling get()
+    /// which internally reads the Vec's buffer pointer, we obtain a raw pointer
+    /// via get_ptr() and use that directly. The raw pointer remains stable even
+    /// when the Vec reallocates because chunks themselves are heap-allocated
+    /// and never move.
+    ///
+    /// This test demonstrates the fix for the data race exposed in
+    /// test_miri_concurrent_read_during_vec_reallocation.
+    #[test]
+    fn test_miri_heap_ptr_access_is_race_free() {
+        use std::{sync::Arc, thread};
+
+        // Chunk size of 2 means we need a new chunk every 2 elements.
+        let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
+
+        // Pre-populate with initial data
+        unsafe {
+            vec.resize_to(2);
+            vec.set(0, 42);
+            vec.set(1, 43);
+        }
+
+        // Get raw pointers UPFRONT - this is the HeapPtr approach
+        // These pointers remain valid even when the Vec grows
+        // Convert to usize for Send (same technique HeapPtr uses internally)
+        let ptr0_addr = vec.get_ptr(0) as usize;
+        let ptr1_addr = vec.get_ptr(1) as usize;
+
+        let vec_writer = Arc::clone(&vec);
+
+        // Reader thread: use raw pointers directly (no ChunkedVec::get() call)
+        // This is equivalent to HeapPtr::get() in the VM
+        let reader = thread::spawn(move || {
+            // Convert back to pointers
+            let ptr0 = ptr0_addr as *const i32;
+            let ptr1 = ptr1_addr as *const i32;
+            for _ in 0..1000 {
+                // SAFETY: The pointers were obtained from valid indices and
+                // remain stable because chunks never move once allocated.
+                unsafe {
+                    assert_eq!(*ptr0, 42);
+                    assert_eq!(*ptr1, 43);
+                }
+            }
+        });
+
+        // Writer thread: keep adding chunks to force Vec reallocation
+        let writer = thread::spawn(move || {
+            for i in 1..100 {
+                let new_len = 2 + (i * 2);
+                unsafe {
+                    vec_writer.resize_to(new_len);
+                }
+            }
+        });
+
+        reader.join().expect("reader panicked");
+        writer.join().expect("writer panicked");
+
+        // Verify the original values are still accessible via the pointers
+        let ptr0 = ptr0_addr as *const i32;
+        let ptr1 = ptr1_addr as *const i32;
+        unsafe {
+            assert_eq!(*ptr0, 42);
+            assert_eq!(*ptr1, 43);
+        }
+    }
 }

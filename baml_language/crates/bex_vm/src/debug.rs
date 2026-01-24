@@ -1,5 +1,8 @@
 //! VM debugging utilities & helpers.
 //!
+// Debug display uses unsafe pointer dereferencing for HeapPtr
+#![allow(unsafe_code)]
+//!
 //! NOTE: Functions here should not take an entire reference to the
 //! [`crate::BexVm`] because then it will be hard to circumvent the borrow checker
 //! in the [`crate::BexVm::exec`] loop (which is where we want to use this).
@@ -25,9 +28,9 @@
 use std::io::IsTerminal;
 
 use bex_vm_types::{
-    ObjectIndex, ObjectPool, StackIndex,
+    HeapPtr, StackIndex,
     bytecode::Instruction,
-    indexable::GlobalPool,
+    indexable::{GlobalPool, ObjectPool},
     types::{Function, Object, Value},
 };
 use colored::{Color, Colorize};
@@ -49,12 +52,13 @@ use crate::indexable::EvalStack;
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
 #[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative in valid bytecode
-pub fn display_instruction<F>(
+pub fn display_instruction(
     instruction_ptr: isize,
-    function: &Function<F>,
+    function: &Function,
     stack: &EvalStack,
-    objects: &ObjectPool<F>,
     globals: &GlobalPool,
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr as usize];
 
@@ -66,12 +70,30 @@ pub fn display_instruction<F>(
                 format!("(invalid block index: {block_index})")
             }
         }
-        Instruction::LoadConst(index) => format!(
-            "({})",
-            display_value(&function.bytecode.constants[*index], objects)
-        ),
+        Instruction::LoadConst(index) => {
+            // Prefer resolved_constants (runtime), fall back to constants (compile-time)
+            if let Some(value) = function.bytecode.resolved_constants.get(*index) {
+                format!("({})", display_value(value))
+            } else if let Some(const_value) = function.bytecode.constants.get(*index) {
+                format!("({})", display_const_value(const_value, objects))
+            } else {
+                format!("(const {index})")
+            }
+        }
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
-            format!("({})", display_value(&globals[*index], objects))
+            // Prefer runtime globals, fall back to compile-time lookup
+            if index.raw() < globals.len() {
+                format!("({})", display_value(&globals[*index]))
+            } else if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
+                // At compile time, look up the global value then resolve to object
+                if let Some(const_val) = ct_globals.get(index.raw()) {
+                    format!("({})", display_const_value(const_val, Some(objs)))
+                } else {
+                    format!("(global {})", index.raw())
+                }
+            } else {
+                format!("(global {})", index.raw())
+            }
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
@@ -105,11 +127,15 @@ pub fn display_instruction<F>(
                 break 'field String::from("(ERROR: value not an object)");
             };
 
-            let Object::Instance(instance) = &objects[reference] else {
+            // SAFETY: During debug display, we assume the pointer is valid
+            let instance = unsafe { reference.get() };
+            let Object::Instance(instance) = instance else {
                 break 'field String::from("(ERROR: value not an instance)");
             };
 
-            let Object::Class(class) = &objects[instance.class] else {
+            // SAFETY: During debug display, we assume the pointer is valid
+            let class = unsafe { instance.class.get() };
+            let Object::Class(class) = class else {
                 break 'field String::from("(ERROR: class not found)");
             };
 
@@ -119,7 +145,12 @@ pub fn display_instruction<F>(
             format!("(to {})", instruction_ptr + offset)
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
-            format!("({})", display_object(objects, *index))
+            // Look up the class/enum from the compile-time ObjectPool if available
+            if let Some(objs) = objects {
+                format!("({})", display_object_from_pool(index.raw(), objs))
+            } else {
+                "(object)".to_string()
+            }
         }
 
         Instruction::VizEnter(index) | Instruction::VizExit(index) => {
@@ -162,28 +193,72 @@ pub fn display_instruction<F>(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value<F>(value: &Value, objects: &ObjectPool<F>) -> String {
+pub fn display_value(value: &Value) -> String {
     match value {
-        Value::Object(index) => display_object(objects, *index),
-
+        Value::Object(ptr) => display_object_ptr(*ptr),
         other => other.to_string(),
     }
 }
 
-fn display_object<F>(objects: &ObjectPool<F>, index: ObjectIndex) -> String {
-    match &objects[index] {
-        // This one's a bit tricky to print.
-        Object::Instance(instance) => match &objects[instance.class] {
-            Object::Class(class) => format!("<{} instance>", class.name),
-            // This will most likely never happen, but we're trying not
-            // to panic.
-            other => format!("<{other} instance>"),
-        },
+/// Display a compile-time constant value.
+///
+/// At compile time, we only have `ConstValue` (with `ObjectIndex` for objects).
+/// If `ObjectPool` is provided, we can resolve object indices to actual values.
+fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&ObjectPool>) -> String {
+    match value {
+        bex_vm_types::ConstValue::Null => "null".to_string(),
+        bex_vm_types::ConstValue::Int(i) => i.to_string(),
+        bex_vm_types::ConstValue::Float(f) => f.to_string(),
+        bex_vm_types::ConstValue::Bool(b) => b.to_string(),
+        bex_vm_types::ConstValue::Object(idx) => {
+            if let Some(objs) = objects {
+                display_object_from_pool(idx.raw(), objs)
+            } else {
+                format!("<object {}>", idx.raw())
+            }
+        }
+    }
+}
 
-        Object::Variant(variant) => match &objects[variant.enm] {
-            Object::Enum(enm) => format!("<{} variant>", enm.name),
-            other => format!("<{other} variant>"),
-        },
+/// Display an object from the compile-time `ObjectPool`.
+fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
+    if let Some(obj) = objects.get(index) {
+        match obj {
+            Object::String(s) => format!("\"{s}\""),
+            Object::Function(f) => format!("<fn {}>", f.name),
+            Object::Class(c) => format!("<class {}>", c.name),
+            Object::Enum(e) => format!("<enum {}>", e.name),
+            _ => format!("<object {index}>"),
+        }
+    } else {
+        format!("<object {index}>")
+    }
+}
+
+fn display_object_ptr(ptr: HeapPtr) -> String {
+    // SAFETY: During debug display, we assume the pointer is valid
+    let object = unsafe { ptr.get() };
+    match object {
+        // This one's a bit tricky to print.
+        Object::Instance(instance) => {
+            // SAFETY: During debug display, we assume the pointer is valid
+            let class = unsafe { instance.class.get() };
+            match class {
+                Object::Class(class) => format!("<{} instance>", class.name),
+                // This will most likely never happen, but we're trying not
+                // to panic.
+                other => format!("<{other} instance>"),
+            }
+        }
+
+        Object::Variant(variant) => {
+            // SAFETY: During debug display, we assume the pointer is valid
+            let enm = unsafe { variant.enm.get() };
+            match enm {
+                Object::Enum(enm) => format!("<{} variant>", enm.name),
+                other => format!("<{other} variant>"),
+            }
+        }
 
         other => other.to_string(),
     }
@@ -281,11 +356,12 @@ impl Col {
 ///
 /// Takes care of calculating how many whitespaces we need to make the table
 /// symmetric and returns the entire table.
-pub fn display_bytecode<F>(
-    function: &Function<F>,
+pub fn display_bytecode(
+    function: &Function,
     stack: &EvalStack,
-    objects: &ObjectPool<F>,
     globals: &GlobalPool,
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
     use_colors: bool,
 ) -> String {
     if function.bytecode.instructions.is_empty() {
@@ -304,8 +380,14 @@ pub fn display_bytecode<F>(
     // Populate all the rows.
     #[allow(clippy::cast_possible_wrap)] // instruction count is always small enough
     for instruction_ptr in 0..function.bytecode.instructions.len() {
-        let (instruction, metadata) =
-            display_instruction(instruction_ptr as isize, function, stack, objects, globals);
+        let (instruction, metadata) = display_instruction(
+            instruction_ptr as isize,
+            function,
+            stack,
+            globals,
+            objects,
+            compile_time_globals,
+        );
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
@@ -389,15 +471,12 @@ pub fn display_bytecode<F>(
 
 /// Prints the dissassembly of a function.
 #[allow(clippy::print_stderr)] // intentional debug output for disassembly
-pub fn disassemble<F>(
-    function: &Function<F>,
-    stack: &EvalStack,
-    objects: &ObjectPool<F>,
-    globals: &GlobalPool,
-) {
+pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool) {
     let use_colors = std::io::stdout().is_terminal();
 
-    let disassembly = display_bytecode(function, stack, objects, globals, use_colors);
+    // At runtime, resolved_constants has HeapPtr that can be dereferenced,
+    // so we don't need the ObjectPool or compile-time globals
+    let disassembly = display_bytecode(function, stack, globals, None, None, use_colors);
 
     eprintln!("{disassembly}");
 }
