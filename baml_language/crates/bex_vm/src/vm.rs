@@ -17,7 +17,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
-use bex_resource_types::ResourceKind;
+use bex_resource_types::ResourceHandle;
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
@@ -704,7 +704,7 @@ impl BexVm {
     }
 
     /// Allocate a resource object on the heap.
-    pub fn alloc_resource(&mut self, resource: Arc<ResourceKind>) -> Value {
+    pub fn alloc_resource(&mut self, resource: ResourceHandle) -> Value {
         Value::Object(self.tlab.alloc(Object::Resource(resource)))
     }
 

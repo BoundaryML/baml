@@ -1,15 +1,19 @@
 //! Network operations.
 
-use std::sync::Arc;
-
+use bex_external_types::BexExternalValue;
+use sys_types::{OpError, SysOpResult};
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
-use crate::{BexExternalValue, OpError, ResourceKind, SocketHandle};
+use crate::registry::REGISTRY;
 
 /// Connect to a TCP address and return a resource.
 ///
 /// Signature: `fn connect(addr: String) -> Socket`
-pub async fn connect(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+pub(crate) fn connect(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(connect_async(args)))
+}
+
+async fn connect_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
     let addr = match args.into_iter().next() {
         Some(BexExternalValue::String(s)) => s,
         other => {
@@ -24,18 +28,20 @@ pub async fn connect(args: Vec<BexExternalValue>) -> Result<BexExternalValue, Op
         .await
         .map_err(|e| OpError::Other(format!("Failed to connect to '{addr}': {e}")))?;
 
-    let handle = SocketHandle::new(stream, addr);
-    Ok(BexExternalValue::Resource(Arc::new(ResourceKind::Socket(
-        handle,
-    ))))
+    let handle = REGISTRY.register_socket(stream, addr);
+    Ok(BexExternalValue::Resource(handle))
 }
 
 /// Read data from a socket.
 ///
 /// Signature: `fn read(self: Socket) -> String`
-pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let socket_arc = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(arc)) => arc,
+pub(crate) fn read(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(read_async(args)))
+}
+
+async fn read_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let handle = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
                 expected: "socket resource",
@@ -44,11 +50,11 @@ pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpErr
         }
     };
 
-    let ResourceKind::Socket(socket_handle) = socket_arc.as_ref() else {
-        return Err(OpError::ResourceTypeMismatch { expected: "socket" });
-    };
+    let stream_mutex = REGISTRY
+        .get_socket(handle.id)
+        .ok_or_else(|| OpError::Other("Socket handle is invalid or has been closed".into()))?;
 
-    let mut stream = socket_handle.stream.lock().await;
+    let mut stream = stream_mutex.lock().await;
     let mut buffer = vec![0u8; 4096];
     let n = stream
         .read(&mut buffer)
@@ -62,9 +68,16 @@ pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpErr
 /// Closes a socket, releasing the resource.
 ///
 /// Signature: `fn close(self: Socket)`
-pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let socket_arc = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(arc)) => arc,
+pub(crate) fn close(args: Vec<BexExternalValue>) -> SysOpResult {
+    let result = close_sync(args);
+    SysOpResult::Ready(result)
+}
+
+fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    use bex_resource_types::ResourceType;
+
+    let handle = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
                 expected: "socket resource",
@@ -73,10 +86,11 @@ pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
         }
     };
 
-    let ResourceKind::Socket(_) = socket_arc.as_ref() else {
+    if handle.kind != ResourceType::Socket {
         return Err(OpError::ResourceTypeMismatch { expected: "socket" });
-    };
+    }
 
-    drop(socket_arc);
+    // Resource closes when handle is dropped (cleanup callback removes from registry)
+    drop(handle);
     Ok(BexExternalValue::Null)
 }

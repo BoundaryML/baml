@@ -77,3 +77,7 @@ name_exceptions = { "tools_stow" = "cargo-stow" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
+
+# bex namespace configuration
+[[namespaces]]
+name = "sys"

@@ -7,7 +7,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-tokio = { workspace = true, features = [ "fs", "net", "sync" ] }
 
 [lints]
 workspace = true

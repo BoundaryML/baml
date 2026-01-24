@@ -66,10 +66,12 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 use bex_program::BexProgram;
-// Re-export bex_sys types for convenience
-pub use bex_sys::{FileHandle, OpError, ResourceKind, SocketHandle, SysOpResult, ops};
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, Object, SysOp, Value};
+use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, Object, Value};
+// Re-export sys_types types for convenience
+pub use sys_types::{
+    CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
+};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
@@ -234,6 +236,8 @@ pub struct BexEngine {
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
+    /// System operations provider.
+    sys_ops: sys_types::SysOps,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -257,9 +261,16 @@ impl BexEngine {
     /// The engine creates a unified heap containing compile-time objects
     /// (functions, classes, enums). Each function call creates a VM that
     /// shares this heap and allocates runtime objects into its own TLAB.
+    ///
+    /// # Arguments
+    ///
+    /// * `snapshot` - The compiled BAML program
+    /// * `env_vars` - Environment variables accessible to the program
+    /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
         snapshot: BexProgram,
         env_vars: HashMap<String, String>,
+        sys_ops: sys_types::SysOps,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(snapshot.bytecode.clone())?;
@@ -296,6 +307,7 @@ impl BexEngine {
             globals,
             resolved_function_names,
             env_vars,
+            sys_ops,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -635,7 +647,7 @@ impl BexEngine {
                 handle: self.heap().create_handle(ptr),
                 kind: m.kind,
             }),
-            Object::Resource(arc) => Ok(BexExternalValue::Resource(std::sync::Arc::clone(arc))),
+            Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1007,7 +1019,7 @@ impl BexEngine {
                     .expect("Handle should be valid - object was returned to external code");
                 Value::Object(ptr)
             }
-            BexExternalValue::Resource(arc) => vm.alloc_resource(Arc::clone(arc)),
+            BexExternalValue::Resource(handle) => vm.alloc_resource(handle.clone()),
         }
     }
 
@@ -1108,7 +1120,7 @@ impl BexEngine {
                             });
                         }
                         ExternalOp::Sys(sys_op) => {
-                            match Self::execute_sys_op(sys_op, args) {
+                            match self.execute_sys_op(sys_op, args) {
                                 SysOpResult::Ready(result) => {
                                     // Sync operation - fulfill immediately
                                     let value = Self::external_to_vm_value(
@@ -1210,18 +1222,16 @@ impl BexEngine {
         }
     }
 
-    /// Execute a system operation, returning either an immediate result or a future.
-    fn execute_sys_op(op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
+    /// Execute a system operation using the provider table.
+    fn execute_sys_op(&self, op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
         match op {
-            // Async operations - return boxed futures
-            SysOp::FsOpen => SysOpResult::Async(Box::pin(ops::fs::open(args))),
-            SysOp::FsRead => SysOpResult::Async(Box::pin(ops::fs::read(args))),
-            SysOp::Shell => SysOpResult::Async(Box::pin(ops::sys::shell(args))),
-            SysOp::NetConnect => SysOpResult::Async(Box::pin(ops::net::connect(args))),
-            SysOp::NetRead => SysOpResult::Async(Box::pin(ops::net::read(args))),
-            // Sync operations - return immediate results
-            SysOp::FsClose => SysOpResult::Ready(ops::fs::close(args)),
-            SysOp::NetClose => SysOpResult::Ready(ops::net::close(args)),
+            SysOp::FsOpen => (self.sys_ops.fs_open)(args),
+            SysOp::FsRead => (self.sys_ops.fs_read)(args),
+            SysOp::FsClose => (self.sys_ops.fs_close)(args),
+            SysOp::NetConnect => (self.sys_ops.net_connect)(args),
+            SysOp::NetRead => (self.sys_ops.net_read)(args),
+            SysOp::NetClose => (self.sys_ops.net_close)(args),
+            SysOp::Shell => (self.sys_ops.shell)(args),
         }
     }
 
@@ -1266,7 +1276,7 @@ impl BexEngine {
                             entries,
                         }
                     }
-                    Object::Resource(arc) => BexExternalValue::Resource(Arc::clone(arc)),
+                    Object::Resource(handle) => BexExternalValue::Resource(handle.clone()),
                     other => {
                         panic!(
                             "Cannot convert object type to BexExternalValue for sys op: {other:?}"
@@ -1299,7 +1309,7 @@ impl BexEngine {
                     .collect();
                 vm.alloc_map(values)
             }
-            BexExternalValue::Resource(arc) => vm.alloc_resource(arc),
+            BexExternalValue::Resource(handle) => vm.alloc_resource(handle),
             // These shouldn't come from sys ops, but handle gracefully
             BexExternalValue::Instance { .. } => {
                 panic!("Unexpected Instance from sys op")

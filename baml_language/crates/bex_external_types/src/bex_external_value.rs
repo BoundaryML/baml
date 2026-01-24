@@ -23,10 +23,8 @@
 //! ```
 
 // Re-export Ty from bex_program for convenience
-use std::sync::Arc;
-
 pub use bex_program::Ty;
-use bex_resource_types::ResourceKind;
+use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -160,7 +158,7 @@ pub enum BexExternalValue {
     },
 
     /// Resource handle (file, socket, etc.) for sys operations.
-    Resource(Arc<ResourceKind>),
+    Resource(ResourceHandle),
 }
 
 impl BexExternalValue {
@@ -184,9 +182,9 @@ impl BexExternalValue {
                 baml_base::MediaKind::Pdf => "pdf",
                 baml_base::MediaKind::Generic => "media",
             },
-            BexExternalValue::Resource(r) => match r.as_ref() {
-                bex_resource_types::ResourceKind::File(_) => "file",
-                bex_resource_types::ResourceKind::Socket(_) => "socket",
+            BexExternalValue::Resource(handle) => match handle.kind {
+                bex_resource_types::ResourceType::File => "file",
+                bex_resource_types::ResourceType::Socket => "socket",
             },
         }
     }
@@ -196,23 +194,32 @@ impl BexExternalValue {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_resource_variant_construction() {
-        // Create a temporary file for testing
-        let temp_path = std::env::temp_dir().join("bex_test_file.txt");
-        let file = tokio::fs::File::create(&temp_path).await.unwrap();
-        let file_handle =
-            bex_resource_types::FileHandle::new(file, temp_path.to_string_lossy().to_string());
+    #[test]
+    fn test_resource_variant_construction() {
+        // Test that we can construct a Resource variant with an opaque handle
+        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
+            1,
+            bex_resource_types::ResourceType::File,
+            "test.txt".to_string(),
+        );
 
-        // Test that we can construct a Resource variant
-        let resource = BexExternalValue::Resource(Arc::new(
-            bex_resource_types::ResourceKind::File(file_handle),
-        ));
+        let resource = BexExternalValue::Resource(handle);
 
         // Test type_name returns "file"
         assert_eq!(resource.type_name(), "file");
+    }
 
-        // Clean up
-        let _ = tokio::fs::remove_file(&temp_path).await;
+    #[test]
+    fn test_resource_socket_type_name() {
+        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
+            2,
+            bex_resource_types::ResourceType::Socket,
+            "localhost:8080".to_string(),
+        );
+
+        let resource = BexExternalValue::Resource(handle);
+
+        // Test type_name returns "socket"
+        assert_eq!(resource.type_name(), "socket");
     }
 }

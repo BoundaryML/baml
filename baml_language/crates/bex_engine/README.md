@@ -21,7 +21,7 @@ Async runtime for the BEX virtual machine, coordinating concurrent execution and
 │                  │ clones heap Arc, creates VM           │ calls              │
 │                  ▼                                       ▼                    │
 │  ┌──────────────────────────────────┐    ┌──────────────────────────────────┐ │
-│  │              BexVm               │    │             bex_sys              │ │
+│  │              BexVm               │    │             sys_types              │ │
 │  │  • Has: BexHeap (cloned Arc)     │    │  • Provides: ops::fs, ops::net,  │ │
 │  │  • Owns: EvalStack               │    │              ops::sys, ops::llm  │ │
 │  │  • Owns: frames: Vec<Frame>      │    │  • Receives: BexValue args       │ │
@@ -29,7 +29,7 @@ Async runtime for the BEX virtual machine, coordinating concurrent execution and
 │  │  • Uses: ObjectIndex internally  │    │  • Uses: OpContext for resources │ │
 │  │  • Yields: VmExecState to engine │    │                                  │ │
 │  │                                  │    │  ResourceRegistry (in OpCtx):    │ │
-│  │  NO DEPENDENCY ON bex_sys!       │    │  • Files, Network, Shell         │ │
+│  │  NO DEPENDENCY ON sys_types!       │    │  • Files, Network, Shell         │ │
 │  │  (doesn't know about sys ops)    │    │                                  │ │
 │  └──────────────────────────────────┘    └──────────────────────────────────┘ │
 │                  │                                       │                    │
@@ -42,7 +42,7 @@ Async runtime for the BEX virtual machine, coordinating concurrent execution and
 │  │  • No dependencies (leaf crate)                                         │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 │                                                                               │
-│  KEY INSIGHT: bex_vm and bex_sys are SIBLINGS - they never depend on each     │
+│  KEY INSIGHT: bex_vm and sys_types are SIBLINGS - they never depend on each     │
 │               other. BexEngine is the ONLY component that talks to both.      │
 │                                                                               │
 └───────────────────────────────────────────────────────────────────────────────┘
@@ -305,7 +305,7 @@ bex_vm_types (no deps, defines Value/Object/ObjectIndex)
       │
       ├──────────────┐
       ▼              ▼
-  bex_heap       bex_sys (leaf, external operations)
+  bex_heap       sys_types (leaf, external operations)
       │              │
       ▼              │
    bex_vm            │

@@ -1,13 +1,17 @@
 //! System operations.
 
+use bex_external_types::BexExternalValue;
+use sys_types::{OpError, SysOpResult};
 use tokio::process::Command;
-
-use crate::{BexExternalValue, OpError};
 
 /// Execute a shell command and return stdout.
 ///
 /// Signature: `fn shell(command: String) -> String`
-pub async fn shell(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+pub(crate) fn shell(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(shell_async(args)))
+}
+
+async fn shell_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
     let command = match args.into_iter().next() {
         Some(BexExternalValue::String(s)) => s,
         other => {

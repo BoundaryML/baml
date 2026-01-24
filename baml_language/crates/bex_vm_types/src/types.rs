@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use bex_resource_types::ResourceKind;
+use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
@@ -452,7 +452,7 @@ pub enum Object {
     Media(MediaValue),
 
     /// External resource (file handle, socket, etc.).
-    Resource(Arc<ResourceKind>),
+    Resource(ResourceHandle),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),

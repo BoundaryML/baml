@@ -762,10 +762,11 @@ dependencies = [
  "bex_heap",
  "bex_program",
  "bex_resource_types",
- "bex_sys",
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "sys_native",
+ "sys_types",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -805,20 +806,6 @@ dependencies = [
 [[package]]
 name = "bex_resource_types"
 version = "0.0.0"
-dependencies = [
- "tokio",
-]
-
-[[package]]
-name = "bex_sys"
-version = "0.0.0"
-dependencies = [
- "bex_external_types",
- "bex_resource_types",
- "indexmap 2.13.0",
- "thiserror 2.0.17",
- "tokio",
-]
 
 [[package]]
 name = "bex_vm"
@@ -4235,6 +4222,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_native"
+version = "0.0.0"
+dependencies = [
+ "bex_external_types",
+ "bex_resource_types",
+ "sys_types",
+ "tokio",
+]
+
+[[package]]
+name = "sys_types"
+version = "0.0.0"
+dependencies = [
+ "bex_external_types",
+ "bex_resource_types",
+ "bex_vm_types",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "system-configuration"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4435,7 +4443,6 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.6.1",

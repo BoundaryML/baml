@@ -1,112 +1,101 @@
 //! Resource types for external operations.
 //!
-//! This crate defines resource types (file handles, sockets) that can be stored
-//! on the VM heap. It is separate from `bex_sys` to avoid circular dependencies.
+//! This crate defines opaque resource handles that can be stored on the VM heap.
+//! The actual resources (files, sockets) are managed by the sys provider.
 
 use std::sync::Arc;
 
-use tokio::{fs::File, net::TcpStream, sync::Mutex};
-
-// ============================================================================
-// Resource Types
-// ============================================================================
-
-/// A file handle stored on the VM heap.
-pub struct FileHandle {
-    /// The file, wrapped in Arc for cloning.
-    pub file: Arc<Mutex<File>>,
-    /// The path the file was opened from.
-    pub path: String,
+/// Type of resource for identification and cleanup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResourceType {
+    File,
+    Socket,
 }
 
-impl FileHandle {
-    /// Create a new file handle.
-    pub fn new(file: File, path: String) -> Self {
+/// Cleanup function type - called when handle is dropped.
+type CleanupFn = Arc<dyn Fn(u64, ResourceType) + Send + Sync>;
+
+/// An opaque handle to a resource managed by the sys provider.
+///
+/// The actual resource (Tokio file, socket, etc.) lives in the provider's registry.
+/// When this handle is dropped, the cleanup callback notifies the provider.
+pub struct ResourceHandle {
+    /// Unique identifier for this resource.
+    pub id: u64,
+    /// Type of resource (for cleanup routing).
+    pub kind: ResourceType,
+    /// Path/address for display purposes.
+    pub display_name: String,
+    /// Cleanup callback - removes resource from provider's registry.
+    cleanup: Option<CleanupFn>,
+}
+
+impl ResourceHandle {
+    /// Create a new resource handle with a cleanup callback.
+    pub fn new(
+        id: u64,
+        kind: ResourceType,
+        display_name: String,
+        cleanup: impl Fn(u64, ResourceType) + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            file: Arc::new(Mutex::new(file)),
-            path,
+            id,
+            kind,
+            display_name,
+            cleanup: Some(Arc::new(cleanup)),
         }
     }
-}
 
-impl PartialEq for FileHandle {
-    fn eq(&self, other: &Self) -> bool {
-        // Compare by Arc pointer equality - same file = same object
-        Arc::ptr_eq(&self.file, &other.file)
-    }
-}
-
-/// A socket handle stored on the VM heap.
-pub struct SocketHandle {
-    /// The stream, wrapped in Arc for cloning.
-    pub stream: Arc<Mutex<TcpStream>>,
-    /// The address the socket connected to.
-    pub addr: String,
-}
-
-impl SocketHandle {
-    /// Create a new socket handle.
-    pub fn new(stream: TcpStream, addr: String) -> Self {
+    /// Create a handle without cleanup (for testing or when cleanup is external).
+    pub fn new_without_cleanup(id: u64, kind: ResourceType, display_name: String) -> Self {
         Self {
-            stream: Arc::new(Mutex::new(stream)),
-            addr,
+            id,
+            kind,
+            display_name,
+            cleanup: None,
         }
     }
 }
 
-impl PartialEq for SocketHandle {
+impl Clone for ResourceHandle {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            kind: self.kind,
+            display_name: self.display_name.clone(),
+            cleanup: self.cleanup.clone(),
+        }
+    }
+}
+
+impl Drop for ResourceHandle {
+    fn drop(&mut self) {
+        if let Some(cleanup) = self.cleanup.take() {
+            // Only call cleanup if this is the last reference
+            if Arc::strong_count(&cleanup) == 1 {
+                cleanup(self.id, self.kind);
+            }
+        }
+    }
+}
+
+impl PartialEq for ResourceHandle {
     fn eq(&self, other: &Self) -> bool {
-        // Compare by Arc pointer equality - same socket = same object
-        Arc::ptr_eq(&self.stream, &other.stream)
+        self.id == other.id && self.kind == other.kind
     }
 }
 
-// ============================================================================
-// Resource Enum
-// ============================================================================
-
-/// All resource types that can be stored on the VM heap.
-pub enum ResourceKind {
-    File(FileHandle),
-    Socket(SocketHandle),
-}
-
-impl From<FileHandle> for ResourceKind {
-    fn from(handle: FileHandle) -> Self {
-        ResourceKind::File(handle)
-    }
-}
-
-impl From<SocketHandle> for ResourceKind {
-    fn from(handle: SocketHandle) -> Self {
-        ResourceKind::Socket(handle)
-    }
-}
-
-impl PartialEq for ResourceKind {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (ResourceKind::File(a), ResourceKind::File(b)) => a == b,
-            (ResourceKind::Socket(a), ResourceKind::Socket(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-
-impl std::fmt::Debug for ResourceKind {
+impl std::fmt::Debug for ResourceHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResourceKind::File(h) => write!(f, "File({})", h.path),
-            ResourceKind::Socket(h) => write!(f, "Socket({})", h.addr),
-        }
+        write!(f, "{:?}(id={}, {})", self.kind, self.id, self.display_name)
     }
 }
 
-impl std::fmt::Display for ResourceKind {
+impl std::fmt::Display for ResourceHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResourceKind::File(h) => write!(f, "file:{}", h.path),
-            ResourceKind::Socket(h) => write!(f, "socket:{}", h.addr),
+        match self.kind {
+            ResourceType::File => write!(f, "file:{}", self.display_name),
+            ResourceType::Socket => write!(f, "socket:{}", self.display_name),
         }
     }
 }

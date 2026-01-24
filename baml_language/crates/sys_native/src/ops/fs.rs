@@ -1,15 +1,19 @@
 //! File system operations.
 
-use std::sync::Arc;
-
+use bex_external_types::BexExternalValue;
+use sys_types::{OpError, SysOpResult};
 use tokio::{fs::File, io::AsyncReadExt};
 
-use crate::{BexExternalValue, FileHandle, OpError, ResourceKind};
+use crate::registry::REGISTRY;
 
 /// Opens a file and returns a resource.
 ///
 /// Signature: `fn open(path: String) -> File`
-pub async fn open(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+pub(crate) fn open(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(open_async(args)))
+}
+
+async fn open_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
     let path = match args.into_iter().next() {
         Some(BexExternalValue::String(s)) => s,
         other => {
@@ -24,18 +28,20 @@ pub async fn open(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpErr
         .await
         .map_err(|e| OpError::Other(format!("Failed to open file '{path}': {e}")))?;
 
-    let handle = FileHandle::new(file, path);
-    Ok(BexExternalValue::Resource(Arc::new(ResourceKind::File(
-        handle,
-    ))))
+    let handle = REGISTRY.register_file(file, path);
+    Ok(BexExternalValue::Resource(handle))
 }
 
 /// Reads the contents of a file.
 ///
 /// Signature: `fn read(self: File) -> String`
-pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let file_arc = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(arc)) => arc,
+pub(crate) fn read(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(read_async(args)))
+}
+
+async fn read_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let handle = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
                 expected: "file resource",
@@ -44,11 +50,11 @@ pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpErr
         }
     };
 
-    let ResourceKind::File(file_handle) = file_arc.as_ref() else {
-        return Err(OpError::ResourceTypeMismatch { expected: "file" });
-    };
+    let file_mutex = REGISTRY
+        .get_file(handle.id)
+        .ok_or_else(|| OpError::Other("File handle is invalid or has been closed".into()))?;
 
-    let mut file = file_handle.file.lock().await;
+    let mut file = file_mutex.lock().await;
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .await
@@ -60,9 +66,16 @@ pub async fn read(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpErr
 /// Closes a file, releasing the resource.
 ///
 /// Signature: `fn close(self: File)`
-pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let file_arc = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(arc)) => arc,
+pub(crate) fn close(args: Vec<BexExternalValue>) -> SysOpResult {
+    let result = close_sync(args);
+    SysOpResult::Ready(result)
+}
+
+fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    use bex_resource_types::ResourceType;
+
+    let handle = match args.into_iter().next() {
+        Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
                 expected: "file resource",
@@ -71,11 +84,11 @@ pub fn close(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
         }
     };
 
-    let ResourceKind::File(_) = file_arc.as_ref() else {
+    if handle.kind != ResourceType::File {
         return Err(OpError::ResourceTypeMismatch { expected: "file" });
-    };
+    }
 
-    // Resource closes when Arc is dropped
-    drop(file_arc);
+    // Resource closes when handle is dropped (cleanup callback removes from registry)
+    drop(handle);
     Ok(BexExternalValue::Null)
 }

@@ -11,16 +11,17 @@ bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_program = { workspace = true }
 bex_resource_types = { workspace = true }
-bex_sys = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_types = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [ "sync", "rt" ] }
 tracing = { workspace = true }
 
 [dev-dependencies]
 baml_tests = { workspace = true }
+sys_native = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 tempfile = { workspace = true }
