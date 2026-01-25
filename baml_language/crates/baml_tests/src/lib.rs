@@ -159,7 +159,7 @@ fn format_hir_file(
         match item {
             ItemId::Function(func_id) => {
                 let func = &item_tree[func_id.id(db)];
-                let (sig, _sig_source_map) = function_signature(db, *func_id);
+                let sig = function_signature(db, *func_id);
                 let body = function_body(db, *func_id);
 
                 // Format as: function Name(param: Type, ...) -> ReturnType { body }

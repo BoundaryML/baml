@@ -141,8 +141,7 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
                 let func = &item_tree[func_loc.id(db)];
 
                 if func.name == name_to_find {
-                    let (sig, _sig_source_map) =
-                        baml_compiler_hir::function_signature(db, *func_loc);
+                    let sig = baml_compiler_hir::function_signature(db, *func_loc);
                     return Some(format_function_signature(&sig));
                 }
             }

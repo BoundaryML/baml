@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
-use baml_compiler_hir::{ItemId, function_body, function_signature};
+use baml_compiler_hir::{ItemId, function_body, function_signature, function_signature_source_map};
 use baml_compiler_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
@@ -645,8 +645,7 @@ impl CompilerRunner {
                     match item {
                         ItemId::Function(func_loc) => {
                             let func = &item_tree[func_loc.id(&self.db)];
-                            let (signature, _sig_source_map) =
-                                function_signature(&self.db, *func_loc);
+                            let signature = function_signature(&self.db, *func_loc);
                             let body = function_body(&self.db, *func_loc);
 
                             // Build function header
@@ -856,7 +855,8 @@ impl CompilerRunner {
 
             for item in items {
                 if let ItemId::Function(func_id) = item {
-                    let (signature, sig_source_map) = function_signature(&self.db, *func_id);
+                    let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
@@ -864,7 +864,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
-                        &sig_source_map,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
@@ -957,7 +957,8 @@ impl CompilerRunner {
 
             for item in items {
                 if let ItemId::Function(func_id) = item {
-                    let (signature, sig_source_map) = function_signature(&self.db, *func_id);
+                    let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
@@ -970,7 +971,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
-                        &sig_source_map,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
@@ -1073,7 +1074,8 @@ impl CompilerRunner {
 
             for item in items {
                 if let ItemId::Function(func_id) = item {
-                    let (signature, sig_source_map) = function_signature(&self.db, *func_id);
+                    let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
@@ -1081,7 +1083,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
-                        &sig_source_map,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_field_types_map.clone()),

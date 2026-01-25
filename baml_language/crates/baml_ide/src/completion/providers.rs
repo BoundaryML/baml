@@ -143,8 +143,7 @@ pub(super) fn complete_symbols(db: &dyn Db, project: Project) -> Vec<CompletionI
                 let item_tree = file_item_tree(db, file);
                 let func = &item_tree[loc.id(db)];
                 let name = func.name.as_str();
-                let (sig, _sig_source_map) =
-                    baml_compiler_hir::function_signature(db, *loc);
+                let sig = baml_compiler_hir::function_signature(db, *loc);
                 let detail = format_function_signature_short(&sig);
                 items.push(
                     CompletionItem::new(name, CompletionKind::Function)

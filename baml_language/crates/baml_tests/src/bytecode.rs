@@ -155,7 +155,7 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
     for item in items_struct.items(&db) {
         match item {
             ItemId::Function(func_loc) => {
-                let (signature, _sig_source_map) = function_signature(&db, *func_loc);
+                let signature = function_signature(&db, *func_loc);
 
                 // Lower return type from TypeRef to TIR Ty
                 let (tir_return_type, _) = resolution_ctx

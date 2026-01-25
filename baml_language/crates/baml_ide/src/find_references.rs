@@ -176,8 +176,9 @@ fn find_local_definition_at_position(
     use baml_db::baml_compiler_tir::DefinitionSite;
 
     // Check parameters first
-    let (signature, sig_source_map) =
-        baml_db::baml_compiler_hir::function_signature(db, function_loc);
+    let signature = baml_db::baml_compiler_hir::function_signature(db, function_loc);
+    let sig_source_map =
+        baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
     for (index, param) in signature.params.iter().enumerate() {
         if param.name.as_str() == word {
             if let Some(param_span) = sig_source_map.param_span(index) {

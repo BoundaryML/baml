@@ -17,6 +17,7 @@ use std::{collections::HashMap, path::PathBuf};
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
+    function_signature_source_map,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -93,7 +94,8 @@ pub fn collect_diagnostics(
 
         for item in items {
             if let ItemId::Function(func_loc) = item {
-                let (signature, sig_source_map) = function_signature(db, *func_loc);
+                let signature = function_signature(db, *func_loc);
+                let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Only infer types for expression functions (not LLM functions)
@@ -106,7 +108,7 @@ pub fn collect_diagnostics(
                     let inference_result = baml_compiler_tir::infer_function(
                         db,
                         &signature,
-                        &sig_source_map,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),

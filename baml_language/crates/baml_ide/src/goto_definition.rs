@@ -154,8 +154,9 @@ pub fn goto_definition(
     if let Expr::Path(segments) = expr {
         if segments.len() > 1 && segments.first().map(smol_str::SmolStr::as_str) == Some(word) {
             // First, check if it's a function parameter
-            let (signature, sig_source_map) =
-                baml_db::baml_compiler_hir::function_signature(db, function_loc);
+            let signature = baml_db::baml_compiler_hir::function_signature(db, function_loc);
+            let sig_source_map =
+                baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
             if let Some((index, param)) = signature
                 .params
                 .iter()
@@ -335,8 +336,10 @@ fn resolution_to_navigation_target(
                     // Get the function signature to find the parameter span
                     // Note: We use the name from the resolution because param_types doesn't
                     // preserve order, so the index may not be accurate
-                    let (signature, sig_source_map) =
+                    let signature =
                         baml_db::baml_compiler_hir::function_signature(db, function_loc);
+                    let sig_source_map =
+                        baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
                     let (param_idx, param) = signature
                         .params
                         .iter()

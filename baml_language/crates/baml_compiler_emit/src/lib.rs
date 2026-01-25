@@ -47,7 +47,9 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile, Span};
-use baml_compiler_hir::{self, ItemId, function_body, function_signature};
+use baml_compiler_hir::{
+    self, ItemId, function_body, function_signature, function_signature_source_map,
+};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
@@ -101,7 +103,7 @@ pub fn compile_files(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let (signature, _sig_source_map) = function_signature(db, *func_loc);
+                let signature = function_signature(db, *func_loc);
                 globals.insert(signature.name.to_string(), global_idx);
                 global_idx += 1;
             }
@@ -218,7 +220,8 @@ pub fn compile_files(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let (signature, sig_source_map) = function_signature(db, *func_loc);
+                let signature = function_signature(db, *func_loc);
+                let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Handle different function body types
@@ -272,7 +275,7 @@ pub fn compile_files(
                         let inference = baml_compiler_tir::infer_function(
                             db,
                             &signature,
-                            &sig_source_map,
+                            Some(&sig_source_map),
                             &body,
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
@@ -337,7 +340,7 @@ fn build_typing_context(
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let (signature, _sig_source_map) = function_signature(db, *func_loc);
+                let signature = function_signature(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<baml_compiler_tir::Ty> = signature

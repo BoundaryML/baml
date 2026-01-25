@@ -238,7 +238,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
 
         for item in items {
             if let baml_compiler_hir::ItemId::Function(func_loc) = item {
-                let (signature, _source_map) = baml_compiler_hir::function_signature(db, *func_loc);
+                let signature = baml_compiler_hir::function_signature(db, *func_loc);
                 let span = Span::default(); // TODO: get proper span from signature
 
                 let param_types: Vec<Ty> = signature
@@ -869,7 +869,12 @@ pub fn function_type_inference<'db>(
     function: FunctionLoc<'db>,
 ) -> Arc<InferenceResult> {
     // Get the function signature and body
-    let (signature, sig_source_map) = baml_compiler_hir::function_signature(db, function);
+    // NOTE: We intentionally don't call function_signature_source_map here.
+    // This allows Salsa early cutoff: when only whitespace/comments change,
+    // function_signature returns an equal value, so this query is cached.
+    // The trade-off is that type mismatch errors won't point to the return
+    // type annotation, but they'll still point to the offending expression.
+    let signature = baml_compiler_hir::function_signature(db, function);
     let body = baml_compiler_hir::function_body(db, function);
 
     // Get the project context
@@ -895,7 +900,7 @@ pub fn function_type_inference<'db>(
     let result = infer_function(
         db,
         &signature,
-        &sig_source_map,
+        None, // No source map - enables Salsa early cutoff on whitespace changes
         &body,
         globals,
         class_fields,
@@ -916,11 +921,17 @@ pub fn function_type_inference<'db>(
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
 /// function calls to be properly typed. Pass `None` if no global context is needed.
+///
+/// The `sig_source_map` parameter is optional. When provided, type mismatch errors
+/// will include a secondary location pointing to the return type annotation.
+/// When `None`, errors still point to the offending expression but without the
+/// return type annotation location. Pass `None` for cached queries to enable
+/// Salsa early cutoff on whitespace/comment changes.
 #[allow(clippy::too_many_arguments)]
 pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
-    sig_source_map: &SignatureSourceMap,
+    sig_source_map: Option<&SignatureSourceMap>,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty>>>,
@@ -971,9 +982,9 @@ pub fn infer_function<'db>(
     );
     type_errors.extend(errors);
 
-    // Convert return type TextRange to Span for diagnostics
+    // Convert return type TextRange to Span for diagnostics (if source map provided)
     let return_type_span = sig_source_map
-        .return_type_span()
+        .and_then(|sm| sm.return_type_span())
         .map(|range| Span::new(file_id, range));
 
     // Delegate to the body inference function
