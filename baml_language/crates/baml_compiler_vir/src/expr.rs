@@ -12,7 +12,6 @@
 
 use baml_base::Name;
 use la_arena::{Arena, Idx};
-use text_size::TextRange;
 
 use crate::Ty;
 
@@ -41,8 +40,6 @@ pub struct ExprBody {
     pub patterns: Arena<Pattern>,
     /// Type for each expression.
     pub expr_types: rustc_hash::FxHashMap<ExprId, Ty>,
-    /// Source spans for expressions.
-    pub expr_spans: rustc_hash::FxHashMap<ExprId, TextRange>,
     /// Expressions that are enum variant values (e.g., `Status.Active`).
     /// Maps expression ID to (`enum_name`, `variant_name`).
     /// Used by MIR lowering to emit enum variant constants.
@@ -57,11 +54,6 @@ impl ExprBody {
         self.expr_types
             .get(&id)
             .expect("all expressions have types")
-    }
-
-    /// Get the span of an expression.
-    pub fn span(&self, id: ExprId) -> Option<TextRange> {
-        self.expr_spans.get(&id).copied()
     }
 
     /// Get an expression by ID.
