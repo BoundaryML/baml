@@ -645,7 +645,8 @@ impl CompilerRunner {
                     match item {
                         ItemId::Function(func_loc) => {
                             let func = &item_tree[func_loc.id(&self.db)];
-                            let (signature, _sig_source_map) = function_signature(&self.db, *func_loc);
+                            let (signature, _sig_source_map) =
+                                function_signature(&self.db, *func_loc);
                             let body = function_body(&self.db, *func_loc);
 
                             // Build function header
@@ -989,7 +990,7 @@ impl CompilerRunner {
                     writeln!(output, "{}", header).ok();
                     output_annotated.push((header, status));
 
-                    match lower_from_hir(&self.db, &body, &inference_result, &resolution_ctx) {
+                    match lower_from_hir(&body, &inference_result, &resolution_ctx) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
                             let ir_output = pretty_print(&typed_ir);
@@ -1091,7 +1092,6 @@ impl CompilerRunner {
 
                     // Lower HIR → VIR → MIR
                     let mir_output = match baml_compiler_vir::lower_from_hir(
-                        &self.db,
                         &body,
                         &inference_result,
                         &resolution_ctx,

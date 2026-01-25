@@ -83,18 +83,14 @@ impl std::error::Error for LoweringError {}
 ///
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise
 /// not suitable for code generation.
-///
-/// Note: Takes `baml_compiler_tir::Db` instead of `baml_compiler_vir::Db` for broader compatibility.
-/// This allows callers with `baml_compiler_mir::Db` to use this function directly.
 pub fn lower_from_hir(
-    db: &dyn baml_compiler_tir::Db,
     body: &FunctionBody,
     inference: &InferenceResult,
     resolution_ctx: &TypeResolutionContext,
 ) -> Result<ExprBody, LoweringError> {
     match body {
         FunctionBody::Expr(hir_body, source_map) => {
-            let ctx = LoweringContext::new(db, inference, resolution_ctx, source_map);
+            let ctx = LoweringContext::new(inference, resolution_ctx, source_map);
             ctx.lower_expr_body(hir_body)
         }
         FunctionBody::Llm(_) => {
@@ -166,8 +162,6 @@ impl ExprBodyBuilder {
 
 /// Context for lowering HIR to VIR.
 struct LoweringContext<'a> {
-    #[allow(dead_code)]
-    db: &'a dyn baml_compiler_tir::Db,
     inference: &'a InferenceResult,
     resolution_ctx: &'a TypeResolutionContext,
     source_map: &'a HirSourceMap,
@@ -176,13 +170,11 @@ struct LoweringContext<'a> {
 
 impl<'a> LoweringContext<'a> {
     fn new(
-        db: &'a dyn baml_compiler_tir::Db,
         inference: &'a InferenceResult,
         resolution_ctx: &'a TypeResolutionContext,
         source_map: &'a HirSourceMap,
     ) -> Self {
         Self {
-            db,
             inference,
             resolution_ctx,
             source_map,

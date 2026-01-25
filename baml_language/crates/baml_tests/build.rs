@@ -529,7 +529,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let inference = baml_compiler_tir::infer_function(&db, &signature, &sig_source_map, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_compiler_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {
+                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx) {
                             Ok(vir) => {
                                 let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
                                 baml_compiler_mir::pretty::display_function(&mir)

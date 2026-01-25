@@ -228,16 +228,3 @@ impl<C: ErrorContext> TypeError<C> {
         }
     }
 }
-
-/// Convenience methods for SpanContext errors (the common case for diagnostics).
-impl<T: Debug + Clone + PartialEq + Eq + Hash> TypeError<SpanContext<T>> {
-    /// Map a function over the type parameter, keeping locations as Spans.
-    ///
-    /// This preserves the original `fmap` behavior for backward compatibility.
-    pub fn fmap<U: Debug + Clone + PartialEq + Eq + Hash, F: Fn(&T) -> U>(
-        &self,
-        f: F,
-    ) -> TypeError<SpanContext<U>> {
-        self.map_context(f, |loc| loc)
-    }
-}
