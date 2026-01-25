@@ -50,7 +50,6 @@ bex_heap = { path = "crates/bex_heap" }
 bex_jinja_runtime = { path = "crates/bex_jinja_runtime" }
 bex_llm_types = { path = "crates/bex_llm_types" }
 bex_llm_client = { path = "crates/bex_llm_client" }
-ir_stub = { path = "crates/ir_stub" }
 sys_resource_types = { path = "crates/sys_resource_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 

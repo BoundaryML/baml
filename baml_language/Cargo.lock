@@ -807,7 +807,6 @@ dependencies = [
  "bex_llm_types",
  "bex_vm_types",
  "indexmap 2.13.0",
- "ir_stub",
  "minijinja",
  "serde",
  "serde_json",
@@ -2453,15 +2452,6 @@ name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
-
-[[package]]
-name = "ir_stub"
-version = "0.0.0"
-dependencies = [
- "indexmap 2.13.0",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "iri-string"

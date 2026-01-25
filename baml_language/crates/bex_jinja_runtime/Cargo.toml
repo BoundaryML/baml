@@ -13,7 +13,6 @@ dead_code = "allow"
 baml_base.workspace = true
 bex_llm_types.workspace = true
 bex_vm_types.workspace = true
-ir_stub.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
