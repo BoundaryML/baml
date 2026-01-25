@@ -22,8 +22,8 @@
 //! }
 //! ```
 
-// Re-export Ty from baml_snapshot for convenience
-pub use baml_snapshot::Ty;
+// Re-export types from baml_snapshot for convenience
+pub use baml_snapshot::{LiteralValue, MediaKind, Ty};
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.

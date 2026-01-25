@@ -26,7 +26,7 @@ mod bex_value;
 mod epoch_guard;
 mod handle;
 
-pub use bex_external_value::{BexExternalValue, Ty, UnionMetadata};
+pub use bex_external_value::{BexExternalValue, LiteralValue, MediaKind, Ty, UnionMetadata};
 pub use bex_value::BexValue;
 pub use epoch_guard::EpochGuard;
 pub use handle::{Handle, HandleInner, WeakHeapRef};

@@ -46,6 +46,10 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
+bex_jinja_runtime = { path = "crates/bex_jinja_runtime" }
+bex_llm_types = { path = "crates/bex_llm_types" }
+bex_llm_client = { path = "crates/bex_llm_client" }
+ir_stub = { path = "crates/ir_stub" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -83,6 +87,7 @@ lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 memchr = { version = "2.7.1" }
 mime_guess = "2.0.5"
+minijinja = { version = "2.0", features = ["builtins", "macros"] }
 notify = "7.0"
 parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
 paste = "1.0"

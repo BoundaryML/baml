@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 use indexmap::{IndexMap, IndexSet};
-use baml_compiler_tir::Ty;
+use bex_external_types::Ty;
 #[cfg(any(test, feature = "test-utils"))]
 use serde::Deserialize;
 
@@ -352,9 +352,6 @@ mod tests {
 
     #[test]
     fn test_output_format_builder() {
-        use baml_base::Name as BaseName;
-        use baml_compiler_hir::FullyQualifiedName;
-
         let e = Enum::new("Status").with_variant("Active", None);
         let c = Class::new("Person")
             .with_field("name", Ty::String, None, true);
@@ -362,7 +359,7 @@ mod tests {
         let of = OutputFormatBuilder::new()
             .with_enum(e)
             .with_class(c)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("Person"))))
+            .with_target(Ty::Class("Person".to_string()))
             .build();
 
         assert!(of.find_enum("Status").is_some());

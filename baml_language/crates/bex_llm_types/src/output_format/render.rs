@@ -3,7 +3,7 @@
 //! This module contains the implementation for rendering `OutputFormatContent`
 //! to a string suitable for inclusion in LLM prompts.
 
-use baml_compiler_tir::{LiteralValue, Ty};
+use bex_external_types::{LiteralValue, Ty};
 use thiserror::Error;
 
 use super::render_options::{HoistClasses, MapStyle, OutputFormatOptions, RenderSetting};
@@ -135,7 +135,7 @@ fn get_auto_prefix(target: &Ty, options: &OutputFormatOptions) -> Option<String>
         RenderSetting::Auto => {
             // Generate appropriate prefix based on target type
             match target {
-                Ty::Class(_) | Ty::TypeAlias(_) => {
+                Ty::Class(_) => {
                     Some("Answer in JSON using this schema:\n".to_string())
                 }
                 Ty::List(_) => Some("Answer with a JSON Array using this schema:\n".to_string()),
@@ -198,7 +198,6 @@ fn render_simple_target(target: &Ty, options: &OutputFormatOptions) -> Option<St
                 LiteralValue::Int(i) => format!("{}", i),
                 LiteralValue::Bool(b) => format!("{}", b),
                 LiteralValue::String(s) => format!("\"{}\"", s),
-                LiteralValue::Float(f) => f.clone(),
             };
             Some(format!("Answer with exactly: {}", value))
         }
@@ -290,18 +289,13 @@ fn render_type(ty: &Ty, ctx: &mut RenderContext, is_top_level: bool) -> Result<S
             Ok(rendered.join(&or_splitter))
         }
 
-        Ty::Class(name) | Ty::TypeAlias(name) => {
-            render_class(name.name.as_str(), ctx, is_top_level)
+        Ty::Class(name) => {
+            render_class(name.as_str(), ctx, is_top_level)
         }
 
         Ty::Enum(name) => {
-            render_enum(name.name.as_str(), ctx, is_top_level)
+            render_enum(name.as_str(), ctx, is_top_level)
         }
-
-        // Special types - just render as string
-        Ty::Unknown | Ty::Error | Ty::Void | Ty::Builtin(_) => Ok("string".to_string()),
-        Ty::Function { .. } => Ok("string".to_string()),
-        Ty::WatchAccessor(inner) => render_type(inner, ctx, is_top_level),
     }
 }
 
@@ -346,15 +340,15 @@ fn render_type_inline(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderErro
             Ok(rendered.join(or_splitter))
         }
 
-        Ty::Class(name) | Ty::TypeAlias(name) => {
+        Ty::Class(name) => {
             // For inline classes that are not recursive, we should reference by name
             // (The old implementation does this for hoisted classes)
-            Ok(name.name.to_string())
+            Ok(name.to_string())
         }
 
         Ty::Enum(name) => {
             // For inline enum in a class field, render as choices
-            if let Some(enum_def) = ctx.content.find_enum(name.name.as_str()) {
+            if let Some(enum_def) = ctx.content.find_enum(name.as_str()) {
                 let or_splitter = ctx.or_splitter();
                 let variants: Vec<String> = enum_def.variants
                     .iter()
@@ -362,14 +356,9 @@ fn render_type_inline(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderErro
                     .collect();
                 Ok(variants.join(or_splitter))
             } else {
-                Ok(name.name.to_string())
+                Ok(name.to_string())
             }
         }
-
-        // Special types
-        Ty::Unknown | Ty::Error | Ty::Void | Ty::Builtin(_) => Ok("string".to_string()),
-        Ty::Function { .. } => Ok("string".to_string()),
-        Ty::WatchAccessor(inner) => render_type_inline(inner, ctx),
     }
 }
 
@@ -379,7 +368,6 @@ fn render_literal(lit: &LiteralValue) -> String {
         LiteralValue::Int(i) => format!("{}", i),
         LiteralValue::Bool(b) => format!("{}", b),
         LiteralValue::String(s) => format!("\"{}\"", s),
-        LiteralValue::Float(f) => f.clone(),
     }
 }
 
@@ -429,14 +417,14 @@ fn render_class(name: &str, ctx: &mut RenderContext, _is_top_level: bool) -> Res
 /// Render a field type, expanding nested classes inline when appropriate.
 fn render_field_type(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderError> {
     match ty {
-        Ty::Class(name) | Ty::TypeAlias(name) => {
+        Ty::Class(name) => {
             // Check if this class is recursive - if so, just use the name
-            if ctx.content.recursive_classes.contains(name.name.as_str()) {
-                return Ok(name.name.to_string());
+            if ctx.content.recursive_classes.contains(name.as_str()) {
+                return Ok(name.to_string());
             }
 
             // For non-recursive classes, expand inline
-            if let Some(class) = ctx.content.find_class(name.name.as_str()) {
+            if let Some(class) = ctx.content.find_class(name.as_str()) {
                 let mut result = String::new();
                 result.push_str("{\n");
 
@@ -462,7 +450,7 @@ fn render_field_type(ty: &Ty, ctx: &RenderContext) -> Result<String, RenderError
                 Ok(result)
             } else {
                 // Unknown class, just use name
-                Ok(name.name.to_string())
+                Ok(name.to_string())
             }
         }
 
@@ -540,9 +528,7 @@ fn render_enum(name: &str, ctx: &mut RenderContext, is_top_level: bool) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Class, Enum, OutputFormatBuilder};
-    use baml_base::Name as BaseName;
-    use baml_compiler_hir::FullyQualifiedName;
+    use super::super::types::{Class, Enum, OutputFormatBuilder};
 
     #[test]
     fn test_render_int() {
@@ -574,7 +560,7 @@ mod tests {
 
         let content = OutputFormatBuilder::new()
             .with_class(person_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("Person"))))
+            .with_target(Ty::Class("Person".to_string()))
             .build();
 
         let result = render(&content, &OutputFormatOptions::default()).unwrap();
@@ -594,7 +580,7 @@ mod tests {
 
         let content = OutputFormatBuilder::new()
             .with_enum(color_enum)
-            .with_target(Ty::Enum(FullyQualifiedName::local(BaseName::from("Color"))))
+            .with_target(Ty::Enum("Color".to_string()))
             .build();
 
         let options = OutputFormatOptions::new(
@@ -624,7 +610,7 @@ mod tests {
         let task_class = Class::new("Task")
             .with_field(
                 "status",
-                Ty::Enum(FullyQualifiedName::local(BaseName::from("Status"))),
+                Ty::Enum("Status".to_string()),
                 None,
                 true,
             );
@@ -632,7 +618,7 @@ mod tests {
         let content = OutputFormatBuilder::new()
             .with_enum(status_enum)
             .with_class(task_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("Task"))))
+            .with_target(Ty::Class("Task".to_string()))
             .build();
 
         let options = OutputFormatOptions::new(
@@ -662,7 +648,7 @@ mod tests {
 
         let content = OutputFormatBuilder::new()
             .with_class(test_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("TestClass"))))
+            .with_target(Ty::Class("TestClass".to_string()))
             .build();
 
         let result = render(&content, &OutputFormatOptions::default()).unwrap();
@@ -685,7 +671,7 @@ mod tests {
 
         let content = OutputFormatBuilder::new()
             .with_class(test_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("TestClass"))))
+            .with_target(Ty::Class("TestClass".to_string()))
             .build();
 
         let result = render(&content, &OutputFormatOptions::default()).unwrap();

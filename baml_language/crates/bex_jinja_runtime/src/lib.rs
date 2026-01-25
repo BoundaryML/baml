@@ -1,10 +1,12 @@
 //! Jinja runtime for BAML.
 //!
 //! This crate provides:
-//! - `render_prompt` - Render a Jinja template with BAML values
+//! - `render_prompt` - Render a Jinja template with BAML values (legacy)
+//! - `render_prompt_vm` - Render a Jinja template with VM values (VM-native)
 //! - `PromptAst` - The result of rendering a prompt template
 
 mod baml_value_to_jinja;
+pub mod vm_value_to_jinja;
 #[cfg(test)]
 #[path = "tests/render_prompt_basic.rs"]
 mod render_prompt_basic;
@@ -20,11 +22,15 @@ pub use baml_value_to_jinja::IntoMiniJinjaValue;
 use bex_llm_types::output_format::{MapStyle, OutputFormatOptions, render as render_output_format};
 use baml_value_to_jinja::MAGIC_MEDIA_DELIMITER;
 use ir_stub::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue};
-use bex_vm_types::{MediaContent, MediaKind, MediaValue};
+use bex_vm_types::{MediaContent, MediaKind, MediaValue, ObjectIndex};
 use indexmap::IndexMap;
 use minijinja::value::{from_args, Kwargs, Object, Value};
 use minijinja::{context, ErrorKind};
 use serde::{Deserialize, Serialize};
+
+// VM-native types
+pub use vm_value_to_jinja::{HeapAccessor, IntoMiniJinjaValue as VmIntoMiniJinjaValue};
+use vm_value_to_jinja::MAGIC_MEDIA_DELIMITER as VM_MAGIC_MEDIA_DELIMITER;
 
 const MAGIC_CHAT_ROLE_DELIMITER: &str = "BAML_CHAT_ROLE_MAGIC_STRING_DELIMITER";
 
@@ -86,6 +92,41 @@ impl Default for RenderContext {
                 options: IndexMap::new(),
             },
             tags: HashMap::new(),
+            output_format: OutputFormatContent::empty(),
+        }
+    }
+}
+
+// ============================================================================
+// Render Context (VM-native)
+// ============================================================================
+
+/// Context for rendering a prompt with VM-native types.
+///
+/// This is the VM-native version of RenderContext, using `bex_vm_types::Value`
+/// for tags instead of `BamlValue`.
+#[derive(Debug)]
+pub struct RenderContextVm {
+    /// Client configuration.
+    pub client: LlmClientSpec,
+    /// Tags available in the template (VM values).
+    pub tags: IndexMap<String, bex_vm_types::Value>,
+    /// Output format schema for the function's return type.
+    pub output_format: OutputFormatContent,
+}
+
+impl Default for RenderContextVm {
+    fn default() -> Self {
+        Self {
+            client: LlmClientSpec {
+                name: "default".to_string(),
+                provider: "unknown".to_string(),
+                default_role: String::new(),
+                allowed_roles: Vec::new(),
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
+            },
+            tags: IndexMap::new(),
             output_format: OutputFormatContent::empty(),
         }
     }
@@ -581,6 +622,331 @@ fn baml_media_to_media_value(media: BamlMedia) -> MediaValue {
     }
 }
 
+// ============================================================================
+// VM-Native Render Functions
+// ============================================================================
+
+/// Render a prompt template with VM-native values.
+///
+/// This is the VM-native entry point for rendering BAML prompts. It uses
+/// `bex_vm_types::Value` for arguments and returns `bex_vm_types::PromptAst`.
+///
+/// # Arguments
+/// * `template` - The Jinja template string
+/// * `args` - Template arguments as VM values
+/// * `heap` - VM heap accessor for dereferencing object indices
+/// * `ctx` - Render context with client config, tags, and output format
+pub fn render_prompt_vm<F>(
+    template: &str,
+    args: &IndexMap<String, bex_vm_types::Value>,
+    heap: &impl HeapAccessor<F>,
+    ctx: RenderContextVm,
+) -> Result<bex_vm_types::PromptAst, RenderError> {
+    let default_role = ctx.client.default_role.clone();
+    let allowed_roles = if ctx.client.allowed_roles.is_empty() {
+        vec![
+            "system".to_string(),
+            "user".to_string(),
+            "assistant".to_string(),
+            "tool".to_string(),
+        ]
+    } else {
+        ctx.client.allowed_roles.clone()
+    };
+    let remap_role = ctx.client.remap_role.clone();
+
+    // Convert args to minijinja values using VM-native conversion
+    let args_jinja: IndexMap<&str, minijinja::Value> = args
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.to_minijinja_value(heap)))
+        .collect();
+
+    render_minijinja_vm(
+        template,
+        &args_jinja,
+        heap,
+        ctx,
+        default_role,
+        allowed_roles,
+        remap_role,
+    )
+}
+
+fn render_minijinja_vm<F>(
+    template: &str,
+    args: &IndexMap<&str, minijinja::Value>,
+    heap: &impl HeapAccessor<F>,
+    ctx: RenderContextVm,
+    default_role: String,
+    allowed_roles: Vec<String>,
+    remap_role: HashMap<String, String>,
+) -> Result<bex_vm_types::PromptAst, RenderError> {
+    let mut env = minijinja::Environment::new();
+
+    // Allow undefined variables to render as empty string instead of erroring
+    env.set_undefined_behavior(minijinja::UndefinedBehavior::Chainable);
+
+    // Dedent the template
+    let whitespace_length = template
+        .split('\n')
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+        .min()
+        .unwrap_or(0);
+    let template = template
+        .split('\n')
+        .map(|line| line.chars().skip(whitespace_length).collect::<String>())
+        .collect::<Vec<String>>()
+        .join("\n");
+    let template = template.trim();
+
+    env.add_template("prompt", template)?;
+
+    // Add ctx global with output_format
+    let client = ctx.client.clone();
+    // Convert VM tags to minijinja values
+    let tags_jinja: IndexMap<&str, minijinja::Value> = ctx
+        .tags
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.to_minijinja_value(heap)))
+        .collect();
+    let output_format = Value::from_object(OutputFormatValue::new(ctx.output_format));
+    env.add_global(
+        "ctx",
+        context! {
+            client => client,
+            tags => tags_jinja,
+            output_format => output_format,
+        },
+    );
+
+    // Add the role function for _.chat() / _.role()
+    let role_fn = minijinja::Value::from_function(
+        |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
+            let role = match (role, kwargs.get::<String>("role")) {
+                (Some(b), Ok(a)) => {
+                    return Err(minijinja::Error::new(
+                        ErrorKind::TooManyArguments,
+                        format!("role() called with two roles: '{a}' and '{b}'"),
+                    ));
+                }
+                (Some(role), _) => role,
+                (_, Ok(role)) => role,
+                _ => {
+                    return Err(minijinja::Error::new(
+                        ErrorKind::MissingArgument,
+                        "role() called without role. Try role('role') or role(role='role').",
+                    ));
+                }
+            };
+
+            let allow_duplicate_role = match kwargs.get::<bool>("__baml_allow_dupe_role__") {
+                Ok(allow) => allow,
+                Err(e) => match e.kind() {
+                    ErrorKind::MissingArgument => false,
+                    _ => return Err(e),
+                },
+            };
+
+            let additional_properties = {
+                let mut props = kwargs
+                    .args()
+                    .filter(|&k| k != "role")
+                    .map(|k| {
+                        Ok((
+                            k,
+                            serde_json::Value::deserialize(kwargs.get::<minijinja::Value>(k)?)?,
+                        ))
+                    })
+                    .collect::<Result<HashMap<&str, serde_json::Value>, minijinja::Error>>()?;
+
+                props.insert("role", role.clone().into());
+                props.insert("__baml_allow_dupe_role__", allow_duplicate_role.into());
+                props
+            };
+
+            let additional_properties = serde_json::json!(additional_properties).to_string();
+
+            Ok(format!(
+                "{MAGIC_CHAT_ROLE_DELIMITER}:baml-start-baml:{additional_properties}:baml-end-baml:{MAGIC_CHAT_ROLE_DELIMITER}"
+            ))
+        },
+    );
+
+    env.add_global(
+        "_",
+        context! {
+            chat => role_fn,
+            role => role_fn
+        },
+    );
+
+    let tmpl = env.get_template("prompt")?;
+    let rendered = tmpl.render(minijinja::Value::from_iter(args.clone()))?;
+
+    // If no chat delimiters, return as completion
+    if !rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) && !rendered.contains(VM_MAGIC_MEDIA_DELIMITER)
+    {
+        return Ok(bex_vm_types::PromptAst::String(rendered));
+    }
+
+    // Parse chat messages into VM-native PromptAst
+    parse_rendered_to_vm_prompt_ast(&rendered, &default_role, &allowed_roles, &remap_role)
+}
+
+/// Parse rendered template output into VM-native PromptAst.
+fn parse_rendered_to_vm_prompt_ast(
+    rendered: &str,
+    default_role: &str,
+    allowed_roles: &[String],
+    remap_role: &HashMap<String, String>,
+) -> Result<bex_vm_types::PromptAst, RenderError> {
+    let mut chat_messages = vec![];
+    let mut role: Option<String> = None;
+    let mut meta: Option<HashMap<String, serde_json::Value>> = None;
+    let mut allow_duplicate_role = false;
+
+    for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
+        if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
+            let parsed = chunk
+                .strip_prefix(":baml-start-baml:")
+                .unwrap_or(chunk)
+                .strip_suffix(":baml-end-baml:")
+                .unwrap_or(chunk);
+
+            if let Ok(mut parsed) =
+                serde_json::from_str::<HashMap<String, serde_json::Value>>(parsed)
+            {
+                if let Some(role_val) = parsed.remove("role") {
+                    role = Some(role_val.as_str().unwrap_or("").to_string());
+                }
+
+                allow_duplicate_role = parsed
+                    .remove("__baml_allow_dupe_role__")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                if parsed.is_empty() {
+                    meta = None;
+                } else {
+                    meta = Some(parsed);
+                }
+            }
+        } else if role.is_none() && chunk.is_empty() {
+            // Discard whitespace before first _.chat()
+        } else {
+            let mut parts = vec![];
+
+            for part in chunk.split(VM_MAGIC_MEDIA_DELIMITER) {
+                let part = if part.starts_with(":baml-start-media:")
+                    && part.ends_with(":baml-end-media:")
+                {
+                    let media_data = part
+                        .strip_prefix(":baml-start-media:")
+                        .unwrap_or(part)
+                        .strip_suffix(":baml-end-media:")
+                        .unwrap_or(part);
+
+                    // Parse media data to extract ObjectIndex
+                    match serde_json::from_str::<serde_json::Value>(media_data) {
+                        Ok(json) => {
+                            if let Some(idx) = json.get("object_index").and_then(|v| v.as_u64()) {
+                                Some(bex_vm_types::PromptAst::Media(ObjectIndex::from_raw(
+                                    idx as usize,
+                                )))
+                            } else {
+                                return Err(RenderError::Other(format!(
+                                    "Media missing object_index: {media_data}"
+                                )));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(RenderError::Other(format!(
+                                "Media variable had unrecognizable data: {media_data}"
+                            )));
+                        }
+                    }
+                } else if !part.trim().is_empty() {
+                    Some(bex_vm_types::PromptAst::String(part.trim().to_string()))
+                } else {
+                    None
+                };
+
+                if let Some(part) = part {
+                    parts.push(part);
+                }
+            }
+
+            if !parts.is_empty() {
+                let content = if parts.len() == 1 {
+                    parts.pop().unwrap()
+                } else {
+                    bex_vm_types::PromptAst::Vec(parts)
+                };
+
+                // Convert metadata to VM Value
+                let metadata = if allow_duplicate_role || meta.is_some() {
+                    let mut map = IndexMap::new();
+                    if let Some(meta) = &meta {
+                        for (key, value) in meta {
+                            map.insert(key.clone(), json_to_vm_value(value));
+                        }
+                    }
+                    if allow_duplicate_role {
+                        map.insert(
+                            "__baml_allow_dupe_role__".to_string(),
+                            bex_vm_types::Value::Bool(true),
+                        );
+                    }
+                    // Note: For simplicity, we store the map as Null if it would require heap allocation.
+                    // In a full implementation, we'd need to allocate a Map object on the heap.
+                    // For now, metadata flags are checked inline.
+                    bex_vm_types::Value::Null
+                } else {
+                    bex_vm_types::Value::Null
+                };
+
+                let final_role = match role.as_ref() {
+                    Some(r) if allowed_roles.contains(r) => r.clone(),
+                    Some(_) => default_role.to_string(),
+                    None => default_role.to_string(),
+                };
+
+                // Apply role remapping
+                let final_role = remap_role.get(&final_role).cloned().unwrap_or(final_role);
+
+                chat_messages.push(bex_vm_types::PromptAst::Message {
+                    role: final_role,
+                    content: Box::new(content),
+                    metadata,
+                });
+            }
+        }
+    }
+
+    Ok(bex_vm_types::PromptAst::Vec(chat_messages))
+}
+
+/// Convert a JSON value to a VM Value.
+fn json_to_vm_value(json: &serde_json::Value) -> bex_vm_types::Value {
+    match json {
+        serde_json::Value::Null => bex_vm_types::Value::Null,
+        serde_json::Value::Bool(b) => bex_vm_types::Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                bex_vm_types::Value::Int(i)
+            } else if let Some(f) = n.as_f64() {
+                bex_vm_types::Value::Float(f)
+            } else {
+                bex_vm_types::Value::Null
+            }
+        }
+        // Strings, arrays, and objects would require heap allocation
+        // For metadata purposes, we only need primitives
+        _ => bex_vm_types::Value::Null,
+    }
+}
+
 /// Evaluate a Jinja expression on a BamlValue.
 ///
 /// Used for constraint evaluation.
@@ -746,9 +1112,7 @@ Hello"#;
 
     #[test]
     fn test_ctx_output_format_class() {
-        use baml_base::Name as BaseName;
-        use baml_compiler_hir::FullyQualifiedName;
-        use baml_compiler_tir::Ty;
+        use bex_external_types::Ty;
         use bex_llm_types::output_format::{Class, OutputFormatBuilder};
 
         let person_class = Class::new("Person")
@@ -757,7 +1121,7 @@ Hello"#;
 
         let output_format = OutputFormatBuilder::new()
             .with_class(person_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("Person"))))
+            .with_target(Ty::Class("Person".to_string()))
             .build();
 
         let ctx = RenderContext {
@@ -783,7 +1147,7 @@ Hello"#;
 
     #[test]
     fn test_ctx_output_format_primitive() {
-        use baml_compiler_tir::Ty;
+        use bex_external_types::Ty;
         use bex_llm_types::output_format::OutputFormatBuilder;
 
         let output_format = OutputFormatBuilder::new()
@@ -811,7 +1175,7 @@ Hello"#;
 
     #[test]
     fn test_ctx_output_format_callable() {
-        use baml_compiler_tir::Ty;
+        use bex_external_types::Ty;
         use bex_llm_types::output_format::OutputFormatBuilder;
 
         let output_format = OutputFormatBuilder::new()
@@ -840,9 +1204,7 @@ Hello"#;
 
     #[test]
     fn test_ctx_output_format_with_custom_or_splitter() {
-        use baml_base::Name as BaseName;
-        use baml_compiler_hir::FullyQualifiedName;
-        use baml_compiler_tir::Ty;
+        use bex_external_types::Ty;
         use bex_llm_types::output_format::{Class, Enum, OutputFormatBuilder};
 
         let status_enum = Enum::new("Status")
@@ -852,7 +1214,7 @@ Hello"#;
         let task_class = Class::new("Task")
             .with_field(
                 "status",
-                Ty::Enum(FullyQualifiedName::local(BaseName::from("Status"))),
+                Ty::Enum("Status".to_string()),
                 None,
                 true,
             );
@@ -860,7 +1222,7 @@ Hello"#;
         let output_format = OutputFormatBuilder::new()
             .with_enum(status_enum)
             .with_class(task_class)
-            .with_target(Ty::Class(FullyQualifiedName::local(BaseName::from("Task"))))
+            .with_target(Ty::Class("Task".to_string()))
             .build();
 
         let ctx = RenderContext {
@@ -879,6 +1241,88 @@ Hello"#;
                 assert!(text.contains("'pending' | 'done'"), "Expected custom or_splitter but got: {}", text);
             }
             _ => panic!("Expected Str prompt"),
+        }
+    }
+
+    // ========================================================================
+    // Tests for VM-native render_prompt_vm
+    // ========================================================================
+
+    #[test]
+    fn test_render_prompt_vm_simple() {
+        use bex_vm_types::{Object, ObjectPool, Value};
+
+        let mut heap: ObjectPool<()> = ObjectPool::new();
+        heap.push(Object::String("World".to_string()));
+        let string_idx = bex_vm_types::ObjectIndex::from_raw(0);
+
+        let mut args = IndexMap::new();
+        args.insert("name".to_string(), Value::Object(string_idx));
+
+        let result = render_prompt_vm("Hello {{ name }}!", &args, &heap, RenderContextVm::default());
+
+        assert!(result.is_ok(), "render_prompt_vm failed: {:?}", result);
+        match result.unwrap() {
+            bex_vm_types::PromptAst::String(text) => {
+                assert_eq!(text, "Hello World!");
+            }
+            other => panic!("Expected String, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_render_prompt_vm_chat() {
+        use bex_vm_types::{Object, ObjectPool, Value};
+
+        let mut heap: ObjectPool<()> = ObjectPool::new();
+        heap.push(Object::String("Sam".to_string()));
+        let string_idx = bex_vm_types::ObjectIndex::from_raw(0);
+
+        let mut args = IndexMap::new();
+        args.insert("name".to_string(), Value::Object(string_idx));
+
+        let template = r#"{{ _.chat("user") }}
+Hello {{ name }}"#;
+
+        let result = render_prompt_vm(template, &args, &heap, RenderContextVm::default());
+
+        assert!(result.is_ok(), "render_prompt_vm failed: {:?}", result);
+        match result.unwrap() {
+            bex_vm_types::PromptAst::Vec(messages) => {
+                assert_eq!(messages.len(), 1);
+                match &messages[0] {
+                    bex_vm_types::PromptAst::Message { role, content, .. } => {
+                        assert_eq!(role, "user");
+                        match content.as_ref() {
+                            bex_vm_types::PromptAst::String(s) => {
+                                assert_eq!(s, "Hello Sam");
+                            }
+                            other => panic!("Expected String content, got: {:?}", other),
+                        }
+                    }
+                    other => panic!("Expected Message, got: {:?}", other),
+                }
+            }
+            other => panic!("Expected Vec, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_render_prompt_vm_with_int() {
+        use bex_vm_types::{ObjectPool, Value};
+
+        let heap: ObjectPool<()> = ObjectPool::new();
+        let mut args = IndexMap::new();
+        args.insert("count".to_string(), Value::Int(42));
+
+        let result = render_prompt_vm("Count: {{ count }}", &args, &heap, RenderContextVm::default());
+
+        assert!(result.is_ok(), "render_prompt_vm failed: {:?}", result);
+        match result.unwrap() {
+            bex_vm_types::PromptAst::String(text) => {
+                assert_eq!(text, "Count: 42");
+            }
+            other => panic!("Expected String, got: {:?}", other),
         }
     }
 }

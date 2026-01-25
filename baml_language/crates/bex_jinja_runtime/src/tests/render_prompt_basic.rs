@@ -5,7 +5,7 @@ use serde_json::{json, Value as JsonValue};
 
 use crate::{render_prompt, LlmClientSpec, OutputFormatContent, PromptAst, PromptAstNode, RenderContext};
 use bex_vm_types::{MediaContent, MediaValue};
-use ir_stub::BamlValue;
+use ir_stub::{BamlMap, BamlValue};
 
 #[derive(Deserialize)]
 struct TestCase {
@@ -83,7 +83,27 @@ fn render_prompt_basic_chat() {
 }
 
 fn json_to_baml_value(value: &JsonValue) -> BamlValue {
-    serde_json::from_value(value.clone()).expect("failed to convert JSON to BamlValue")
+    match value {
+        JsonValue::Null => BamlValue::Null,
+        JsonValue::Bool(b) => BamlValue::Bool(*b),
+        JsonValue::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                BamlValue::Int(i)
+            } else if let Some(f) = n.as_f64() {
+                BamlValue::Float(f)
+            } else {
+                BamlValue::String(n.to_string())
+            }
+        }
+        JsonValue::String(s) => BamlValue::String(s.clone()),
+        JsonValue::Array(arr) => {
+            BamlValue::List(arr.iter().map(json_to_baml_value).collect())
+        }
+        JsonValue::Object(obj) => {
+            let map = obj.iter().map(|(k, v)| (k.clone(), json_to_baml_value(v))).collect();
+            BamlValue::Map(map)
+        }
+    }
 }
 
 fn prompt_ast_to_json(ast: &PromptAst) -> JsonValue {

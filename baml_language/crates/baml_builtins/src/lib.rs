@@ -208,6 +208,8 @@ macro_rules! with_builtins {
                         fn name(self: PrimitiveClient) -> String;
                         fn provider(self: PrimitiveClient) -> String;
                         #[external]
+                        fn render_prompt<T>(self: PrimitiveClient, template: String, context: Map<String, T>) -> PromptAst;
+                        #[external]
                         fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
                         fn build_request(self: PrimitiveClient, prompt: PromptAst) -> HttpRequest;
                     }

@@ -20,6 +20,7 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_compiler_tir = { workspace = true }
+bex_external_types = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
