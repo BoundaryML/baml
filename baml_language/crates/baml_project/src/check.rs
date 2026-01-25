@@ -97,7 +97,7 @@ pub fn collect_diagnostics(
                 let body = function_body(db, *func_loc);
 
                 // Only infer types for expression functions (not LLM functions)
-                if let FunctionBody::Expr(expr_body, _source_map) = &*body {
+                if let FunctionBody::Expr(expr_body, hir_source_map) = &*body {
                     // Collect body lowering diagnostics (e.g., missing semicolons)
                     for diag in &expr_body.diagnostics {
                         diagnostics.push(diag.to_diagnostic());
@@ -115,8 +115,14 @@ pub fn collect_diagnostics(
                         *func_loc,
                     );
 
+                    // Convert TIR type errors (with ErrorLocation) to span-based errors for diagnostics
                     for type_error in &inference_result.errors {
-                        diagnostics.push(type_error.to_diagnostic());
+                        // Map the error to span-based context using the source map
+                        let span_error = type_error.map_context(
+                            |ty| ty.to_string(),               // Convert Ty to String for display
+                            |loc| loc.to_span(hir_source_map), // Resolve ErrorLocation to Span
+                        );
+                        diagnostics.push(span_error.to_diagnostic());
                     }
                 }
             }

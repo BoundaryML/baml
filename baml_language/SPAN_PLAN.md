@@ -4,7 +4,7 @@ This plan implements span tracking for BAML following rust-analyzer's source map
 
 ---
 
-## Current Status (Updated 2026-01-23)
+## Current Status (Updated 2026-01-24)
 
 ### Completed Phases
 
@@ -15,7 +15,7 @@ This plan implements span tracking for BAML following rust-analyzer's source map
 | Phase 3 | ✅ Complete | Moved spans from `ExprBody` to `HirSourceMap`, updated `FunctionBody::Expr` to be tuple |
 | Phase 4 | ✅ Complete | Created `SignatureSourceMap`, removed spans from `FunctionSignature`/`Param` |
 | Phase 5 | ✅ Complete | Removed unused span from `TypeContext.return_types` |
-| Phase 6 | 🔲 Pending | Migrate `TypeError` to use IDs instead of spans |
+| Phase 6 | ✅ Complete | Migrated `TypeError` to use position-independent IDs via `ErrorContext` trait |
 | Phase 7 | 🔲 Pending | Migrate VIR and MIR |
 | Phase 8 | 🔲 Pending | Final call site updates |
 
@@ -24,6 +24,8 @@ This plan implements span tracking for BAML following rust-analyzer's source map
 1. **HIR Source Map** (`baml_compiler_hir/src/source_map.rs`):
    - `HirSourceMap`: Stores `expr_spans`, `stmt_spans`, `pattern_spans`, `match_arm_spans`
    - `SignatureSourceMap`: Stores `return_type_span`, `param_spans`
+   - `ErrorLocation`: Enum for position-independent error locations (`Expr(ExprId)`, `MatchArm(MatchArmId)`, `Span(Span)`)
+   - `TirContext<Ty>`: Marker type implementing `ErrorContext` for TIR layer
 
 2. **FunctionBody** now returns tuple: `FunctionBody::Expr(ExprBody, HirSourceMap)`
 
@@ -31,9 +33,60 @@ This plan implements span tracking for BAML following rust-analyzer's source map
 
 4. **TypeContext** simplified: `return_types: Vec<Ty>` (removed unused span)
 
+5. **TypeError** now uses `ErrorContext` trait pattern:
+   - `ErrorContext` trait defines associated types `Ty` and `Location`
+   - `SpanContext<T>`: Default context using `Span` for locations (for diagnostic output)
+   - `TirContext<Ty>`: TIR context using `ErrorLocation` for position-independent IDs
+   - TIR type inference works entirely with IDs, no source map needed
+   - `map_context()` method transforms errors between contexts at diagnostic render time
+
+### Phase 6 Implementation Details
+
+The key architectural insight: TIR should work entirely with position-independent IDs. Only at diagnostic rendering time should IDs be resolved to spans using the source map.
+
+**New types in `baml_compiler_diagnostics/src/errors/type_error.rs`:**
+```rust
+pub trait ErrorContext: Debug + Clone + PartialEq + Eq + Hash {
+    type Ty: Debug + Clone + PartialEq + Eq + Hash;
+    type Location: Debug + Clone + Copy + PartialEq + Eq + Hash;
+}
+
+pub struct SpanContext<T>(PhantomData<T>);  // Location = Span
+```
+
+**New types in `baml_compiler_hir/src/source_map.rs`:**
+```rust
+pub enum ErrorLocation {
+    Expr(ExprId),
+    MatchArm(MatchArmId),
+    Span(Span),  // Fallback for cases without HIR IDs
+}
+
+pub struct TirContext<Ty>(PhantomData<Ty>);  // Location = ErrorLocation
+```
+
+**TIR now creates errors with IDs:**
+```rust
+// In baml_compiler_tir/src/lib.rs
+let location = ErrorLocation::Expr(expr_id);
+ctx.type_errors.push(TypeError::TypeMismatch {
+    expected, found, location, info_location: None,
+});
+```
+
+**Diagnostic rendering resolves IDs to spans:**
+```rust
+// In baml_project/src/check.rs
+let span_error = type_error.map_context(
+    |ty| ty.to_string(),
+    |loc| loc.to_span(hir_source_map),
+);
+diagnostics.push(span_error.to_diagnostic());
+```
+
 ### Remaining Work
 
-The main remaining issue for incremental caching is **Phase 6**: `TypeError` stores `Span` directly, and these errors end up in `InferenceResult.errors` which is Salsa-cached. To achieve full incrementality (whitespace changes don't invalidate type checking), `TypeError` needs to store IDs instead of spans.
+Phase 7 (VIR/MIR) and Phase 8 (final cleanup) are pending. The core incremental caching goal is now achieved for type inference.
 
 ### All Tests Passing
 347+ tests across the workspace pass after these changes.
@@ -431,9 +484,11 @@ pub struct TypeContext<'db> {
 
 ---
 
-## Phase 6: Migrate Diagnostics
+## Phase 6: Migrate Diagnostics ✅ COMPLETE
 
 ### 6.1 Update TypeError
+
+**Implemented approach:** Used `ErrorContext` trait with associated types instead of hardcoded ID types. This allows `TypeError` to work with different contexts (TIR with IDs, diagnostics with spans).
 
 **Before (`type_error.rs`):**
 ```rust
@@ -451,89 +506,90 @@ pub enum TypeError<T> {
 
 **After:**
 ```rust
-pub enum TypeError<T> {
+pub trait ErrorContext: Debug + Clone + PartialEq + Eq + Hash {
+    type Ty: Debug + Clone + PartialEq + Eq + Hash;
+    type Location: Debug + Clone + Copy + PartialEq + Eq + Hash;
+}
+
+pub enum TypeError<C: ErrorContext> {
     TypeMismatch {
-        expected: T,
-        found: T,
-        expr_id: ExprId,
-        file: FileId,
-        info_source: Option<TypeSource>,
+        expected: C::Ty,
+        found: C::Ty,
+        location: C::Location,
+        info_location: Option<C::Location>,
     },
-    UnknownType {
-        name: String,
-        type_ref_id: TypeRefId,
-        file: FileId,
-    },
-    // ... variants use appropriate ID types
+    UnknownType { name: String, location: C::Location },
+    // ... all variants use location: C::Location
 }
 
-/// Source of a type (for "expected X because of Y" messages)
-pub enum TypeSource {
-    TypeRef(TypeRefId, FileId),
-    Expr(ExprId, FileId),
-    Return(ExprId, FileId),
+impl<C: ErrorContext> TypeError<C> {
+    pub fn map_context<C2: ErrorContext>(
+        &self,
+        map_ty: impl Fn(&C::Ty) -> C2::Ty,
+        map_loc: impl Fn(&C::Location) -> C2::Location,
+    ) -> TypeError<C2> { ... }
 }
 ```
 
-### 6.2 Update HirDiagnostic
+**Two context implementations:**
+- `SpanContext<T>`: `Location = Span` - used for diagnostic output
+- `TirContext<Ty>`: `Location = ErrorLocation` - used in TIR (position-independent)
 
-**Before (`hir_diagnostic.rs`):**
+### 6.2 ErrorLocation Enum
+
 ```rust
-pub enum HirDiagnostic {
-    DuplicateField {
-        class_name: String,
-        field_name: String,
-        first_span: Span,
-        second_span: Span,
-    },
-    // ...
+// In baml_compiler_hir/src/source_map.rs
+pub enum ErrorLocation {
+    Expr(ExprId),
+    MatchArm(MatchArmId),
+    Span(Span),  // Fallback for cases without HIR IDs
 }
-```
 
-**After:**
-```rust
-pub enum HirDiagnostic {
-    DuplicateField {
-        class_name: String,
-        field_name: String,
-        first_field_id: FieldId,
-        second_field_id: FieldId,
-        file: FileId,
-    },
-    // ...
-}
-```
-
-### 6.3 Add Diagnostic Rendering
-
-```rust
-impl TypeError<Ty> {
-    pub fn render(&self, db: &dyn Db) -> RenderedDiagnostic {
+impl ErrorLocation {
+    pub fn to_span(&self, source_map: &HirSourceMap) -> Span {
         match self {
-            TypeError::UnknownType { name, type_ref_id, file } => {
-                let source_map = item_tree_source_map(db, *file);
-                let span = source_map
-                    .type_ref_syntax(*type_ref_id)
-                    .map(|ptr| ptr.text_range());
-
-                RenderedDiagnostic {
-                    message: format!("Unknown type: {}", name),
-                    span,
-                    file: *file,
-                }
-            }
-            // ... other variants
+            ErrorLocation::Expr(id) => source_map.expr_span(*id).unwrap_or_default(),
+            ErrorLocation::MatchArm(id) => source_map
+                .match_arm_spans(*id)
+                .map(|s| s.arm_span)
+                .unwrap_or_default(),
+            ErrorLocation::Span(span) => *span,
         }
     }
 }
 ```
 
+### 6.3 Diagnostic Rendering
+
+Conversion happens at diagnostic collection time in `baml_project/src/check.rs`:
+
+```rust
+for type_error in &inference_result.errors {
+    let span_error = type_error.map_context(
+        |ty| ty.to_string(),
+        |loc| loc.to_span(hir_source_map),
+    );
+    diagnostics.push(span_error.to_diagnostic());
+}
+```
+
+### 6.4 HirDiagnostic (Deferred)
+
+`HirDiagnostic` still uses spans directly. This is acceptable because:
+- HIR diagnostics are emitted during lowering, not cached type inference
+- Converting HIR diagnostics to IDs provides less incrementality benefit
+- Can be addressed in Phase 8 if needed
+
 **Tasks:**
-- [ ] Define `TypeSource` enum for tracking type origins
-- [ ] Update all `TypeError` variants to use IDs instead of spans
-- [ ] Update all `HirDiagnostic` variants to use IDs instead of spans
-- [ ] Implement `render()` methods for all diagnostic types
-- [ ] Update diagnostic emission sites throughout the codebase
+- [x] Define `ErrorContext` trait with associated `Ty` and `Location` types
+- [x] Update `TypeError<C>` to use `C::Ty` and `C::Location`
+- [x] Implement `SpanContext<T>` for span-based errors (diagnostic output)
+- [x] Implement `TirContext<Ty>` and `ErrorLocation` for position-independent errors
+- [x] Add `map_context()` method to transform between contexts
+- [x] Update all TIR error emission sites to use `ErrorLocation::Expr(expr_id)`
+- [x] Update exhaustiveness checking to use `ErrorLocation::MatchArm(arm_id)`
+- [x] Update diagnostic collection to convert TIR errors to span-based errors
+- [N/A] `HirDiagnostic` conversion deferred (lower priority)
 
 ---
 

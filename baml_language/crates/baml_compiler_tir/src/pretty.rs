@@ -12,7 +12,6 @@ use baml_compiler_hir::{
     Stmt, StmtId, UnaryOp,
 };
 
-use super::Ty;
 use crate::{InferenceResult, TypeResolutionContext};
 
 /// Renders a function's TIR as a tree showing expression structure with types.
