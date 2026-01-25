@@ -18,6 +18,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
 bex_llm_types = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }

@@ -1,13 +1,23 @@
 # Architecture diagram
 
-These are generated via `stacktower`. To regenerate, run:
-
-(Note, this is from a local build of stacktower with some fixes to address cargo workspaces.)
+To regenerate:
 
 ```bash
-# Generate dependency graph
-stacktower parse rust Cargo.toml  -o architecture/dependency-graph.json --enrich=false
-
-# Render
-stacktower render architecture/dependency-graph.json -o architecture/architecture.svg --only-local --randomize=false --popups=false --include serde,tokio,anyhow,rowan,salsa,thiserror -t nodelink
+./architecture/generate.sh
 ```
+
+Or directly:
+
+```bash
+cargo run -p cargo-stow -- stow --graph architecture/architecture.svg
+```
+
+Options:
+- `--include-tests` - Include test crates (`*_test`, `*_tests`) in the graph
+
+The graph shows:
+- Local workspace crates grouped into namespace clusters (`baml`, `bex`)
+- Crates colored by namespace (border) and tag (fill)
+- External dependencies from `stow.toml` `graph_external_deps` placed inside each namespace that uses them
+- Dashed edges with direction arrows for cross-namespace dependencies
+- Transitive reduction applied (only direct dependencies shown)

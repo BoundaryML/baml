@@ -78,9 +78,7 @@ export function BAMLSDKProvider({ children, mode: initialMode = 'wasm', initialF
       // If no files provided and not in debug mode, the consumer is responsible for calling sdk.files.update()
       const initialFiles = propInitialFiles ?? (debugMode ? DEBUG_BAML_FILES : null);
 
-      if (initialFiles) {
-        await sdk.initialize(initialFiles);
-      }
+      await sdk.initialize(initialFiles ?? {});
 
       if (mounted) {
         console.log(' ✅ SDK initialized successfully');

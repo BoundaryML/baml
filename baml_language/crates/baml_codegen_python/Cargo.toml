@@ -13,7 +13,7 @@ license = { workspace = true }
 [dependencies]
 baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
-askama = { workspace = true, features = ["code-in-doc"] }
+askama = { workspace = true, features = [ "code-in-doc" ] }
 
 [lib]
 doctest = false

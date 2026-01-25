@@ -23,6 +23,7 @@ baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_resource_types = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
 paste = { workspace = true }
@@ -41,5 +42,5 @@ name = "fib"
 harness = false
 
 [features]
-default = []
-heap_debug = ["bex_heap/heap_debug", "bex_vm_types/heap_debug"]
+default = [  ]
+heap_debug = [ "bex_heap/heap_debug", "bex_vm_types/heap_debug" ]

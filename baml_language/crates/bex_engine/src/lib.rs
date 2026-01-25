@@ -40,6 +40,18 @@
 //! - GC only accesses VM stacks while holding `parked_vms` lock
 //! - Handles always resolve through table (no cached indices)
 //! - New calls wait for in-progress GC before processing handle args
+//!
+//! # Unsafe Code
+//!
+//! This module uses unsafe code for:
+//! - `VmPtr` Send implementation: Raw VM pointers stored for GC root collection
+//! - Direct heap access: Reading objects during value conversion (index from valid handle)
+//! - GC coordination: Dereferencing parked VM pointers to collect/update roots
+//! - Epoch guards: Creating guards after registering with the epoch system
+//!
+//! Safety is ensured by the epoch-based GC coordination system described above.
+
+#![allow(unsafe_code)]
 
 use std::{
     collections::HashMap,
@@ -49,18 +61,17 @@ use std::{
     },
 };
 
-use baml_snapshot::BamlSnapshot;
 pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
-// Re-export bex_sys types for convenience
-pub use bex_sys::{
-    FileHandle, OpContext, OpError, ResolvedArgs, ResolvedValue, ResourceId, ResourceKind,
-    ResourceRegistry, SocketHandle, SysOpResult, ops,
+use bex_program::BexProgram;
+use bex_vm::{BexVm, VmExecState};
+use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, Object, Value};
+// Re-export sys_types types for convenience
+pub use sys_types::{
+    CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
 };
-use bex_vm::{BexVm, NativeFunction, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, Object, ObjectIndex, SysOp, Value};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
@@ -70,8 +81,8 @@ use tokio::sync::{Notify, mpsc};
 
 /// Result of an external future.
 struct FutureResult {
-    id: ObjectIndex,
-    result: Result<ResolvedValue, EngineError>,
+    id: HeapPtr,
+    result: Result<BexExternalValue, EngineError>,
 }
 
 /// Wrapper for VM pointer that implements Send.
@@ -85,7 +96,6 @@ struct FutureResult {
 struct VmPtr(*const BexVm);
 
 // SAFETY: We control all access through the mutex and only use while VMs are parked
-#[allow(unsafe_code)]
 unsafe impl Send for VmPtr {}
 
 /// State for a single epoch slot.
@@ -217,16 +227,17 @@ pub enum EngineError {
 /// ```
 pub struct BexEngine {
     /// The original snapshot (for metadata access)
-    snapshot: BamlSnapshot,
+    snapshot: BexProgram,
     /// The unified heap (shared across all VM instances)
-    heap: Arc<BexHeap<NativeFunction>>,
+    heap: Arc<BexHeap>,
     /// Global variables pool
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
-    resolved_function_names:
-        HashMap<String, (ObjectIndex, bex_vm_types::FunctionKind<NativeFunction>)>,
+    resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
+    /// System operations provider.
+    sys_ops: sys_types::SysOps,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -250,26 +261,53 @@ impl BexEngine {
     /// The engine creates a unified heap containing compile-time objects
     /// (functions, classes, enums). Each function call creates a VM that
     /// shares this heap and allocates runtime objects into its own TLAB.
+    ///
+    /// # Arguments
+    ///
+    /// * `snapshot` - The compiled BAML program
+    /// * `env_vars` - Environment variables accessible to the program
+    /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
-        snapshot: BamlSnapshot,
+        snapshot: BexProgram,
         env_vars: HashMap<String, String>,
+        sys_ops: sys_types::SysOps,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(snapshot.bytecode.clone())?;
 
         // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object<NativeFunction>> =
-            bytecode.objects.into_iter().collect();
+        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
         // Create the unified heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
+        // Convert ObjectIndex -> HeapPtr for function lookup table.
+        // Now that the heap exists, we can get stable pointers to compile-time objects.
+        let resolved_function_names = bytecode
+            .resolved_function_names
+            .into_iter()
+            .map(|(name, (idx, kind))| {
+                let ptr = heap.compile_time_ptr(idx.into_raw());
+                (name, (ptr, kind))
+            })
+            .collect();
+
+        // Convert compile-time globals (ConstValue) to runtime globals (Value).
+        // Object references are converted from ObjectIndex to HeapPtr.
+        let globals_vec: Vec<Value> = bytecode
+            .globals
+            .into_iter()
+            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+            .collect();
+        let globals = GlobalPool::from_vec(globals_vec);
+
         Ok(Self {
             snapshot,
             heap,
-            globals: bytecode.globals,
-            resolved_function_names: bytecode.resolved_function_names,
+            globals,
+            resolved_function_names,
             env_vars,
+            sys_ops,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -280,12 +318,12 @@ impl BexEngine {
     }
 
     /// Get a reference to the program snapshot.
-    pub fn program(&self) -> &BamlSnapshot {
+    pub fn program(&self) -> &BexProgram {
         &self.snapshot
     }
 
     /// Get a reference to the shared heap.
-    pub fn heap(&self) -> &Arc<BexHeap<NativeFunction>> {
+    pub fn heap(&self) -> &Arc<BexHeap> {
         &self.heap
     }
 
@@ -450,7 +488,7 @@ impl BexEngine {
         declared_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
         // If declared type is a union, find which member matches the actual value
-        let effective_type = self.resolve_effective_type(value, declared_type);
+        let effective_type = Self::resolve_effective_type(value, declared_type);
 
         let external = match value {
             Value::Null => BexExternalValue::Null,
@@ -468,17 +506,16 @@ impl BexEngine {
     ///
     /// # Safety
     ///
-    /// This method uses unsafe calls to `heap.get_object()`. It is safe because:
+    /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
-    /// - The caller ensures the index is valid (from a handle which is a GC root)
+    /// - The caller ensures the pointer is valid (from a handle which is a GC root)
     fn vm_object_to_external(
         &self,
-        idx: ObjectIndex,
+        ptr: HeapPtr,
         effective_type: &Ty,
     ) -> Result<BexExternalValue, EngineError> {
-        // SAFETY: We only read objects, and the index comes from a valid handle.
-        #[allow(unsafe_code)]
-        let obj = unsafe { self.heap().get_object(idx) };
+        // SAFETY: We only read objects, and the pointer comes from a valid handle.
+        let obj = unsafe { ptr.get() };
 
         match obj {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -528,8 +565,7 @@ impl BexEngine {
 
             Object::Instance(instance) => {
                 // Get class name from the Class object
-                #[allow(unsafe_code)]
-                let class_obj = unsafe { self.heap().get_object(instance.class) };
+                let class_obj = unsafe { instance.class.get() };
                 let (class_name, field_names) = match class_obj {
                     Object::Class(class) => (class.name.clone(), &class.field_names),
                     _ => panic!("Instance.class should point to a Class object"),
@@ -576,8 +612,7 @@ impl BexEngine {
 
             Object::Variant(variant) => {
                 // Get enum name and variant name from the Enum object
-                #[allow(unsafe_code)]
-                let enum_obj = unsafe { self.heap().get_object(variant.enm) };
+                let enum_obj = unsafe { variant.enm.get() };
                 let (enum_name, variant_name) = match enum_obj {
                     Object::Enum(enm) => {
                         let variant_name = enm
@@ -608,9 +643,11 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::Media(_) => Err(EngineError::CannotConvert {
-                type_name: "media".to_string(),
+            Object::Media(m) => Ok(BexExternalValue::Media {
+                handle: self.heap().create_handle(ptr),
+                kind: m.kind,
             }),
+            Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
                 type_name: "primitive_client".to_string(),
             }),
@@ -630,30 +667,27 @@ impl BexEngine {
     /// For union types, find which member matches the actual runtime value.
     ///
     /// If the declared type is not a union, returns it unchanged.
-    fn resolve_effective_type<'a>(&self, value: &Value, declared_type: &'a Ty) -> &'a Ty {
+    fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
         match declared_type {
-            Ty::Union(members) => self
-                .find_matching_union_member(value, members)
+            Ty::Union(members) => Self::find_matching_union_member(value, members)
                 .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
             _ => declared_type,
         }
     }
 
     /// Find the union member that matches the runtime value's type.
-    fn find_matching_union_member<'a>(&self, value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
+    fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
         match value {
             Value::Null => members.iter().find(|m| matches!(m, Ty::Null)),
             Value::Int(_) => members.iter().find(|m| matches!(m, Ty::Int)),
             Value::Float(_) => members.iter().find(|m| matches!(m, Ty::Float)),
             Value::Bool(_) => members.iter().find(|m| matches!(m, Ty::Bool)),
-            Value::Object(idx) => {
-                #[allow(unsafe_code)]
-                let obj = unsafe { self.heap().get_object(*idx) };
+            Value::Object(ptr) => {
+                let obj = unsafe { ptr.get() };
                 match obj {
                     Object::String(_) => members.iter().find(|m| matches!(m, Ty::String)),
                     Object::Instance(inst) => {
-                        #[allow(unsafe_code)]
-                        let class_obj = unsafe { self.heap().get_object(inst.class) };
+                        let class_obj = unsafe { inst.class.get() };
                         if let Object::Class(class) = class_obj {
                             members
                                 .iter()
@@ -663,8 +697,7 @@ impl BexEngine {
                         }
                     }
                     Object::Variant(variant) => {
-                        #[allow(unsafe_code)]
-                        let enum_obj = unsafe { self.heap().get_object(variant.enm) };
+                        let enum_obj = unsafe { variant.enm.get() };
                         if let Object::Enum(enm) = enum_obj {
                             members
                                 .iter()
@@ -678,7 +711,7 @@ impl BexEngine {
                         if let Some(first) = elements.first() {
                             members.iter().find(|m| {
                                 if let Ty::List(elem_ty) = m {
-                                    self.find_matching_union_member(
+                                    Self::find_matching_union_member(
                                         first,
                                         &[elem_ty.as_ref().clone()],
                                     )
@@ -766,7 +799,6 @@ impl BexEngine {
         // SAFETY: All VMs are parked (verified above), so we have exclusive read access
         // to their stacks. The parked_vms vec contains valid pointers because VMs
         // register before parking and unregister only after gc_complete is notified.
-        #[allow(unsafe_code)]
         for vm_ptr in parked_vms.iter() {
             let vm = unsafe { &*vm_ptr.0 };
             all_roots.extend(Self::collect_vm_roots(vm));
@@ -780,14 +812,12 @@ impl BexEngine {
         );
 
         // Run GC with forwarding map
-        #[allow(unsafe_code)]
         let (stats, _remapped_roots, forwarding) =
             unsafe { self.heap.collect_garbage_with_forwarding(&all_roots) };
 
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
-        #[allow(unsafe_code)]
         for vm_ptr in parked_vms.iter() {
             let vm = unsafe { &mut *vm_ptr.0.cast_mut() };
 
@@ -893,7 +923,6 @@ impl BexEngine {
             .fetch_add(1, Ordering::AcqRel);
 
         // SAFETY: We just registered with the epoch above
-        #[allow(unsafe_code)]
         let guard = unsafe { EpochGuard::new() };
 
         // Create VM with shared heap (each VM gets its own TLAB)
@@ -912,11 +941,8 @@ impl BexEngine {
         // Set entry point with converted args
         vm.set_entry_point(function_index, &vm_args);
 
-        // Create a resource registry for this call
-        let ctx = Arc::new(OpContext::new());
-
         // Run the event loop with epoch tracking
-        let result = self.run_event_loop_with_epoch(&mut vm, ctx, my_epoch).await;
+        let result = self.run_event_loop_with_epoch(&mut vm, my_epoch).await;
 
         // Unregister from epoch
         if self.epoch_states[slot]
@@ -937,23 +963,27 @@ impl BexEngine {
     /// Requires `EpochGuard` because resolving handles returns an `ObjectIndex`
     /// that must remain valid while we use it.
     ///
-    /// - `Opaque(Handle)` extracts the `ObjectIndex`
+    /// - `Opaque(Handle)` extracts the `HeapPtr`
     /// - `External(...)` recursively allocates on the heap
     fn externalize_to_value(vm: &mut BexVm, external: &BexValue, guard: &EpochGuard<'_>) -> Value {
         match external {
             BexValue::Opaque(handle) => {
-                // Resolve through table to get current index after any GC
-                let idx = handle
-                    .object_index(guard)
+                // Resolve through table to get current pointer after any GC
+                let ptr = handle
+                    .object_ptr(guard)
                     .expect("Handle should be valid - object was returned to external code");
-                Value::Object(idx)
+                Value::Object(ptr)
             }
-            BexValue::External(ext) => Self::allocate_from_external(vm, ext),
+            BexValue::External(ext) => Self::allocate_from_external(vm, ext, guard),
         }
     }
 
     /// Recursively allocate a `BexExternalValue` onto the heap, returning a `Value`.
-    fn allocate_from_external(vm: &mut BexVm, external: &BexExternalValue) -> Value {
+    fn allocate_from_external(
+        vm: &mut BexVm,
+        external: &BexExternalValue,
+        guard: &EpochGuard<'_>,
+    ) -> Value {
         match external {
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(*i),
@@ -963,7 +993,7 @@ impl BexEngine {
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .iter()
-                    .map(|item| Self::allocate_from_external(vm, item))
+                    .map(|item| Self::allocate_from_external(vm, item, guard))
                     .collect();
                 vm.alloc_array(values)
             }
@@ -971,48 +1001,55 @@ impl BexEngine {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .iter()
                     .map(|(k, v): (&String, &BexExternalValue)| {
-                        (k.clone(), Self::allocate_from_external(vm, v))
+                        (k.clone(), Self::allocate_from_external(vm, v, guard))
                     })
                     .collect();
                 vm.alloc_map(values)
             }
             BexExternalValue::Instance { .. } => {
                 // Instance allocation requires class lookup - not supported from external
-                // External callers should use the class constructor functions
-                panic!(
-                    "Cannot allocate Instance from BexExternalValue - use class constructor functions"
+                todo!(
+                    "Cannot allocate Instance from BexExternalValue. We need to do a string lookup for the right type in the schema."
                 )
             }
             BexExternalValue::Variant { .. } => {
                 // Variant allocation requires enum lookup - not supported from external
-                // External callers should use enum variant values
-                panic!("Cannot allocate Variant from BexExternalValue - use enum values")
+                todo!(
+                    "Cannot allocate Variant from BexExternalValue. We need to do a string lookup for the right type in the schema."
+                )
             }
             BexExternalValue::Union { value, .. } => {
                 // Unwrap the union and allocate the inner value
-                Self::allocate_from_external(vm, value)
+                Self::allocate_from_external(vm, value, guard)
             }
+            BexExternalValue::Media { handle, .. } => {
+                let ptr = handle
+                    .object_ptr(guard)
+                    .expect("Handle should be valid - object was returned to external code");
+                Value::Object(ptr)
+            }
+            BexExternalValue::Resource(handle) => vm.alloc_resource(handle.clone()),
         }
     }
 
-    /// Look up a function by name and return its bytecode index.
-    fn lookup_function(&self, function_name: &str) -> Result<ObjectIndex, EngineError> {
+    /// Look up a function by name and return its heap pointer.
+    fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
         self.resolved_function_names
             .get(function_name)
-            .map(|(idx, _kind)| *idx)
+            .map(|(ptr, _kind)| *ptr)
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
     /// Collect roots from a yielded VM.
-    fn collect_vm_roots(vm: &BexVm) -> Vec<ObjectIndex> {
+    fn collect_vm_roots(vm: &BexVm) -> Vec<HeapPtr> {
         let mut roots = Vec::new();
 
         // Stack values
         for value in &vm.stack.0 {
-            if let Value::Object(idx) = value {
-                roots.push(*idx);
+            if let Value::Object(ptr) = value {
+                roots.push(*ptr);
             }
         }
 
@@ -1027,16 +1064,15 @@ impl BexEngine {
         self.heap.verify_quick();
         if self.heap.should_gc() {
             let roots = Self::collect_vm_roots(vm);
-            #[allow(unsafe_code)]
             unsafe {
                 let (stats, _remapped_roots, forwarding) =
                     self.heap.collect_garbage_with_forwarding(&roots);
 
                 // Update VM stack with forwarding pointers
                 for value in &mut vm.stack.0 {
-                    if let Value::Object(idx) = value {
-                        if let Some(&new_idx) = forwarding.get(idx) {
-                            *idx = new_idx;
+                    if let Value::Object(ptr) = value {
+                        if let Some(&new_ptr) = forwarding.get(ptr) {
+                            *ptr = new_ptr;
                         }
                     }
                 }
@@ -1062,7 +1098,6 @@ impl BexEngine {
     async fn run_event_loop_with_epoch(
         &self,
         vm: &mut BexVm,
-        ctx: Arc<OpContext>,
         my_epoch: u64,
     ) -> Result<BexValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
@@ -1077,18 +1112,11 @@ impl BexEngine {
                 VmExecState::ScheduleFuture(id) => {
                     let pending = vm.pending_future(id)?;
 
-                    // Resolve arguments from VM values to ResolvedValues
-                    let resolved_args = ResolvedArgs {
-                        args: pending
-                            .args
-                            .iter()
-                            .map(|v| Self::resolve_value(vm, v))
-                            .collect(),
-                    };
+                    // Convert arguments to BexExternalValue
+                    let args = Self::vm_args_to_external(vm, &pending.args);
 
                     match pending.operation {
                         ExternalOp::Llm => {
-                            // LLM operations are always async (not yet implemented)
                             let pending_futures = pending_futures.clone();
                             tokio::spawn(async move {
                                 let result = Err(OpError::Other(
@@ -1101,10 +1129,10 @@ impl BexEngine {
                             });
                         }
                         ExternalOp::Sys(sys_op) => {
-                            match Self::execute_sys_op(sys_op, Arc::clone(&ctx), resolved_args) {
+                            match self.execute_sys_op(sys_op, args) {
                                 SysOpResult::Ready(result) => {
                                     // Sync operation - fulfill immediately
-                                    let value = Self::unresolve_value(
+                                    let value = Self::external_to_vm_value(
                                         vm,
                                         result.map_err(EngineError::from)?,
                                     );
@@ -1185,11 +1213,9 @@ impl BexEngine {
 
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
-                        // TODO: When there's an error in the future, we must handle somehow.
-                        let resolved = future.result?;
-                        let value = Self::unresolve_value(vm, resolved);
+                        let external = future.result?;
+                        let value = Self::external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
-                        // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             continue 'vm_exec;
                         }
@@ -1202,11 +1228,9 @@ impl BexEngine {
                             .await
                             .ok_or(EngineError::FutureChannelClosed)?;
 
-                        // TODO: When there's an error in the future, we must handle somehow.
-                        let resolved = future.result?;
-                        let value = Self::unresolve_value(vm, resolved);
+                        let external = future.result?;
+                        let value = Self::external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
-                        // Future fulfilled, we can continue executing the VM.
                         if future.id == future_id {
                             break;
                         }
@@ -1220,77 +1244,104 @@ impl BexEngine {
         }
     }
 
-    /// Execute a system operation, returning either an immediate result or a future.
-    fn execute_sys_op(op: SysOp, ctx: Arc<OpContext>, args: ResolvedArgs) -> SysOpResult {
+    /// Execute a system operation using the provider table.
+    fn execute_sys_op(&self, op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
         match op {
-            // Async operations - return boxed futures
-            SysOp::FsOpen => SysOpResult::Async(Box::pin(ops::fs::open(ctx, args))),
-            SysOp::FsRead => SysOpResult::Async(Box::pin(ops::fs::read(ctx, args))),
-            SysOp::Shell => SysOpResult::Async(Box::pin(ops::sys::shell(ctx, args))),
-            SysOp::NetConnect => SysOpResult::Async(Box::pin(ops::net::connect(ctx, args))),
-            SysOp::NetRead => SysOpResult::Async(Box::pin(ops::net::read(ctx, args))),
-            // Sync operations - return immediate results
-            SysOp::FsClose => SysOpResult::Ready(ops::fs::close(&ctx, args)),
-            SysOp::NetClose => SysOpResult::Ready(ops::net::close(&ctx, args)),
+            SysOp::FsOpen => (self.sys_ops.fs_open)(args),
+            SysOp::FsRead => (self.sys_ops.fs_read)(args),
+            SysOp::FsClose => (self.sys_ops.fs_close)(args),
+            SysOp::NetConnect => (self.sys_ops.net_connect)(args),
+            SysOp::NetRead => (self.sys_ops.net_read)(args),
+            SysOp::NetClose => (self.sys_ops.net_close)(args),
+            SysOp::Shell => (self.sys_ops.shell)(args),
         }
     }
 
-    /// Resolve a VM value to a `ResolvedValue`.
-    fn resolve_value(vm: &BexVm, value: &Value) -> ResolvedValue {
+    /// Convert VM values to `BexExternalValues` for sys ops.
+    ///
+    /// This is simpler than `vm_value_to_external` because sys ops only receive
+    /// primitives, strings, arrays, maps, and resources - not instances/variants.
+    fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
+        args.iter()
+            .map(|v| Self::vm_arg_to_external(vm, v))
+            .collect()
+    }
+
+    fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue {
         match value {
-            Value::Null => ResolvedValue::Null,
-            Value::Int(i) => ResolvedValue::Int(*i),
-            Value::Float(f) => ResolvedValue::Float(*f),
-            Value::Bool(b) => ResolvedValue::Bool(*b),
+            Value::Null => BexExternalValue::Null,
+            Value::Int(i) => BexExternalValue::Int(*i),
+            Value::Float(f) => BexExternalValue::Float(*f),
+            Value::Bool(b) => BexExternalValue::Bool(*b),
             Value::Object(idx) => {
                 let obj = vm.get_object(*idx);
                 match obj {
-                    Object::String(s) => ResolvedValue::String(s.clone()),
+                    Object::String(s) => BexExternalValue::String(s.clone()),
                     Object::Array(arr) => {
-                        let resolved: Vec<ResolvedValue> =
-                            arr.iter().map(|v| Self::resolve_value(vm, v)).collect();
-                        ResolvedValue::Array(resolved)
+                        let items: Vec<BexExternalValue> = arr
+                            .iter()
+                            .map(|v| Self::vm_arg_to_external(vm, v))
+                            .collect();
+                        BexExternalValue::Array {
+                            element_type: bex_external_types::Ty::Null,
+                            items,
+                        }
                     }
                     Object::Map(map) => {
-                        let resolved: indexmap::IndexMap<String, ResolvedValue> = map
+                        let entries: indexmap::IndexMap<String, BexExternalValue> = map
                             .iter()
-                            .map(|(k, v)| (k.clone(), Self::resolve_value(vm, v)))
+                            .map(|(k, v)| (k.clone(), Self::vm_arg_to_external(vm, v)))
                             .collect();
-                        ResolvedValue::Map(resolved)
+                        BexExternalValue::Map {
+                            key_type: bex_external_types::Ty::String,
+                            value_type: bex_external_types::Ty::Null,
+                            entries,
+                        }
                     }
+                    Object::Resource(handle) => BexExternalValue::Resource(handle.clone()),
                     other => {
-                        panic!("Cannot resolve object type to ResolvedValue: {other:?}")
+                        panic!(
+                            "Cannot convert object type to BexExternalValue for sys op: {other:?}"
+                        )
                     }
                 }
             }
         }
     }
 
-    /// Convert a `ResolvedValue` back to a VM Value.
-    fn unresolve_value(vm: &mut BexVm, resolved: ResolvedValue) -> Value {
-        match resolved {
-            ResolvedValue::Null => Value::Null,
-            ResolvedValue::Int(i) => Value::Int(i),
-            ResolvedValue::Float(f) => Value::Float(f),
-            ResolvedValue::Bool(b) => Value::Bool(b),
-            ResolvedValue::String(s) => vm.alloc_string(s),
-            ResolvedValue::Array(arr) => {
-                let values: Vec<Value> = arr
+    /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
+    fn external_to_vm_value(vm: &mut BexVm, external: BexExternalValue) -> Value {
+        match external {
+            BexExternalValue::Null => Value::Null,
+            BexExternalValue::Int(i) => Value::Int(i),
+            BexExternalValue::Float(f) => Value::Float(f),
+            BexExternalValue::Bool(b) => Value::Bool(b),
+            BexExternalValue::String(s) => vm.alloc_string(s),
+            BexExternalValue::Array { items, .. } => {
+                let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| Self::unresolve_value(vm, v))
+                    .map(|v| Self::external_to_vm_value(vm, v))
                     .collect();
                 vm.alloc_array(values)
             }
-            ResolvedValue::Map(map) => {
-                let values: indexmap::IndexMap<String, Value> = map
+            BexExternalValue::Map { entries, .. } => {
+                let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, Self::unresolve_value(vm, v)))
+                    .map(|(k, v)| (k, Self::external_to_vm_value(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
-            ResolvedValue::ResourceId(id) => {
-                // Store resource ID as an integer value
-                Value::Int(id.cast_signed())
+            BexExternalValue::Resource(handle) => vm.alloc_resource(handle),
+            // These shouldn't come from sys ops, but handle gracefully
+            BexExternalValue::Instance { .. } => {
+                panic!("Unexpected Instance from sys op")
+            }
+            BexExternalValue::Variant { .. } => {
+                panic!("Unexpected Variant from sys op")
+            }
+            BexExternalValue::Union { value, .. } => Self::external_to_vm_value(vm, *value),
+            BexExternalValue::Media { .. } => {
+                panic!("Unexpected Media from sys op")
             }
         }
     }
@@ -1313,7 +1364,7 @@ mod concurrent_tests {
 
         // This test is a placeholder demonstrating the concurrent execution pattern.
         // In a real implementation, you would:
-        // 1. Create a test BamlSnapshot with a simple function
+        // 1. Create a test BexProgram with a simple function
         // 2. Create a BexEngine from the snapshot
         // 3. Wrap it in Arc and spawn concurrent calls
         // 4. Verify all calls complete successfully

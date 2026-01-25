@@ -41,7 +41,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     /// Enum variant mappings (enum name -> variant name -> variant index).
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Shared object pool for strings, etc.
-    pub objects: &'obj mut ObjectPool<()>,
+    pub objects: &'obj mut ObjectPool,
 }
 
 use std::collections::HashMap;
@@ -51,8 +51,8 @@ use baml_compiler_hir::{self, ItemId, function_body, function_signature};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, CmpOp, Enum, ExternalOp, Function, FunctionKind, GlobalIndex,
-    Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
+    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, ExternalOp, Function, FunctionKind,
+    GlobalIndex, Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -62,9 +62,7 @@ pub use bex_vm_types::{
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(
-    db: &dyn baml_compiler_mir::Db,
-) -> Result<Program<()>, LoweringError> {
+pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
     compile_files(db, project.files(db))
 }
@@ -77,7 +75,7 @@ pub fn generate_project_bytecode(
 pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
-) -> Result<Program<()>, LoweringError> {
+) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let project = db.project();
 
@@ -198,7 +196,7 @@ pub fn compile_files(
                 .expect("external builtin must have ExternalOp mapping");
             FunctionKind::External(external_op)
         } else {
-            FunctionKind::Native(())
+            FunctionKind::NativeUnresolved
         };
 
         let builtin_fn = Function {
@@ -212,7 +210,7 @@ pub fn compile_files(
             viz_nodes: Vec::new(),
         };
         let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
-        program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
+        program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
     }
 
     // Compile each user function using MIR
@@ -320,7 +318,7 @@ pub fn compile_files(
                     .insert(signature.name.to_string(), fn_obj_idx);
 
                 // Add to globals
-                program.add_global(Value::Object(ObjectIndex::from_raw(fn_obj_idx)));
+                program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
             }
         }
     }

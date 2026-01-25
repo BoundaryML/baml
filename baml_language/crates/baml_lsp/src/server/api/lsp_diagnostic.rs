@@ -8,8 +8,10 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_compiler_diagnostics::{Diagnostic, Severity};
-use baml_db::FileId;
+use baml_db::{
+    FileId,
+    baml_compiler_diagnostics::{Diagnostic, Severity},
+};
 use lsp_types::{DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Url};
 
 use crate::edit::PositionEncoding;
@@ -228,8 +230,7 @@ pub fn compute_line_starts(source: &str) -> Vec<u32> {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler_diagnostics::DiagnosticId;
-    use baml_db::Span;
+    use baml_db::{Span, baml_compiler_diagnostics::DiagnosticId};
     use text_size::TextRange;
 
     use super::*;

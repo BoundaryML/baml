@@ -13,7 +13,7 @@ use baml_base::{FileId, Span};
 /// The compiler phase that produced a diagnostic.
 ///
 /// This enables grouping diagnostics by phase for display purposes
-/// (e.g., in `baml_tools_onionskin` TUI or `baml_tests` snapshots).
+/// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum DiagnosticPhase {
     /// Parsing phase errors (syntax errors from the parser)

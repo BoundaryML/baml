@@ -20,7 +20,6 @@ libc = { workspace = true }
 default = [  ]
 
 [dependencies]
-baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_ide = { workspace = true }
 baml_lsp_types = { workspace = true }
@@ -58,7 +57,7 @@ similar = { workspace = true }
 simple-logging = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "fs", "net", "time" ] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

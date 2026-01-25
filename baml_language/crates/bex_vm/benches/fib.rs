@@ -23,7 +23,8 @@ fn bootstrap_vm(input: &Program) -> BexVm {
         .expect("function not found");
 
     let mut vm = BexVm::from_program(program).expect("All native functions should be attached");
-    vm.set_entry_point(function_index, &input.args);
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    vm.set_entry_point(function_ptr, &input.args);
     vm
 }
 

@@ -681,7 +681,8 @@ mod tests {
 
     #[test]
     fn test_media_node_passthrough() {
-        use bex_vm_types::{MediaContent, MediaKind, MediaValue};
+        use baml_base::MediaKind;
+        use bex_vm_types::{MediaContent, MediaValue};
 
         // Test that Media nodes pass through unchanged
         let client = make_client(
@@ -879,7 +880,8 @@ mod tests {
     #[test]
     fn test_deeply_nested_content_in_message() {
         // Test message with deeply nested content
-        use bex_vm_types::{MediaContent, MediaKind, MediaValue};
+        use baml_base::MediaKind;
+        use bex_vm_types::{MediaContent, MediaValue};
 
         let client = make_client(
             RoleConfig::default(),

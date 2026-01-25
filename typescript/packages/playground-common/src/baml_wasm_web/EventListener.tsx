@@ -103,7 +103,7 @@ export const EventListener: React.FC = () => {
       if (!source) {
         return;
       }
-      if (source === ('react-devtools-bridge' as string)) {
+      if (typeof source === 'string' && source.startsWith('react-devtools-')) {
         // Ignore noisy React DevTools bridge chatter
         return;
       }

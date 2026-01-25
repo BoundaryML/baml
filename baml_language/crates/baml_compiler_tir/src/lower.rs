@@ -137,7 +137,7 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Null => Ty::Null,
 
         // Media types
-        TypeRef::Media(kind) => Ty::Media(kind.clone()),
+        TypeRef::Media(kind) => Ty::Media(*kind),
 
         // Named type via path
         TypeRef::Path(path) => lower_path_type_resolved_with_ctx(ctx, path),

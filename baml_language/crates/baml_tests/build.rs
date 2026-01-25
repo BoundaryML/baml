@@ -684,11 +684,15 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                             && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
                         {
                             writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
+                            // Use empty GlobalPool for compile-time display (no heap available)
+                            // Pass ObjectPool and compile-time globals to resolve names
+                            let empty_globals = bex_vm_types::indexable::GlobalPool::new();
                             let bytecode_table = bex_vm::debug::display_bytecode(
                                 func,
                                 &bex_vm::EvalStack::new(),
-                                &program.objects,
-                                &program.globals,
+                                &empty_globals,
+                                Some(&program.objects),
+                                Some(&program.globals),
                                 false,  // no colors
                             );
                             if bytecode_table.is_empty() {

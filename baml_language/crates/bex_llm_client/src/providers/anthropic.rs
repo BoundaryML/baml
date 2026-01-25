@@ -245,7 +245,8 @@ fn flatten_content_blocks(content: &PromptAst) -> Result<Vec<serde_json::Value>,
 fn media_to_content_block(
     media: &bex_vm_types::MediaValue,
 ) -> Result<serde_json::Value, ProviderError> {
-    use bex_vm_types::{MediaContent, MediaKind};
+    use baml_base::MediaKind;
+    use bex_vm_types::MediaContent;
 
     // Get mime type, defaulting based on media kind
     let mime_type = media.mime_type.as_deref().unwrap_or_else(|| match media.kind {
@@ -350,7 +351,8 @@ fn media_to_content_block(
 mod tests {
     use super::*;
     use bex_llm_types::{ModelFeatures, RoleConfig};
-    use bex_vm_types::{MediaContent, MediaKind, MediaValue};
+    use baml_base::MediaKind;
+    use bex_vm_types::{MediaContent, MediaValue};
     use indexmap::IndexMap;
 
     fn make_client(model: &str) -> ResolvedClient {

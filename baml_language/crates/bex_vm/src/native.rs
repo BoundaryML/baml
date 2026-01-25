@@ -11,10 +11,11 @@
 
 use std::{collections::HashMap, fmt::Write};
 
+use baml_base::MediaKind;
 use bex_vm_types::{
-    ObjectIndex,
+    HeapPtr,
     types::{
-        Future, HttpRequest, Instance, MediaContent, MediaKind, MediaValue, Object,
+        Future, HttpRequest, Instance, MediaContent, MediaValue, Object,
         PrimitiveClient, PromptAst, Type, Value,
     },
 };
@@ -234,24 +235,24 @@ impl NativeFunctions for VmNatives {
 fn deep_copy_value_recursive(
     vm: &mut BexVm,
     value: Value,
-    copied_objects: &mut HashMap<ObjectIndex, ObjectIndex>,
+    copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
 ) -> NativeFunctionResult {
     match value {
         // Primitive values are copied by value
         Value::Null | Value::Int(_) | Value::Float(_) | Value::Bool(_) => Ok(value),
 
         // Objects need deep copying
-        Value::Object(index) => {
+        Value::Object(ptr) => {
             // Check if we've already copied this object (handles circular references)
-            if let Some(&new_index) = copied_objects.get(&index) {
-                return Ok(Value::Object(new_index));
+            if let Some(&new_ptr) = copied_objects.get(&ptr) {
+                return Ok(Value::Object(new_ptr));
             }
 
             // Clone the object first to avoid borrow checker issues
-            let object = vm.get_object(index).clone();
+            let object = vm.get_object(ptr).clone();
 
             // Deep copy based on object type
-            let new_index = match object {
+            let new_ptr = match object {
                 Object::String(s) => {
                     // Strings are immutable, but we still create a new copy
                     vm.tlab.alloc(Object::String(s))
@@ -259,8 +260,8 @@ fn deep_copy_value_recursive(
 
                 Object::Array(values) => {
                     // First, register a placeholder to handle circular references
-                    let placeholder_index = vm.tlab.alloc(Object::Array(Vec::new()));
-                    copied_objects.insert(index, placeholder_index);
+                    let placeholder_ptr = vm.tlab.alloc(Object::Array(Vec::new()));
+                    copied_objects.insert(ptr, placeholder_ptr);
 
                     // Deep copy each element in the array
                     let mut new_values = Vec::with_capacity(values.len());
@@ -269,14 +270,14 @@ fn deep_copy_value_recursive(
                     }
 
                     // Update the placeholder with the actual array
-                    *vm.get_object_mut(placeholder_index) = Object::Array(new_values);
-                    placeholder_index
+                    *vm.get_object_mut(placeholder_ptr) = Object::Array(new_values);
+                    placeholder_ptr
                 }
 
                 Object::Map(map) => {
                     // First, register a placeholder to handle circular references
-                    let placeholder_index = vm.tlab.alloc(Object::Map(IndexMap::new()));
-                    copied_objects.insert(index, placeholder_index);
+                    let placeholder_ptr = vm.tlab.alloc(Object::Map(IndexMap::new()));
+                    copied_objects.insert(ptr, placeholder_ptr);
 
                     // Deep copy each key-value pair
                     let mut new_map = IndexMap::new();
@@ -286,17 +287,17 @@ fn deep_copy_value_recursive(
                     }
 
                     // Update the placeholder with the actual map
-                    *vm.get_object_mut(placeholder_index) = Object::Map(new_map);
-                    placeholder_index
+                    *vm.get_object_mut(placeholder_ptr) = Object::Map(new_map);
+                    placeholder_ptr
                 }
 
                 Object::Instance(instance) => {
                     // First, register a placeholder to handle circular references
-                    let placeholder_index = vm.tlab.alloc(Object::Instance(Instance {
+                    let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance {
                         class: instance.class,
                         fields: Vec::new(),
                     }));
-                    copied_objects.insert(index, placeholder_index);
+                    copied_objects.insert(ptr, placeholder_ptr);
 
                     // Deep copy each field in the instance
                     let mut new_fields = Vec::with_capacity(instance.fields.len());
@@ -305,11 +306,11 @@ fn deep_copy_value_recursive(
                     }
 
                     // Update the placeholder with the actual instance
-                    *vm.get_object_mut(placeholder_index) = Object::Instance(Instance {
+                    *vm.get_object_mut(placeholder_ptr) = Object::Instance(Instance {
                         class: instance.class,
                         fields: new_fields,
                     });
-                    placeholder_index
+                    placeholder_ptr
                 }
 
                 // These types don't contain nested objects that need deep copying
@@ -318,6 +319,7 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::Media(m) => vm.tlab.alloc(Object::Media(m)),
+                Object::Resource(r) => vm.tlab.alloc(Object::Resource(r)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
                 Object::PromptAst(a) => vm.tlab.alloc(Object::PromptAst(a)),
@@ -327,9 +329,9 @@ fn deep_copy_value_recursive(
             };
 
             // Record the mapping if not already done (for non-circular cases)
-            copied_objects.entry(index).or_insert(new_index);
+            copied_objects.entry(ptr).or_insert(new_ptr);
 
-            Ok(Value::Object(new_index))
+            Ok(Value::Object(new_ptr))
         }
     }
 }
@@ -340,7 +342,7 @@ fn deep_equals_recursive(
     vm: &BexVm,
     a: Value,
     b: Value,
-    visited: &mut HashMap<(ObjectIndex, ObjectIndex), bool>,
+    visited: &mut HashMap<(HeapPtr, HeapPtr), bool>,
 ) -> bool {
     match (a, b) {
         // Primitive values - direct comparison
@@ -353,17 +355,17 @@ fn deep_equals_recursive(
         (Value::Bool(a), Value::Bool(b)) => a == b,
 
         // Objects - need recursive comparison
-        (Value::Object(a_idx), Value::Object(b_idx)) => {
+        (Value::Object(a_ptr), Value::Object(b_ptr)) => {
             // Check if same reference (optimization)
-            if a_idx == b_idx {
+            if a_ptr == b_ptr {
                 return true;
             }
 
             // Check if we've already compared these objects (circular reference handling)
-            let key = if a_idx < b_idx {
-                (a_idx, b_idx)
+            let key = if a_ptr < b_ptr {
+                (a_ptr, b_ptr)
             } else {
-                (b_idx, a_idx)
+                (b_ptr, a_ptr)
             };
 
             if let Some(&result) = visited.get(&key) {
@@ -374,7 +376,7 @@ fn deep_equals_recursive(
             visited.insert(key, true);
 
             // Compare based on object type
-            let result = match (vm.get_object(a_idx), vm.get_object(b_idx)) {
+            let result = match (vm.get_object(a_ptr), vm.get_object(b_ptr)) {
                 (Object::String(a), Object::String(b)) => a == b,
 
                 (Object::Array(a_values), Object::Array(b_values)) => {
@@ -417,7 +419,7 @@ fn deep_equals_recursive(
                 }
 
                 // Functions are compared by reference
-                (Object::Function(_), Object::Function(_)) => a_idx == b_idx,
+                (Object::Function(_), Object::Function(_)) => a_ptr == b_ptr,
 
                 // Future comparison - compare the inner values if both are ready
                 (Object::Future(a_fut), Object::Future(b_fut)) => match (a_fut, b_fut) {
@@ -545,6 +547,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
             Object::Media(m) => Ok(format!("<type {}>", m.kind)),
+            Object::Resource(r) => Ok(format!("<{r}>")),
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PrimitiveClient(c) => Ok(format!("<primitive_client {}>", c.name)),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
@@ -555,8 +558,13 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
     }
 }
 
-// Public wrapper functions are auto-generated by the macro above
-pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmError> {
+/// Resolves native function pointers for unresolved native functions in objects.
+///
+/// At compile time, native functions are marked as `FunctionKind::NativeUnresolved`
+/// because the compiler doesn't have access to the VM's native function table.
+/// This function resolves those references by looking up the native function
+/// implementations at runtime.
+pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
     Ok(match object {
         Object::Function(function) => {
             let kind = match function.kind {
@@ -564,14 +572,19 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
                 bex_vm_types::FunctionKind::External(op) => {
                     bex_vm_types::FunctionKind::External(op)
                 }
-                bex_vm_types::FunctionKind::Native(()) => {
+                bex_vm_types::FunctionKind::NativeUnresolved => {
                     let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(
                             "Native function '{}' not found",
                             function.name
                         ))));
                     };
-                    bex_vm_types::FunctionKind::Native(native_function)
+                    // Store as type-erased pointer
+                    bex_vm_types::FunctionKind::Native(native_function as *const ())
+                }
+                bex_vm_types::FunctionKind::Native(ptr) => {
+                    // Already resolved, pass through
+                    bex_vm_types::FunctionKind::Native(ptr)
                 }
             };
             Object::Function(bex_vm_types::Function {
@@ -585,19 +598,7 @@ pub fn attach_builtins(object: Object<()>) -> Result<Object<NativeFunction>, VmE
                 viz_nodes: function.viz_nodes,
             })
         }
-        Object::Class(class) => Object::Class(class),
-        Object::Instance(instance) => Object::Instance(instance),
-        Object::Enum(enm) => Object::Enum(enm),
-        Object::Variant(variant) => Object::Variant(variant),
-        Object::String(string) => Object::String(string),
-        Object::Array(values) => Object::Array(values),
-        Object::Map(index_map) => Object::Map(index_map),
-        Object::Future(future) => Object::Future(future),
-        Object::Media(media_value) => Object::Media(media_value),
-        Object::PrimitiveClient(client) => Object::PrimitiveClient(client),
-        Object::PromptAst(ast) => Object::PromptAst(ast),
-        Object::HttpRequest(request) => Object::HttpRequest(request),
-        #[cfg(feature = "heap_debug")]
-        Object::Sentinel(kind) => Object::Sentinel(kind),
+        // All other object types pass through unchanged
+        other => other,
     })
 }

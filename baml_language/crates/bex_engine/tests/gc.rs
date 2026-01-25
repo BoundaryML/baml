@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use bex_engine::{BexEngine, BexExternalValue};
 use common::compile_for_engine;
+use sys_native::SysOpsExt;
 
 /// Test that a handle prevents the referenced object from being collected.
 #[tokio::test]
@@ -20,7 +21,7 @@ async fn test_handle_prevents_gc_collection() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
     // Get a handle to a string object
     let result = engine.call_function("return_string", &[]).await.unwrap();
@@ -47,7 +48,7 @@ async fn test_array_preserved_through_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
     // Get a handle to the array
     let result = engine.call_function("return_array", &[]).await.unwrap();
@@ -89,7 +90,7 @@ async fn test_gc_updates_forwarding_pointers() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
     // Create objects
     let result = engine.call_function("create_objects", &[]).await.unwrap();
@@ -123,7 +124,7 @@ async fn test_multiple_handles_survive_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
     // Create multiple handles
     let h1 = engine
@@ -164,7 +165,7 @@ async fn test_primitive_returns_are_external_values() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).unwrap();
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
     // Int should be BexExternalValue::Int
     let result = engine.call_function("return_int", &[]).await.unwrap();

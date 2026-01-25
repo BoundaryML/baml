@@ -32,16 +32,17 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
-baml_snapshot = { path = "crates/baml_snapshot" }
+bex_program = { path = "crates/bex_program" }
 bex_engine = { path = "crates/bex_engine" }
-bex_sys = { path = "crates/bex_sys" }
+sys_types = { path = "crates/sys_types" }
+sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
 baml_ide = { path = "crates/baml_ide" }
 baml_lsp = { path = "crates/baml_lsp" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_tests = { path = "crates/baml_tests" }
-baml_tools_onionskin = { path = "crates/baml_tools_onionskin" }
+tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
@@ -50,6 +51,7 @@ bex_jinja_runtime = { path = "crates/bex_jinja_runtime" }
 bex_llm_types = { path = "crates/bex_llm_types" }
 bex_llm_client = { path = "crates/bex_llm_client" }
 ir_stub = { path = "crates/ir_stub" }
+sys_resource_types = { path = "crates/sys_resource_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -58,6 +60,7 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 askama = { version = "0.14.0" }
 axum = { version = "0.8.4", features = [ "ws" ] }
+cargo_metadata = { version = "0.23.1" }
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 clap-cargo = "0.14.1"
@@ -72,10 +75,10 @@ divan = { package = "codspeed-divan-compat", version = "*" }
 filetime = "0.2.25"
 futures = { version = "0.3.30", features = [ "executor" ] }
 glob = { version = "0.3" }
+graphviz-rust = { version = "0.9" }
 ignore = { version = "0.4.22" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }
-insta-cmd = { version = "0.6.0" }
 is-macro = { version = "0.3.5" }
 itertools = "0.14.0"
 jod-thread = { version = "0.1.2" }
@@ -133,7 +136,7 @@ text-size = { version = "1.1" }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
-tokio = { version = "1.36", features = [ "full", "tracing" ] }
+tokio = { version = "1.36" }
 tower = "0.5"
 tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
 tracing = { version = "0.1.40" }
@@ -146,7 +149,6 @@ url = "2.5.2"
 walkdir = { version = "2.4" }
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
-which = { version = "6.0" }
 webbrowser = "1.0.5"
 wee_alloc = "0.4"
 [workspace.lints.rust]

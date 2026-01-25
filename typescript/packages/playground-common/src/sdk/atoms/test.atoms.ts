@@ -165,3 +165,15 @@ export interface PendingTestCommand {
 }
 
 export const pendingTestCommandAtom = atom<PendingTestCommand | null>(null);
+
+/**
+ * Pending function selection from URL parameter
+ * Used when playground is opened with ?function=FunctionName parameter
+ * Processed once after runtime is first created
+ */
+export interface PendingFunctionSelection {
+  functionName: string;
+  timestamp: number;
+}
+
+export const pendingFunctionSelectionAtom = atom<PendingFunctionSelection | null>(null);

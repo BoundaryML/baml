@@ -30,10 +30,10 @@ use std::{
 };
 
 use baml_base::{FileId, SourceFile};
-// Re-export BamlSnapshot for engine tests
-pub use baml_snapshot::BamlSnapshot;
+// Re-export BexProgram for engine tests
+pub use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ObjectIndex, Program as VmProgram, Value as VmValue};
+use bex_vm_types::{ConstValue, ObjectIndex, Program as VmProgram};
 
 // Re-export test types from crate::vm
 pub use crate::vm::{
@@ -113,7 +113,7 @@ impl TestDatabase {
 //
 
 /// Compile BAML source code into a VM program.
-pub fn compile_source(source: &str) -> VmProgram<()> {
+pub fn compile_source(source: &str) -> VmProgram {
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
@@ -121,11 +121,11 @@ pub fn compile_source(source: &str) -> VmProgram<()> {
         .expect("compile_files should succeed for valid test source")
 }
 
-/// Compile BAML source code into a `BamlSnapshot` with schema populated.
+/// Compile BAML source code into a `BexProgram` with schema populated.
 ///
 /// This function extracts function return types from the TIR so that
-/// `BamlSnapshot.functions` is properly populated for engine tests.
-pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
+/// `BexProgram.functions` is properly populated for engine tests.
+pub fn compile_source_with_schema(source: &str) -> BexProgram {
     use std::collections::HashMap;
 
     use baml_compiler_hir::{ItemId, file_item_tree, function_signature};
@@ -165,24 +165,24 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
                 let return_type = convert_tir_ty_to_snapshot_ty(&tir_return_type);
 
                 // Build params
-                let params: Vec<baml_snapshot::ParamDef> = signature
+                let params: Vec<bex_program::ParamDef> = signature
                     .params
                     .iter()
                     .map(|p| {
                         let (tir_ty, _) =
                             resolution_ctx.lower_type_ref(&p.type_ref, baml_base::Span::default());
-                        baml_snapshot::ParamDef {
+                        bex_program::ParamDef {
                             name: p.name.to_string(),
                             param_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
                         }
                     })
                     .collect();
 
-                let func_def = baml_snapshot::FunctionDef {
+                let func_def = bex_program::FunctionDef {
                     name: signature.name.to_string(),
                     params,
                     return_type,
-                    body: baml_snapshot::FunctionBody::Expr {
+                    body: bex_program::FunctionBody::Expr {
                         bytecode_index: 0, // Not needed for type checking
                     },
                 };
@@ -193,13 +193,13 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
                 let class = &item_tree[class_loc.id(&db)];
                 let class_name = class.name.to_string();
 
-                let fields: Vec<baml_snapshot::FieldDef> = class
+                let fields: Vec<bex_program::FieldDef> = class
                     .fields
                     .iter()
                     .map(|field| {
                         let (tir_ty, _) = resolution_ctx
                             .lower_type_ref(&field.type_ref, baml_base::Span::default());
-                        baml_snapshot::FieldDef {
+                        bex_program::FieldDef {
                             name: field.name.to_string(),
                             field_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
                             description: None,
@@ -208,7 +208,7 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
                     })
                     .collect();
 
-                let class_def = baml_snapshot::ClassDef {
+                let class_def = bex_program::ClassDef {
                     name: class_name.clone(),
                     fields,
                     description: None,
@@ -220,17 +220,17 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
                 let enum_def = &item_tree[enum_loc.id(&db)];
                 let enum_name = enum_def.name.to_string();
 
-                let variants: Vec<baml_snapshot::EnumVariantDef> = enum_def
+                let variants: Vec<bex_program::EnumVariantDef> = enum_def
                     .variants
                     .iter()
-                    .map(|variant| baml_snapshot::EnumVariantDef {
+                    .map(|variant| bex_program::EnumVariantDef {
                         name: variant.name.to_string(),
                         description: None,
                         alias: None,
                     })
                     .collect();
 
-                let enum_def = baml_snapshot::EnumDef {
+                let enum_def = bex_program::EnumDef {
                     name: enum_name.clone(),
                     variants,
                     description: None,
@@ -242,7 +242,7 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
         }
     }
 
-    BamlSnapshot {
+    BexProgram {
         classes,
         enums,
         functions,
@@ -256,9 +256,9 @@ pub fn compile_source_with_schema(source: &str) -> BamlSnapshot {
 ///
 /// The main difference is that TIR uses `FullyQualifiedName` for classes/enums,
 /// while Snapshot uses plain `String`.
-fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> baml_snapshot::Ty {
+fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::Ty {
     use baml_compiler_tir::Ty as TirTy;
-    use baml_snapshot::Ty as SnapTy;
+    use bex_program::Ty as SnapTy;
 
     match tir_ty {
         TirTy::Int => SnapTy::Int,
@@ -269,25 +269,25 @@ fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> baml_snapsho
 
         TirTy::Media(kind) => {
             let snap_kind = match kind {
-                baml_base::MediaKind::Image => baml_snapshot::MediaKind::Image,
-                baml_base::MediaKind::Audio => baml_snapshot::MediaKind::Audio,
-                baml_base::MediaKind::Video => baml_snapshot::MediaKind::Video,
-                baml_base::MediaKind::Pdf => baml_snapshot::MediaKind::Pdf,
-                baml_base::MediaKind::Generic => baml_snapshot::MediaKind::Image,
+                baml_base::MediaKind::Image => bex_program::MediaKind::Image,
+                baml_base::MediaKind::Audio => bex_program::MediaKind::Audio,
+                baml_base::MediaKind::Video => bex_program::MediaKind::Video,
+                baml_base::MediaKind::Pdf => bex_program::MediaKind::Pdf,
+                baml_base::MediaKind::Generic => bex_program::MediaKind::Image,
             };
             SnapTy::Media(snap_kind)
         }
 
         TirTy::Literal(val) => {
             let snap_val = match val {
-                baml_compiler_tir::LiteralValue::Int(i) => baml_snapshot::LiteralValue::Int(*i),
+                baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
                 baml_compiler_tir::LiteralValue::Float(s) => {
-                    baml_snapshot::LiteralValue::Int(s.parse().unwrap_or(0))
+                    bex_program::LiteralValue::Int(s.parse().unwrap_or(0))
                 }
                 baml_compiler_tir::LiteralValue::String(s) => {
-                    baml_snapshot::LiteralValue::String(s.clone())
+                    bex_program::LiteralValue::String(s.clone())
                 }
-                baml_compiler_tir::LiteralValue::Bool(b) => baml_snapshot::LiteralValue::Bool(*b),
+                baml_compiler_tir::LiteralValue::Bool(b) => bex_program::LiteralValue::Bool(*b),
             };
             SnapTy::Literal(snap_val)
         }
@@ -401,7 +401,8 @@ pub fn collect_vm_exec_states(
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    vm.set_entry_point(function_ptr, &[]);
 
     let mut states = Vec::new();
 
@@ -463,7 +464,8 @@ fn setup_and_exec_program(
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    vm.set_entry_point(function_ptr, &[]);
     let result = vm.exec();
     Ok((vm, result))
 }
@@ -476,7 +478,7 @@ fn setup_and_exec_program(
 pub struct BytecodeProgram {
     pub arity: usize,
     pub instructions: Vec<bex_vm_types::Instruction>,
-    pub constants: Vec<VmValue>,
+    pub constants: Vec<ConstValue>,
     pub expected: VmExecState,
 }
 
@@ -498,6 +500,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             scopes: vec![0; input.instructions.len()],
             instructions: input.instructions,
             constants: input.constants,
+            resolved_constants: Vec::new(), // Populated by BexHeap at load time
             jump_tables: Vec::new(),
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
@@ -514,17 +517,15 @@ pub fn assert_vm_executes_bytecode_with_inspection(
 
     let mut program = VmProgram::new();
     let fn_idx = program.add_object(bex_vm_types::Object::Function(function));
-    program.add_global(VmValue::Object(ObjectIndex::from_raw(fn_idx)));
+    program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_idx)));
     program
         .function_indices
         .insert("test_fn".to_string(), fn_idx);
 
-    let function_index = program
-        .function_index("test_fn")
-        .expect("test_fn should exist");
-
     let mut vm = BexVm::from_program(program)?;
-    vm.set_entry_point(function_index, &[]);
+    // Get HeapPtr for function from the heap
+    let function_ptr = vm.heap.compile_time_ptr(fn_idx);
+    vm.set_entry_point(function_ptr, &[]);
 
     let result = vm.exec()?;
 

@@ -69,6 +69,7 @@ import {
   highlightedBlocksAtom,
   flashRangesAtom,
   pendingTestCommandAtom,
+  pendingFunctionSelectionAtom,
 } from '../atoms/test.atoms';
 
 import type {
@@ -77,6 +78,7 @@ import type {
   WatchNotification,
   FlashRange,
   PendingTestCommand,
+  PendingFunctionSelection,
 } from '../atoms/test.atoms';
 import type { BamlRuntimeInterface } from '../runtime/BamlRuntimeInterface';
 import type { FunctionWithCallGraph } from '../interface';
@@ -575,5 +577,17 @@ export class JotaiStorage implements SDKStorage {
 
   getPendingTestCommand() {
     return this.store.get(pendingTestCommandAtom);
+  }
+
+  // ============================================================================
+  // Pending Function Selection (from URL parameter)
+  // ============================================================================
+
+  setPendingFunctionSelection(selection: PendingFunctionSelection | null) {
+    this.store.set(pendingFunctionSelectionAtom, selection);
+  }
+
+  getPendingFunctionSelection() {
+    return this.store.get(pendingFunctionSelectionAtom);
   }
 }

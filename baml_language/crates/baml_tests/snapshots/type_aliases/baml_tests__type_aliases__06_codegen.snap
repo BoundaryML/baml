@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -12,13 +12,13 @@ Function Bar (arity: 0, kind: Bytecode):
      1   RETURN         
 
 Function Baz (arity: 0, kind: Bytecode):
-     0   LOAD_CONST 0   (hello)
+     0   LOAD_CONST 0   ("hello")
      1   RETURN         
 
 Function EchoJSON (arity: 1, kind: Bytecode):
      0   ALLOC_INSTANCE 0   (<class NotJSON>)
      1   COPY 0             
-     2   LOAD_CONST 0       (Whoops)
+     2   LOAD_CONST 0       ("Whoops")
      3   STORE_FIELD 0      
      4   RETURN             
 

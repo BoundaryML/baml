@@ -20,6 +20,7 @@ baml-runtime = { path = "../baml-runtime", features = [
     "internal",
 ], default-features = false }
 baml-lsp-types = { path = "../baml-lsp-types" }
+chrono.workspace = true
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 generators-lib = { path = "../generators/utils/generators_lib" }
@@ -83,6 +84,7 @@ tokio-stream = "0.1.17"
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 tower = "0.5"
 webbrowser = "1.0.5"
+percent-encoding = "2.3.1"
 mime_guess = "2.0.5"
 
 [dev-dependencies]

@@ -59,6 +59,7 @@
 //! ```
 
 mod accessor;
+mod chunked_vec;
 mod gc;
 mod heap;
 mod heap_debugger;
