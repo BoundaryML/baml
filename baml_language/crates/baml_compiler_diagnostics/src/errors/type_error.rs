@@ -2,8 +2,7 @@
 // Type Errors
 // ============================================================================
 //
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 use baml_base::Span;
 
@@ -11,7 +10,7 @@ use baml_base::Span;
 ///
 /// Different compiler phases use different representations:
 /// - HIR uses `TypeRef` for types and `Span` for locations
-/// - TIR uses `Ty` for types and `ErrorLocation` (with ExprId etc.) for locations
+/// - TIR uses `Ty` for types and `ErrorLocation` (with `ExprId` etc.) for locations
 ///
 /// By parameterizing `TypeError` over this trait, we can:
 /// 1. Keep errors in a single enum definition
@@ -29,10 +28,10 @@ pub trait ErrorContext: Debug + Clone + PartialEq + Eq + Hash {
 /// This is used when we need a simple `TypeError` with spans,
 /// such as in early compiler phases or for diagnostic output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SpanContext<T>(std::marker::PhantomData<T>);
+pub struct SpanContext;
 
-impl<T: Debug + Clone + PartialEq + Eq + Hash> ErrorContext for SpanContext<T> {
-    type Ty = T;
+impl ErrorContext for SpanContext {
+    type Ty = String;
     type Location = Span;
 }
 

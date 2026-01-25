@@ -5,14 +5,13 @@
 
 use std::fmt::Write;
 
-use crate::TirTypeError;
 use baml_base::Span;
 use baml_compiler_hir::{
     BinaryOp, Expr, ExprBody, ExprId, FunctionBody, FunctionSignature, Literal, LlmBody, Pattern,
     Stmt, StmtId, UnaryOp,
 };
 
-use crate::{InferenceResult, TypeResolutionContext};
+use crate::{InferenceResult, TirTypeError, TypeResolutionContext};
 
 /// Renders a function's TIR as a tree showing expression structure with types.
 ///

@@ -2,7 +2,7 @@
 //!
 //! Separated from `ItemTree` to provide fine-grained incrementality.
 //! Signature changes invalidate type checking, but not name resolution.
-//! Spans are stored separately in SignatureSourceMap for incrementality.
+//! Spans are stored separately in `SignatureSourceMap` for incrementality.
 
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ use crate::{Name, SignatureSourceMap, type_ref::TypeRef};
 
 /// The signature of a function (everything except the body).
 ///
-/// Position-independent: spans are stored in SignatureSourceMap.
+/// Position-independent: spans are stored in `SignatureSourceMap`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     /// Function name (duplicated from `ItemTree` for convenience)

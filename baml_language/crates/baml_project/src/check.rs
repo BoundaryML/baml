@@ -121,7 +121,7 @@ pub fn collect_diagnostics(
                     for type_error in &inference_result.errors {
                         // Map the error to span-based context using the source map
                         let span_error = type_error.map_context(
-                            |ty| ty.to_string(),               // Convert Ty to String for display
+                            ToString::to_string,               // Convert Ty to String for display
                             |loc| loc.to_span(hir_source_map), // Resolve ErrorLocation to Span
                         );
                         diagnostics.push(span_error.to_diagnostic());

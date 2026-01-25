@@ -49,9 +49,7 @@ impl ToDiagnostic for ParseError {
 /// `ToDiagnostic` is implemented for `TypeError` with `SpanContext`, which uses
 /// `Span` for locations. TIR errors using `ErrorLocation` must first be converted
 /// to `SpanContext` before rendering as diagnostics.
-impl<T: std::fmt::Display + std::fmt::Debug + Clone + PartialEq + Eq + std::hash::Hash> ToDiagnostic
-    for TypeError<SpanContext<T>>
-{
+impl ToDiagnostic for TypeError<SpanContext> {
     fn to_diagnostic(&self) -> Diagnostic {
         let diag = match self {
             TypeError::TypeMismatch {
@@ -646,7 +644,7 @@ mod tests {
 
     #[test]
     fn test_type_error_to_diagnostic() {
-        let error: TypeError<SpanContext<String>> = TypeError::TypeMismatch {
+        let error: TypeError<SpanContext> = TypeError::TypeMismatch {
             expected: "int".to_string(),
             found: "string".to_string(),
             location: test_span(),

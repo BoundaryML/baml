@@ -5,10 +5,9 @@
 //! the "where" only at render time.
 //!
 //! This allows whitespace and comment changes to not invalidate type checking cache
-//! (once ExprBody no longer contains spans).
+//! (once `ExprBody` no longer contains spans).
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 use baml_base::Span;
 use baml_compiler_diagnostics::ErrorContext;
@@ -96,6 +95,7 @@ impl<Ty: std::fmt::Debug + Clone + PartialEq + Eq + Hash> ErrorContext for TirCo
 ///
 /// Maps HIR IDs back to their source spans, enabling accurate error locations
 /// without storing spans in the cached HIR structures.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HirSourceMap {
     /// Expression spans
@@ -181,7 +181,8 @@ impl HirSourceMap {
 /// Source map for function signatures.
 ///
 /// Maps signature components back to their source spans, enabling accurate
-/// error locations without storing spans in the cached FunctionSignature.
+/// error locations without storing spans in the cached `FunctionSignature`.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SignatureSourceMap {
     /// Span of the return type annotation

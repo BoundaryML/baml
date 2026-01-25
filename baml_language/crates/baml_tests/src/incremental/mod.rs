@@ -5,8 +5,10 @@
 
 mod scenarios;
 
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use baml_project::ProjectDatabase;
 use baml_workspace::Project;

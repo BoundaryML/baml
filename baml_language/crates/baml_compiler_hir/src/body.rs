@@ -113,7 +113,6 @@ pub struct MatchArmSpans {
     pub pattern_span: Span,
 }
 
-
 // IDs for arena indices
 pub type ExprId = Idx<Expr>;
 pub type StmtId = Idx<Stmt>;
@@ -523,7 +522,7 @@ struct LoweringContext {
     /// All names used in this function, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
 
-    /// Source map for tracking spans (separate from ExprBody for incrementality)
+    /// Source map for tracking spans (separate from `ExprBody` for incrementality)
     source_map: HirSourceMap,
 
     /// HIR diagnostics collected during lowering.
@@ -602,7 +601,8 @@ impl LoweringContext {
 
     fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
-        self.source_map.insert_pattern(id, self.span_from_range(range));
+        self.source_map
+            .insert_pattern(id, self.span_from_range(range));
         id
     }
 

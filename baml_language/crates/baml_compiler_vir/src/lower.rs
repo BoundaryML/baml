@@ -32,7 +32,6 @@ use text_size::TextRange;
 
 // Note: TextRange is still used for LoweringError spans (for error messages during lowering).
 // HirSourceMap is still needed to look up spans for LoweringError, but VIR itself no longer stores spans.
-
 use crate::{
     AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, SpreadField, Ty,
     UnaryOp,

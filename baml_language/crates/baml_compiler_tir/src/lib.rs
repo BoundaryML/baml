@@ -984,7 +984,7 @@ pub fn infer_function<'db>(
 
     // Convert return type TextRange to Span for diagnostics (if source map provided)
     let return_type_span = sig_source_map
-        .and_then(|sm| sm.return_type_span())
+        .and_then(SignatureSourceMap::return_type_span)
         .map(|range| Span::new(file_id, range));
 
     // Delegate to the body inference function
