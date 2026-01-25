@@ -1,43 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use crate::{apply_client, build_request};
-    use bex_llm_types::{ModelFeatures, PromptAst, ResolvedClient, RoleConfig};
+    use crate::{specialize_prompt, build_request};
+    use bex_llm_types::{ModelFeatures, ResolvedClient, RoleConfig};
+    use bex_vm_types::{PromptAst, Value};
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use std::collections::HashMap;
 
     fn make_prompt_ast() -> PromptAst {
-        let value = serde_json::json!({
-            "type": "vec",
-            "value": [
-                {
-                    "type": "message",
-                    "value": {
-                        "role": "system",
-                        "content": {
-                            "type": "str",
-                            "value": "You are a concise assistant."
-                        },
-                        "metadata": {
-                            "source": "snapshot-test"
-                        }
-                    }
-                },
-                {
-                    "type": "message",
-                    "value": {
-                        "role": "user",
-                        "content": {
-                            "type": "str",
-                            "value": "Summarize BAML in one sentence."
-                        },
-                        "metadata": {}
-                    }
-                }
-            ]
-        });
-
-        serde_json::from_value(value).unwrap()
+        PromptAst::Vec(vec![
+            PromptAst::Message {
+                role: "system".to_string(),
+                content: Box::new(PromptAst::String("You are a concise assistant.".to_string())),
+                metadata: Value::Null,
+            },
+            PromptAst::Message {
+                role: "user".to_string(),
+                content: Box::new(PromptAst::String("Summarize BAML in one sentence.".to_string())),
+                metadata: Value::Null,
+            },
+        ])
     }
 
     fn make_client(provider: &str, model: &str) -> ResolvedClient {
@@ -56,7 +38,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_apply_client() {
+    fn snapshot_specialize_prompt() {
         let mut remap = HashMap::new();
         remap.insert("system".to_string(), "user".to_string());
 
@@ -67,43 +49,28 @@ mod tests {
         };
 
         let ast = make_prompt_ast();
-        let result = apply_client(ast, &client).unwrap();
+        let result = specialize_prompt(ast, &client).unwrap();
         let snap = format!("{:#?}", result);
-        assert_snapshot!(snap, @"PromptAst {
-    span: None,
-    node: Vec(
-        [
-            PromptAst {
-                span: None,
-                node: Message {
-                    role: \"user\",
-                    content: PromptAst {
-                        span: None,
-                        node: Str(
-                            \"You are a concise assistant.\",
-                        ),
-                    },
-                    metadata: {
-                        \"source\": String(\"snapshot-test\"),
-                    },
+        assert_snapshot!(snap, @r###"
+        Vec(
+            [
+                Message {
+                    role: "user",
+                    content: String(
+                        "You are a concise assistant.",
+                    ),
+                    metadata: Null,
                 },
-            },
-            PromptAst {
-                span: None,
-                node: Message {
-                    role: \"user\",
-                    content: PromptAst {
-                        span: None,
-                        node: Str(
-                            \"Summarize BAML in one sentence.\",
-                        ),
-                    },
-                    metadata: {},
+                Message {
+                    role: "user",
+                    content: String(
+                        "Summarize BAML in one sentence.",
+                    ),
+                    metadata: Null,
                 },
-            },
-        ],
-    ),
-}");
+            ],
+        )
+        "###);
     }
 
     #[test]
@@ -112,30 +79,31 @@ mod tests {
         let prompt = make_prompt_ast();
         let request = build_request(&prompt, &client).unwrap();
         let snap = format!("{:#?}", request);
-        assert_snapshot!(snap, @"HttpRequest {
-    url: \"https://api.openai.com/v1/chat/completions\",
-    method: Post,
-    headers: {
-        \"Authorization\": \"Bearer test-key\",
-        \"Content-Type\": \"application/json\",
-    },
-    query_params: {},
-    body: Json(
-        Object {
-            \"messages\": Array [
+        assert_snapshot!(snap, @r###"
+        HttpRequest {
+            url: "https://api.openai.com/v1/chat/completions",
+            method: Post,
+            headers: {
+                "Authorization": "Bearer test-key",
+                "Content-Type": "application/json",
+            },
+            query_params: {},
+            body: Json(
                 Object {
-                    \"content\": String(\"You are a concise assistant.\"),
-                    \"role\": String(\"system\"),
-                    \"source\": String(\"snapshot-test\"),
+                    "messages": Array [
+                        Object {
+                            "content": String("You are a concise assistant."),
+                            "role": String("system"),
+                        },
+                        Object {
+                            "content": String("Summarize BAML in one sentence."),
+                            "role": String("user"),
+                        },
+                    ],
+                    "model": String("gpt-4o-mini"),
                 },
-                Object {
-                    \"content\": String(\"Summarize BAML in one sentence.\"),
-                    \"role\": String(\"user\"),
-                },
-            ],
-            \"model\": String(\"gpt-4o-mini\"),
-        },
-    ),
-}");
+            ),
+        }
+        "###);
     }
 }

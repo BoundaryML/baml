@@ -1,18 +1,18 @@
 //! Jinja runtime for BAML.
 //!
 //! This crate provides:
-//! - `render_prompt_vm` - Render a Jinja template with VM values
-//! - `PromptAst` - The result of rendering a prompt template
+//! - [`render_prompt_vm`] - Render a Jinja template with VM values, returning [`bex_vm_types::PromptAst`]
+//!
+//! The VM-native types use `HeapPtr` for media references to keep values in the VM heap.
 
 pub mod vm_value_to_jinja;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// Re-export prompt/runtime types
+// Re-export types needed for RenderContextVm
 pub use bex_llm_types::ResolvedClient;
 pub use bex_llm_types::output_format::OutputFormatContent;
-pub use bex_llm_types::{PromptAst, PromptAstNode};
 use bex_llm_types::output_format::{MapStyle, OutputFormatOptions, render as render_output_format};
 use indexmap::IndexMap;
 use minijinja::value::{from_args, Kwargs, Object, Value};
@@ -455,8 +455,6 @@ fn parse_rendered_to_vm_prompt_ast(
 ) -> Result<bex_vm_types::PromptAst, RenderError> {
     let mut chat_messages = vec![];
     let mut role: Option<String> = None;
-    let mut meta: Option<HashMap<String, serde_json::Value>> = None;
-    let mut allow_duplicate_role = false;
 
     for chunk in rendered.split(MAGIC_CHAT_ROLE_DELIMITER) {
         if chunk.starts_with(":baml-start-baml:") && chunk.ends_with(":baml-end-baml:") {
@@ -472,17 +470,9 @@ fn parse_rendered_to_vm_prompt_ast(
                 if let Some(role_val) = parsed.remove("role") {
                     role = Some(role_val.as_str().unwrap_or("").to_string());
                 }
-
-                allow_duplicate_role = parsed
-                    .remove("__baml_allow_dupe_role__")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-
-                if parsed.is_empty() {
-                    meta = None;
-                } else {
-                    meta = Some(parsed);
-                }
+                // Note: __baml_allow_dupe_role__ and other metadata are parsed here
+                // but not currently stored in the VM PromptAst. They could be handled by
+                // specialize_prompt at a higher level if needed.
             }
         } else if role.is_none() && chunk.is_empty() {
             // Discard whitespace before first _.chat()
@@ -543,27 +533,10 @@ fn parse_rendered_to_vm_prompt_ast(
                     bex_vm_types::PromptAst::Vec(parts)
                 };
 
-                // Convert metadata to VM Value
-                let metadata = if allow_duplicate_role || meta.is_some() {
-                    let mut map = IndexMap::new();
-                    if let Some(meta) = &meta {
-                        for (key, value) in meta {
-                            map.insert(key.clone(), json_to_vm_value(value));
-                        }
-                    }
-                    if allow_duplicate_role {
-                        map.insert(
-                            "__baml_allow_dupe_role__".to_string(),
-                            bex_vm_types::Value::Bool(true),
-                        );
-                    }
-                    // Note: For simplicity, we store the map as Null if it would require heap allocation.
-                    // In a full implementation, we'd need to allocate a Map object on the heap.
-                    // For now, metadata flags are checked inline.
-                    bex_vm_types::Value::Null
-                } else {
-                    bex_vm_types::Value::Null
-                };
+                // Metadata is stored as Null for now - heap allocation would be needed
+                // for proper Map storage. Metadata flags like __baml_allow_dupe_role__
+                // are handled at a higher level (specialize_prompt).
+                let metadata = bex_vm_types::Value::Null;
 
                 let final_role = match role.as_ref() {
                     Some(r) if allowed_roles.contains(r) => r.clone(),
@@ -584,24 +557,4 @@ fn parse_rendered_to_vm_prompt_ast(
     }
 
     Ok(bex_vm_types::PromptAst::Vec(chat_messages))
-}
-
-/// Convert a JSON value to a VM Value.
-fn json_to_vm_value(json: &serde_json::Value) -> bex_vm_types::Value {
-    match json {
-        serde_json::Value::Null => bex_vm_types::Value::Null,
-        serde_json::Value::Bool(b) => bex_vm_types::Value::Bool(*b),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                bex_vm_types::Value::Int(i)
-            } else if let Some(f) = n.as_f64() {
-                bex_vm_types::Value::Float(f)
-            } else {
-                bex_vm_types::Value::Null
-            }
-        }
-        // Strings, arrays, and objects would require heap allocation
-        // For metadata purposes, we only need primitives
-        _ => bex_vm_types::Value::Null,
-    }
 }

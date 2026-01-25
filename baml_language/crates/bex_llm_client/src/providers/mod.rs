@@ -6,7 +6,8 @@
 pub mod anthropic;
 pub mod openai;
 
-use bex_llm_types::{HttpRequest, PromptAst, ResolvedClient};
+use bex_llm_types::{HttpRequest, ResolvedClient};
+use bex_vm_types::PromptAst;
 
 /// Errors that can occur during provider request building.
 #[derive(Debug, Clone)]
@@ -55,7 +56,7 @@ pub fn build_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bex_llm_types::{ModelFeatures, PromptAstNode, RoleConfig};
+    use bex_llm_types::{ModelFeatures, RoleConfig};
     use indexmap::IndexMap;
 
     fn make_client(provider: &str, model: &str) -> ResolvedClient {
@@ -75,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_to_openai() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("openai", "gpt-4");
 
         let request = build_request(&prompt, &client).unwrap();
@@ -85,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_to_openai_generic() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("openai-generic", "custom-model");
 
         let request = build_request(&prompt, &client).unwrap();
@@ -96,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_to_anthropic() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("anthropic", "claude-3-opus-20240229");
 
         let request = build_request(&prompt, &client).unwrap();
@@ -106,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_unsupported_provider() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("unknown-provider", "some-model");
 
         let result = build_request(&prompt, &client);
@@ -143,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_openai_and_anthropic_have_different_auth() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
 
         // OpenAI uses Bearer auth
         let openai_client = make_client("openai", "gpt-4");
@@ -164,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_anthropic_has_version_header() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("anthropic", "claude-3-opus-20240229");
 
         let request = build_request(&prompt, &client).unwrap();
@@ -173,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_anthropic_has_max_tokens_default() {
-        let prompt = PromptAst::without_span(PromptAstNode::Str("Hello".to_string()));
+        let prompt = PromptAst::String("Hello".to_string());
         let client = make_client("anthropic", "claude-3-opus-20240229");
 
         let request = build_request(&prompt, &client).unwrap();

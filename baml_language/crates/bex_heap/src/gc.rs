@@ -310,11 +310,11 @@ impl BexHeap {
                     }
                 }
             }
-            // PrimitiveClient has options ObjectIndex
+            // PrimitiveClient has options HeapPtr
             Object::PrimitiveClient(client) => {
                 worklist.push(client.options);
             }
-            // PromptAst is recursive with ObjectIndex references
+            // PromptAst is recursive with HeapPtr references
             Object::PromptAst(prompt) => {
                 add_prompt_ast_refs_to_worklist(prompt, worklist);
             }
@@ -332,7 +332,7 @@ impl BexHeap {
     }
 }
 
-/// Recursively add ObjectIndex references from a PromptAst to the worklist.
+/// Recursively add HeapPtr references from a PromptAst to the worklist.
 fn add_prompt_ast_refs_to_worklist(prompt: &bex_vm_types::PromptAst, worklist: &mut Vec<HeapPtr>) {
     use bex_vm_types::PromptAst;
     match prompt {
@@ -353,7 +353,7 @@ fn add_prompt_ast_refs_to_worklist(prompt: &bex_vm_types::PromptAst, worklist: &
     }
 }
 
-/// Recursively fix up ObjectIndex references in a PromptAst.
+/// Recursively fix up HeapPtr references in a PromptAst.
 fn fixup_prompt_ast_refs(
     prompt: &mut bex_vm_types::PromptAst,
     forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>,
@@ -440,13 +440,13 @@ impl BexHeap {
                     }
                 }
             }
-            // PrimitiveClient has options ObjectIndex
+            // PrimitiveClient has options HeapPtr
             Object::PrimitiveClient(client) => {
                 if let Some(&new_idx) = forwarding.get(&client.options) {
                     client.options = new_idx;
                 }
             }
-            // PromptAst is recursive with ObjectIndex references
+            // PromptAst is recursive with HeapPtr references
             Object::PromptAst(prompt) => {
                 fixup_prompt_ast_refs(prompt, forwarding);
             }
@@ -539,7 +539,7 @@ mod tests {
     #[test]
     #[ignore = "Requires heap_debug feature and epoch validation which now uses HeapPtr"]
     fn test_gc_stale_runtime_index_panics() {
-        // This test was checking that stale ObjectIndex causes panic.
+        // This test was checking that stale HeapPtr causes panic.
         // With HeapPtr, the safety model is different - we need to update
         // how epoch validation works with pointers.
         //
@@ -573,7 +573,7 @@ mod tests {
     #[test]
     #[ignore = "Requires heap_debug feature with Instance/Variant using HeapPtr"]
     fn test_full_verify_panics_on_bad_variant() {
-        // This test creates a Variant with an ObjectIndex, which is now HeapPtr
+        // This test creates a Variant with a HeapPtr
         // We need to create a valid HeapPtr pointing to an Enum.
         //
         // use std::panic::{AssertUnwindSafe, catch_unwind};
