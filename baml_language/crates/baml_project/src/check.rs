@@ -117,14 +117,13 @@ pub fn collect_diagnostics(
                         *func_loc,
                     );
 
-                    // Convert TIR type errors (with ErrorLocation) to span-based errors for diagnostics
+                    // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
                     for type_error in &inference_result.errors {
-                        // Map the error to span-based context using the source map
-                        let span_error = type_error.map_context(
-                            ToString::to_string,               // Convert Ty to String for display
-                            |loc| loc.to_span(hir_source_map), // Resolve ErrorLocation to Span
+                        diagnostics.push(
+                            type_error.to_diagnostic(ToString::to_string, |loc| {
+                                loc.to_span(hir_source_map)
+                            }),
                         );
-                        diagnostics.push(span_error.to_diagnostic());
                     }
                 }
             }
