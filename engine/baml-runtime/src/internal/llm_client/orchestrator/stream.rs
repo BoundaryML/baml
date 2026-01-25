@@ -479,6 +479,14 @@ where
                 // We must NOT emit failure events for intermediate retries because the
                 // TypeScript/Python client will throw immediately on receiving an error event,
                 // even though we're about to retry and may succeed.
+                //
+                // TODO: If a stream yields partial chunks before failing mid-stream, those
+                // chunks have already been emitted via on_event in run_parser_loop. When the
+                // retry starts, fresh chunks will also be emitted. Users iterating over the
+                // stream would see partials from both attempts (the stream may appear to
+                // "reset" or go backwards). The final response from getFinalResponse() will
+                // be correct. To fully handle mid-stream failures, we'd need to buffer chunks
+                // until the stream completes successfully, which would hurt streaming latency.
                 let is_success = matches!(final_response, LLMResponse::Success(_));
                 let should_emit_event = is_success || is_last_node;
 
