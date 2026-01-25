@@ -6,7 +6,7 @@ import * as http from "http";
  * When a streaming request fails and BAML retries, the chunks from the retried
  * stream should be yielded to the user.
  *
- * Bug report: Discord (Anders - 2025-01-26)
+ * Bug report: Discord
  * - Using plain string streaming with Anthropic provider
  * - Ephemeral errors like "bad MAC" cause retries
  * - b.stream will RETRY the request, but will NOT yield the text chunks
