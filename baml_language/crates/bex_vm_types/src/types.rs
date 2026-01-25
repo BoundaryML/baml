@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
+use sys_resource_types::ResourceHandle;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 

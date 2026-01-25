@@ -761,11 +761,11 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_program",
- "bex_resource_types",
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
  "sys_native",
+ "sys_resource_types",
  "sys_types",
  "tempfile",
  "thiserror 2.0.17",
@@ -779,9 +779,9 @@ version = "0.0.0"
 dependencies = [
  "baml_base",
  "bex_program",
- "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "sys_resource_types",
  "tokio",
 ]
 
@@ -804,10 +804,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bex_resource_types"
-version = "0.0.0"
-
-[[package]]
 name = "bex_vm"
 version = "0.0.0"
 dependencies = [
@@ -818,12 +814,12 @@ dependencies = [
  "baml_compiler_emit",
  "baml_tests",
  "bex_heap",
- "bex_resource_types",
  "bex_vm_types",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
  "paste",
+ "sys_resource_types",
  "thiserror 2.0.17",
  "tokio",
 ]
@@ -838,11 +834,11 @@ dependencies = [
  "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
- "bex_resource_types",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
  "paste",
+ "sys_resource_types",
  "tokio",
 ]
 
@@ -4226,18 +4222,22 @@ name = "sys_native"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
- "bex_resource_types",
+ "sys_resource_types",
  "sys_types",
  "tokio",
 ]
+
+[[package]]
+name = "sys_resource_types"
+version = "0.0.0"
 
 [[package]]
 name = "sys_types"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
- "bex_resource_types",
  "bex_vm_types",
+ "sys_resource_types",
  "thiserror 2.0.17",
  "tokio",
 ]

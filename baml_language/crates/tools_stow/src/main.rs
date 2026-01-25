@@ -1710,6 +1710,7 @@ fn generate_dependency_graph_svg(
 
             let is_external_target = graph_external_deps.contains(to);
             let source_namespace = config.get_namespace_for_crate(from);
+            let target_namespace = config.get_namespace_for_crate(to);
 
             // Get features for this crate's dependency on the external target
             let source_features: Option<&HashSet<String>> = if is_external_target {
@@ -1718,10 +1719,13 @@ fn generate_dependency_graph_svg(
                 None
             };
 
-            // For external targets, only apply transitive reduction if there's a path
-            // through an intermediate crate in the SAME namespace as the source,
-            // AND the intermediate has the same features for that dependency.
-            // This ensures dependencies with different features are always shown.
+            // Transitive reduction rules:
+            // - For internal targets: reduce if intermediate is in same namespace as TARGET
+            //   This keeps first cross-namespace edge but reduces redundant ones
+            //   (e.g., ns1_A -> ns2_B is reduced when ns1_A -> ns2_A -> ns2_B exists)
+            // - For external targets: reduce if intermediate is in same namespace as SOURCE
+            //   This keeps one edge per namespace to external deps
+            //   (e.g., baml_compiler_hir -> salsa reduced when baml_base -> salsa exists)
             let is_redundant = adjacency[src].iter().any(|&intermediate| {
                 if intermediate == dst {
                     return false;
@@ -1729,20 +1733,24 @@ fn generate_dependency_graph_svg(
                 if !reachable[intermediate][dst] {
                     return false;
                 }
-                // For external targets, only count intermediates in the same namespace
-                // AND with the same features
+                let intermediate_name = nodes[intermediate];
+                let intermediate_namespace = config.get_namespace_for_crate(intermediate_name);
+
+                // Check namespace based on whether target is external or internal
+                let reference_namespace = if is_external_target {
+                    source_namespace
+                } else {
+                    target_namespace
+                };
+                let same_namespace = match (reference_namespace, intermediate_namespace) {
+                    (Some(ref_ns), Some(int_ns)) => ref_ns.name == int_ns.name,
+                    _ => false,
+                };
+                if !same_namespace {
+                    return false;
+                }
+                // For external targets, also check if features are the same
                 if is_external_target {
-                    let intermediate_name = nodes[intermediate];
-                    let intermediate_namespace = config.get_namespace_for_crate(intermediate_name);
-                    // Both must be in the same namespace for it to count as redundant
-                    let same_namespace = match (source_namespace, intermediate_namespace) {
-                        (Some(src_ns), Some(int_ns)) => src_ns.name == int_ns.name,
-                        _ => false,
-                    };
-                    if !same_namespace {
-                        return false;
-                    }
-                    // Also check if features are the same
                     let intermediate_features = crate_features
                         .get(intermediate_name)
                         .and_then(|deps| deps.get(*to));

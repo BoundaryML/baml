@@ -24,8 +24,8 @@
 
 // Re-export Ty from bex_program for convenience
 pub use bex_program::Ty;
-use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
+use sys_resource_types::ResourceHandle;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
 ///
@@ -182,9 +182,9 @@ impl BexExternalValue {
                 baml_base::MediaKind::Pdf => "pdf",
                 baml_base::MediaKind::Generic => "media",
             },
-            BexExternalValue::Resource(handle) => match handle.kind {
-                bex_resource_types::ResourceType::File => "file",
-                bex_resource_types::ResourceType::Socket => "socket",
+            BexExternalValue::Resource(handle) => match handle.kind() {
+                sys_resource_types::ResourceType::File => "file",
+                sys_resource_types::ResourceType::Socket => "socket",
             },
         }
     }
@@ -197,9 +197,9 @@ mod tests {
     #[test]
     fn test_resource_variant_construction() {
         // Test that we can construct a Resource variant with an opaque handle
-        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
+        let handle = sys_resource_types::ResourceHandle::new_without_cleanup(
             1,
-            bex_resource_types::ResourceType::File,
+            sys_resource_types::ResourceType::File,
             "test.txt".to_string(),
         );
 
@@ -211,9 +211,9 @@ mod tests {
 
     #[test]
     fn test_resource_socket_type_name() {
-        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
+        let handle = sys_resource_types::ResourceHandle::new_without_cleanup(
             2,
-            bex_resource_types::ResourceType::Socket,
+            sys_resource_types::ResourceType::Socket,
             "localhost:8080".to_string(),
         );
 

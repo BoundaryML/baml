@@ -47,7 +47,7 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
-bex_resource_types = { path = "crates/bex_resource_types" }
+sys_resource_types = { path = "crates/sys_resource_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies

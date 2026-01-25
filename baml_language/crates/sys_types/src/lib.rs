@@ -8,10 +8,10 @@ use std::{future::Future, pin::Pin};
 
 // Re-export BexExternalValue for ops
 pub use bex_external_types::BexExternalValue;
-// Re-export resource types
-pub use bex_resource_types::{ResourceHandle, ResourceType};
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
+// Re-export resource types
+pub use sys_resource_types::{ResourceHandle, ResourceType};
 
 // ============================================================================
 // Operation Errors
@@ -217,7 +217,7 @@ impl SysOpResult {
 // Host Resource Abstraction
 // ============================================================================
 
-// Re-export ResourceType and ResourceHandle from bex_resource_types
+// Re-export ResourceType and ResourceHandle from sys_resource_types
 // (already done above)
 
 /// Callback trait for host to release resources when GC collects them.

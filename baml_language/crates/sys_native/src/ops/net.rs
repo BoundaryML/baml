@@ -51,7 +51,7 @@ async fn read_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
     };
 
     let stream_mutex = REGISTRY
-        .get_socket(handle.id)
+        .get_socket(handle.key())
         .ok_or_else(|| OpError::Other("Socket handle is invalid or has been closed".into()))?;
 
     let mut stream = stream_mutex.lock().await;
@@ -74,7 +74,7 @@ pub(crate) fn close(args: Vec<BexExternalValue>) -> SysOpResult {
 }
 
 fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    use bex_resource_types::ResourceType;
+    use sys_resource_types::ResourceType;
 
     let handle = match args.into_iter().next() {
         Some(BexExternalValue::Resource(h)) => h,
@@ -86,7 +86,7 @@ fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> 
         }
     };
 
-    if handle.kind != ResourceType::Socket {
+    if handle.kind() != ResourceType::Socket {
         return Err(OpError::ResourceTypeMismatch { expected: "socket" });
     }
 

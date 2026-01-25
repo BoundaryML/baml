@@ -8,7 +8,7 @@ license.workspace = true
 
 [dependencies]
 bex_external_types = { workspace = true }
-bex_resource_types = { workspace = true }
+sys_resource_types = { workspace = true }
 sys_types = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util" ] }
 

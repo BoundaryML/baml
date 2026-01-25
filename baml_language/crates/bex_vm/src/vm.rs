@@ -17,7 +17,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
-use bex_resource_types::ResourceHandle;
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
@@ -25,6 +24,7 @@ use bex_vm_types::{
     types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
 };
 use indexmap::IndexMap;
+use sys_resource_types::ResourceHandle;
 
 use crate::{
     NativeFunction, StackTrace,

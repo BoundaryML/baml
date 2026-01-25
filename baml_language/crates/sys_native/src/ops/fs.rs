@@ -51,7 +51,7 @@ async fn read_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
     };
 
     let file_mutex = REGISTRY
-        .get_file(handle.id)
+        .get_file(handle.key())
         .ok_or_else(|| OpError::Other("File handle is invalid or has been closed".into()))?;
 
     let mut file = file_mutex.lock().await;
@@ -72,7 +72,7 @@ pub(crate) fn close(args: Vec<BexExternalValue>) -> SysOpResult {
 }
 
 fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    use bex_resource_types::ResourceType;
+    use sys_resource_types::ResourceType;
 
     let handle = match args.into_iter().next() {
         Some(BexExternalValue::Resource(h)) => h,
@@ -84,7 +84,7 @@ fn close_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> 
         }
     };
 
-    if handle.kind != ResourceType::File {
+    if handle.kind() != ResourceType::File {
         return Err(OpError::ResourceTypeMismatch { expected: "file" });
     }
 
