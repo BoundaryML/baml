@@ -389,8 +389,15 @@ impl BamlTracer {
     }
 
     pub(crate) fn flush(&self) -> Result<()> {
-        if let Some(ref tracer) = self.tracer {
-            tracer.flush().context("Failed to flush BAML traces")?;
+        // ThreadedTracer (publisher v1) is enabled by default, can be disabled with ENABLE_PUBLISHERV1=false
+        let enable_v1 = std::env::var("ENABLE_PUBLISHERV1")
+            .map(|v| v != "false" && v != "0")
+            .unwrap_or(true);
+
+        if enable_v1 {
+            if let Some(ref tracer) = self.tracer {
+                tracer.flush().context("Failed to flush BAML traces")?;
+            }
         }
 
         Ok(())
@@ -728,9 +735,21 @@ impl BamlTracer {
         baml_log::elog!(log_level, &event);
 
         let new_call_ids = event_chain.iter().map(|s| s.new_call_id.clone()).collect();
-        if let Some(tracer) = &self.tracer {
-            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, call))?;
-            guard.finalize();
+
+        // ThreadedTracer (publisher v1) is enabled by default.
+        // Set ENABLE_PUBLISHERV1=false to disable (e.g., to avoid crashes in forked processes
+        // where the mpsc channel from the parent process is invalid).
+        let enable_v1 = std::env::var("ENABLE_PUBLISHERV1")
+            .map(|v| v != "false" && v != "0")
+            .unwrap_or(true);
+
+        if enable_v1 {
+            if let Some(tracer) = &self.tracer {
+                tracer.submit(response.to_log_schema(&self.options, event_chain, tags, call))?;
+                guard.finalize();
+            } else {
+                guard.done();
+            }
         } else {
             guard.done();
         }

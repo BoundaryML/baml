@@ -1,0 +1,25 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rqworker:
+    build:
+      context: ../..
+      dockerfile: integ-tests/python-multiprocessing/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+      - REDIS_HOST=redis
+    command: ["python", "-m", "app.manage", "rqworker", "async"]

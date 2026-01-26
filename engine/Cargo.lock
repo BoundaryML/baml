@@ -1114,6 +1114,7 @@ name = "baml-python-ffi"
 version = "0.218.0"
 dependencies = [
  "anyhow",
+ "backtrace",
  "baml-cli",
  "baml-compiler",
  "baml-ids",

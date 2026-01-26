@@ -183,3 +183,6 @@ _site/
 
 # claude
 .claude/
+rpi/
+
+*.rdb

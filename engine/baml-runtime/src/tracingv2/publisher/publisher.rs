@@ -56,38 +56,211 @@ pub enum BlobUploaderMessage {
     Shutdown(tokio::sync::oneshot::Sender<()>),
 }
 
-/// Global publisher channel.
-/// When the module is first used, we create a bounded channel and then spawn the publisher task.
-/// The channel capacity is limited to 10 batches worth of events to prevent unbounded memory growth.
-static PUBLISHING_CHANNEL: OnceCell<mpsc::Sender<PublisherMessage>> = OnceCell::new();
+/// Global publisher state that can be reinitialized after fork.
+/// Using RwLock<Option<...>> instead of OnceCell so we can reinitialize in forked children.
 #[cfg(not(target_arch = "wasm32"))]
-static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
-static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
+struct PublisherState {
+    channel: mpsc::Sender<PublisherMessage>,
+    task: Arc<tokio::task::JoinHandle<()>>,
+    blob_channel: mpsc::Sender<BlobUploaderMessage>,
+    blob_task: Arc<tokio::task::JoinHandle<()>>,
+    init_pid: u32,
+    // Store what we need to reinitialize (rt is created fresh on reinit)
+    lookup: Arc<AstSignatureWrapper>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+static PUBLISHER_STATE: std::sync::RwLock<Option<PublisherState>> = std::sync::RwLock::new(None);
+
+// Keep OnceCell for wasm32 where we don't have fork issues
+#[cfg(target_arch = "wasm32")]
+static PUBLISHING_CHANNEL: OnceCell<mpsc::Sender<PublisherMessage>> = OnceCell::new();
+#[cfg(target_arch = "wasm32")]
 static BLOB_UPLOADER_CHANNEL: OnceCell<mpsc::Sender<BlobUploaderMessage>> = OnceCell::new();
 
-fn get_publish_channel(allow_missing: bool) -> Option<&'static mpsc::Sender<PublisherMessage>> {
+/// Check if we're in a forked child process (different PID from when publisher was initialized).
+#[cfg(not(target_arch = "wasm32"))]
+fn is_in_forked_child() -> bool {
+    let state = PUBLISHER_STATE.read().unwrap();
+    match &*state {
+        Some(s) => s.init_pid != std::process::id(),
+        None => false,
+    }
+}
+
+/// Check if publisher needs reinitialization (we're in a forked child).
+#[cfg(not(target_arch = "wasm32"))]
+fn needs_reinit() -> bool {
+    let state = PUBLISHER_STATE.read().unwrap();
+    match &*state {
+        Some(s) => s.init_pid != std::process::id(),
+        None => false,
+    }
+}
+
+/// Clear publisher state so it can be reinitialized.
+#[cfg(not(target_arch = "wasm32"))]
+fn clear_publisher_state() {
+    let mut state = PUBLISHER_STATE.write().unwrap();
+    *state = None;
+}
+
+fn get_publish_channel(allow_missing: bool) -> Option<mpsc::Sender<PublisherMessage>> {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let Some(join_handle) = PUBLISHING_TASK.get() else {
-            if !allow_missing {
-                // baml_log::fatal_once!(
-                //     "Tracing publisher not started. Report this bug to the BAML team."
-                // );
-                // TODO: redo this logic -- we dont start the publisher if there's no api key for example.
+        // First check if we need to reinitialize (PID mismatch)
+        let needs_reinit = {
+            let state = PUBLISHER_STATE.read().unwrap();
+            match &*state {
+                Some(s) => s.init_pid != std::process::id(),
+                None => false,
             }
-            return None;
         };
-        if join_handle.is_finished() {
-            baml_log::fatal_once!(
-                "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
+
+        if needs_reinit {
+            // Get the stored lookup, then reinitialize
+            let lookup = {
+                let state = PUBLISHER_STATE.read().unwrap();
+                match &*state {
+                    Some(s) => s.lookup.clone(),
+                    None => return None,
+                }
+            };
+
+            eprintln!(
+                "[BAML Publisher] PID mismatch detected (current: {}), reinitializing publisher...",
+                std::process::id()
             );
-            return None;
+
+            // Clear and reinitialize (will create fresh tokio runtime)
+            reinitialize_publisher(lookup);
+        }
+
+        // Now get the channel
+        let state = PUBLISHER_STATE.read().unwrap();
+        match &*state {
+            Some(s) => {
+                if s.task.is_finished() {
+                    baml_log::fatal_once!(
+                        "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
+                    );
+                    return None;
+                }
+                Some(s.channel.clone())
+            }
+            None => {
+                if !allow_missing {
+                    // TODO: redo this logic -- we dont start the publisher if there's no api key for example.
+                }
+                None
+            }
         }
     }
+    #[cfg(target_arch = "wasm32")]
     {
-        let channel = PUBLISHING_CHANNEL.get();
-        channel
+        PUBLISHING_CHANNEL.get().cloned()
     }
+}
+
+/// Reinitialize the publisher with stored lookup.
+/// Called when we detect a PID mismatch (forked child).
+/// Uses the current async runtime handle since we're likely called from an async context.
+#[cfg(not(target_arch = "wasm32"))]
+fn reinitialize_publisher(lookup: Arc<AstSignatureWrapper>) {
+    // Clear old state
+    clear_publisher_state();
+
+    // Try to get the current runtime handle (we're likely in an async context from pyo3)
+    let handle = match tokio::runtime::Handle::try_current() {
+        Ok(h) => h,
+        Err(_) => {
+            eprintln!("[BAML Publisher] No current tokio runtime, creating new one");
+            // Fall back to creating a new runtime if not in async context
+            match tokio::runtime::Runtime::new() {
+                Ok(rt) => {
+                    let rt = Arc::new(rt);
+                    do_start_publisher(lookup, rt);
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("[BAML Publisher] Failed to create tokio runtime: {}", e);
+                    return;
+                }
+            }
+        }
+    };
+
+    eprintln!("[BAML Publisher] Using current tokio runtime handle for forked child");
+
+    // Reinitialize using the current runtime handle
+    do_start_publisher_with_handle(lookup, handle);
+}
+
+/// Start publisher using a runtime handle (for reinitialization in async context).
+#[cfg(not(target_arch = "wasm32"))]
+fn do_start_publisher_with_handle(lookup: Arc<AstSignatureWrapper>, handle: tokio::runtime::Handle) {
+    // Check if already initialized for this PID
+    {
+        let state = PUBLISHER_STATE.read().unwrap();
+        if let Some(s) = &*state {
+            if s.init_pid == std::process::id() {
+                return; // Already initialized in this process
+            }
+        }
+    }
+
+    eprintln!("[BAML Publisher] Starting publisher with handle (PID: {})", std::process::id());
+
+    // Read batch sizes early to calculate channel capacities
+    let trace_batch_size = lookup
+        .env_var("BAML_TRACE_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(500);
+    let blob_batch_size = lookup
+        .env_var("BAML_BLOB_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(10);
+
+    let trace_queue_capacity = 4 * trace_batch_size;
+    let blob_queue_capacity = 4 * blob_batch_size;
+
+    // Create channels
+    let (trace_tx, trace_rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
+    let (blob_tx, blob_rx) = mpsc::channel::<BlobUploaderMessage>(blob_queue_capacity);
+
+    let runtime_ast = Arc::new(RuntimeAST {
+        ast: lookup.clone(),
+        client: reqwest::Client::new(),
+        blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
+    });
+
+    let lookup_for_publisher = runtime_ast.clone();
+    let lookup_for_blob = runtime_ast.clone();
+
+    let mut publisher = TracePublisher::new(
+        trace_rx,
+        lookup_for_publisher,
+        blob_tx.clone(),
+        trace_batch_size,
+    );
+    let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
+
+    // Spawn tasks using the handle
+    let task = handle.spawn(async move { publisher.run().await });
+    let blob_task = handle.spawn(async move { blob_uploader.run().await });
+
+    // Store the new state
+    let mut state = PUBLISHER_STATE.write().unwrap();
+    *state = Some(PublisherState {
+        channel: trace_tx,
+        task: Arc::new(task),
+        blob_channel: blob_tx,
+        blob_task: Arc::new(blob_task),
+        init_pid: std::process::id(),
+        lookup: lookup.clone(),
+    });
+
+    eprintln!("[BAML Publisher] Publisher initialized with handle (PID: {})", std::process::id());
 }
 
 #[derive(Serialize)]
@@ -231,7 +404,32 @@ pub fn start_publisher(
         log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
         return;
     }
-    log::debug!("Starting publisher");
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        do_start_publisher(lookup, rt);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        do_start_publisher_wasm(lookup);
+    }
+}
+
+/// Internal function to start the publisher (non-wasm).
+#[cfg(not(target_arch = "wasm32"))]
+fn do_start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime::Runtime>) {
+    // Check if already initialized for this PID
+    {
+        let state = PUBLISHER_STATE.read().unwrap();
+        if let Some(s) = &*state {
+            if s.init_pid == std::process::id() {
+                return; // Already initialized in this process
+            }
+        }
+    }
+
+    eprintln!("[BAML Publisher] Starting publisher (PID: {})", std::process::id());
 
     // Read batch sizes early to calculate channel capacities
     let trace_batch_size = lookup
@@ -243,88 +441,98 @@ pub fn start_publisher(
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(10);
 
-    // Limit to 10 batches worth of capacity
     let trace_queue_capacity = 4 * trace_batch_size;
     let blob_queue_capacity = 4 * blob_batch_size;
 
-    let mut blob_rx_holder: Option<mpsc::Receiver<BlobUploaderMessage>> = None;
-    let blob_tx = match BLOB_UPLOADER_CHANNEL.get() {
-        Some(existing) => existing.clone(),
-        None => {
-            let (new_tx, new_rx) = mpsc::channel::<BlobUploaderMessage>(blob_queue_capacity);
-            match BLOB_UPLOADER_CHANNEL.set(new_tx.clone()) {
-                Ok(()) => {
-                    blob_rx_holder = Some(new_rx);
-                    new_tx
-                }
-                Err(_) => {
-                    // Another thread beat us to initialization
-                    BLOB_UPLOADER_CHANNEL
-                        .get()
-                        .expect("blob uploader channel should be initialized")
-                        .clone()
-                }
-            }
-        }
-    };
+    // Create channels
+    let (trace_tx, trace_rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
+    let (blob_tx, blob_rx) = mpsc::channel::<BlobUploaderMessage>(blob_queue_capacity);
 
-    let lookup = Arc::new(RuntimeAST {
+    let runtime_ast = Arc::new(RuntimeAST {
+        ast: lookup.clone(),
+        client: reqwest::Client::new(),
+        blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
+    });
+
+    let lookup_for_publisher = runtime_ast.clone();
+    let lookup_for_blob = runtime_ast.clone();
+
+    let mut publisher = TracePublisher::new(
+        trace_rx,
+        lookup_for_publisher,
+        blob_tx.clone(),
+        trace_batch_size,
+    );
+    let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
+
+    // Spawn tasks
+    let task = rt.spawn(async move { publisher.run().await });
+    let blob_task = rt.spawn(async move { blob_uploader.run().await });
+
+    // Store the new state (including lookup for potential reinitialization)
+    let mut state = PUBLISHER_STATE.write().unwrap();
+    *state = Some(PublisherState {
+        channel: trace_tx,
+        task: Arc::new(task),
+        blob_channel: blob_tx,
+        blob_task: Arc::new(blob_task),
+        init_pid: std::process::id(),
+        lookup: lookup.clone(),
+    });
+
+    eprintln!("[BAML Publisher] Publisher initialized (PID: {})", std::process::id());
+}
+
+/// Internal function to start the publisher (wasm).
+#[cfg(target_arch = "wasm32")]
+fn do_start_publisher_wasm(lookup: Arc<AstSignatureWrapper>) {
+    log::debug!("Starting publisher");
+
+    let trace_batch_size = lookup
+        .env_var("BAML_TRACE_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(500);
+    let blob_batch_size = lookup
+        .env_var("BAML_BLOB_BATCH_SIZE")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(10);
+
+    let trace_queue_capacity = 4 * trace_batch_size;
+    let blob_queue_capacity = 4 * blob_batch_size;
+
+    let (blob_tx, blob_rx) = mpsc::channel::<BlobUploaderMessage>(blob_queue_capacity);
+    let _ = BLOB_UPLOADER_CHANNEL.set(blob_tx.clone());
+
+    let runtime_ast = Arc::new(RuntimeAST {
         ast: lookup,
         client: reqwest::Client::new(),
         blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
     });
 
-    let channel = if let Some(existing) = PUBLISHING_CHANNEL.get() {
-        existing
-    } else {
-        let Some(blob_rx) = blob_rx_holder.take() else {
-            // Another thread is handling initialization; we'll pick up the update next time.
-            return;
-        };
+    let lookup_for_publisher = runtime_ast.clone();
+    let lookup_for_blob = runtime_ast.clone();
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let rt_clone = rt.clone();
+    PUBLISHING_CHANNEL.get_or_init(move || {
+        let (tx, rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
 
-        let lookup_for_publisher = lookup.clone();
-        let lookup_for_blob = lookup.clone();
-        let blob_tx_for_publisher = blob_tx.clone();
+        let mut publisher = TracePublisher::new(
+            rx,
+            lookup_for_publisher,
+            blob_tx.clone(),
+            trace_batch_size,
+        );
+        let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
 
-        PUBLISHING_CHANNEL.get_or_init(move || {
-            let (tx, rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
+        wasm_bindgen_futures::spawn_local(async move {
+            publisher.run().await;
+        });
 
-            let mut publisher = TracePublisher::new(
-                rx,
-                lookup_for_publisher,
-                blob_tx_for_publisher,
-                trace_batch_size,
-            );
-            let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
+        wasm_bindgen_futures::spawn_local(async move {
+            blob_uploader.run().await;
+        });
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // Spawn the main publisher task
-                let handle = rt_clone.spawn(async move { publisher.run().await });
-                PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
-
-                // Spawn the blob uploader task
-                let blob_handle = rt_clone.spawn(async move { blob_uploader.run().await });
-                BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
-            }
-
-            #[cfg(target_arch = "wasm32")]
-            {
-                wasm_bindgen_futures::spawn_local(async move {
-                    publisher.run().await;
-                });
-
-                wasm_bindgen_futures::spawn_local(async move {
-                    blob_uploader.run().await;
-                });
-            }
-
-            tx
-        })
-    };
+        tx
+    });
 }
 
 struct TracePublisher {
@@ -636,9 +844,14 @@ impl TracePublisher {
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
+        eprintln!("[BAML Publisher] Processing batch of {} events (PID: {})", batch.len(), std::process::id());
         let batch_result = self.process_batch_impl(batch).await;
-        if let Err(e) = batch_result {
-            baml_log::debug!("Failed to upload trace events: {:?}", e);
+        match &batch_result {
+            Ok(()) => eprintln!("[BAML Publisher] Batch processed successfully (PID: {})", std::process::id()),
+            Err(e) => {
+                eprintln!("[BAML Publisher] Failed to upload trace events: {:?} (PID: {})", e, std::process::id());
+                baml_log::debug!("Failed to upload trace events: {:?}", e);
+            }
         }
     }
 
@@ -1056,26 +1269,58 @@ impl AsReqwestHeaders for S3UploadMetadata {
 }
 
 async fn flush_blob_uploader_channel(timeout_duration: Duration) -> anyhow::Result<()> {
-    let Some(blob_tx) = BLOB_UPLOADER_CHANNEL.get() else {
-        return Ok(());
-    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let blob_tx = {
+            let state = PUBLISHER_STATE.read().unwrap();
+            match &*state {
+                Some(s) => s.blob_channel.clone(),
+                None => return Ok(()),
+            }
+        };
 
-    let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
-    blob_tx
-        .send(BlobUploaderMessage::Flush(blob_ack_tx))
-        .await
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
+        blob_tx
+            .send(BlobUploaderMessage::Flush(blob_ack_tx))
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
-    match timeout(timeout_duration, blob_ack_rx).await {
-        Ok(Ok(())) => {
-            log::debug!("Flush blob uploader completed");
-            Ok(())
+        match timeout(timeout_duration, blob_ack_rx).await {
+            Ok(Ok(())) => {
+                log::debug!("Flush blob uploader completed");
+                Ok(())
+            }
+            Ok(Err(e)) => Err(e.into()),
+            Err(_) => Err(anyhow::anyhow!(
+                "Blob flush timed out after {:?}",
+                timeout_duration
+            )),
         }
-        Ok(Err(e)) => Err(e.into()),
-        Err(_) => Err(anyhow::anyhow!(
-            "Blob flush timed out after {:?}",
-            timeout_duration
-        )),
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(blob_tx) = BLOB_UPLOADER_CHANNEL.get() else {
+            return Ok(());
+        };
+
+        let (blob_ack_tx, blob_ack_rx) = tokio::sync::oneshot::channel();
+        blob_tx
+            .send(BlobUploaderMessage::Flush(blob_ack_tx))
+            .await
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+        match timeout(timeout_duration, blob_ack_rx).await {
+            Ok(Ok(())) => {
+                log::debug!("Flush blob uploader completed");
+                Ok(())
+            }
+            Ok(Err(e)) => Err(e.into()),
+            Err(_) => Err(anyhow::anyhow!(
+                "Blob flush timed out after {:?}",
+                timeout_duration
+            )),
+        }
     }
 }
 

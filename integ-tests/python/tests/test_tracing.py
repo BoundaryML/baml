@@ -1,5 +1,6 @@
 # import uuid
 import json
+import multiprocessing
 import os
 import time
 from typing import Optional, List, Dict, Any
@@ -1314,6 +1315,342 @@ async def test_tracing_big_union():
         print("✓ Callstack verification complete!")
     finally:
         pass
+
+
+# ============================================================================
+# TEST 14: Fork safety - tracing works in forked child processes
+# ============================================================================
+
+def _child_process_baml_call(trace_file: str, result_queue):
+    """
+    Function that runs in forked child process.
+    Calls a BAML function and flushes traces.
+    """
+    try:
+        # Set the trace file env var
+        os.environ["BAML_TRACE_FILE"] = trace_file
+
+        # Import BAML client after fork to ensure fresh initialization
+        from ..baml_client import b
+        from ..baml_client.tracing import flush
+
+        print(f"[PID {os.getpid()}] Child process: Calling TestFnNamedArgsSingleString...", flush=True)
+
+        # Call a simple BAML function
+        result = asyncio.run(b.TestFnNamedArgsSingleString("fork test"))
+
+        print(f"[PID {os.getpid()}] Child process: Result: {result}", flush=True)
+
+        # Flush traces to ensure they're written
+        print(f"[PID {os.getpid()}] Child process: Flushing traces...", flush=True)
+        flush()
+        print(f"[PID {os.getpid()}] Child process: Flush complete", flush=True)
+
+        result_queue.put({"success": True, "result": str(result)})
+    except Exception as e:
+        import traceback
+        print(f"[PID {os.getpid()}] Child process error: {e}", flush=True)
+        traceback.print_exc()
+        result_queue.put({"success": False, "error": str(e)})
+
+
+def _child_process_traced_function(trace_file: str, result_queue):
+    """
+    Function that runs in forked child process.
+    Calls a @trace decorated function.
+    """
+    try:
+        # Set the trace file env var
+        os.environ["BAML_TRACE_FILE"] = trace_file
+
+        # Import after fork
+        from ..baml_client.tracing import trace, flush
+
+        @trace
+        def my_traced_function_in_fork(arg: str) -> str:
+            """A simple traced function."""
+            return f"Hello from fork, {arg}!"
+
+        print(f"[PID {os.getpid()}] Child process: Calling traced function...", flush=True)
+
+        result = my_traced_function_in_fork("World")
+
+        print(f"[PID {os.getpid()}] Child process: Traced function returned: {result}", flush=True)
+
+        # Flush traces
+        print(f"[PID {os.getpid()}] Child process: Flushing traces...", flush=True)
+        flush()
+        print(f"[PID {os.getpid()}] Child process: Flush complete", flush=True)
+
+        result_queue.put({"success": True, "result": result})
+    except Exception as e:
+        import traceback
+        print(f"[PID {os.getpid()}] Child process error: {e}", flush=True)
+        traceback.print_exc()
+        result_queue.put({"success": False, "error": str(e)})
+
+
+def _child_process_baml_with_trace(trace_file: str, result_queue):
+    """
+    Function that runs in forked child process.
+    Calls a BAML function wrapped in a @trace decorated function.
+    """
+    try:
+        # Set the trace file env var
+        os.environ["BAML_TRACE_FILE"] = trace_file
+
+        # Import after fork
+        from ..baml_client import b
+        from ..baml_client.tracing import trace, flush
+
+        @trace
+        async def my_baml_wrapper_in_fork(input_str: str) -> str:
+            """Wrapper that calls BAML function."""
+            result = await b.TestFnNamedArgsSingleString(input_str)
+            return str(result)
+
+        print(f"[PID {os.getpid()}] Child process: Calling BAML via traced wrapper...", flush=True)
+
+        result = asyncio.run(my_baml_wrapper_in_fork("wrapped fork test"))
+
+        print(f"[PID {os.getpid()}] Child process: Result: {result}", flush=True)
+
+        # Flush traces
+        print(f"[PID {os.getpid()}] Child process: Flushing traces...", flush=True)
+        flush()
+        print(f"[PID {os.getpid()}] Child process: Flush complete", flush=True)
+
+        result_queue.put({"success": True, "result": result})
+    except Exception as e:
+        import traceback
+        print(f"[PID {os.getpid()}] Child process error: {e}", flush=True)
+        traceback.print_exc()
+        result_queue.put({"success": False, "error": str(e)})
+
+
+@pytest.mark.asyncio
+async def test_baml_function_in_forked_child():
+    """
+    Test that BAML function calls in forked child processes
+    generate proper FunctionStart and FunctionEnd trace events.
+    """
+    trace_file = os.environ.get("BAML_TRACE_FILE")
+    if not trace_file:
+        pytest.skip("BAML_TRACE_FILE not set")
+
+    # Clear trace file
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+
+    # Pre-import to trigger publisher initialization in parent
+    from ..baml_client import b  # noqa: F401
+
+    flush()
+
+    result_queue = multiprocessing.Queue()
+
+    # Fork child process
+    process = multiprocessing.Process(
+        target=_child_process_baml_call,
+        args=(trace_file, result_queue),
+    )
+    process.start()
+    process.join(timeout=60)
+
+    assert process.exitcode == 0, f"Child process crashed with exit code {process.exitcode}"
+
+    # Get result from child
+    assert not result_queue.empty(), "No result from child process"
+    child_result = result_queue.get()
+    assert child_result["success"], f"Child process failed: {child_result.get('error')}"
+
+    # Give a moment for file to be fully written
+    await asyncio.sleep(0.5)
+
+    # Parse and validate trace events
+    reader = TraceFileReader(trace_file)
+    print("\n=== Fork Test Trace Events ===")
+    reader.print_trace_hierarchy(show_ids=True)
+
+    event_counts = reader.count_events()
+    print(f"Event counts: {event_counts}")
+
+    # Should have at least FunctionStart and FunctionEnd for the BAML function
+    assert_that(event_counts["function_start"]).is_greater_than_or_equal_to(1)
+    assert_that(event_counts["function_end"]).is_greater_than_or_equal_to(1)
+
+    print("✓ BAML function tracing in forked child: PASSED")
+
+
+@pytest.mark.asyncio
+async def test_trace_decorator_in_forked_child():
+    """
+    Test that @trace decorated functions in forked child processes
+    generate proper FunctionStart and FunctionEnd trace events.
+    """
+    trace_file = os.environ.get("BAML_TRACE_FILE")
+    if not trace_file:
+        pytest.skip("BAML_TRACE_FILE not set")
+
+    # Clear trace file
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+
+    # Pre-import to trigger publisher initialization in parent
+    from ..baml_client.tracing import trace  # noqa: F401
+
+    flush()
+
+    result_queue = multiprocessing.Queue()
+
+    process = multiprocessing.Process(
+        target=_child_process_traced_function,
+        args=(trace_file, result_queue),
+    )
+    process.start()
+    process.join(timeout=60)
+
+    assert process.exitcode == 0, f"Child process crashed with exit code {process.exitcode}"
+
+    # Get result from child
+    assert not result_queue.empty(), "No result from child process"
+    child_result = result_queue.get()
+    assert child_result["success"], f"Child process failed: {child_result.get('error')}"
+    assert_that(child_result["result"]).is_equal_to("Hello from fork, World!")
+
+    # Give a moment for file to be fully written
+    await asyncio.sleep(0.5)
+
+    # Parse and validate trace events
+    reader = TraceFileReader(trace_file)
+    print("\n=== Fork Test Trace Events (@trace decorator) ===")
+    reader.print_trace_hierarchy(show_ids=True)
+
+    event_counts = reader.count_events()
+    print(f"Event counts: {event_counts}")
+
+    # Should have FunctionStart and FunctionEnd for the traced function
+    assert_that(event_counts["function_start"]).is_greater_than_or_equal_to(1)
+    assert_that(event_counts["function_end"]).is_greater_than_or_equal_to(1)
+
+    print("✓ @trace decorator in forked child: PASSED")
+
+
+@pytest.mark.asyncio
+async def test_baml_with_trace_wrapper_in_forked_child():
+    """
+    Test that BAML function calls wrapped in @trace decorated functions
+    in forked child processes generate proper trace events for both.
+    """
+    trace_file = os.environ.get("BAML_TRACE_FILE")
+    if not trace_file:
+        pytest.skip("BAML_TRACE_FILE not set")
+
+    # Clear trace file
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+
+    # Pre-import to trigger publisher initialization in parent
+    from ..baml_client import b  # noqa: F401
+    from ..baml_client.tracing import trace  # noqa: F401
+
+    flush()
+
+    result_queue = multiprocessing.Queue()
+
+    process = multiprocessing.Process(
+        target=_child_process_baml_with_trace,
+        args=(trace_file, result_queue),
+    )
+    process.start()
+    process.join(timeout=60)
+
+    assert process.exitcode == 0, f"Child process crashed with exit code {process.exitcode}"
+
+    # Get result from child
+    assert not result_queue.empty(), "No result from child process"
+    child_result = result_queue.get()
+    assert child_result["success"], f"Child process failed: {child_result.get('error')}"
+
+    # Give a moment for file to be fully written
+    await asyncio.sleep(0.5)
+
+    # Parse and validate trace events
+    reader = TraceFileReader(trace_file)
+    print("\n=== Fork Test Trace Events (BAML + @trace wrapper) ===")
+    reader.print_trace_hierarchy(show_ids=True)
+
+    event_counts = reader.count_events()
+    print(f"Event counts: {event_counts}")
+
+    # Should have events for both wrapper and BAML function (2 starts, 2 ends)
+    assert_that(event_counts["function_start"]).is_greater_than_or_equal_to(2)
+    assert_that(event_counts["function_end"]).is_greater_than_or_equal_to(2)
+
+    print("✓ BAML with @trace wrapper in forked child: PASSED")
+
+
+@pytest.mark.asyncio
+async def test_fork_after_flush_in_parent():
+    """
+    Test that forking after calling flush() in the parent process
+    still works correctly - the child should reinitialize its publisher.
+    """
+    trace_file = os.environ.get("BAML_TRACE_FILE")
+    if not trace_file:
+        pytest.skip("BAML_TRACE_FILE not set")
+
+    # Clear trace file
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+
+    # Call a BAML function in the parent first
+    parent_result = await b.TestFnNamedArgsSingleString("parent call")
+    print(f"[PID {os.getpid()}] Parent process: Result: {parent_result}")
+
+    # Flush traces in parent - this exercises the publisher
+    print(f"[PID {os.getpid()}] Parent process: Flushing traces...")
+    flush()
+    print(f"[PID {os.getpid()}] Parent process: Flush complete")
+
+    # Clear trace file again to only capture child events
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
+
+    result_queue = multiprocessing.Queue()
+
+    # Fork child process - publisher should reinitialize
+    process = multiprocessing.Process(
+        target=_child_process_baml_call,
+        args=(trace_file, result_queue),
+    )
+    process.start()
+    process.join(timeout=60)
+
+    assert process.exitcode == 0, f"Child process crashed with exit code {process.exitcode}"
+
+    # Get result from child
+    assert not result_queue.empty(), "No result from child process"
+    child_result = result_queue.get()
+    assert child_result["success"], f"Child process failed: {child_result.get('error')}"
+
+    # Give a moment for file to be fully written
+    await asyncio.sleep(0.5)
+
+    # Parse and validate trace events
+    reader = TraceFileReader(trace_file)
+    print("\n=== Fork After Parent Flush - Trace Events ===")
+    reader.print_trace_hierarchy(show_ids=True)
+
+    event_counts = reader.count_events()
+    print(f"Event counts: {event_counts}")
+
+    # Should have at least FunctionStart and FunctionEnd from the child
+    assert_that(event_counts["function_start"]).is_greater_than_or_equal_to(1)
+    assert_that(event_counts["function_end"]).is_greater_than_or_equal_to(1)
+
+    print("✓ Fork after parent flush: PASSED")
+
 
 # ============================================================================
 # Cleanup fixture

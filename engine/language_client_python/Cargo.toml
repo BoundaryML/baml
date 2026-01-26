@@ -34,6 +34,7 @@ env_logger.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 libc = "0.2"
+backtrace = "0.3"
 once_cell = "1.19"
 jsonish = { path = "../baml-lib/jsonish" }
 log.workspace = true

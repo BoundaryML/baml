@@ -1,9 +1,8 @@
-# Ignore everything except what we need for the Go integration tests
+# Ignore everything except what we need for integration tests
 *
 !integ-tests/go
-!engine/language_client_go
-!go.mod
-!go.sum
+!integ-tests/python-multiprocessing
+!engine
 
 # Exclude large build artifacts and caches
 engine/target/

@@ -1,0 +1,18 @@
+[project]
+name = "debug-rq"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # "baml-py>=0.216.0",
+    "django>=6.0.1",
+    "django-rq>=2.10.0",
+    "pydantic>=2.12.5",
+    "redis>=7.1.0",
+    "rq>=2.6.1",
+    "typing-extensions>=4.15.0",
+]
+
+[tool.uv.sources]
+baml-py = { path = "../../engine/language_client_python", editable = true }
