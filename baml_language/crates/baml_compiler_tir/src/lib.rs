@@ -46,7 +46,7 @@ pub use builtins::{
     method_return_type, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
+pub use lower::{TypeLoweringContext, lower_type_ref};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
@@ -183,9 +183,9 @@ pub struct EnumNamesSet<'db> {
     pub names: HashSet<Name>,
 }
 
-/// Tracked struct holding all known type names (classes, enums, type aliases).
+/// Tracked struct holding type alias names.
 #[salsa::tracked]
-pub struct KnownTypesSet<'db> {
+pub struct TypeAliasNamesSet<'db> {
     #[tracked]
     #[returns(ref)]
     pub names: HashSet<Name>,
@@ -353,37 +353,22 @@ pub fn enum_names(db: &dyn Db, project: Project) -> EnumNamesSet<'_> {
     EnumNamesSet::new(db, names)
 }
 
-/// Query: Get all known type names for a project (classes, enums, type aliases).
+/// Query: Get type alias names for a project.
 #[salsa::tracked]
-pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
+pub fn type_alias_names(db: &dyn Db, project: Project) -> TypeAliasNamesSet<'_> {
     let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
     for item in items.items(db) {
-        match item {
-            baml_compiler_hir::ItemId::Class(class_loc) => {
-                let file = class_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let class_data = &item_tree[class_loc.id(db)];
-                names.insert(class_data.name.clone());
-            }
-            baml_compiler_hir::ItemId::Enum(enum_loc) => {
-                let file = enum_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let enum_data = &item_tree[enum_loc.id(db)];
-                names.insert(enum_data.name.clone());
-            }
-            baml_compiler_hir::ItemId::TypeAlias(alias_loc) => {
-                let file = alias_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let alias_data = &item_tree[alias_loc.id(db)];
-                names.insert(alias_data.name.clone());
-            }
-            _ => {}
+        if let baml_compiler_hir::ItemId::TypeAlias(alias_loc) = item {
+            let file = alias_loc.file(db);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
+            let alias_data = &item_tree[alias_loc.id(db)];
+            names.insert(alias_data.name.clone());
         }
     }
 
-    KnownTypesSet::new(db, names)
+    TypeAliasNamesSet::new(db, names)
 }
 
 /// Context for type resolution across a project.
@@ -393,7 +378,7 @@ pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
 pub struct TypeResolutionContext {
     pub class_names: HashSet<Name>,
     pub enum_names: HashSet<Name>,
-    pub known_types: HashSet<Name>,
+    pub type_alias_names: HashSet<Name>,
 }
 
 impl TypeResolutionContext {
@@ -402,7 +387,7 @@ impl TypeResolutionContext {
         Self {
             class_names: class_names(db, project).names(db).clone(),
             enum_names: enum_names(db, project).names(db).clone(),
-            known_types: known_types(db, project).names(db).clone(),
+            type_alias_names: type_alias_names(db, project).names(db).clone(),
         }
     }
 
@@ -412,11 +397,12 @@ impl TypeResolutionContext {
         type_ref: &baml_compiler_hir::TypeRef,
         span: Span,
     ) -> (Ty, Vec<TirTypeError>) {
-        lower_type_ref_validated_resolved(
+        lower_type_ref(
             type_ref,
-            &self.known_types,
+            &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
+            &HashMap::new(),
             span,
         )
     }
@@ -482,8 +468,8 @@ pub struct TypeContext<'db> {
     class_names: HashSet<Name>,
     /// Enum names for type resolution
     enum_names: HashSet<Name>,
-    /// Known type names for validation
-    known_types: HashSet<Name>,
+    /// Type alias names for validation
+    type_alias_names: HashSet<Name>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty>,
     /// For multi-segment paths, the type of each segment.
@@ -518,7 +504,7 @@ impl<'db> TypeContext<'db> {
         enum_variants: HashMap<Name, Vec<Name>>,
         class_names: HashSet<Name>,
         enum_names: HashSet<Name>,
-        known_types: HashSet<Name>,
+        type_alias_names: HashSet<Name>,
         file_id: FileId,
     ) -> Self {
         TypeContext {
@@ -529,7 +515,7 @@ impl<'db> TypeContext<'db> {
             enum_variants,
             class_names,
             enum_names,
-            known_types,
+            type_alias_names,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
@@ -653,13 +639,15 @@ impl<'db> TypeContext<'db> {
         normalize::is_subtype_of(sub, sup, &self.type_aliases)
     }
 
+    /// CLAUDE: Do we need this?
     /// Lower a `TypeRef` to a Ty with full resolution (classes/enums resolved to names).
     pub fn lower_type_resolved(&self, type_ref: &baml_compiler_hir::TypeRef, span: Span) -> Ty {
-        let (ty, _errors) = lower_type_ref_validated_resolved(
+        let (ty, _errors) = lower_type_ref(
             type_ref,
-            &self.known_types,
+            &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
+            &self.type_aliases,
             span,
         );
         // Note: errors are not accumulated here since they should have been
@@ -760,7 +748,7 @@ pub fn infer_function_body<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     class_names_opt: Option<HashSet<Name>>,
     enum_names_opt: Option<HashSet<Name>>,
-    known_types: Option<HashSet<Name>>,
+    type_alias_names: Option<HashSet<Name>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
     let file_id = function_loc.file(db).file_id(db);
@@ -772,7 +760,7 @@ pub fn infer_function_body<'db>(
         enum_variants.unwrap_or_default(),
         class_names_opt.unwrap_or_default(),
         enum_names_opt.unwrap_or_default(),
-        known_types.unwrap_or_default(),
+        type_alias_names.unwrap_or_default(),
         file_id,
     );
 
@@ -939,11 +927,9 @@ pub fn infer_function<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
-    // Query known type names from the project (Salsa-cached)
     let project = db.project();
-    let known_type_names = baml_compiler_hir::project_type_names(db, project);
-    let known_types: std::collections::HashSet<_> =
-        known_type_names.names(db).iter().cloned().collect();
+    let type_aliases = type_aliases.unwrap_or_default();
+    let type_alias_name_set: HashSet<Name> = type_aliases.keys().cloned().collect();
 
     // Get class and enum name sets for type resolution (Salsa-cached)
     let class_name_set = class_names(db, project).names(db).clone();
@@ -960,11 +946,12 @@ pub fn infer_function<'db>(
         .params
         .iter()
         .map(|param| {
-            let (ty, errors) = lower_type_ref_validated_resolved(
+            let (ty, errors) = lower_type_ref(
                 &param.type_ref,
-                &known_types,
+                &type_alias_name_set,
                 &class_name_set,
                 &enum_name_set,
+                &type_aliases,
                 placeholder_span,
             );
             type_errors.extend(errors);
@@ -973,11 +960,12 @@ pub fn infer_function<'db>(
         .collect();
 
     // Convert return type with validation and resolution
-    let (expected_return, errors) = lower_type_ref_validated_resolved(
+    let (expected_return, errors) = lower_type_ref(
         &signature.return_type,
-        &known_types,
+        &type_alias_name_set,
         &class_name_set,
         &enum_name_set,
+        &type_aliases,
         placeholder_span,
     );
     type_errors.extend(errors);
@@ -996,11 +984,11 @@ pub fn infer_function<'db>(
         return_type_span,
         globals,
         class_fields,
-        type_aliases,
+        Some(type_aliases),
         enum_variants,
         Some(class_name_set),
         Some(enum_name_set),
-        Some(known_types),
+        Some(type_alias_name_set),
         function_loc,
     );
 
@@ -2043,7 +2031,7 @@ fn check_match_exhaustiveness(
         &ctx.type_aliases,
         &ctx.class_names,
         &ctx.enum_names,
-        &ctx.known_types,
+        &ctx.type_alias_names,
     );
 
     let result = checker.check(scrutinee_ty, arm_ids, body);

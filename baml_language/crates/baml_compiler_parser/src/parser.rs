@@ -1317,7 +1317,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a type expression
     /// Examples: string, int, User, string[], map<string, int>, string | int
-    /// Can also use string literals: "user" | "assistant"
+    /// Can also use string literals: "user", "assistant"
     pub(crate) fn parse_type(&mut self) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
             p.parse_type_primary();

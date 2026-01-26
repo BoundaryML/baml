@@ -56,6 +56,7 @@ pub enum DiagnosticId {
     NotCallable,
     NoSuchField,
     NotIndexable,
+    InvalidMapKeyType,
 
     // Name errors (E0011)
     DuplicateName,
@@ -130,6 +131,7 @@ impl DiagnosticId {
             DiagnosticId::NotCallable => "E0006",
             DiagnosticId::NoSuchField => "E0007",
             DiagnosticId::NotIndexable => "E0008",
+            DiagnosticId::InvalidMapKeyType => "E0067",
 
             // Name errors
             DiagnosticId::DuplicateName => "E0011",

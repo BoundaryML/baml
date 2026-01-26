@@ -201,6 +201,42 @@ fn substitute(ty: &StructuralTy, var: &Name, replacement: &StructuralTy) -> Stru
     }
 }
 
+pub(crate) fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
+    fn can_be_key(structural_ty: &StructuralTy) -> bool {
+        match structural_ty {
+            StructuralTy::String => true,
+            StructuralTy::Literal(literal_value) => match literal_value {
+                LiteralValue::String(_) => true,
+                LiteralValue::Int(_) => false,
+                LiteralValue::Float(_) => false,
+                LiteralValue::Bool(_) => false,
+            },
+            StructuralTy::Error => true,
+            StructuralTy::Union(variants) => variants.iter().all(|v| can_be_key(&v)),
+            StructuralTy::Int => false,
+            StructuralTy::Float => false,
+            StructuralTy::Bool => false,
+            StructuralTy::Null => false,
+            StructuralTy::Media(_) => false,
+            StructuralTy::Class(_) => false,
+            StructuralTy::Enum(_) => false,
+            StructuralTy::Optional(_) => false,
+            StructuralTy::List(_) => false,
+            StructuralTy::Map { .. } => false,
+            StructuralTy::Function { .. } => false,
+            StructuralTy::Mu { .. } => false,
+            StructuralTy::TyVar(_) => false,
+            StructuralTy::Unknown => false,
+            StructuralTy::Void => false,
+            StructuralTy::WatchAccessor(_) => false,
+            StructuralTy::Builtin(_) => false,
+        }
+    }
+    let recursive = find_recursive_aliases(aliases);
+    let norm = normalize(ty, aliases, &recursive);
+    can_be_key(&norm)
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NORMALIZATION (private)
 // ═══════════════════════════════════════════════════════════════════════════

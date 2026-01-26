@@ -666,5 +666,8 @@ pub fn short_display(error: &TirTypeError) -> String {
                 "Missing return expression. Function expects `{expected}` but body has no final expression."
             )
         }
+        TypeError::InvalidMapKeyType { ty, .. } => {
+            format!("Invalid key type for map: {ty}.")
+        }
     }
 }

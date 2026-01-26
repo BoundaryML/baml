@@ -107,4 +107,7 @@ pub enum TypeError<C: ErrorContext> {
         expected: C::Ty,
         location: C::Location,
     },
+    /// Map has keys that aren't valid. Only string, literal string, and enum are
+    /// valid may key types.
+    InvalidMapKeyType { ty: C::Ty, location: C::Location },
 }

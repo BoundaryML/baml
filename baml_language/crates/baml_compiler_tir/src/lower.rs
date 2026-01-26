@@ -5,24 +5,26 @@
 //! - Resolving named types to their definitions (classes, enums)
 //! - Converting type constructors (Optional, List, Union)
 //! - Handling primitive type names
-//! - Validating that named types exist (when `known_types` is provided)
+//! - Validating that named types exist (when `type_alias_names` is provided)
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{ErrorLocation, TypeRef};
 
-use crate::{LiteralValue, TirTypeError, Ty};
+use crate::{LiteralValue, TirTypeError, Ty, normalize};
 
 /// Context for type lowering with validation.
 ///
-/// When `known_types` is provided, unknown type names will produce errors
+/// When `type_alias_names` is provided, unknown type names will produce errors
 /// and return `Ty::Error` to suppress downstream type mismatches.
 pub struct TypeLoweringContext<'a> {
-    /// Set of known type names (classes, enums, type aliases).
+    /// Set of type alias names.
     /// If None, no validation is performed.
-    pub known_types: Option<&'a HashSet<Name>>,
+    pub type_alias_names: Option<&'a HashSet<Name>>,
+    /// Type aliases.
+    pub type_aliases: Option<&'a HashMap<Name, Ty>>,
     /// Span to use for error reporting. If None, a default span is used.
     pub span: Option<Span>,
     /// Accumulated errors during lowering.
@@ -33,16 +35,22 @@ impl<'a> TypeLoweringContext<'a> {
     /// Create a new context without validation.
     pub fn new() -> Self {
         TypeLoweringContext {
-            known_types: None,
+            type_alias_names: None,
+            type_aliases: None,
             span: None,
             errors: Vec::new(),
         }
     }
 
     /// Create a new context with type name validation.
-    pub fn with_validation(known_types: &'a HashSet<Name>, span: Span) -> Self {
+    pub fn with_validation(
+        type_alias_names: &'a HashSet<Name>,
+        type_aliases: &'a HashMap<Name, Ty>,
+        span: Span,
+    ) -> Self {
         TypeLoweringContext {
-            known_types: Some(known_types),
+            type_alias_names: Some(type_alias_names),
+            type_aliases: Some(type_aliases),
             span: Some(span),
             errors: Vec::new(),
         }
@@ -62,45 +70,50 @@ impl Default for TypeLoweringContext<'_> {
 /// contexts where you need fully resolved types.
 ///
 /// Returns the lowered type and any errors encountered.
-pub fn lower_type_ref_validated_resolved(
+pub fn lower_type_ref(
     type_ref: &TypeRef,
-    known_types: &HashSet<Name>,
+    type_alias_names: &HashSet<Name>,
     class_names: &HashSet<Name>,
     enum_names: &HashSet<Name>,
+    type_aliases: &HashMap<Name, Ty>,
     span: Span,
 ) -> (Ty, Vec<TirTypeError>) {
-    let mut ctx = TypeLoweringContextResolved::new(known_types, class_names, enum_names, span);
+    let mut ctx =
+        TypeLoweringContextResolved::new(type_alias_names, class_names, enum_names, type_aliases, span);
     let ty = lower_type_ref_resolved_with_ctx(&mut ctx, type_ref);
     (ty, ctx.errors)
 }
 
 /// Context for type lowering with validation and resolution.
 struct TypeLoweringContextResolved<'a> {
-    known_types: &'a HashSet<Name>,
+    type_alias_names: &'a HashSet<Name>,
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
+    type_aliases: &'a HashMap<Name, Ty>,
     span: Span,
     errors: Vec<TirTypeError>,
 }
 
 impl<'a> TypeLoweringContextResolved<'a> {
     fn new(
-        known_types: &'a HashSet<Name>,
+        type_alias_names: &'a HashSet<Name>,
         class_names: &'a HashSet<Name>,
         enum_names: &'a HashSet<Name>,
+        type_aliases: &'a HashMap<Name, Ty>,
         span: Span,
     ) -> Self {
         Self {
-            known_types,
+            type_alias_names,
             class_names,
             enum_names,
+            type_aliases,
             span,
             errors: Vec::new(),
         }
     }
 
-    fn is_known_type(&self, name: &Name) -> bool {
-        self.known_types.contains(name)
+    fn is_type_alias_name(&self, name: &Name) -> bool {
+        self.type_alias_names.contains(name)
     }
 
     fn unknown_type_error(&mut self, name: &Name) -> Ty {
@@ -120,6 +133,18 @@ impl<'a> TypeLoweringContextResolved<'a> {
         } else {
             None
         }
+    }
+
+    fn invalid_map_key_type(&mut self, ty: &Ty) -> Ty {
+        self.errors.push(TypeError::InvalidMapKeyType {
+            ty: ty.clone(),
+            location: ErrorLocation::Span(self.span),
+        });
+        Ty::Error
+    }
+
+    fn is_valid_map_key_type(&self, ty: &Ty) -> bool {
+        normalize::is_valid_map_key_type(ty, self.type_aliases)
     }
 }
 
@@ -156,6 +181,9 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Map { key, value } => {
             let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
             let value_ty = lower_type_ref_resolved_with_ctx(ctx, value);
+            if !ctx.is_valid_map_key_type(&key_ty) {
+                ctx.invalid_map_key_type(&key_ty);
+            }
             Ty::Map {
                 key: Box::new(key_ty),
                 value: Box::new(value_ty),
@@ -218,8 +246,8 @@ fn lower_path_type_resolved_with_ctx(
                         return resolved;
                     }
 
-                    // Check if it's a known type (could be a type alias)
-                    if ctx.is_known_type(name) {
+                    // Check if it's a type alias
+                    if ctx.is_type_alias_name(name) {
                         Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
                     } else {
                         ctx.unknown_type_error(name)
@@ -237,7 +265,7 @@ fn lower_path_type_resolved_with_ctx(
                 .collect::<Vec<_>>()
                 .join(".");
             let name = Name::new(&full_path);
-            if !is_simple_type_name(&full_path) || ctx.is_known_type(&name) {
+            if !is_simple_type_name(&full_path) || ctx.is_type_alias_name(&name) {
                 Ty::TypeAlias(FullyQualifiedName::local(name))
             } else {
                 ctx.unknown_type_error(&name)
