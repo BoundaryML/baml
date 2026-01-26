@@ -435,7 +435,6 @@ impl<'a> ExhaustivenessChecker<'a> {
                     self.type_alias_names,
                     self.class_names,
                     self.enum_names,
-                    self.type_aliases,
                     Span::default(),
                 );
                 Self::ty_to_value_set(&lowered_ty)

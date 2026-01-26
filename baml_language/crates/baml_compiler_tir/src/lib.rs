@@ -46,7 +46,8 @@ pub use builtins::{
     method_return_type, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::{TypeLoweringContext, lower_type_ref};
+pub use lower::lower_type_ref;
+pub use normalize::find_invalid_map_keys;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
@@ -402,7 +403,6 @@ impl TypeResolutionContext {
             &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
-            &HashMap::new(),
             span,
         )
     }
@@ -647,7 +647,6 @@ impl<'db> TypeContext<'db> {
             &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
-            &self.type_aliases,
             span,
         );
         // Note: errors are not accumulated here since they should have been
@@ -951,7 +950,6 @@ pub fn infer_function<'db>(
                 &type_alias_name_set,
                 &class_name_set,
                 &enum_name_set,
-                &type_aliases,
                 placeholder_span,
             );
             type_errors.extend(errors);
@@ -965,7 +963,6 @@ pub fn infer_function<'db>(
         &type_alias_name_set,
         &class_name_set,
         &enum_name_set,
-        &type_aliases,
         placeholder_span,
     );
     type_errors.extend(errors);
@@ -974,6 +971,37 @@ pub fn infer_function<'db>(
     let return_type_span = sig_source_map
         .and_then(SignatureSourceMap::return_type_span)
         .map(|range| Span::new(file_id, range));
+
+    // Validate map key types in function signature
+    // Check return type for invalid map keys
+    if let Some(span) = return_type_span {
+        let invalid_return_keys = normalize::find_invalid_map_keys(&expected_return, &type_aliases);
+        for invalid_key in invalid_return_keys {
+            type_errors.push(TypeError::InvalidMapKeyType {
+                ty: invalid_key,
+                location: ErrorLocation::Span(span),
+            });
+        }
+    }
+
+    // Check param types for invalid map keys
+    if let Some(source_map) = sig_source_map {
+        for (idx, param) in signature.params.iter().enumerate() {
+            if let Some(param_ty) = param_types.get(&param.name) {
+                if let Some(range) = source_map.param_span(idx) {
+                    let span = Span::new(file_id, range);
+                    let invalid_param_keys =
+                        normalize::find_invalid_map_keys(param_ty, &type_aliases);
+                    for invalid_key in invalid_param_keys {
+                        type_errors.push(TypeError::InvalidMapKeyType {
+                            ty: invalid_key,
+                            location: ErrorLocation::Span(span),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     // Delegate to the body inference function
     let mut result = infer_function_body(

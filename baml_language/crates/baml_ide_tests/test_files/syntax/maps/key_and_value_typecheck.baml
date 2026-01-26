@@ -55,11 +55,11 @@ function UseMapTypecheck() -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Invalid type int for map key. Only strings, string literals and enums are valid map keys.
-//    ╭─[ maps_key_and_value_typecheck.baml:1:1 ]
+//    ╭─[ maps_key_and_value_typecheck.baml:2:28 ]
 //    │
-//  1 │ // For now, errors with 'map keys must be string literals'
-//    │ │ 
-//    │ ╰─ Invalid type int for map key. Only strings, string literals and enums are valid map keys.
+//  2 │ function CreateMapExpr() -> map<int, string> {
+//    │                            ────────┬────────  
+//    │                                    ╰────────── Invalid type int for map key. Only strings, string literals and enums are valid map keys.
 //    │ 
 //    │ Note: Error code: E0067
 // ───╯

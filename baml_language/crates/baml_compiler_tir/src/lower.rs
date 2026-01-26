@@ -7,61 +7,13 @@
 //! - Handling primitive type names
 //! - Validating that named types exist (when `type_alias_names` is provided)
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use baml_base::{Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{ErrorLocation, TypeRef};
 
-use crate::{LiteralValue, TirTypeError, Ty, normalize};
-
-/// Context for type lowering with validation.
-///
-/// When `type_alias_names` is provided, unknown type names will produce errors
-/// and return `Ty::Error` to suppress downstream type mismatches.
-pub struct TypeLoweringContext<'a> {
-    /// Set of type alias names.
-    /// If None, no validation is performed.
-    pub type_alias_names: Option<&'a HashSet<Name>>,
-    /// Type aliases.
-    pub type_aliases: Option<&'a HashMap<Name, Ty>>,
-    /// Span to use for error reporting. If None, a default span is used.
-    pub span: Option<Span>,
-    /// Accumulated errors during lowering.
-    pub errors: Vec<TirTypeError>,
-}
-
-impl<'a> TypeLoweringContext<'a> {
-    /// Create a new context without validation.
-    pub fn new() -> Self {
-        TypeLoweringContext {
-            type_alias_names: None,
-            type_aliases: None,
-            span: None,
-            errors: Vec::new(),
-        }
-    }
-
-    /// Create a new context with type name validation.
-    pub fn with_validation(
-        type_alias_names: &'a HashSet<Name>,
-        type_aliases: &'a HashMap<Name, Ty>,
-        span: Span,
-    ) -> Self {
-        TypeLoweringContext {
-            type_alias_names: Some(type_alias_names),
-            type_aliases: Some(type_aliases),
-            span: Some(span),
-            errors: Vec::new(),
-        }
-    }
-}
-
-impl Default for TypeLoweringContext<'_> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+use crate::{LiteralValue, TirTypeError, Ty};
 
 /// Lower a `TypeRef` to a Ty with validation AND resolution of class/enum types.
 ///
@@ -75,11 +27,9 @@ pub fn lower_type_ref(
     type_alias_names: &HashSet<Name>,
     class_names: &HashSet<Name>,
     enum_names: &HashSet<Name>,
-    type_aliases: &HashMap<Name, Ty>,
     span: Span,
 ) -> (Ty, Vec<TirTypeError>) {
-    let mut ctx =
-        TypeLoweringContextResolved::new(type_alias_names, class_names, enum_names, type_aliases, span);
+    let mut ctx = TypeLoweringContextResolved::new(type_alias_names, class_names, enum_names, span);
     let ty = lower_type_ref_resolved_with_ctx(&mut ctx, type_ref);
     (ty, ctx.errors)
 }
@@ -89,7 +39,6 @@ struct TypeLoweringContextResolved<'a> {
     type_alias_names: &'a HashSet<Name>,
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
-    type_aliases: &'a HashMap<Name, Ty>,
     span: Span,
     errors: Vec<TirTypeError>,
 }
@@ -99,14 +48,12 @@ impl<'a> TypeLoweringContextResolved<'a> {
         type_alias_names: &'a HashSet<Name>,
         class_names: &'a HashSet<Name>,
         enum_names: &'a HashSet<Name>,
-        type_aliases: &'a HashMap<Name, Ty>,
         span: Span,
     ) -> Self {
         Self {
             type_alias_names,
             class_names,
             enum_names,
-            type_aliases,
             span,
             errors: Vec::new(),
         }
@@ -133,18 +80,6 @@ impl<'a> TypeLoweringContextResolved<'a> {
         } else {
             None
         }
-    }
-
-    fn invalid_map_key_type(&mut self, ty: &Ty) -> Ty {
-        self.errors.push(TypeError::InvalidMapKeyType {
-            ty: ty.clone(),
-            location: ErrorLocation::Span(self.span),
-        });
-        Ty::Error
-    }
-
-    fn is_valid_map_key_type(&self, ty: &Ty) -> bool {
-        normalize::is_valid_map_key_type(ty, self.type_aliases)
     }
 }
 
@@ -181,9 +116,6 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Map { key, value } => {
             let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
             let value_ty = lower_type_ref_resolved_with_ctx(ctx, value);
-            if !ctx.is_valid_map_key_type(&key_ty) {
-                ctx.invalid_map_key_type(&key_ty);
-            }
             Ty::Map {
                 key: Box::new(key_ty),
                 value: Box::new(value_ty),

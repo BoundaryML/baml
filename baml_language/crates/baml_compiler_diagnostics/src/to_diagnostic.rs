@@ -57,10 +57,7 @@ impl<C: ErrorContext> TypeError<C> {
         &self,
         ty_fn: impl Fn(&C::Ty) -> String,
         loc_fn: impl Fn(&C::Location) -> Span,
-    ) -> Diagnostic
-    where
-        C::Ty: std::fmt::Display,
-    {
+    ) -> Diagnostic {
         let diag = match self {
             TypeError::TypeMismatch {
                 expected,
@@ -204,7 +201,8 @@ impl<C: ErrorContext> TypeError<C> {
             TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
                 DiagnosticId::InvalidMapKeyType,
                 format!(
-                    "Invalid type {ty} for map key. Only strings, string literals and enums are valid map keys."
+                    "Invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
+                    ty_fn(ty)
                 )
             ).with_primary_span(loc_fn(location)),
         };
