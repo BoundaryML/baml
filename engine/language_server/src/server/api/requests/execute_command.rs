@@ -1,14 +1,17 @@
 use std::time::Duration;
 
-use lsp_server::ErrorCode;
+use lsp_server::{ErrorCode, Notification};
 use lsp_types::{request, ExecuteCommandParams, MessageType};
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use playground_server::WebviewRouterMessage;
+use serde_json::json;
 use tokio::time::sleep;
 use webbrowser;
 
 use crate::{
     server::{
         api::{
+            requests::code_action::OPEN_IN_BROWSER_COMMAND,
             traits::{RequestHandler, SyncRequestHandler},
             ResultExt,
         },
@@ -33,14 +36,27 @@ impl SyncRequestHandler for ExecuteCommand {
     ) -> Result<Option<serde_json::Value>> {
         use crate::server::commands::RegisteredCommands;
 
-        if params.command == "openPlayground" {
+        if params.command == OPEN_IN_BROWSER_COMMAND {
             // Get the actual playground port from session (determined by server after availability check)
             // Fall back to configured port if actual port not set yet
 
-            use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+            // Extract function name from arguments if provided
+            // Arguments come as: ["FunctionName"] (single string in array)
+            let function_name: Option<String> = params
+                .arguments
+                .first()
+                .and_then(|val| val.as_str())
+                .map(|s| s.to_string());
 
-            // Construct the URL
-            let url = format!("http://localhost:{}", session.playground_port);
+            // Construct the URL with optional function parameter
+            let url = match &function_name {
+                Some(name) => format!(
+                    "http://localhost:{}?function={}",
+                    session.playground_port,
+                    utf8_percent_encode(name, NON_ALPHANUMERIC)
+                ),
+                None => format!("http://localhost:{}", session.playground_port),
+            };
 
             // Open the browser
             if let Err(e) = webbrowser::open(&url) {
@@ -56,55 +72,20 @@ impl SyncRequestHandler for ExecuteCommand {
                 });
             }
 
-            if let Some(function_name) = params
-                .arguments
-                .first()
-                .and_then(|arg| arg.as_str().map(|s| s.to_string()))
-            {
-                session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
-                        FrontendMessage::select_function {
-                            // TODO: this can't be correct... but it looks like it is
-                            root_path: function_name.to_string(),
-                            function_name,
-                        },
-                    ))
-                    .unwrap();
-            }
-            return Ok(None);
-        }
-
-        match RegisteredCommands::from_execute_command(params) {
-            Err(e) => {
-                return Err(crate::server::api::Error {
-                    code: ErrorCode::InternalError,
-                    error: e.into(),
+            let _ = session
+                .to_webview_router_tx
+                .send(WebviewRouterMessage::SendMessageToWebview(
+                    playground_server::WebviewCommand::LspMessage(Notification::new(
+                        "workspace/executeCommand".to_string(),
+                        json!(params),
+                    )),
+                ))
+                .inspect_err(|e| {
+                    tracing::error!(
+                        "Failed to send SEND_MESSAGE_TO_WEBVIEW message to webview: {e}"
+                    );
                 });
-            }
-            Ok(RegisteredCommands::OpenBamlPanel(args)) => {
-                session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
-                        FrontendMessage::select_function {
-                            // TODO: this can't be correct... but it looks like it is
-                            root_path: args.project_id,
-                            function_name: args.function_name,
-                        },
-                    ))
-                    .unwrap();
-            }
-            Ok(RegisteredCommands::RunTest(args)) => {
-                session
-                    .playground_tx
-                    .send(PreLangServerToWasmMessage::FrontendMessage(
-                        FrontendMessage::run_test {
-                            function_name: args.function_name,
-                            test_name: args.test_case_name,
-                        },
-                    ))
-                    .unwrap();
-            }
+            return Ok(None);
         }
 
         Ok(None)

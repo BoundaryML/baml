@@ -1,0 +1,609 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/IfThenElse.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            DeclareAndAssign {\n                name: \"x\",\n                value: NumericValue(\n                    \"1\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 54,\n                        end: 55,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                    start: 46,\n                    end: 57,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Before\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 62,\n                        end: 73,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"If should always do else\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 79,\n                        end: 107,\n                    },\n                },\n            ),\n            Expression {\n                expr: If {\n                    condition: BoolValue(\n                        false,\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                            start: 116,\n                            end: 121,\n                        },\n                    ),\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"impossible: return 1\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                                            start: 134,\n                                            end: 159,\n                                        },\n                                    },\n                                ),\n                            ],\n                            trailing_expr: Some(\n                                NumericValue(\n                                    \"1\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                                        start: 168,\n                                        end: 169,\n                                    },\n                                ),\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                            start: 123,\n                            end: 175,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"should always be 5\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                                                start: 191,\n                                                end: 214,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    NumericValue(\n                                        \"5\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                                            start: 223,\n                                            end: 224,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                                start: 181,\n                                end: 230,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 112,\n                        end: 230,\n                    },\n                },\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                    start: 112,\n                    end: 231,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"After\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 236,\n                        end: 245,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            BinaryOperation {\n                left: Identifier(\n                    \"x\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 250,\n                        end: 251,\n                    },\n                ),\n                operator: Add,\n                right: NumericValue(\n                    \"4\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                        start: 254,\n                        end: 255,\n                    },\n                ),\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenElse.baml\", contents: ... },\n                    start: 250,\n                    end: 255,\n                },\n            },\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: IfThenElse
+      log_filter_key: "IfThenElse|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 11
+        end: 257
+    "1":
+      label: Before
+      log_filter_key: "IfThenElse|root:0|hdr:before:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 62
+        end: 73
+    "2":
+      label: If should always do else
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 79
+        end: 107
+    "3":
+      label: if (false)
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+      node_type: branch-group
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 112
+        end: 230
+    "4":
+      label: if (false)
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 123
+        end: 175
+    "5":
+      label: "impossible: return 1"
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+      node_type: header
+      parent: "4"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 134
+        end: 159
+    "6":
+      label: else
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 181
+        end: 230
+    "7":
+      label: should always be 5
+      log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+      node_type: header
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 191
+        end: 214
+    "8":
+      label: After
+      log_filter_key: "IfThenElse|root:0|hdr:after:2"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/IfThenElse.baml
+        start: 236
+        end: 245
+  edges:
+    "1":
+      - "2"
+    "2":
+      - "8"
+mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (false)\"]\n        direction TB\n        n5[\"5: impossible: return 1\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: should always be 5\"]\n      end\n    end\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+    json:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (false)\"]\n        direction TB\n        n5[\"5: impossible: return 1\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: should always be 5\"]\n      end\n    end\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "4"
+          - "6"
+    json:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "4":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 123
+            end: 175
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "6":
+          label: else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 181
+            end: 230
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "4"
+          - "6"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    n3[\"3: BranchGroup: if (false)\"]\n    subgraph n4[\"4: BranchArm: if (false)\"]\n      direction TB\n      n5[\"5: impossible: return 1\"]\n    end\n    subgraph n6[\"6: BranchArm: else\"]\n      direction TB\n      n7[\"7: should always be 5\"]\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n8[\"8: After\"]\n  n1 --> n2\n  n2 --> n8\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "5"
+          - "7"
+    json:
+      nodes:
+        "0":
+          label: IfThenElse
+          log_filter_key: "IfThenElse|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 11
+            end: 257
+        "1":
+          label: Before
+          log_filter_key: "IfThenElse|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 62
+            end: 73
+        "2":
+          label: If should always do else
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 79
+            end: 107
+        "3":
+          label: if (false)
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 112
+            end: 230
+        "5":
+          label: "impossible: return 1"
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:if-false:0|hdr:impossible-return-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 134
+            end: 159
+        "7":
+          label: should always be 5
+          log_filter_key: "IfThenElse|root:0|hdr:if-should-always-do-else:1|bg:if-false:0|arm:else:1|hdr:should-always-be-5:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 191
+            end: 214
+        "8":
+          label: After
+          log_filter_key: "IfThenElse|root:0|hdr:after:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenElse.baml
+            start: 236
+            end: 245
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "8"
+        "3":
+          - "5"
+          - "7"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenElse\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If should always do else\"]\n    direction TB\n    n3[\"3: BranchGroup: if (false)\"]\n    n4[\"5: impossible: return 1\"]\n    n5[\"7: should always be 5\"]\n    n3 --> n4\n    n3 --> n5\n  end\n  n6[\"8: After\"]\n  n1 --> n2\n  n2 --> n6\nend\n"

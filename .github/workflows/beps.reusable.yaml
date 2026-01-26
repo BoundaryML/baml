@@ -1,0 +1,254 @@
+name: BEPs (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      beps_changed:
+        required: true
+        type: string
+      is_canary:
+        required: true
+        type: boolean
+      is_pr:
+        required: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-beps
+  cancel-in-progress: true
+
+jobs:
+  check-beps:
+    name: "check beps"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.beps_changed == 'true' || inputs.is_canary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch canary ref
+        run: git fetch origin canary
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: "Check BEP index"
+        run: ./beps/scripts/update_bep_readme.py --check
+
+  deploy-beps-canary:
+    name: "deploy beps (canary)"
+    runs-on: ubuntu-latest
+    needs: check-beps
+    if: inputs.is_canary && !inputs.is_pr
+    permissions:
+      id-token: write
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Fetch canary ref
+        run: git fetch origin canary
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: beps-canary
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/canary/ --delete --cache-control "public, max-age=3600"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/canary/*"
+
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/canary" \
+            --env "canary" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: https://${{ secrets.BEPS_DOMAIN }}/canary/
+
+  deploy-beps-preview:
+    name: "deploy beps (preview)"
+    runs-on: ubuntu-latest
+    needs: check-beps
+    if: inputs.is_pr && inputs.beps_changed == 'true'
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Get branch name
+        id: branch
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          SANITIZED_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=$SANITIZED_BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: beps-preview-${{ steps.branch.outputs.name }}
+
+      - name: Comment - Building Preview
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            🏗️ **Building BEPs preview...** (run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}))
+          comment-tag: beps-preview
+
+      - name: Fetch canary ref
+        run: git fetch origin canary
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Install MkDocs and dependencies
+        run: |
+          pip install mkdocs-material mkdocs-awesome-pages-plugin mkdocs-git-revision-date-localized-plugin mkdocs-git-committers-plugin-2
+
+      - name: Build MkDocs
+        working-directory: beps
+        run: mkdocs build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync _site s3://${{ secrets.BEPS_S3_BUCKET }}/${{ steps.branch.outputs.name }}/ --delete --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/${{ steps.branch.outputs.name }}/*"
+
+      - name: Update Building Comment
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            ✅ **Latest build complete** • [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          comment-tag: beps-preview
+
+      - name: Comment Preview URL
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          message: |
+            🐑 **BEPs Preview Ready**
+
+            **Preview URL**: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/
+
+            <sub>Commit: `${{ github.event.pull_request.head.sha }}` • [Workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>
+
+      - name: Generate Slack notification
+        id: slack-payload
+        run: |
+          PAYLOAD=$(./beps/scripts/summarize_changes.py \
+            --base-url "https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}" \
+            --env "${{ steps.branch.outputs.name }}" \
+            --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --format slack)
+          # Check if there are any blocks (non-draft BEPs)
+          BLOCK_COUNT=$(echo "$PAYLOAD" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('blocks',[])))")
+          echo "block_count=$BLOCK_COUNT" >> $GITHUB_OUTPUT
+          echo "payload<<EOF" >> $GITHUB_OUTPUT
+          echo "$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Slack notification
+        if: ${{ steps.slack-payload.outputs.block_count != '0' }}
+        env:
+          SLACK_PAYLOAD: ${{ steps.slack-payload.outputs.payload }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "$SLACK_PAYLOAD" \
+            "${{ secrets.BEPS_SLACK_WEBHOOK_URL }}"
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: https://${{ secrets.BEPS_DOMAIN }}/${{ steps.branch.outputs.name }}/

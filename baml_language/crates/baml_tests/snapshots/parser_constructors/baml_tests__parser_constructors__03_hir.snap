@@ -1,0 +1,67 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function floatArray() -> float[] {
+      [1.0, 2.0, 3.0]
+}
+
+function stringArray() -> string[] {
+      ["hello", "world", "test"]
+}
+
+function pointArray() -> Point[] {
+      [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
+}
+
+function boolArray() -> bool[] {
+      [true, false, true]
+}
+
+function mixedArray() -> (int | string)[] {
+      [1, "two", 3]
+}
+
+function intArray() -> int[] {
+      [1, 2, 3]
+}
+
+class Point {
+  x: int
+  y: int
+}
+
+function point() -> Point {
+      Point { x: 1, y: 2 }
+}
+
+function vec2d() -> Vec2D {
+      Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
+}
+
+class Vec2D {
+  p: Point
+  q: Point
+}
+
+class Point {
+  x: int
+  y: int
+}
+
+function boolValues() -> Map<string, bool> {
+      { "hello": true, "test": false }
+}
+
+function intValues() -> Map<string, int> {
+      { "hello": 1, "test": 2 }
+}
+
+function stringValues() -> Map<string, string> {
+      { "hello": "world", "test": "test" }
+}
+
+function floatValues() -> Map<string, float> {
+      { "hello": 1.0, "test": 2.0 }
+}

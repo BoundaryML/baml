@@ -1,0 +1,290 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/UnicodeHeaders.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"你好世界\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/UnicodeHeaders.baml\", contents: ... },\n                        start: 73,\n                        end: 89,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Émojis 🎉🎊\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/UnicodeHeaders.baml\", contents: ... },\n                        start: 122,\n                        end: 143,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 3,\n                    title: \"Special «Characters» ™\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/UnicodeHeaders.baml\", contents: ... },\n                        start: 176,\n                        end: 208,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            StringValue(\n                \"test\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/UnicodeHeaders.baml\", contents: ... },\n                    start: 214,\n                    end: 220,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: UnicodeHeaders
+      log_filter_key: "UnicodeHeaders|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/UnicodeHeaders.baml
+        start: 31
+        end: 222
+    "1":
+      label: 你好世界
+      log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/UnicodeHeaders.baml
+        start: 73
+        end: 89
+    "2":
+      label: Émojis 🎉🎊
+      log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/UnicodeHeaders.baml
+        start: 122
+        end: 143
+    "3":
+      label: Special «Characters» ™
+      log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+      node_type: header
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/UnicodeHeaders.baml
+        start: 176
+        end: 208
+  edges: {}
+mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: UnicodeHeaders
+          log_filter_key: "UnicodeHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 31
+            end: 222
+        "1":
+          label: 你好世界
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 73
+            end: 89
+        "2":
+          label: Émojis 🎉🎊
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 122
+            end: 143
+        "3":
+          label: Special «Characters» ™
+          log_filter_key: "UnicodeHeaders|root:0|hdr:header-0:0|hdr:mojis:0|hdr:special-characters:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/UnicodeHeaders.baml
+            start: 176
+            end: 208
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: UnicodeHeaders\"]\n  direction TB\n  subgraph n1[\"1: 你好世界\"]\n    direction TB\n    subgraph n2[\"2: Émojis 🎉🎊\"]\n      direction TB\n      n3[\"3: Special «Characters» ™\"]\n    end\n  end\nend\n"

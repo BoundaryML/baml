@@ -1,0 +1,333 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/IfThenOnlyHeader.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            DeclareAndAssign {\n                name: \"x\",\n                value: NumericValue(\n                    \"1\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                        start: 60,\n                        end: 61,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                    start: 52,\n                    end: 63,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Before\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                        start: 68,\n                        end: 79,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"If\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                        start: 85,\n                        end: 91,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"y\",\n                value: If {\n                    condition: BoolValue(\n                        false,\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                            start: 108,\n                            end: 113,\n                        },\n                    ),\n                    if_branch: Block(\n                        Block {\n                            statements: [],\n                            trailing_expr: Some(\n                                NumericValue(\n                                    \"1\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                                        start: 117,\n                                        end: 118,\n                                    },\n                                ),\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                            start: 115,\n                            end: 120,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [],\n                                trailing_expr: Some(\n                                    NumericValue(\n                                        \"0\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                                            start: 128,\n                                            end: 129,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                                start: 126,\n                                end: 131,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                        start: 104,\n                        end: 131,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                    start: 96,\n                    end: 133,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"After\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                        start: 138,\n                        end: 148,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            Identifier(\n                \"y\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/IfThenOnlyHeader.baml\", contents: ... },\n                    start: 153,\n                    end: 154,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: IfThenOnlyHeader
+      log_filter_key: "IfThenOnlyHeader|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 11
+        end: 156
+    "1":
+      label: Before
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 68
+        end: 79
+    "2":
+      label: If
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 85
+        end: 91
+    "3":
+      label: if (false)
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|bg:if-false:0"
+      node_type: branch-group
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 104
+        end: 131
+    "4":
+      label: if (false)
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|bg:if-false:0|arm:if-false:0"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 115
+        end: 120
+    "5":
+      label: else
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|bg:if-false:0|arm:else:1"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 126
+        end: 131
+    "6":
+      label: After
+      log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+      node_type: header
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/IfThenOnlyHeader.baml
+        start: 138
+        end: 148
+  edges:
+    "1":
+      - "2"
+    "3":
+      - "6"
+mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (false)\"]\n      direction TB\n      n4[\"4: BranchArm: if (false)\"]\n      n5[\"5: BranchArm: else\"]\n    end\n    n6[\"6: After\"]\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    json:
+      nodes:
+        "0":
+          label: IfThenOnlyHeader
+          log_filter_key: "IfThenOnlyHeader|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 11
+            end: 156
+        "1":
+          label: Before
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:before:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 68
+            end: 79
+        "2":
+          label: If
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 85
+            end: 91
+        "6":
+          label: After
+          log_filter_key: "IfThenOnlyHeader|root:0|hdr:if:1|hdr:after:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/IfThenOnlyHeader.baml
+            start: 138
+            end: 148
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: IfThenOnlyHeader\"]\n  direction TB\n  n1[\"1: Before\"]\n  subgraph n2[\"2: If\"]\n    direction TB\n    n3[\"6: After\"]\n  end\n  n1 --> n2\nend\n"

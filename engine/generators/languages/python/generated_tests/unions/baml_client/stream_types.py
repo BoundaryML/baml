@@ -12,7 +12,7 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 import baml_py
 
@@ -30,7 +30,7 @@ class ExistingSystemComponent(BaseModel):
     id: typing.Optional[int] = None
     name: typing.Optional[str] = None
     type: typing.Optional[str] = None
-    category: typing.Optional[typing.Union[str, str]] = None
+    category: typing.Optional[typing.Union[typing_extensions.Literal['service'], typing_extensions.Literal['resource']]] = None
     explanation: typing.Optional[str] = None
 
 class UseMyUnion(BaseModel):
@@ -53,4 +53,4 @@ Nonrecursive2: typing_extensions.TypeAlias = typing.Optional[str]
 Recursive1: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, typing.List["Recursive1"]]]
 
 
-SystemComponentCategory: typing_extensions.TypeAlias = typing.Optional[typing.Union[str, str]]
+SystemComponentCategory: typing_extensions.TypeAlias = typing.Optional[typing.Union[typing_extensions.Literal['service'], typing_extensions.Literal['resource']]]

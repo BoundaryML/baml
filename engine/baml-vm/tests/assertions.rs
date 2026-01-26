@@ -1,22 +1,23 @@
 //! VM tests for assert statements.
 
-use baml_vm::{RuntimeError, Value, VmExecState};
+use baml_vm::RuntimeError;
 
 mod common;
-use common::{assert_vm_executes, assert_vm_fails, FailingProgram, Program};
+use common::{assert_vm_executes, assert_vm_fails, ExecState, FailingProgram, Program, Value};
 
 #[test]
 fn assert_ok() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn assertOk() -> int {
+            function assertOk() -> int {
 
                 assert 2 + 2 == 4;
 
                 3
-            }"#,
+            }
+        "#,
         function: "assertOk",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -24,11 +25,12 @@ fn assert_ok() -> anyhow::Result<()> {
 fn assert_not_ok() -> anyhow::Result<()> {
     assert_vm_fails(FailingProgram {
         source: r#"
-            fn assertNotOk() -> int {
+            function assertNotOk() -> int {
                 assert 3 == 1;
 
                 2
-            }"#,
+            }
+        "#,
         function: "assertNotOk",
         expected: RuntimeError::AssertionError.into(),
     })

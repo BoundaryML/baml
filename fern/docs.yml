@@ -63,7 +63,7 @@ ai-chat:
     // Functions define inputs, outputs and prompts
     // function name is always PascalCase
     function MyFunction(input: MyObject) -> string {
-      client "openai/gpt-4o"
+      client "openai-responses/gpt-5-mini"
       // prompt with jinja syntax inside here. with double curly braces for variables.
       // make sure to include: {{ ctx.output_format }} in the prompt, which prints the output schema instructions so the LLM returns the output in the correct format (json or string, etc.). DO NOT write the output schema manually.
       prompt #"
@@ -73,10 +73,10 @@ ai-chat:
 
     <LLMClients>
       You can use any of the following if you write a baml function example:
-      - openai/gpt-4o
-      - openai/gpt-4o-mini
-      - anthropic/claude-3-5-sonnet-latest (note the "3-5")
-      - anthropic/claude-3-5-haiku-latest
+      - openai-responses/gpt-5
+      - openai-responses/gpt-5-mini
+      - anthropic/claude-sonnet-4-20250514
+      - anthropic/claude-3-5-haiku-20241022
 
       If the user mentions an open-source model like "llama3" or "r1", search the docs for "OpenRouter" or "openai-generic" to see how to use it.
     </LLMClients>
@@ -97,7 +97,7 @@ ai-chat:
       }
 
       function ClassifyTweets(tweets: string[]) -> TweetAnalysis[] {
-        client "openai/gpt-4o-mini"
+        client "openai-responses/gpt-5-mini"
         prompt #"
           Analyze each of the following tweets and classify them.
 
@@ -269,6 +269,10 @@ tabs:
     display-name: Playground
     icon: fa-solid fa-play
     href: https://promptfiddle.com
+  agents-md:
+    display-name: Agents.md
+    icon: fa-solid fa-robot
+    slug: agents-md
   changelog:
     display-name: Changelog
     icon: fa-regular fa-history
@@ -285,6 +289,9 @@ navigation:
           - page: What is BAML?
             icon: fa-regular fa-question-circle
             path: 01-guide/what-are-function-definitions.mdx
+          - page: Why BAML?
+            icon: fa-regular fa-lightbulb
+            path: 01-guide/why-baml.mdx
           - page: What's the baml_src folder
             icon: fa-regular fa-folder
             path: 01-guide/what-is-baml_src.mdx
@@ -301,6 +308,9 @@ navigation:
           - page: Cursor Extension
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/cursor.mdx
+          - page: Claude Code
+            icon: fa-solid fa-terminal
+            path: 01-guide/01-editors/claude-code.mdx
           - page: Others
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/others.mdx
@@ -380,10 +390,13 @@ navigation:
           - page: Error Handling
             icon: fa-regular fa-triangle-exclamation
             path: 01-guide/04-baml-basics/error-handling.mdx
+          - page: Configuring Timeouts
+            icon: fa-regular fa-stopwatch
+            path: 01-guide/04-baml-basics/timeouts.mdx
           - page: Concurrent Calls
             icon: fa-regular fa-clock-rotate-left
             path: 01-guide/04-baml-basics/concurrent-calls.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             icon: fa-regular fa-stop-circle
             path: 01-guide/04-baml-basics/abort-signal.mdx
@@ -412,6 +425,9 @@ navigation:
           - page: Modular API
             icon: fa-regular fa-cubes
             path: 01-guide/05-baml-advanced/modular-api.mdx
+          - page: Prompt Optimization
+            icon: fa-regular fa-aeropress
+            path: 01-guide/05-baml-advanced/prompt-optimization.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions
@@ -431,9 +447,18 @@ navigation:
                 path: 01-guide/07-observability/studio.mdx
       - section: Comparisons
         contents:
+          - page: BAML vs Langchain
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/langchain.mdx
           - page: BAML vs Marvin
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/marvin.mdx
+          - page: BAML vs Ai-SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/ai-sdk.mdx
+          - page: BAML vs OpenAI SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/openai-sdk.mdx
           - page: BAML vs Pydantic
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/pydantic.mdx
@@ -471,6 +496,9 @@ navigation:
           - page: Symbol Tuning
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
+          - page: Token Optimization
+            icon: fa-regular fa-coins
+            path: 01-guide/06-prompt-engineering/token-optimization.mdx
           - page: PII Data Extraction / Scrubbing
             icon: fa-regular fa-user-cog
             path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
@@ -670,7 +698,7 @@ navigation:
         contents:
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
-          - page: AbortSignal / Timeouts
+          - page: AbortSignal / Cancellation
             slug: abort-signal
             path: 03-reference/baml_client/abort-signal.mdx
           - page: Collector
@@ -686,6 +714,9 @@ navigation:
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
             path: 01-guide/05-baml-advanced/client-registry.mdx
+          - page: client Option
+            path: 03-reference/baml_client/client-option.mdx
+            slug: client-option
           - page: OnTick
             path: 03-reference/baml_client/ontick.mdx
           - page: Multimodal
@@ -761,11 +792,14 @@ navigation:
             path: 03-reference/baml/clients/providers/openai-responses.mdx
           - page: "OpenAI from Azure"
             path: 03-reference/baml/clients/providers/azure.mdx
+          - page: "OpenRouter"
+            slug: openrouter
+            path: 03-reference/baml/clients/providers/openrouter.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
-          - page: "Azure AI Foundary (openai-generic)"
-            slug: azure-ai-foundary
-            path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
+          - page: "Microsoft Foundry (openai-generic)"
+            slug: microsoft-foundry
+            path: 03-reference/baml/clients/providers/microsoft-foundry.mdx
           - page: "Cerebras (openai-generic)"
             slug: cerebras
             path: 03-reference/baml/clients/providers/cerebras.mdx
@@ -790,9 +824,9 @@ navigation:
           - page: "Ollama (openai-generic)"
             slug: ollama
             path: 03-reference/baml/clients/providers/ollama.mdx
-          - page: "OpenRouter (openai-generic)"
-            slug: openrouter
-            path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Vercel AI Gateway (openai-generic)"
+            slug: vercel-ai-gateway
+            path: 03-reference/baml/clients/providers/vercel-ai-gateway.mdx
           - page: "Tinfoil (openai-generic)"
             slug: tinfoil
             path: 03-reference/baml/clients/providers/tinfoil.mdx
@@ -807,6 +841,9 @@ navigation:
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
         contents:
+          - page: "Timeout Configuration"
+            slug: timeouts
+            path: 03-reference/baml/clients/timeouts.mdx
           - page: "Retry Policy"
             path: 03-reference/baml/clients/strategy/retry.mdx
           - page: "Fallback"
@@ -818,6 +855,8 @@ navigation:
         contents:
           - page: What is jinja?
             path: 03-reference/baml/prompt-syntax/what-is-jinja.mdx
+          - page: Jinja Filters
+            path: 03-reference/baml/prompt-syntax/jinja-filters.mdx
           - page: "ctx.output_format"
             path: 03-reference/baml/prompt-syntax/output-format.mdx
           - page: "ctx.client"
@@ -906,6 +945,11 @@ navigation:
       #     - page: set_tags
       #       path: 01-guide/introduction.mdx
   - tab: playground
+  - tab: agents-md
+    layout:
+      - page: Claude Code
+        icon: fa-solid fa-terminal
+        path: 01-guide/01-editors/claude-code.mdx
   - tab: changelog
     layout:
       - page: Changelog
@@ -964,6 +1008,9 @@ layout:
   searchbar-placement: header
   header-height: 54px
   tabs-placement: header
+settings:
+  dark-mode-code: true
+  http-snippets: false
 
 typography:
   bodyFont:
@@ -1050,12 +1097,14 @@ redirects:
     destination: "/ref/llm-client-providers/openai-generic"
   - source: "/docs/snippets/clients/providers/google-vertex"
     destination: "/ref/llm-client-providers/google-vertex"
+  - source: "/ref/llm-client-providers/vertex-ai"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/openrouter"
     destination: "/ref/llm-client-providers/openai-generic-open-router"
   - source: "/docs/snippets/clients/providers/together"
     destination: "/ref/llm-client-providers/openai-generic-together-ai"
   - source: "/docs/snippets/clients/providers/vertex"
-    destination: "/ref/llm-client-providers/vertex"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/vllm"
     destination: "/ref/llm-client-providers/openai-generic-v-llm"
   - source: "/docs/snippets/clients/providers/lmstudio"
@@ -1140,8 +1189,8 @@ redirects:
     destination: "/ref/boundary-extraction-api/extract"
   - source: "/document-extraction-api/overview/docs/api/extraction-examples"
     destination: "/ref/boundary-extraction-api/extract/examples"
-  - source: "/ref/llm-client-providers/openai-generic-azure-ai-foundary"
-    destination: "/ref/llm-client-providers/azure-ai-foundary"
+  - source: "/ref/llm-client-providers/openai-generic-microsoft-foundry"
+    destination: "/ref/llm-client-providers/microsoft-foundry"
   - source: "/ref/llm-client-providers/openai-generic-groq"
     destination: "/ref/llm-client-providers/groq"
   - source: "/ref/llm-client-providers/openai-generic-hugging-face"
@@ -1156,6 +1205,8 @@ redirects:
     destination: "/ref/llm-client-providers/ollama"
   - source: "/ref/llm-client-providers/openai-generic-openrouter"
     destination: "/ref/llm-client-providers/openrouter"
+  - source: "/ref/llm-client-providers/openai-generic-vercel-ai-gateway"
+    destination: "/ref/llm-client-providers/vercel-ai-gateway"
   - source: "/ref/llm-client-providers/openai-generic-togetherai"
     destination: "/ref/llm-client-providers/together"
   - source: "/ref/llm-client-providers/openai-generic-unify-ai"

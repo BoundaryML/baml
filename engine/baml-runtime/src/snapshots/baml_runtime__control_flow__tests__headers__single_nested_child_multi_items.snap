@@ -1,0 +1,105 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::SingleNestedChildMultiItems":
+  nodes:
+    "SingleNestedChildMultiItems|c:func:0":
+      label: SingleNestedChildMultiItems
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 11
+        end: 211
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "SingleNestedChildMultiItems|c:func:0|c:loop:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 147
+        end: 161
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:first:0":
+      label: First
+      node_type: expr
+      parent: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:second:0":
+      label: Second
+      node_type: expr
+      parent: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 147
+        end: 161
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 190
+        end: 191
+    "SingleNestedChildMultiItems|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "SingleNestedChildMultiItems|c:func:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 66
+        end: 89
+    "SingleNestedChildMultiItems|c:func:0|s:1":
+      label: for
+      node_type: loop
+      parent: "SingleNestedChildMultiItems|c:func:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 94
+        end: 197
+    "SingleNestedChildMultiItems|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "SingleNestedChildMultiItems|c:func:0"
+      span:
+        file: src/control_flow/headers/single_nested_child_multi_items.baml
+        start: 203
+        end: 209
+  edges:
+    "SingleNestedChildMultiItems|c:func:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|s:0"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:first:0"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:first:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:0"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:second:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:2"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|h:second:0"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0|s:2":
+      - dst: "SingleNestedChildMultiItems|c:func:0|s:1"
+        label: repeat
+    "SingleNestedChildMultiItems|c:func:0|s:0":
+      - dst: "SingleNestedChildMultiItems|c:func:0|s:1"
+        label: ""
+    "SingleNestedChildMultiItems|c:func:0|s:1":
+      - dst: "SingleNestedChildMultiItems|c:func:0|c:loop:0|c:block:0"
+        label: ""
+      - dst: "SingleNestedChildMultiItems|c:func:0|s:2"
+        label: ""

@@ -31,7 +31,7 @@ impl LLMProvider {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn try_from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "openai" => Some(LLMProvider::OpenAI),
             "anthropic" => Some(LLMProvider::Anthropic),
@@ -82,9 +82,15 @@ mod tests {
     #[test]
     fn test_provider_string_conversion() {
         assert_eq!(LLMProvider::OpenAI.as_str(), "openai");
-        assert_eq!(LLMProvider::from_str("openai"), Some(LLMProvider::OpenAI));
-        assert_eq!(LLMProvider::from_str("OPENAI"), Some(LLMProvider::OpenAI));
-        assert_eq!(LLMProvider::from_str("unknown"), None);
+        assert_eq!(
+            LLMProvider::try_from_str("openai"),
+            Some(LLMProvider::OpenAI)
+        );
+        assert_eq!(
+            LLMProvider::try_from_str("OPENAI"),
+            Some(LLMProvider::OpenAI)
+        );
+        assert_eq!(LLMProvider::try_from_str("unknown"), None);
     }
 
     #[test]

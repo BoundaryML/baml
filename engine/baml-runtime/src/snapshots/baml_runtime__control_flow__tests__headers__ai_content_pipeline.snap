@@ -1,0 +1,281 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::AIContentPipeline":
+  nodes:
+    "AIContentPipeline|c:func:0":
+      label: AIContentPipeline
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 24
+        end: 1531
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "AIContentPipeline|c:func:0|c:loop:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1070
+        end: 1106
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:get-content-type-and-generate-draft:0":
+      label: Get Content Type and Generate Draft
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:save-draft:0":
+      label: Save Draft
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1070
+        end: 1106
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1114
+        end: 1168
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:2":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1202
+        end: 1248
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:3":
+      label: expr
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1257
+        end: 1268
+    "AIContentPipeline|c:func:0|h:complete:0":
+      label: Complete
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:fetch-resources:0":
+      label: Fetch Resources
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:generate-content:0":
+      label: Generate Content
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:generate-drafts-for-posts:0":
+      label: Generate Drafts for Posts
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:prepare-pull-request:0":
+      label: Prepare Pull Request
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:process-and-load-video:0":
+      label: Process and Load Video
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:retrieve-emails-and-posts-from-database:1":
+      label: Retrieve Emails and Posts from Database
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|h:video-summarization:1":
+      label: Video Summarization
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "AIContentPipeline|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 221
+        end: 247
+    "AIContentPipeline|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 251
+        end: 275
+    "AIContentPipeline|c:func:0|s:2":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 312
+        end: 369
+    "AIContentPipeline|c:func:0|s:3":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 373
+        end: 405
+    "AIContentPipeline|c:func:0|s:4":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 466
+        end: 885
+    "AIContentPipeline|c:func:0|s:5":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 890
+        end: 938
+    "AIContentPipeline|c:func:0|s:6":
+      label: for
+      node_type: loop
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 978
+        end: 1274
+    "AIContentPipeline|c:func:0|s:7":
+      label: stmt
+      node_type: stmt
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1309
+        end: 1501
+    "AIContentPipeline|c:func:0|s:9":
+      label: expr
+      node_type: expr
+      parent: "AIContentPipeline|c:func:0"
+      span:
+        file: src/control_flow/headers/ai_content_pipeline.baml
+        start: 1523
+        end: 1529
+  edges:
+    "AIContentPipeline|c:func:0":
+      - dst: "AIContentPipeline|c:func:0|h:fetch-resources:0"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:get-content-type-and-generate-draft:0"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:get-content-type-and-generate-draft:0":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:0"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:save-draft:0":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:2"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:0":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:1"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:1":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|h:save-draft:0"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:2":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:3"
+        label: ""
+    "AIContentPipeline|c:func:0|c:loop:0|c:block:0|s:3":
+      - dst: "AIContentPipeline|c:func:0|s:6"
+        label: repeat
+    "AIContentPipeline|c:func:0|h:complete:0":
+      - dst: "AIContentPipeline|c:func:0|s:9"
+        label: ""
+    "AIContentPipeline|c:func:0|h:fetch-resources:0":
+      - dst: "AIContentPipeline|c:func:0|h:retrieve-emails-and-posts-from-database:1"
+        label: ""
+    "AIContentPipeline|c:func:0|h:generate-content:0":
+      - dst: "AIContentPipeline|c:func:0|h:video-summarization:1"
+        label: ""
+    "AIContentPipeline|c:func:0|h:generate-drafts-for-posts:0":
+      - dst: "AIContentPipeline|c:func:0|s:6"
+        label: ""
+    "AIContentPipeline|c:func:0|h:prepare-pull-request:0":
+      - dst: "AIContentPipeline|c:func:0|s:7"
+        label: ""
+    "AIContentPipeline|c:func:0|h:process-and-load-video:0":
+      - dst: "AIContentPipeline|c:func:0|s:2"
+        label: ""
+    "AIContentPipeline|c:func:0|h:retrieve-emails-and-posts-from-database:1":
+      - dst: "AIContentPipeline|c:func:0|s:0"
+        label: ""
+    "AIContentPipeline|c:func:0|h:video-summarization:1":
+      - dst: "AIContentPipeline|c:func:0|s:4"
+        label: ""
+    "AIContentPipeline|c:func:0|s:0":
+      - dst: "AIContentPipeline|c:func:0|s:1"
+        label: ""
+    "AIContentPipeline|c:func:0|s:1":
+      - dst: "AIContentPipeline|c:func:0|h:process-and-load-video:0"
+        label: ""
+    "AIContentPipeline|c:func:0|s:2":
+      - dst: "AIContentPipeline|c:func:0|s:3"
+        label: ""
+    "AIContentPipeline|c:func:0|s:3":
+      - dst: "AIContentPipeline|c:func:0|h:generate-content:0"
+        label: ""
+    "AIContentPipeline|c:func:0|s:4":
+      - dst: "AIContentPipeline|c:func:0|s:5"
+        label: ""
+    "AIContentPipeline|c:func:0|s:5":
+      - dst: "AIContentPipeline|c:func:0|h:generate-drafts-for-posts:0"
+        label: ""
+    "AIContentPipeline|c:func:0|s:6":
+      - dst: "AIContentPipeline|c:func:0|c:loop:0|c:block:0"
+        label: ""
+      - dst: "AIContentPipeline|c:func:0|h:prepare-pull-request:0"
+        label: ""
+    "AIContentPipeline|c:func:0|s:7":
+      - dst: "AIContentPipeline|c:func:0|h:complete:0"
+        label: ""

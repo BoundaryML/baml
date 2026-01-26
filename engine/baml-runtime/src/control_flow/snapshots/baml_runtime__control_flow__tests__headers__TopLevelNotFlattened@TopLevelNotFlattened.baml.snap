@@ -1,0 +1,164 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/TopLevelNotFlattened.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Only Child\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/TopLevelNotFlattened.baml\", contents: ... },\n                        start: 66,\n                        end: 81,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            StringValue(\n                \"done\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/TopLevelNotFlattened.baml\", contents: ... },\n                    start: 86,\n                    end: 92,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: TopLevelNotFlattened
+      log_filter_key: "TopLevelNotFlattened|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/TopLevelNotFlattened.baml
+        start: 18
+        end: 94
+    "1":
+      label: Only Child
+      log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/TopLevelNotFlattened.baml
+        start: 66
+        end: 81
+  edges: {}
+mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: TopLevelNotFlattened
+          log_filter_key: "TopLevelNotFlattened|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 18
+            end: 94
+        "1":
+          label: Only Child
+          log_filter_key: "TopLevelNotFlattened|root:0|hdr:only-child:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/TopLevelNotFlattened.baml
+            start: 66
+            end: 81
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: TopLevelNotFlattened\"]\n  direction TB\n  n1[\"1: Only Child\"]\nend\n"

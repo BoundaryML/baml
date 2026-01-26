@@ -3,15 +3,15 @@
 import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
 import { CustomErrorBoundary } from '@baml/playground-common/custom-error-boundary';
 import { EventListener } from '@baml/playground-common/event-listener';
-import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { BAMLSDKProvider, useBAMLSDK } from '@baml/playground-common/sdk';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from '@baml/ui/resizable';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { isMobile } from 'react-device-detect';
 import { useKeybindingOverrides } from '../../../hooks/command-s';
 import type { BAMLProject } from '../../../lib/exampleProjects';
@@ -20,8 +20,8 @@ import { activeFileNameAtom, unsavedChangesAtom } from '../_atoms/atoms';
 
 import {
   filesAtom,
-  runtimeStateAtom,
-  selectedFunctionAtom,
+  functionsAtom,
+  unifiedSelectionStateAtom,
 } from '@baml/playground-common';
 import { useFeedbackWidget } from '@baml/playground-common/lib/feedback_widget';
 import { ScrollArea } from '@baml/ui/scroll-area';
@@ -37,30 +37,6 @@ const ErrorBoundaryWrapper = ({
   children: React.ReactNode;
 }) => <CustomErrorBoundary message={message}>{children}</CustomErrorBoundary>;
 
-// Hook for project file management
-const useProjectFiles = (project: BAMLProject) => {
-  const [files, setFiles] = useAtom(filesAtom);
-  const [unsavedChanges, setUnsavedChanges] = useAtom(unsavedChangesAtom);
-
-  useEffect(() => {
-    if (project) {
-      console.log('Updating files due: project', project.id);
-      setUnsavedChanges(false);
-      setFiles(
-        project.files.reduce(
-          (acc, f) => {
-            acc[f.path] = f.content;
-            return acc;
-          },
-          {} as Record<string, string>,
-        ),
-      );
-    }
-  }, [project, setFiles, setUnsavedChanges]);
-
-  return { files, setFiles, unsavedChanges };
-};
-
 // Hook for editable text fields
 const useEditableField = (initialValue: string) => {
   const [value, setValue] = useState(initialValue);
@@ -74,7 +50,9 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
   useFeedbackWidget();
   useKeybindingOverrides();
 
-  const { files, setFiles, unsavedChanges } = useProjectFiles(project);
+  const sdk = useBAMLSDK();
+  const files = useAtomValue(filesAtom);
+  const unsavedChanges = useAtomValue(unsavedChangesAtom);
   const activeFileName = useAtomValue(activeFileNameAtom);
   const { value: projectName, setValue: setProjectName } = useEditableField(
     project.name,
@@ -87,12 +65,15 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
     textareaRef: descriptionTextareaRef,
   } = useEditableField(project.description);
 
+  // Note: Initial files are provided via BAMLSDKProvider's initialFiles prop
+  // No need for a useEffect here - the provider handles initialization
+
   const handleContentChange = (newContent: string) => {
     const newFiles: Record<string, string> = {};
     for (const [key, value] of Object.entries(files)) {
       newFiles[key] = key === activeFileName ? newContent : value;
     }
-    setFiles(newFiles);
+    sdk.files.update(newFiles);
   };
 
   return (
@@ -171,7 +152,7 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
                 {!isMobile && (
                   <ResizablePanel defaultSize={50} className="tour-playground">
                     <div className="flex flex-col h-full overflow-hidden">
-                      <div className="flex-1 min-h-0 overflow-hidden">
+                      <div className="h-full min-h-0 overflow-hidden">
                         <PlaygroundView />
                       </div>
                     </div>
@@ -190,21 +171,61 @@ const ProjectViewImpl = ({ project }: { project: BAMLProject }) => {
 
 export const FunctionSelectorProvider = () => {
   const activeFileName = useAtomValue(activeFileNameAtom);
-  const { functions } = useAtomValue(runtimeStateAtom);
-  const setSelectedFunction = useSetAtom(selectedFunctionAtom);
+  const functions = useAtomValue(functionsAtom);
+  const setSelectionState = useSetAtom(unifiedSelectionStateAtom);
+  const currentSelection = useAtomValue(unifiedSelectionStateAtom);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
-    const func = functions.find((f) => f.span.file_path === activeFileName);
+    // Find the first function in the active file
+    const func = functions.find((f) => f.span?.filePath === activeFileName);
+
     if (func) {
-      setSelectedFunction(func.name);
+      // Get the first test case if available
+      const firstTestName = func.testCases?.[0]?.name ?? null;
+
+      // Only auto-select on initial load or when file changes
+      // Check if we already have this function selected to avoid loops
+      if (currentSelection.mode === 'function' &&
+        currentSelection.functionName === func.name) {
+        // Already selected this function, only update test if empty
+        if (!currentSelection.testName && firstTestName) {
+          setSelectionState({
+            mode: 'function',
+            functionName: func.name,
+            testName: firstTestName,
+          });
+        }
+        return;
+      }
+
+      // Select the function and its first test
+      setSelectionState({
+        mode: 'function',
+        functionName: func.name,
+        testName: firstTestName,
+      });
+      hasInitializedRef.current = true;
+    } else if (functions.length > 0 && !hasInitializedRef.current) {
+      // No function in active file, but we have functions - select the first one
+      const firstFunc = functions[0];
+      if (firstFunc) {
+        const firstTestName = firstFunc.testCases?.[0]?.name ?? null;
+        setSelectionState({
+          mode: 'function',
+          functionName: firstFunc.name,
+          testName: firstTestName,
+        });
+        hasInitializedRef.current = true;
+      }
     }
-  }, [activeFileName, functions, setSelectedFunction]);
+  }, [activeFileName, functions, setSelectionState, currentSelection]);
 
   return null;
 };
 
 export const ProjectSidebar = () => (
-  <div className="w-64 h-full dark:bg-[#020309] bg-muted overflow-hidden">
+  <div className="w-[200px] h-full dark:bg-[#020309] bg-muted overflow-hidden">
     <div className="flex flex-row justify-center items-center pt-4 w-full">
       <a
         href={'/'}
@@ -233,11 +254,24 @@ export const ProjectSidebar = () => (
   </div>
 );
 
-export const ProjectView = ({ project }: { project: BAMLProject }) => (
-  <JotaiProvider>
-    <ProjectViewImpl project={project} />
-  </JotaiProvider>
-);
+export const ProjectView = ({ project }: { project: BAMLProject }) => {
+  // Convert project files to the format expected by the SDK (memoized to prevent re-renders)
+  const initialFiles = useMemo(() => {
+    return project.files.reduce(
+      (acc, f) => {
+        acc[f.path] = f.content;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+  }, [project.files]);
+
+  return (
+    <BAMLSDKProvider mode="wasm" initialFiles={initialFiles}>
+      <ProjectViewImpl project={project} />
+    </BAMLSDKProvider>
+  );
+};
 
 const PlaygroundView = () => (
   <ErrorBoundaryWrapper message="Error loading playground">

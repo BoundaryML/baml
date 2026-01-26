@@ -68,6 +68,10 @@ func (*stream) TestBooleanLiterals(ctx context.Context, input string, opts ...Ca
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -136,6 +140,10 @@ func (*stream) TestComplexLiterals(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -208,6 +216,10 @@ func (*stream) TestIntegerLiterals(ctx context.Context, input string, opts ...Ca
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -278,6 +290,10 @@ func (*stream) TestMixedLiterals(ctx context.Context, input string, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -346,6 +362,10 @@ func (*stream) TestStringLiterals(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

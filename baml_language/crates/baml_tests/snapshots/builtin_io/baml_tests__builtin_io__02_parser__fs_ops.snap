@@ -1,0 +1,229 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ReadFile"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.fs.open"
+              WORD "baml"
+              DOT "."
+              WORD "fs"
+              DOT "."
+              WORD "open"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "example.txt"
+                QUOTE """
+                WORD "example"
+                DOT "."
+                WORD "txt"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "f.read"
+            WORD "f"
+            DOT "."
+            WORD "read"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ReadFileInline"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              PATH_EXPR "baml.fs.open"
+                WORD "baml"
+                DOT "."
+                WORD "fs"
+                DOT "."
+                WORD "open"
+              CALL_ARGS
+                L_PAREN "("
+                STRING_LITERAL "data.json"
+                  QUOTE """
+                  WORD "data"
+                  DOT "."
+                  WORD "json"
+                  QUOTE """
+                R_PAREN ")"
+            DOT "."
+            WORD "read"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ReadMultipleFiles"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f1"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.fs.open"
+              WORD "baml"
+              DOT "."
+              WORD "fs"
+              DOT "."
+              WORD "open"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "file1.txt"
+                QUOTE """
+                WORD "file1"
+                DOT "."
+                WORD "txt"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "f2"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.fs.open"
+              WORD "baml"
+              DOT "."
+              WORD "fs"
+              DOT "."
+              WORD "open"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "file2.txt"
+                QUOTE """
+                WORD "file2"
+                DOT "."
+                WORD "txt"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "content1"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "f1.read"
+              WORD "f1"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "content2"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "f2.read"
+              WORD "f2"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        BINARY_EXPR "content1 + content2"
+          WORD "content1"
+          PLUS "+"
+          WORD "content2"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ReadAndClose"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "f"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.fs.open"
+              WORD "baml"
+              DOT "."
+              WORD "fs"
+              DOT "."
+              WORD "open"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "example.txt"
+                QUOTE """
+                WORD "example"
+                DOT "."
+                WORD "txt"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "content"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "f.read"
+              WORD "f"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "f.close"
+            WORD "f"
+            DOT "."
+            WORD "close"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        WORD "content"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

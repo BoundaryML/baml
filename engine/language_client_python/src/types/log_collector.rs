@@ -31,6 +31,11 @@ impl Collector {
         }
     }
 
+    /// Clear all tracked logs from this collector
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
     /// For Python: `repr(log_collector)`
     fn __repr__(&self) -> String {
         let logs = self.logs();
@@ -88,7 +93,7 @@ impl Collector {
     #[staticmethod]
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {tracer:#?}");
+        eprintln!("Storage: {tracer:#?}");
     }
 }
 
@@ -184,6 +189,17 @@ impl FunctionLog {
         let dict = PyDict::new(py);
         for (k, v) in meta.iter() {
             // Convert each value to a PyObject as appropriate
+            dict.set_item(k, serde_value_to_py(py, v)?)?;
+        }
+        Ok(dict.into())
+    }
+
+    /// pyi: @property def tags -> Dict[str, Any]
+    #[getter]
+    pub fn tags<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+        let tags = self.inner.lock().unwrap().tags();
+        let dict = PyDict::new(py);
+        for (k, v) in tags.iter() {
             dict.set_item(k, serde_value_to_py(py, v)?)?;
         }
         Ok(dict.into())
@@ -404,12 +420,15 @@ pub(crate) fn serde_value_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<P
 impl Usage {
     pub fn __repr__(&self) -> String {
         format!(
-            "Usage(input_tokens={}, output_tokens={})",
+            "Usage(input_tokens={}, output_tokens={}, cached_input_tokens={})",
             self.inner
                 .input_tokens
                 .map_or_else(|| "None".to_string(), |v| v.to_string()),
             self.inner
                 .output_tokens
+                .map_or_else(|| "None".to_string(), |v| v.to_string()),
+            self.inner
+                .cached_input_tokens
                 .map_or_else(|| "None".to_string(), |v| v.to_string())
         )
     }
@@ -422,6 +441,11 @@ impl Usage {
     #[getter]
     pub fn output_tokens(&self) -> Option<i64> {
         self.inner.output_tokens
+    }
+
+    #[getter]
+    pub fn cached_input_tokens(&self) -> Option<i64> {
+        self.inner.cached_input_tokens
     }
 }
 

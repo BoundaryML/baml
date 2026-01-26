@@ -6,14 +6,19 @@ use ts_rs::TS;
 
 use crate::ast::type_reference::TypeReference;
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, TS, PartialEq, Eq, Default)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TypeIndex {
+    #[default]
     NotUnion,
     Null,         // the type is a union but the value is null
     Index(usize), // the type is a union and this index points to the actual type
     NotFound,
+}
+
+fn is_default_type_index(t: &TypeIndex) -> bool {
+    matches!(t, TypeIndex::NotUnion)
 }
 
 // Export this to TS since we don't yet decouple this into a DB specific type or anything. What the runtime exports is what the frontend reads as far as BamlValue is concerned. If you want to decouple it, create a UIBamlValue type and do a conversion from this to the UI type.
@@ -80,9 +85,11 @@ pub struct ValueMetadata {
     // None -> Not a union
     // Some(None) -> Null
     // Some(Some(i)) -> i
+    #[serde(default, skip_serializing_if = "is_default_type_index")]
     pub type_index: TypeIndex,
 
     // check_name
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check_results: Option<IndexMap<String, CheckValue>>,
 }
 

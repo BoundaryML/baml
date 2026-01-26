@@ -15,6 +15,8 @@ on:
   push:
     branches:
       - sam/mise-protoc-gen-go
+      - aaron/fix-windows
+      - aaron/fix-windows-cli-build
 env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
   # Turbo remote caching
@@ -70,7 +72,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # This sets up protoc-gen-go for non-Windows builds
+      # and on windows this seems to hang forever since 0.217.0
       - name: Setup Tools
+        if: matrix._.os != 'windows-2022'
         uses: ./.github/actions/setup-tools
 
       - name: Setup Rust
@@ -82,10 +87,28 @@ jobs:
       - name: Setup Go
         uses: ./.github/actions/setup-go
 
-
       - uses: jdx/mise-action@v2
+        if: matrix._.os != 'windows-2022'
         with:
           install_args: "protoc-gen-go"
+
+      - name: Setup Protoc (Windows)
+        if: matrix._.os == 'windows-2022'
+        shell: bash
+        run: |
+          # Download protoc directly to avoid rate limiting
+          PROTOC_VERSION="27.1"
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-win64.zip"
+          unzip -q protoc-${PROTOC_VERSION}-win64.zip -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm protoc-${PROTOC_VERSION}-win64.zip
+
+      - name: Install protoc-gen-go (Windows)
+        if: matrix._.os == 'windows-2022'
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.1
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+        shell: bash
 
       - name: Test protoc-gen-go availability
         id: protoc_gen_go_setup
@@ -135,7 +158,8 @@ jobs:
           --no-default-features
         working-directory: engine
 
-      - name: Build CFFI Library
+      - name: Build CFFI Library (Unix)
+        if: ${{ !contains(matrix._.os, 'windows') }}
         shell: bash
         run: |
           # Set the correct protoc-gen-go path based on whether we're using cross (Linux) or native build
@@ -156,32 +180,39 @@ jobs:
 
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
+
+      - name: Build CFFI Library (Windows)
+        if: ${{ contains(matrix._.os, 'windows') }}
+        shell: bash
+        run: |
+          cargo build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+        working-directory: engine
 
       # Determine CFFI library name and artifact suffix based on OS
       - name: Set CFFI Lib Info
         id: cffi_info
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           target="${{ matrix._.target }}"
           if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
-            # This case is currently excluded by the 'if' condition, but kept for completeness
-            base_name="libbaml_cffi.dll"
+            base_name="baml_cffi.dll"  # Note: no "lib" prefix on Windows
             suffix="windows"
+            extension="dll"
           elif [[ "${{ matrix._.os }}" == *"macos"* ]]; then
             base_name="libbaml_cffi.dylib"
             suffix="darwin"
+            extension="dylib"
           else # Linux
             base_name="libbaml_cffi.so"
             suffix="linux"
+            extension="so"
           fi
-          # Extract extension
-          extension="${base_name##*.}"
-          # Construct new name: libbaml_cffi-${target}.${extension}
-          new_name="libbaml_cffi-${target}.${extension}"
+          # Windows DLLs don't use lib prefix
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
+            new_name="baml_cffi-${target}.${extension}"
+          else
+            new_name="libbaml_cffi-${target}.${extension}"
+          fi
 
           echo "lib_name=${base_name}" >> $GITHUB_OUTPUT
           echo "new_lib_name=${new_name}" >> $GITHUB_OUTPUT
@@ -204,8 +235,6 @@ jobs:
 
       # Rename the CFFI library file
       - name: Rename CFFI Library
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           set -x # enable debug printing
@@ -236,8 +265,6 @@ jobs:
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
         uses: actions/upload-artifact@v4
-        # Skip this step on Windows runners
-        if: matrix._.os != 'windows-2022'
         with:
           # Artifact name uses the target name for uniqueness (as decided previously)
           name: libbaml-cffi-${{ matrix._.target }}

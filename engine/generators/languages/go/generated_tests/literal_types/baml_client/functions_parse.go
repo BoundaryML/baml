@@ -51,6 +51,10 @@ func (*parse) TestBooleanLiterals(text string, opts ...CallOptionFunc) (types.Bo
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -92,6 +96,10 @@ func (*parse) TestComplexLiterals(text string, opts ...CallOptionFunc) (types.Co
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -137,6 +145,10 @@ func (*parse) TestIntegerLiterals(text string, opts ...CallOptionFunc) (types.In
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -180,6 +192,10 @@ func (*parse) TestMixedLiterals(text string, opts ...CallOptionFunc) (types.Mixe
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -221,6 +237,10 @@ func (*parse) TestStringLiterals(text string, opts ...CallOptionFunc) (types.Str
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

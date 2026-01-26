@@ -7,9 +7,8 @@ description.workspace = true
 license-file.workspace = true
 
 [lib]
-# If you only wanted dynamic library, you'd use only "cdylib".
-# This demo shows both. See https://doc.rust-lang.org/reference/linkage.html
-# for more information.
+# cdylib - Dynamic library for runtime linking (used by Go, Rust, etc.)
+# See https://doc.rust-lang.org/reference/linkage.html
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -21,7 +20,6 @@ baml-types.workspace = true
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
   "internal",
 ] }
-internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true

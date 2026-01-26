@@ -6,7 +6,7 @@ describe("Basic Input/Output Tests", () => {
   describe("Input Types", () => {
     it("single bool", async () => {
       const res = await b.TestFnNamedArgsSingleBool(true);
-      expect(res).toEqual("true");
+      expect(res.toLowerCase()).toEqual("true");
     });
 
     it("single string list", async () => {

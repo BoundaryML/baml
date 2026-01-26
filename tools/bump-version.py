@@ -67,7 +67,7 @@ def get_current_version() -> Optional[str]:
 def check_git_changes(pre_bump_version: str) -> int:
     try:
         diff_output = run(
-            f"git diff {pre_bump_version} -- engine/language_client_codegen/src",
+            f"git diff {pre_bump_version} -- engine/generators/languages",
             capture_output=True,
         ).stdout
     except sp.CalledProcessError:
@@ -88,7 +88,9 @@ def main(
     python: bool = typer.Option(False, "--python", help="Bump patch for python"),
     ruby: bool = typer.Option(False, "--ruby", help="Bump patch for ruby"),
     go: bool = typer.Option(False, "--go", help="Bump patch for go"),
+    rust: bool = typer.Option(False, "--rust", help="Bump patch for rust SDK"),
     vscode: bool = typer.Option(False, "--vscode", help="Bump patch for vscode"),
+    zed: bool = typer.Option(False, "--zed", help="Bump patch for zed extension"),
     jetbrains: bool = typer.Option(
         False, "--jetbrains", help="Bump patch for jetbrains"
     ),
@@ -101,7 +103,7 @@ def main(
     ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
-    modes = [ts, python, ruby, go, vscode, jetbrains, bump_all]
+    modes = [ts, python, ruby, go, rust, vscode, zed, jetbrains, bump_all]
     if sum(modes) > 1:
         c.print("Error: Only one mode can be enabled.", style="red")
         sys.exit(1)
@@ -135,7 +137,7 @@ def main(
         sys.exit(1)
 
     c.print(
-        f"Checking for changes from version {pre_bump_version} in 'engine/language_client_codegen/src'...",
+        f"Checking for changes from version {pre_bump_version} in 'engine/generators/languages'...",
         style="blue",
     )
 
@@ -184,7 +186,9 @@ def main(
         python,
         ruby,
         go,
+        rust,
         vscode,
+        zed,
         jetbrains,
         bump_all,
         allow_dirty,
@@ -320,7 +324,9 @@ def perform_version_bumps(
     python: bool,
     ruby: bool,
     go: bool,
+    rust: bool,
     vscode: bool,
+    zed: bool,
     jetbrains: bool,
     all: bool,
     allow_dirty: bool,
@@ -343,7 +349,9 @@ def perform_version_bumps(
             "typescript",
             "ruby",
             "go",
+            "rust",
             "vscode",
+            "zed",
             "integ-tests",
             "jetbrains",
         ]:
@@ -389,10 +397,24 @@ def perform_version_bumps(
             "patch",
             f"--new-version={new_version}" if new_version else "",
         )
+    elif zed:
+        bump2version(
+            "--config-file",
+            "./versions/zed.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif jetbrains:
         bump2version(
             "--config-file",
             "./versions/jetbrains.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
+    elif rust:
+        bump2version(
+            "--config-file",
+            "./versions/rust.cfg",
             "patch",
             f"--new-version={new_version}" if new_version else "",
         )

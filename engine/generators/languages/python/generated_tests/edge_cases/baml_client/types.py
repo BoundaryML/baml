@@ -15,7 +15,7 @@ import typing_extensions
 from enum import Enum
 
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 import baml_py
@@ -132,11 +132,11 @@ class NumberEdgeCases(BaseModel):
     zero: int
     negativeInt: int
     largeInt: int
-    veryLargeInt: int
+    veryLargeInt: int = Field(description='i64 max value')
     smallFloat: float
     largeFloat: float
     negativeFloat: float
-    scientificNotation: float
+    scientificNotation: float = Field(description='> 1e3, but < 1e6')
     infinity: typing.Optional[float] = None
     notANumber: typing.Optional[float] = None
 

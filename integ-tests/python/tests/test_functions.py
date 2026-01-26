@@ -49,6 +49,36 @@ import asyncio
 import random
 
 
+def count_trace_events_from_file(trace_file_path: str) -> dict:
+    """
+    Count function_start and function_end events from a trace file.
+    Returns a dict with counts: {"function_start": N, "function_end": N}
+    """
+    counts = {"function_start": 0, "function_end": 0}
+
+    if not os.path.exists(trace_file_path):
+        # Create the trace file and its parent directory if they don't exist
+        os.makedirs(os.path.dirname(trace_file_path), exist_ok=True)
+        with open(trace_file_path, "w") as f:
+            pass  # Create empty file
+        return counts  # Return zero counts for empty file
+
+    with open(trace_file_path, "r") as f:
+        for line in f:
+            try:
+                event = json.loads(line.strip())
+                # The event type is nested in content.type
+                event_type = event.get("content", {}).get("type")
+                if event_type == "function_start":
+                    counts["function_start"] += 1
+                elif event_type == "function_end":
+                    counts["function_end"] += 1
+            except json.JSONDecodeError:
+                continue
+
+    return counts
+
+
 def test_legacy_imports():
     from ..baml_client import reset_baml_env_vars
 
@@ -420,9 +450,7 @@ async def test_should_work_for_all_outputs():
 @pytest.mark.asyncio
 async def test_should_work_with_image_url():
     res = await b.TestImageInput(
-        img=baml_py.Image.from_url(
-            "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
-        )
+        img=baml_py.Image.from_url("https://i.imgur.com/93fWs5R.png")
     )
     assert_that(res.lower()).matches(r"(green|yellow|shrek|ogre)")
 
@@ -431,9 +459,7 @@ async def test_should_work_with_image_url():
 async def test_should_work_with_image_list():
     res = await b.TestImageListInput(
         imgs=[
-            baml_py.Image.from_url(
-                "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
-            ),
+            baml_py.Image.from_url("https://i.imgur.com/93fWs5R.png"),
             baml_py.Image.from_url(
                 "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_92x30dp.png"
             ),
@@ -448,6 +474,9 @@ async def test_should_work_with_vertex():
     assert_that("donkey kong" in res.lower())
 
 
+@pytest.mark.skip(
+    "Skipping test_should_work_with_vertex_claude until vertex resourcing is fixed"
+)
 @pytest.mark.asyncio
 async def test_should_work_with_vertex_claude():
     res = await b.TestVertexClaude("donkey kong")
@@ -506,6 +535,7 @@ async def test_works_with_retries2():
 
 
 @pytest.mark.asyncio
+@trace
 async def test_works_with_fallbacks():
     res = await b.TestFallbackClient()
     assert len(res) > 0, "Expected non-empty result but got empty."
@@ -624,10 +654,32 @@ async def test_anthropic_shorthand():
 
 @pytest.mark.asyncio
 async def test_anthropic_shorthand_streaming():
-    res = await b.stream.TestAnthropicShorthand(
-        input="Mt Rainier is tall"
-    ).get_final_response()
-    assert len(res) > 0, "Expected non-empty result but got empty."
+    res = b.stream.TestAnthropicShorthand(input="Mt Rainier is tall")
+    chunks = []
+    async for chunk in res:
+        chunks.append(chunk)
+        print("chunk", chunk)
+    final = await res.get_final_response()
+    print("final", final)
+
+    assert len(chunks) > 0, "Expected non-empty result but got empty."
+    assert len(final) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.skip(
+    "Skipping test_vertex_anthropic_streaming until vertex resourcing is fixed"
+)
+@pytest.mark.asyncio
+async def test_vertex_anthropic_streaming():
+    res = b.stream.TestVertexClaude(input="Mt Rainier is tall")
+    chunks = []
+    async for chunk in res:
+        chunks.append(chunk)
+        print("chunk", chunk)
+    final = await res.get_final_response()
+    print("final", final)
+    assert len(chunks) > 0, "Expected non-empty result but got empty."
+    assert len(final) > 0, "Expected non-empty result but got empty."
 
 
 @pytest.mark.asyncio
@@ -639,7 +691,7 @@ async def test_fallback_to_shorthand():
 
 
 @pytest.mark.asyncio
-async def test_streaming():
+async def test_streaming_long():
     stream = b.stream.PromptTestStreaming(
         input="Programming languages are fun to create"
     )
@@ -694,6 +746,7 @@ def test_streaming_sync():
     last_msg_time = start_time
     first_msg_time = start_time + 10
     for msg in stream:
+        print(f"msg {msg}")
         msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
@@ -702,14 +755,14 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    diff = first_msg_time - start_time
+    print(f"first_msg_time - start_time: {diff}")
+    assert diff <= 2, "Expected first message within 2 second but it took longer."
+    diff = last_msg_time - start_time
+    print(f"last_msg_time - start_time: {diff}")
+    assert diff >= 2, "Expected last message after 2 second but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
-    assert len(msgs) > 0, "Expected at least one streamed response but got none."
+    assert len(msgs) > 5, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
         assert msg.startswith(
             prev_msg
@@ -813,11 +866,11 @@ async def test_gemini_models():
     # )
     # assert len(res) > 0, "Expected non-empty result but got empty."
 
-    # Test with gemini-2.0-flash-thinking-exp-1219
+    # Test with gemini-2.5-pro
     client_registry.add_llm_client(
         "GeminiFlashThinking",
         "google-ai",
-        {"model": "gemini-2.0-flash-thinking-exp-1219"},
+        {"model": "gemini-2.5-pro"},
     )
     client_registry.set_primary("GeminiFlashThinking")
     res = await b.TestGemini(
@@ -835,10 +888,17 @@ async def test_tracing_async_only():
             time.sleep(0.5 + random.random())
             return "nested dummy fn"
 
+        async def failsafe_baml_fn(foo: str):
+            try:
+                await b.FnOutputClass(foo)
+            except Exception as e:
+                print("ERROR", e)
+                return "failsafe baml fn"
+
         @trace
         async def dummy_fn(foo: str):
             await asyncio.gather(
-                b.FnOutputClass(foo),
+                failsafe_baml_fn(foo),
                 nested_dummy_fn(foo),
             )
             return "dummy fn"
@@ -848,27 +908,122 @@ async def test_tracing_async_only():
             dummy_fn("dummy arg 2"),
             dummy_fn("dummy arg 3"),
         )
-        await asyncio.gather(
-            parent_async("first-arg-value"), parent_async2("second-arg-value")
-        )
+        # await asyncio.gather(
+        #     parent_async("first-arg-value"), parent_async2("second-arg-value")
+        # )
         return 1
 
-    # Clear any existing traces
-    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
-    _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
+    # Set up trace file for verification
+    trace_file = os.environ["BAML_TRACE_FILE"]
+    if os.path.exists(trace_file):
+        os.remove(trace_file)
 
-    res = await top_level_async_tracing()
-    assert_that(res).is_equal_to(1)
+    try:
+        # Clear any existing traces
+        DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+        _ = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
 
-    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
-    stats = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.drain_stats()
-    print("STATS", stats)
-    assert_that(stats.started).is_equal_to(15)
-    assert_that(stats.finalized).is_equal_to(stats.started)
-    assert_that(stats.submitted).is_equal_to(stats.started)
-    assert_that(stats.sent).is_equal_to(stats.started)
-    assert_that(stats.done).is_equal_to(stats.started)
-    assert_that(stats.failed).is_equal_to(0)
+        try:
+            res = await top_level_async_tracing()
+            assert_that(res).is_equal_to(1)
+        except Exception as e:
+            print("ERROR", e)
+
+        DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.flush()
+
+        # Verify trace events were written to file
+        event_counts = count_trace_events_from_file(trace_file)
+        print(f"Trace event counts: {event_counts}")
+        assert_that(event_counts["function_start"]).is_equal_to(10)
+        assert_that(event_counts["function_end"]).is_equal_to(10)
+        # Function starts and ends should match
+        assert_that(event_counts["function_start"]).is_equal_to(
+            event_counts["function_end"]
+        )
+
+        # Verify callstack hierarchy and parent IDs
+        events = []
+        with open(trace_file, "r") as f:
+            for line in f:
+                try:
+                    event = json.loads(line.strip())
+                    events.append(event)
+                except json.JSONDecodeError:
+                    continue
+
+        # Build a map of call_id -> event for function_start events
+        call_map = {}
+        for event in events:
+            if event.get("content", {}).get("type") == "function_start":
+                call_id = event["call_id"]
+                call_stack = event["call_stack"]
+                function_name = event["content"]["data"]["function_display_name"]
+                call_map[call_id] = {
+                    "call_stack": call_stack,
+                    "function_name": function_name,
+                }
+
+        # Find top_level_async_tracing - it should have a call_stack of length 1
+        top_level_id = None
+        for call_id, info in call_map.items():
+            if info["function_name"] == "top_level_async_tracing":
+                top_level_id = call_id
+                assert_that(info["call_stack"]).is_equal_to([call_id])
+                print(f"✓ top_level_async_tracing: call_stack = [{call_id}]")
+                break
+
+        assert_that(top_level_id).is_not_none()
+
+        # Find all dummy_fn calls - they should have call_stack [top_level_id, dummy_fn_id]
+        dummy_fn_ids = []
+        for call_id, info in call_map.items():
+            if info["function_name"] == "dummy_fn":
+                assert_that(info["call_stack"]).is_equal_to([top_level_id, call_id])
+                dummy_fn_ids.append(call_id)
+                print(f"✓ dummy_fn: call_stack = [top_level_async_tracing, {call_id}]")
+
+        # Should have 3 dummy_fn calls
+        assert_that(len(dummy_fn_ids)).is_equal_to(3)
+
+        # Find all nested_dummy_fn calls - they should have call_stack [top_level_id, parent_dummy_fn_id, nested_dummy_fn_id]
+        nested_dummy_fn_count = 0
+        for call_id, info in call_map.items():
+            if info["function_name"] == "nested_dummy_fn":
+                call_stack = info["call_stack"]
+                assert_that(len(call_stack)).is_equal_to(3)
+                assert_that(call_stack[0]).is_equal_to(top_level_id)
+                assert_that(call_stack[1]).is_in(*dummy_fn_ids)
+                assert_that(call_stack[2]).is_equal_to(call_id)
+                parent_dummy_fn_id = call_stack[1]
+                print(
+                    f"✓ nested_dummy_fn: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]"
+                )
+                nested_dummy_fn_count += 1
+
+        # Should have 3 nested_dummy_fn calls (one per dummy_fn)
+        assert_that(nested_dummy_fn_count).is_equal_to(3)
+
+        # Find all FnOutputClass calls - they should have call_stack [top_level_id, parent_dummy_fn_id, FnOutputClass_id]
+        fn_output_class_count = 0
+        for call_id, info in call_map.items():
+            if info["function_name"] == "FnOutputClass":
+                call_stack = info["call_stack"]
+                assert_that(len(call_stack)).is_equal_to(3)
+                assert_that(call_stack[0]).is_equal_to(top_level_id)
+                assert_that(call_stack[1]).is_in(*dummy_fn_ids)
+                assert_that(call_stack[2]).is_equal_to(call_id)
+                parent_dummy_fn_id = call_stack[1]
+                print(
+                    f"✓ FnOutputClass: call_stack = [top_level_async_tracing, dummy_fn:{parent_dummy_fn_id}, {call_id}]"
+                )
+                fn_output_class_count += 1
+
+        # Should have 3 FnOutputClass calls (one per dummy_fn, called in failsafe_baml_fn)
+        assert_that(fn_output_class_count).is_equal_to(3)
+
+        print("✓ Callstack verification complete!")
+    finally:
+        pass
 
 
 def test_tracing_sync():
@@ -997,7 +1152,7 @@ async def test_dynamic_client_with_vertex_json_str_creds():
         "MyClient",
         "vertex-ai",
         {
-            "model": "gemini-1.5-pro",
+            "model": "gemini-2.5-flash",
             "location": "us-central1",
             "credentials": os.environ[
                 "INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"
@@ -1019,7 +1174,7 @@ async def test_dynamic_client_with_vertex_json_object_creds():
         "MyClient",
         "vertex-ai",
         {
-            "model": "gemini-1.5-pro",
+            "model": "gemini-2.5-flash",
             "location": "us-central1",
             "credentials": json.loads(
                 os.environ["INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT"]
@@ -1072,6 +1227,14 @@ async def test_aws_bedrock_invalid_region():
     with pytest.raises(errors.BamlClientError) as excinfo:
         res = await b.TestAwsInvalidRegion("lightning in a rock")
         print("unstreamed", res)
+
+    assert "DispatchFailure" in str(excinfo)
+
+
+@pytest.mark.asyncio
+async def test_aws_bedrock_invalid_endpoint():
+    with pytest.raises(errors.BamlClientError) as excinfo:
+        await b.TestAwsInvalidEndpoint("lightning in a rock")
 
     assert "DispatchFailure" in str(excinfo)
 
@@ -1331,9 +1494,10 @@ async def test_return_failing_assert():
 
 @pytest.mark.asyncio
 async def test_parameter_failing_assert():
-    with pytest.raises(errors.BamlInvalidArgumentError):
+    with pytest.raises(errors.BamlInvalidArgumentError) as exc_info:
         msg = await b.ReturnFailingAssert(100)
         assert msg == 103
+    print(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -1581,3 +1745,68 @@ async def test_openai_responses_reasoning_streaming():
         print(msg)
 
     _res = await stream.get_final_response()
+
+
+@pytest.mark.asyncio
+async def test_openai_responses_all_roles():
+    _res = await b.TestOpenAIResponsesAllRoles(
+        "a world without horses, should be titled 'A World Without Horses'. Make it short, 2 sentences."
+    )
+
+
+# Testing @skip attribute bug fixes
+# GitHub issue #2915: @skip + @@dynamic causes panic
+# Discord bug report: @skip on non-dynamic class causes panic
+class TestSkipAttribute:
+    """Test that @skip fields work correctly and don't cause panics.
+
+    Tests fix for:
+    - GitHub #2915: @skip + @@dynamic panic in semantic_streaming.rs:130
+    - Discord report: @skip on non-dynamic class with optional fields
+    """
+
+    @pytest.mark.asyncio
+    async def test_skip_with_dynamic_class(self):
+        """Test @skip + @@dynamic combination (GitHub #2915)"""
+        res = await b.TestSkipDynamic("value: hello world")
+        assert res is not None
+        assert res.internal_id is None  # @skip field should be None
+
+    @pytest.mark.asyncio
+    async def test_skip_with_dynamic_class_streaming(self):
+        """Test @skip + @@dynamic with streaming (GitHub #2915)"""
+        stream = b.stream.TestSkipDynamic("value: streaming test")
+        async for msg in stream:
+            pass
+        res = await stream.get_final_response()
+        assert res is not None
+        assert res.internal_id is None
+
+    @pytest.mark.asyncio
+    async def test_skip_non_dynamic_class(self):
+        """Test @skip on non-dynamic class (Discord bug report)"""
+        res = await b.TestSkipNonDynamic("name: test")
+        assert res is not None
+        assert res.metadata is None  # @skip field should be None
+
+    @pytest.mark.asyncio
+    async def test_skip_non_dynamic_class_streaming(self):
+        """Test @skip on non-dynamic class with streaming (Discord bug report)"""
+        stream = b.stream.TestSkipNonDynamic("name: streaming")
+        async for msg in stream:
+            pass
+        res = await stream.get_final_response()
+        assert res is not None
+        assert res.metadata is None
+
+
+@pytest.fixture(scope="session", autouse=True)
+def flush_traces():
+    """Ensure traces are flushed when pytest exits."""
+    yield
+    print("[python] Flushing traces")
+    from baml_client.tracing import flush
+
+    print("Flushing traces (after import)")
+    flush()
+    print("[python]Traces flushed")

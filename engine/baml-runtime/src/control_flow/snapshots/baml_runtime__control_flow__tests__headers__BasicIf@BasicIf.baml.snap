@@ -1,0 +1,1156 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/BasicIf.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            DeclareAndAssign {\n                name: \"x\",\n                value: NumericValue(\n                    \"1\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                        start: 40,\n                        end: 41,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                    start: 32,\n                    end: 43,\n                },\n            },\n            Expression {\n                expr: If {\n                    condition: BoolValue(\n                        true,\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 52,\n                            end: 56,\n                        },\n                    ),\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"standalone then\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 68,\n                                            end: 87,\n                                        },\n                                    },\n                                ),\n                                DeclareAndAssign {\n                                    name: \"a\",\n                                    value: NumericValue(\n                                        \"18\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 104,\n                                            end: 106,\n                                        },\n                                    ),\n                                    annotated_type: None,\n                                    watch: None,\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 96,\n                                        end: 108,\n                                    },\n                                },\n                            ],\n                            trailing_expr: None,\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 58,\n                            end: 113,\n                        },\n                    ),\n                    else_branch: None,\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                        start: 48,\n                        end: 113,\n                    },\n                },\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                    start: 48,\n                    end: 114,\n                },\n            },\n            Expression {\n                expr: If {\n                    condition: BinaryOperation {\n                        left: Identifier(\n                            \"x\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                start: 123,\n                                end: 124,\n                            },\n                        ),\n                        operator: Eq,\n                        right: NumericValue(\n                            \"2\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                start: 128,\n                                end: 129,\n                            },\n                        ),\n                        span: Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 123,\n                            end: 129,\n                        },\n                    },\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"if inside if-elseif-else\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 141,\n                                            end: 169,\n                                        },\n                                    },\n                                ),\n                                DeclareAndAssign {\n                                    name: \"b\",\n                                    value: NumericValue(\n                                        \"18\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 186,\n                                            end: 188,\n                                        },\n                                    ),\n                                    annotated_type: None,\n                                    watch: None,\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 178,\n                                        end: 190,\n                                    },\n                                },\n                            ],\n                            trailing_expr: None,\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 131,\n                            end: 195,\n                        },\n                    ),\n                    else_branch: Some(\n                        If {\n                            condition: BinaryOperation {\n                                left: Identifier(\n                                    \"x\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 205,\n                                        end: 206,\n                                    },\n                                ),\n                                operator: Eq,\n                                right: NumericValue(\n                                    \"3\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 210,\n                                        end: 211,\n                                    },\n                                ),\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                    start: 205,\n                                    end: 211,\n                                },\n                            },\n                            if_branch: Block(\n                                Block {\n                                    statements: [\n                                        HeaderContextEnter(\n                                            HeaderContext {\n                                                level: 1,\n                                                title: \"elseif inside if-elseif-else\",\n                                                span: Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                    start: 223,\n                                                    end: 255,\n                                                },\n                                            },\n                                        ),\n                                        DeclareAndAssign {\n                                            name: \"b\",\n                                            value: NumericValue(\n                                                \"19\",\n                                                Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                    start: 272,\n                                                    end: 274,\n                                                },\n                                            ),\n                                            annotated_type: None,\n                                            watch: None,\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                start: 264,\n                                                end: 276,\n                                            },\n                                        },\n                                    ],\n                                    trailing_expr: None,\n                                },\n                                Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                    start: 213,\n                                    end: 281,\n                                },\n                            ),\n                            else_branch: Some(\n                                Block(\n                                    Block {\n                                        statements: [\n                                            HeaderContextEnter(\n                                                HeaderContext {\n                                                    level: 1,\n                                                    title: \"else inside if-elseif-else\",\n                                                    span: Span {\n                                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                        start: 297,\n                                                        end: 327,\n                                                    },\n                                                },\n                                            ),\n                                            DeclareAndAssign {\n                                                name: \"b\",\n                                                value: NumericValue(\n                                                    \"20\",\n                                                    Span {\n                                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                        start: 344,\n                                                        end: 346,\n                                                    },\n                                                ),\n                                                annotated_type: None,\n                                                watch: None,\n                                                span: Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                    start: 336,\n                                                    end: 348,\n                                                },\n                                            },\n                                        ],\n                                        trailing_expr: None,\n                                    },\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 287,\n                                        end: 353,\n                                    },\n                                ),\n                            ),\n                            span: Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                start: 201,\n                                end: 353,\n                            },\n                        },\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                        start: 119,\n                        end: 353,\n                    },\n                },\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                    start: 119,\n                    end: 354,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"This is a named statement\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                        start: 359,\n                        end: 388,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"x\",\n                value: If {\n                    condition: BoolValue(\n                        true,\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 405,\n                            end: 409,\n                        },\n                    ),\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"Then Statement\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 421,\n                                            end: 439,\n                                        },\n                                    },\n                                ),\n                            ],\n                            trailing_expr: Some(\n                                NumericValue(\n                                    \"12\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                        start: 448,\n                                        end: 450,\n                                    },\n                                ),\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                            start: 411,\n                            end: 456,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"Else Statement\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                                start: 472,\n                                                end: 490,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    NumericValue(\n                                        \"13\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                            start: 499,\n                                            end: 501,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                                start: 462,\n                                end: 507,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                        start: 401,\n                        end: 507,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                    start: 393,\n                    end: 509,\n                },\n            },\n        ],\n        trailing_expr: Some(\n            NumericValue(\n                \"5\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicIf.baml\", contents: ... },\n                    start: 514,\n                    end: 515,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: BasicIf
+      log_filter_key: "BasicIf|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 0
+        end: 517
+    "1":
+      label: if (true)
+      log_filter_key: "BasicIf|root:0|bg:if-true:0"
+      node_type: branch-group
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 48
+        end: 113
+    "10":
+      label: else
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+      node_type: branch-arm
+      parent: "5"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 287
+        end: 353
+    "11":
+      label: else inside if-elseif-else
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+      node_type: header
+      parent: "10"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 297
+        end: 327
+    "12":
+      label: This is a named statement
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 359
+        end: 388
+    "13":
+      label: if (true)
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+      node_type: branch-group
+      parent: "12"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 401
+        end: 507
+    "14":
+      label: if (true)
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+      node_type: branch-arm
+      parent: "13"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 411
+        end: 456
+    "15":
+      label: Then Statement
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+      node_type: header
+      parent: "14"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 421
+        end: 439
+    "16":
+      label: else
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+      node_type: branch-arm
+      parent: "13"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 462
+        end: 507
+    "17":
+      label: Else Statement
+      log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+      node_type: header
+      parent: "16"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 472
+        end: 490
+    "2":
+      label: if (true)
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+      node_type: branch-arm
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 58
+        end: 113
+    "3":
+      label: standalone then
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+      node_type: header
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 68
+        end: 87
+    "4":
+      label: else
+      log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+      node_type: branch-arm
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 48
+        end: 113
+    "5":
+      label: if (x == 2)
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+      node_type: branch-group
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 119
+        end: 353
+    "6":
+      label: if (x == 2)
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+      node_type: branch-arm
+      parent: "5"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 131
+        end: 195
+    "7":
+      label: if inside if-elseif-else
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+      node_type: header
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 141
+        end: 169
+    "8":
+      label: else if (x == 3)
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+      node_type: branch-arm
+      parent: "5"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 213
+        end: 281
+    "9":
+      label: elseif inside if-elseif-else
+      log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+      node_type: header
+      parent: "8"
+      span:
+        file: src/control_flow/testdata/BasicIf.baml
+        start: 223
+        end: 255
+  edges:
+    "1":
+      - "5"
+    "5":
+      - "12"
+mermaid: "flowchart TD\nsubgraph n0[\"0: BasicIf\"]\n  direction TB\n  subgraph n1[\"1: BranchGroup: if (true)\"]\n    direction TB\n    subgraph n2[\"2: BranchArm: if (true)\"]\n      direction TB\n      n3[\"3: standalone then\"]\n    end\n    n4[\"4: BranchArm: else\"]\n  end\n  subgraph n5[\"5: BranchGroup: if (x == 2)\"]\n    direction TB\n    subgraph n6[\"6: BranchArm: if (x == 2)\"]\n      direction TB\n      n7[\"7: if inside if-elseif-else\"]\n    end\n    subgraph n8[\"8: BranchArm: else if (x == 3)\"]\n      direction TB\n      n9[\"9: elseif inside if-elseif-else\"]\n    end\n    subgraph n10[\"10: BranchArm: else\"]\n      direction TB\n      n11[\"11: else inside if-elseif-else\"]\n    end\n  end\n  subgraph n12[\"12: This is a named statement\"]\n    direction TB\n    subgraph n13[\"13: BranchGroup: if (true)\"]\n      direction TB\n      subgraph n14[\"14: BranchArm: if (true)\"]\n        direction TB\n        n15[\"15: Then Statement\"]\n      end\n      subgraph n16[\"16: BranchArm: else\"]\n        direction TB\n        n17[\"17: Else Statement\"]\n      end\n    end\n  end\n  n1 --> n5\n  n5 --> n12\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "10":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 287
+            end: 353
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "10"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "14":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "13"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 411
+            end: 456
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "16":
+          label: else
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "13"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 462
+            end: 507
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "16"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "2":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 58
+            end: 113
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "6":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 131
+            end: 195
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "8":
+          label: else if (x == 3)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 213
+            end: 281
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "5"
+        "5":
+          - "12"
+    json:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "10":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 287
+            end: 353
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "10"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "14":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "13"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 411
+            end: 456
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "16":
+          label: else
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "13"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 462
+            end: 507
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "16"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "2":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 58
+            end: 113
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "6":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 131
+            end: 195
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "8":
+          label: else if (x == 3)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 213
+            end: 281
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "5"
+        "5":
+          - "12"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicIf\"]\n  direction TB\n  subgraph n1[\"1: BranchGroup: if (true)\"]\n    direction TB\n    subgraph n2[\"2: BranchArm: if (true)\"]\n      direction TB\n      n3[\"3: standalone then\"]\n    end\n    n4[\"4: BranchArm: else\"]\n  end\n  subgraph n5[\"5: BranchGroup: if (x == 2)\"]\n    direction TB\n    subgraph n6[\"6: BranchArm: if (x == 2)\"]\n      direction TB\n      n7[\"7: if inside if-elseif-else\"]\n    end\n    subgraph n8[\"8: BranchArm: else if (x == 3)\"]\n      direction TB\n      n9[\"9: elseif inside if-elseif-else\"]\n    end\n    subgraph n10[\"10: BranchArm: else\"]\n      direction TB\n      n11[\"11: else inside if-elseif-else\"]\n    end\n  end\n  subgraph n12[\"12: This is a named statement\"]\n    direction TB\n    subgraph n13[\"13: BranchGroup: if (true)\"]\n      direction TB\n      subgraph n14[\"14: BranchArm: if (true)\"]\n        direction TB\n        n15[\"15: Then Statement\"]\n      end\n      subgraph n16[\"16: BranchArm: else\"]\n        direction TB\n        n17[\"17: Else Statement\"]\n      end\n    end\n  end\n  n1 --> n5\n  n5 --> n12\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "10":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 287
+            end: 353
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "10"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "14":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 411
+            end: 456
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "16":
+          label: else
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 462
+            end: 507
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "16"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "2":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 58
+            end: 113
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "6":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 131
+            end: 195
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "8":
+          label: else if (x == 3)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 213
+            end: 281
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "2"
+          - "4"
+        "10":
+          - "12"
+        "13":
+          - "14"
+          - "16"
+        "2":
+          - "5"
+        "4":
+          - "5"
+        "5":
+          - "10"
+          - "6"
+          - "8"
+        "6":
+          - "12"
+        "8":
+          - "12"
+    json:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "10":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 287
+            end: 353
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "10"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "14":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 411
+            end: 456
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "16":
+          label: else
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 462
+            end: 507
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "16"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "2":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 58
+            end: 113
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "6":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 131
+            end: 195
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "8":
+          label: else if (x == 3)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 213
+            end: 281
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "2"
+          - "4"
+        "10":
+          - "12"
+        "13":
+          - "14"
+          - "16"
+        "2":
+          - "5"
+        "4":
+          - "5"
+        "5":
+          - "10"
+          - "6"
+          - "8"
+        "6":
+          - "12"
+        "8":
+          - "12"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicIf\"]\n  direction TB\n  n1[\"1: BranchGroup: if (true)\"]\n  subgraph n2[\"2: BranchArm: if (true)\"]\n    direction TB\n    n3[\"3: standalone then\"]\n  end\n  n4[\"4: BranchArm: else\"]\n  n5[\"5: BranchGroup: if (x == 2)\"]\n  subgraph n6[\"6: BranchArm: if (x == 2)\"]\n    direction TB\n    n7[\"7: if inside if-elseif-else\"]\n  end\n  subgraph n8[\"8: BranchArm: else if (x == 3)\"]\n    direction TB\n    n9[\"9: elseif inside if-elseif-else\"]\n  end\n  subgraph n10[\"10: BranchArm: else\"]\n    direction TB\n    n11[\"11: else inside if-elseif-else\"]\n  end\n  subgraph n12[\"12: This is a named statement\"]\n    direction TB\n    n13[\"13: BranchGroup: if (true)\"]\n    subgraph n14[\"14: BranchArm: if (true)\"]\n      direction TB\n      n15[\"15: Then Statement\"]\n    end\n    subgraph n16[\"16: BranchArm: else\"]\n      direction TB\n      n17[\"17: Else Statement\"]\n    end\n    n13 --> n14\n    n13 --> n16\n  end\n  n2 --> n5\n  n4 --> n5\n  n1 --> n2\n  n1 --> n4\n  n6 --> n12\n  n8 --> n12\n  n10 --> n12\n  n5 --> n6\n  n5 --> n8\n  n5 --> n10\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "3"
+          - "4"
+        "11":
+          - "12"
+        "13":
+          - "15"
+          - "17"
+        "3":
+          - "5"
+        "4":
+          - "5"
+        "5":
+          - "11"
+          - "7"
+          - "9"
+        "7":
+          - "12"
+        "9":
+          - "12"
+    json:
+      nodes:
+        "0":
+          label: BasicIf
+          log_filter_key: "BasicIf|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 0
+            end: 517
+        "1":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "11":
+          label: else inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else:2|hdr:else-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 297
+            end: 327
+        "12":
+          label: This is a named statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 359
+            end: 388
+        "13":
+          label: if (true)
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0"
+          node_type: branch-group
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 401
+            end: 507
+        "15":
+          label: Then Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:if-true:0|hdr:then-statement:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 421
+            end: 439
+        "17":
+          label: Else Statement
+          log_filter_key: "BasicIf|root:0|hdr:this-is-a-named-statement:0|bg:if-true:0|arm:else:1|hdr:else-statement:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 472
+            end: 490
+        "3":
+          label: standalone then
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:if-true:0|hdr:standalone-then:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 68
+            end: 87
+        "4":
+          label: else
+          log_filter_key: "BasicIf|root:0|bg:if-true:0|arm:else:1"
+          node_type: branch-arm
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 48
+            end: 113
+        "5":
+          label: if (x == 2)
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1"
+          node_type: branch-group
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 119
+            end: 353
+        "7":
+          label: if inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:if-x-2:0|hdr:if-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 141
+            end: 169
+        "9":
+          label: elseif inside if-elseif-else
+          log_filter_key: "BasicIf|root:0|bg:if-x-2:1|arm:else-if-x-3:1|hdr:elseif-inside-if-elseif-else:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicIf.baml
+            start: 223
+            end: 255
+      edges:
+        "1":
+          - "3"
+          - "4"
+        "11":
+          - "12"
+        "13":
+          - "15"
+          - "17"
+        "3":
+          - "5"
+        "4":
+          - "5"
+        "5":
+          - "11"
+          - "7"
+          - "9"
+        "7":
+          - "12"
+        "9":
+          - "12"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicIf\"]\n  direction TB\n  n1[\"1: BranchGroup: if (true)\"]\n  n2[\"3: standalone then\"]\n  n3[\"4: BranchArm: else\"]\n  n4[\"5: BranchGroup: if (x == 2)\"]\n  n5[\"7: if inside if-elseif-else\"]\n  n6[\"9: elseif inside if-elseif-else\"]\n  n7[\"11: else inside if-elseif-else\"]\n  subgraph n8[\"12: This is a named statement\"]\n    direction TB\n    n9[\"13: BranchGroup: if (true)\"]\n    n10[\"15: Then Statement\"]\n    n11[\"17: Else Statement\"]\n    n9 --> n10\n    n9 --> n11\n  end\n  n3 --> n4\n  n1 --> n2\n  n1 --> n3\n  n4 --> n5\n  n4 --> n6\n  n4 --> n7\n  n2 --> n4\n  n5 --> n8\n  n6 --> n8\n  n7 --> n8\nend\n"

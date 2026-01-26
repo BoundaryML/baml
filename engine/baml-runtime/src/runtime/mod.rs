@@ -1,6 +1,5 @@
 mod ir_features;
 mod publisher;
-pub(crate) mod runtime_interface;
 
 use std::{
     collections::HashMap,
@@ -44,81 +43,22 @@ impl CachedClient {
     }
 
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
-        self.env_vars
+        // Check if any existing env vars have different values
+        let values_changed = self
+            .env_vars
             .iter()
-            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v))
+            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v));
+
+        if values_changed {
+            return true;
+        }
+
+        // Check if BOUNDARY_PROXY_URL was added or removed (affects client configuration)
+        let had_proxy = self.env_vars.contains_key("BOUNDARY_PROXY_URL");
+        let has_proxy = new_env_vars.contains_key("BOUNDARY_PROXY_URL");
+
+        had_proxy != has_proxy
     }
 }
 
-#[derive(Clone)]
-pub struct InternalBamlRuntime {
-    pub ir: Arc<IntermediateRepr>,
-    pub db: ParserDatabase,
-    pub diagnostics: Diagnostics,
-    clients: DashMap<String, CachedClient>,
-    retry_policies: DashMap<String, CallablePolicy>,
-    source_files: Vec<SourceFile>,
-}
-
-impl InternalBamlRuntime {
-    pub(super) fn from_file_content<T: AsRef<str>>(
-        directory: &str,
-        files: &HashMap<T, T>,
-        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<Self> {
-        let contents = files
-            .iter()
-            .map(|(path, contents)| {
-                Ok(SourceFile::from((
-                    PathBuf::from(path.as_ref()),
-                    contents.as_ref().to_string(),
-                )))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let mut schema = validate(&PathBuf::from(directory), contents.clone(), feature_flags);
-        schema.diagnostics.to_result()?;
-
-        let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
-        ir.validate_test_args(&mut schema.diagnostics);
-        schema.diagnostics.to_result()?;
-
-        Ok(InternalBamlRuntime {
-            ir: Arc::new(ir),
-            db: schema.db,
-            diagnostics: schema.diagnostics,
-            clients: Default::default(),
-            retry_policies: Default::default(),
-            source_files: contents,
-        })
-    }
-
-    pub(super) fn from_files(
-        directory: &Path,
-        files: Vec<PathBuf>,
-        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<Self> {
-        let contents: Vec<SourceFile> = files
-            .iter()
-            .map(|path| match std::fs::read_to_string(path) {
-                Ok(contents) => Ok(SourceFile::from((path.clone(), contents))),
-                Err(e) => Err(e),
-            })
-            .filter_map(|res| res.ok())
-            .collect();
-        let mut schema = validate(directory, contents.clone(), feature_flags);
-        schema.diagnostics.to_result()?;
-
-        let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
-        ir.validate_test_args(&mut schema.diagnostics);
-        schema.diagnostics.to_result()?;
-
-        Ok(Self {
-            ir: Arc::new(ir),
-            db: schema.db,
-            diagnostics: schema.diagnostics,
-            clients: Default::default(),
-            retry_policies: Default::default(),
-            source_files: contents,
-        })
-    }
-}
+// InternalBamlRuntime has been merged into BamlRuntime in lib.rs

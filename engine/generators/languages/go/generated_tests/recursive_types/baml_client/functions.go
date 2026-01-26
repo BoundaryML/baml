@@ -29,6 +29,14 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.JSON, erro
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"x": x},
 		Env:    getEnvVars(callOpts.env),
@@ -44,6 +52,10 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.JSON, erro
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -91,6 +103,14 @@ func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"x": x},
 		Env:    getEnvVars(callOpts.env),
@@ -106,6 +126,10 @@ func JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFunc) (types
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

@@ -9,19 +9,59 @@ pub enum ExposedError {
         prompt: String,
         raw_output: String,
         message: String,
+        detailed_message: String,
     },
     FinishReasonError {
         prompt: String,
         raw_output: String,
         message: String,
         finish_reason: Option<String>,
+        detailed_message: String,
     },
     ClientHttpError {
         client_name: String,
         message: String,
         status_code: ErrorCode,
+        detailed_message: String,
+        /// The raw response body from the LLM API (if available)
+        raw_response: Option<String>,
     },
-    AbortError,
+    TimeoutError {
+        client_name: String,
+        message: String,
+    },
+    AbortError {
+        detailed_message: String,
+    },
+}
+
+impl ExposedError {
+    pub fn timeout_error(client_name: impl Into<String>, message: impl Into<String>) -> Self {
+        ExposedError::TimeoutError {
+            client_name: client_name.into(),
+            message: message.into(),
+        }
+    }
+
+    pub fn to_anyhow_with_details(&self) -> anyhow::Error {
+        let detailed_message = match self {
+            ExposedError::ValidationError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::FinishReasonError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::ClientHttpError {
+                detailed_message, ..
+            } => detailed_message,
+            ExposedError::TimeoutError { message, .. } => message,
+            ExposedError::AbortError {
+                detailed_message, ..
+            } => detailed_message,
+        };
+        let with_details = format!("{self}\n\nDetailed message: {detailed_message}");
+        anyhow::anyhow!(with_details)
+    }
 }
 
 impl std::error::Error for ExposedError {}
@@ -33,6 +73,7 @@ impl std::fmt::Display for ExposedError {
                 prompt,
                 raw_output,
                 message,
+                detailed_message: _,
             } => {
                 write!(
                     f,
@@ -44,6 +85,7 @@ impl std::fmt::Display for ExposedError {
                 raw_output,
                 message,
                 finish_reason,
+                detailed_message: _,
             } => {
                 write!(
                     f,
@@ -58,14 +100,21 @@ impl std::fmt::Display for ExposedError {
                 client_name,
                 message,
                 status_code,
+                ..
             } => {
                 write!(
-                    f,
-                    "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
-                )
+                        f,
+                        "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
+                    )
             }
-            ExposedError::AbortError => {
-                write!(f, "AbortError")
+            ExposedError::TimeoutError {
+                client_name,
+                message,
+            } => {
+                write!(f, "LLM client \"{client_name}\" timed out: {message}")
+            }
+            ExposedError::AbortError { detailed_message } => {
+                write!(f, "AbortError: {detailed_message}")
             }
         }
     }
@@ -90,6 +139,7 @@ impl IntoBamlError for &anyhow::Error {
                     prompt,
                     message,
                     raw_output: raw_response,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::Validation {
                     raw_output: Cow::Owned(raw_response.clone()),
                     message: Cow::Owned(message.clone()),
@@ -100,6 +150,7 @@ impl IntoBamlError for &anyhow::Error {
                     message,
                     raw_output: raw_response,
                     finish_reason,
+                    detailed_message: _,
                 } => baml_types::tracing::events::BamlError::ClientFinishReason {
                     finish_reason: match finish_reason {
                         Some(finish_reason) => Cow::Owned(finish_reason.clone()),
@@ -110,16 +161,25 @@ impl IntoBamlError for &anyhow::Error {
                     raw_output: Cow::Owned(raw_response.clone()),
                 },
                 ExposedError::ClientHttpError {
-                    client_name,
                     message,
                     status_code,
+                    ..
                 } => baml_types::tracing::events::BamlError::ClientHttp {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
                 },
-                ExposedError::AbortError => baml_types::tracing::events::BamlError::Base {
-                    message: "AbortError".into(),
+                ExposedError::TimeoutError {
+                    client_name: _,
+                    message,
+                } => baml_types::tracing::events::BamlError::ClientHttp {
+                    message: Cow::Owned(message.clone()),
+                    status_code: 408, // HTTP 408 Request Timeout
                 },
+                ExposedError::AbortError { detailed_message } => {
+                    baml_types::tracing::events::BamlError::Base {
+                        message: Cow::Owned(format!("AbortError: {detailed_message}")),
+                    }
+                }
             };
         }
         if let Some(baml_error) = self.downcast_ref::<baml_types::tracing::events::BamlError<'_>>()
@@ -127,7 +187,7 @@ impl IntoBamlError for &anyhow::Error {
             return baml_error.clone();
         }
         baml_types::tracing::events::BamlError::External {
-            message: Cow::Owned(format!("into_baml_error: {self:?}")),
+            message: Cow::Owned(format!("ExternalException: {self:?}")),
         }
     }
 }

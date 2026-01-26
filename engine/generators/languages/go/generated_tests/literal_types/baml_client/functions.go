@@ -29,6 +29,14 @@ func TestBooleanLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -44,6 +52,10 @@ func TestBooleanLiterals(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -91,6 +103,14 @@ func TestComplexLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -106,6 +126,10 @@ func TestComplexLiterals(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -153,6 +177,14 @@ func TestIntegerLiterals(ctx context.Context, input string, opts ...CallOptionFu
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -168,6 +200,10 @@ func TestIntegerLiterals(ctx context.Context, input string, opts ...CallOptionFu
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -215,6 +251,14 @@ func TestMixedLiterals(ctx context.Context, input string, opts ...CallOptionFunc
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -230,6 +274,10 @@ func TestMixedLiterals(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -277,6 +325,14 @@ func TestStringLiterals(ctx context.Context, input string, opts ...CallOptionFun
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
 		Env:    getEnvVars(callOpts.env),
@@ -292,6 +348,10 @@ func TestStringLiterals(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

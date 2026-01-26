@@ -1,0 +1,45 @@
+{
+  "name": "app-vscode-ext",
+  "displayName": "BAML Playground",
+  "description": "BAML Playground VSCode Extension",
+  "version": "0.1.0",
+  "publisher": "Boundary",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "vscode": ">=1.63.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "baml.openPlayground",
+        "title": "Open Playground",
+        "category": "BAML"
+      }
+    ]
+  },
+  "scripts": {
+    "dev": "tsup --watch --sourcemap",
+    "build": "pnpm run typecheck && tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "app-vscode-webview": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.63.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.16"
+  }
+}

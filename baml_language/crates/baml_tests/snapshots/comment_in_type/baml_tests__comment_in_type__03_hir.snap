@@ -1,0 +1,22 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function CommentAfterArrow() -> string {
+  client TestClient
+  prompt #"
+    test
+  "#
+}
+
+function FunctionWithComments(a: string, b: int) -> string {
+  client TestClient
+  prompt #"
+    test
+  "#
+}
+
+client TestClient {
+  provider: baml-openai-chat
+}

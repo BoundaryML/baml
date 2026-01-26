@@ -6,7 +6,7 @@ client<llm> OpenAIResponses {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
   }
 }
 
@@ -15,7 +15,7 @@ client<llm> OpenAIResponsesExplicit {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     client_response_type "openai-responses"
   }
 }
@@ -25,7 +25,7 @@ client<llm> OpenAIResponsesCustomURL {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     base_url "https://api.openai.com/v1"
   }
 }
@@ -129,7 +129,7 @@ test TestOpenAIResponsesProviders {
 
 // Test shorthand syntax (this should work but use standard openai, not responses)
 function TestOpenAIResponsesShorthand(input: string) -> string {
-  client "openai/gpt-4.1"
+  client "openai/gpt-5-mini"
   prompt #"
     {{ _.role("user") }}
     What do you think about {{ input }}?
@@ -152,7 +152,7 @@ client<llm> OpenAIResponsesAutoType {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     // No explicit client_response_type - should automatically use openai-responses
   }
 }
@@ -185,7 +185,7 @@ client<llm> OpenAIResponsesImage {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "o1-mini"
+    model "gpt-5"
   }
 }
 
@@ -213,7 +213,7 @@ client<llm> OpenAIResponsesWebSearch {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     tools [
       {
         type "web_search_preview"
@@ -246,7 +246,7 @@ client<llm> OpenAIResponsesFunctionCall {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     tools [
       {
         type "function"
@@ -295,7 +295,7 @@ client<llm> OpenAIWithResponsesType {
   provider openai
   options {
     api_key env.OPENAI_API_KEY
-    model "gpt-4.1"
+    model "gpt-5-mini"
     client_response_type "openai-responses"
   }
 }
@@ -314,7 +314,7 @@ client<llm> OpenAIResponsesReasoning {
   provider openai-responses
   options {
     api_key env.OPENAI_API_KEY
-    model "o4-mini"
+    model "gpt-5"
     reasoning{
       effort "high"
     }
@@ -336,5 +336,66 @@ test TestOpenAIResponsesReasoningTest {
   ]
   args {
     problem "Solve this step by step: If a train travels at 60 mph for 2.5 hours, then at 80 mph for 1.5 hours, what is the total distance traveled?"
+  }
+}
+
+client<llm> Gpt5 {
+  provider openai-responses
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-5"
+  }
+}
+
+
+function TestOpenAIResponsesAllRoles(problem: string) -> string {
+  client Gpt5
+  prompt #"
+    {{ _.role("system") }}
+    Hi
+    {{ _.role("developer") }}
+    Hi
+    {{ _.role("assistant") }}
+    Hi
+    {{ _.role("user") }}
+    {{ problem }}
+  "#
+}
+
+
+function TestOpenaiResponsesPdfs(pdf: pdf) -> string {
+  client Gpt5
+  prompt #"
+    {{ _.role("user") }}
+    Summarize in one sentence the contents of this:
+    {{ pdf }}
+  "#
+} 
+
+test TestOpenaiResponsesPdfsTest {
+  functions [
+    TestOpenaiResponsesPdfs
+  ]
+  args {
+    pdf { url "https://www.berkshirehathaway.com/letters/2024ltr.pdf" }
+  }
+}
+
+test TestOpenaiResponsesPdfsTestFile {
+  functions [
+    TestOpenaiResponsesPdfs
+  ]
+  args {
+    pdf { file "../../dummy.pdf" }
+  }
+}
+
+
+test TestOpenAIResponsesAllRolesTest {
+  functions [
+    TestOpenAIResponsesAllRoles
+  ]
+  args {
+    problem "What is the weather like in Boston today?"
   }
 }

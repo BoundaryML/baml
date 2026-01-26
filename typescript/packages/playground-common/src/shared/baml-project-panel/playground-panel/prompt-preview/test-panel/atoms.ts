@@ -1,24 +1,34 @@
-import { atom } from 'jotai';
+/**
+ * Test Panel Atoms
+ *
+ * This file re-exports SDK test atoms and provides UI-specific atoms for the test panel.
+ * Most test execution state is managed by the SDK - we just add UI preferences here.
+ */
+
 import { atomWithStorage } from 'jotai/utils';
 import { sessionStore } from '../../../../../baml_wasm_web/JotaiProvider';
-import type { TestState } from '../../atoms';
 
-export interface TestHistoryEntry {
-  timestamp: number;
-  functionName: string;
-  testName: string;
-  response: TestState;
-  input?: any;
-}
+// Re-export all test atoms from SDK
+// The SDK manages test execution state - UI just reads from these atoms
+export {
+  testHistoryAtom,
+  selectedHistoryIndexAtom,
+  currentWatchNotificationsAtom,
+  highlightedBlocksAtom,
+  categorizedNotificationsAtom,
+  areTestsRunningAtom,
+} from '../../../../../sdk/atoms/test.atoms';
 
-export interface TestHistoryRun {
-  timestamp: number;
-  tests: TestHistoryEntry[];
-}
+// Re-export test types from SDK
+export type {
+  TestHistoryEntry,
+  TestHistoryRun,
+  TestState,
+  WatchNotification,
+  CategorizedNotifications,
+} from '../../../../../sdk/atoms/test.atoms';
 
-// TODO: make this persistent, but make sure to serialize the wasm objects properly
-export const testHistoryAtom = atom<TestHistoryRun[]>([]);
-export const selectedHistoryIndexAtom = atom<number>(0);
+// UI-specific atom for parallel test execution preference
 export const isParallelTestsEnabledAtom = atomWithStorage<boolean>(
   'runTestsInParallel',
   true,

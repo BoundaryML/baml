@@ -1,0 +1,42 @@
+//! Generated streaming types (partial data during streaming).
+//!
+//! Full implementation coming in Phase 6.
+
+mod classes;
+mod unions;
+mod type_aliases;
+
+pub use classes::*;
+pub use unions::*;
+pub use type_aliases::*;
+
+/// Streaming variants of types (all fields Optional).
+#[derive(Debug, Clone)]
+pub enum StreamTypes {
+{% for class in classes %}
+    {{ class.name }}({{ class.name }}),
+{% endfor %}
+{% for union_ in unions %}
+    {{ union_.name }}({{ union_.name }}),
+{% endfor %}
+}
+
+impl baml::KnownTypes for StreamTypes {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn type_name(&self) -> &'static str {
+        match self {
+{% for class in classes %}
+            StreamTypes::{{ class.name }}(_) => "{{ class.name }}",
+{% endfor %}
+{% for union_ in unions %}
+            StreamTypes::{{ union_.name }}(_) => "{{ union_.name }}",
+{% endfor %}
+{% if classes.is_empty() && unions.is_empty() %}
+            _ => unreachable!("StreamTypes has no variants"),
+{% endif %}
+        }
+    }
+}

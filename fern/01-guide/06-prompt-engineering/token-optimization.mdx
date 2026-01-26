@@ -1,0 +1,386 @@
+---
+title: Token Optimization
+---
+
+# Experimenting with Data Format for Token Efficiency
+
+When working with LLMs, token usage directly impacts both cost and latency. Different serialization formats can affect how many tokens are used to represent your data—but **the optimal format depends on your specific use case and LLM**.
+
+## Important: Test Before Adopting
+
+**Every optimization has trade-offs.** Reducing token count doesn't automatically improve accuracy, and different LLMs may respond differently to different formats. You should:
+- **Test with your actual data and prompts**
+- **Measure accuracy alongside token savings**
+- **Compare multiple formats** (JSON, YAML, TOON, or custom)
+- **Validate with your specific LLM**
+
+What works for one use case may not work for another.
+
+## Available Format Options
+
+BAML's `format` filter lets you experiment with different serializations:
+
+```jinja
+{{ data|format(type="json") }}   {# Standard JSON #}
+{{ data|format(type="yaml") }}   {# YAML format #}
+{{ data|format(type="toon") }}   {# TOON format #}
+```
+
+### TOON Format
+
+TOON (Token-Oriented Object Notation) is a compact format that uses:
+- Indentation-based structure (like YAML)
+- Tabular format for arrays of objects (declare keys once, stream rows)
+- Minimal punctuation
+- Explicit array lengths and field headers (LLM-friendly guardrails)
+
+**What TOON is good for:**
+- Uniform arrays of objects with many similar items
+- Data that's already highly structured and tabular
+- When LLM validation of structure matters (explicit lengths help)
+
+**When TOON may NOT help:**
+- Deeply nested or non-uniform structures (JSON-compact often uses fewer tokens)
+- Semi-uniform arrays (~40-60% tabular eligibility) where savings diminish
+- Pure flat tables (CSV is more compact)
+- Latency-critical applications (benchmark on your setup - some models process compact JSON faster despite higher token count)
+
+Learn more: [TOON specification and benchmarks](https://github.com/toon-format/toon)
+
+## Understanding Data Structure
+
+### Tabular Eligibility
+
+TOON's efficiency comes from its tabular format for arrays. Your data's "tabular eligibility" affects how much TOON can help:
+
+- **High eligibility (80-100%)**: Mostly uniform arrays of objects with the same fields → TOON excels
+- **Medium eligibility (40-60%)**: Mix of uniform and non-uniform data → savings diminish, may not be worth it
+- **Low eligibility (0-20%)**: Deeply nested, varied structures → JSON-compact may use fewer tokens
+
+**Example - High eligibility:**
+```json
+{ "users": [
+  {"id": 1, "name": "Alice", "role": "admin"},
+  {"id": 2, "name": "Bob", "role": "user"}
+]}
+```
+All users have identical fields → 100% tabular → TOON helps
+
+**Example - Low eligibility:**
+```json
+{ "config": {
+  "server": { "host": "localhost", "port": 8080 },
+  "database": { "name": "prod", "pool": { "min": 5, "max": 20 }}
+}}
+```
+Deeply nested with no arrays of uniform objects → 0% tabular → JSON-compact likely better
+
+## Considerations for Format Selection
+
+### When to Experiment with Compact Formats
+- Passing large datasets with high tabular eligibility
+- Token costs are significant
+- After you've validated accuracy with standard formats
+
+### When to Stick with Standard Formats
+- Starting a new project (establish baseline first)
+- Your LLM performs poorly with alternative formats
+- Data structure is very small or deeply nested
+- Team familiarity matters more than token cost
+
+## Experimentation Example
+
+Here's how you might test different formats for a product analysis task:
+
+### Baseline: Using JSON
+
+```baml
+class Product {
+  id int
+  name string
+  price float
+  in_stock bool
+}
+
+function AnalyzeProducts(products: Product[]) -> string {
+  client GPT4
+  prompt #"
+    Analyze these products and provide insights:
+    
+    {{ products }}
+    
+    Focus on pricing trends and inventory status.
+  "#
+}
+```
+
+When you pass products to this function, they're serialized as JSON:
+
+```json
+[
+  { "id": 1, "name": "Widget", "price": 9.99, "in_stock": true },
+  { "id": 2, "name": "Gadget", "price": 19.99, "in_stock": false }
+]
+```
+
+### Experiment: Trying TOON
+
+To test if TOON works for your use case, try the `format(type="toon")` filter:
+
+```baml
+function AnalyzeProducts(products: Product[]) -> string {
+  client GPT4
+  prompt #"
+    Analyze these products and provide insights:
+    
+    {{ products|format(type="toon") }}
+    
+    Focus on pricing trends and inventory status.
+  "#
+}
+```
+
+The same data serialized as TOON:
+
+```
+[2]{id,name,price,in_stock}:
+  1,Widget,9.99,true
+  2,Gadget,19.99,false
+```
+
+**Next steps:** Test with your actual prompts and measure both token usage and accuracy.
+
+## TOON Options
+
+### Custom Indentation
+
+Control spacing for better readability:
+
+```jinja
+{{ products|format(type="toon", indent=4) }}
+```
+
+### Alternative Delimiters
+
+Choose the delimiter that works best for your data:
+
+```jinja
+{# Comma-separated (default) #}
+{{ products|format(type="toon", delimiter="comma") }}
+
+{# Tab-separated #}
+{{ products|format(type="toon", delimiter="tab") }}
+
+{# Pipe-separated #}
+{{ products|format(type="toon", delimiter="pipe") }}
+```
+
+**Delimiter trade-offs:**
+- **Tab (`\t`)**: Often tokenizes more efficiently than commas; tabs rarely appear in data (less quote-escaping needed); but some editors/terminals may display tabs inconsistently
+- **Pipe (`|`)**: Middle ground between comma and tab; explicit visual separator
+- **Comma (default)**: Most familiar, but may require more quoting if your data contains commas
+
+Test different delimiters with your actual data - the best choice depends on your content.
+
+### Length Markers
+
+Add length indicators for clarity:
+
+```jinja
+{{ products|format(type="toon", length_marker="#") }}
+```
+
+Output:
+```
+#2[2]{id,name,price,in_stock}:
+  1,Widget,9.99,true
+  2,Gadget,19.99,false
+```
+
+## Real-World Use Case: Transaction Analysis
+
+Here's a complete example analyzing financial transactions:
+
+```baml
+class Transaction {
+  id string
+  date string
+  amount float
+  category string
+  merchant string
+  status string
+}
+
+function AnalyzeTransactions(
+  transactions: Transaction[],
+  question: string
+) -> string {
+  client GPT4
+  prompt #"
+    {{ _.role("system") }}
+    You are a financial analyst. Answer questions about transaction data.
+    
+    {{ _.role("user") }}
+    Transaction data:
+    {{ transactions|format(type="toon", delimiter="pipe") }}
+    
+    Question: {{ question }}
+  "#
+}
+
+test AnalyzeSpending {
+  functions [AnalyzeTransactions]
+  args {
+    transactions [
+      {
+        id: "tx_001",
+        date: "2025-01-15",
+        amount: 45.99,
+        category: "Dining",
+        merchant: "Coffee Shop",
+        status: "completed"
+      },
+      {
+        id: "tx_002",
+        date: "2025-01-16",
+        amount: 120.00,
+        category: "Shopping",
+        merchant: "Electronics Store",
+        status: "completed"
+      }
+    ]
+    question "What's my largest expense category this week?"
+  }
+}
+```
+
+## Understanding Trade-offs
+
+Token reduction is only valuable if accuracy and reliability are maintained. Consider:
+
+### What You Might Gain
+- Lower token costs per API call
+- Ability to fit more data in context windows
+- Validation benefits (TOON's explicit array lengths can help LLMs detect truncated data)
+
+### What You Might Lose
+- LLM comprehension (benchmark results show format performance varies by model and dataset type)
+- Latency (some models may process compact JSON faster despite higher token count - measure TTFT and total time)
+- Debugging ease (non-standard formats are harder to inspect)
+- Team velocity (custom formats require explanation and documentation)
+- Accuracy (format changes can affect model output quality)
+
+### Real Benchmark Insights
+
+According to [TOON's benchmarks](https://github.com/toon-format/toon):
+- **TOON excels** with uniform employee records, e-commerce orders, GitHub repo lists
+- **JSON-compact wins** on semi-uniform event logs, some deeply nested configs
+- **Model-dependent**: GPT-5-nano showed 90.9% accuracy with both TOON and JSON-compact, while Claude Haiku showed 59.8% (TOON) vs 57.4% (JSON)
+- **Structure matters**: Tabular eligibility strongly predicts which format will be more efficient
+
+**Critical:** Lost accuracy, increased debugging time, or degraded user experience typically cost far more than token savings. Always measure end-to-end impact on your specific workload, not just token counts.
+
+## Experimentation Guidelines
+
+### 1. Start with a Baseline
+
+Always establish a baseline with a standard format first:
+
+```baml
+function AnalyzeData(data: Dataset[]) -> Analysis {
+  client GPT4
+  prompt #"
+    {{ _.role("user") }}
+    Data:
+    {{ data|format(type="json") }}  // Start with JSON baseline
+    
+    Provide analysis.
+  "#
+}
+```
+
+**Measure:** Accuracy, token usage, latency, cost
+
+### 2. Test Alternative Formats
+
+Try different formats and compare results:
+
+```jinja
+{# Experiment 1: YAML #}
+{{ data|format(type="yaml") }}
+
+{# Experiment 2: TOON #}
+{{ data|format(type="toon") }}
+
+{# Experiment 3: TOON with options #}
+{{ data|format(type="toon", delimiter="pipe") }}
+```
+
+**Measure:** Do you maintain accuracy? How much do tokens reduce?
+
+### 3. Consider Your Data Structure
+
+Different formats work better for different structures. From TOON benchmarks:
+
+```jinja
+{# High tabular eligibility: uniform arrays #}
+{{ products|format(type="toon") }}  // Try TOON
+{{ products|format(type="json") }}  // Compare vs JSON
+
+{# Low tabular eligibility: deeply nested config #}
+{{ config|format(type="json") }}    // JSON-compact often better
+{{ config|format(type="yaml") }}    // Or try YAML
+
+{# Medium eligibility: mixed structures #}
+{{ events|format(type="json") }}    // Test multiple formats
+{{ events|format(type="toon") }}    // Results vary
+```
+
+**Key insight:** For pure flat tables, CSV is more compact than TOON. For deeply nested data, compact JSON may win. TOON's sweet spot is uniform arrays of objects with multiple fields.
+
+### 4. Test with Your LLM
+
+Different models may respond differently to format changes. Test with the specific LLM you're using.
+
+**Tip from TOON documentation:** When using TOON, show the format instead of describing it. Models parse the structure naturally from examples - the indentation and headers are usually self-documenting.
+
+## How to Measure Impact
+
+### Using BAML Playground
+
+1. Write your function with your baseline format (usually JSON)
+2. Run it in the playground and record:
+   - Actual token count (shown in playground)
+   - LLM response quality and accuracy
+   - Time to first token (TTFT) and total latency
+   - Any parsing errors
+   - Response consistency across multiple runs
+3. Change to an alternative format
+4. Compare ALL metrics: tokens, accuracy, latency, error rates
+5. Run multiple test cases with diverse inputs
+6. Verify edge cases and error scenarios
+
+**Important:** Lower token count doesn't guarantee lower latency. Some models may process familiar formats (like JSON) faster even if they use more tokens. Measure end-to-end response time.
+
+### In Production
+
+- Use [BAML Studio](/guide/boundary-cloud/observability/tracking-usage) to monitor token usage AND accuracy
+- Track accuracy metrics alongside token/cost metrics
+- A/B test formats if possible (measure both cost and quality)
+- Monitor latency - cheaper formats that are slower may not be worth it
+- Be ready to roll back quickly if quality or performance degrades
+
+## Next Steps
+
+- **Don't assume, test:** Try different formats with your actual data
+- **Measure what matters:** Track accuracy, not just token counts
+- **Start small:** Test on non-critical workloads first
+- **Document results:** Note which formats work best for which use cases
+- **Consider alternatives:** Custom serialization, selective fields, or prompt redesign might also help
+
+## See Also
+
+- [Jinja Filters Reference](/ref/prompt-syntax/jinja-filters) - Complete filter documentation
+- [BAML Studio](/guide/boundary-cloud/observability/tracking-usage) - Monitor token usage in production
+- [Prompt Caching](/guide/baml-advanced/prompt-caching-message-role-metadata) - Additional cost optimization
+

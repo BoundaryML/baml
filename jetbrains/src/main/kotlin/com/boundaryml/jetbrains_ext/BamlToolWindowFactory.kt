@@ -1,6 +1,7 @@
 package com.boundaryml.jetbrains_ext
 
-import BamlGetPortService
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -53,42 +54,79 @@ private const val PLACEHOLDER_HTML = """
     </html>
 """
 
-class BamlToolWindowFactory : ToolWindowFactory {
+private const val VITE_HOT_RELOAD_HTML = """
+<!DOCTYPE html>
+<html lang="en">
 
-    init {
-        thisLogger().warn("Don't forget to remove all non-needed sample code files with their corresponding registration entries in `plugin.xml`.")
-    }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BAML Playground</title>
+  <script type="module">
+    import RefreshRuntime from "http://localhost:3030/@react-refresh"
+    RefreshRuntime.injectIntoGlobalHook(window)
+    ${"window.\$RefreshReg\$ = () => {}"}
+    ${"window.\$RefreshSig\$ = () => (type) => type"}
+    window.__vite_plugin_react_preamble_installed__ = true
+  </script>
+  <script type="module" crossorigin src="http://localhost:3030/src/main.tsx"></script>
+  <link rel="stylesheet" crossorigin href="http://localhost:3030/src/main.tsx">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>
+"""
+
+class BamlToolWindowFactory : ToolWindowFactory {
+    private val log = thisLogger()
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val browser = JBCefBrowser().apply {
-            loadHTML(PLACEHOLDER_HTML.trimIndent())
+            val savedPort = service<BamlLanguageServerService>().port
+            if (savedPort != null) {
+                loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
+            } else {
+                loadHTML(PLACEHOLDER_HTML.trimIndent())
+            }
         }
 
         // Create control panel with conditional debug buttons
         val controlPanel = JPanel(FlowLayout(FlowLayout.RIGHT))
 
-        if (BamlIdeConfig.isDebugMode) {
+        if (BamlIdeConfig.shouldShowToolWindowDebuggers()) {
             // Create reload button
             val reloadButton = JButton("Reload").apply {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
-                    val savedPort = project.getService(BamlGetPortService::class.java).port
-                    println("playground reload at ${currentTime}, port is $savedPort")
+                    val savedPort = service<BamlLanguageServerService>().port
+                    log.debug("playground reload at ${currentTime}, port is $savedPort")
                     if (savedPort != null) {
                         browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
                     } else {
                         browser.loadHTML("<p>Port not ready</p>")
                     }
-                    println("playground reload done")
+                    log.debug("playground reload done")
                 }
             }
+
+            // vite hot reload
+            val viteButton = JButton("Vite").apply {
+                addActionListener {
+                    browser.loadHTML(VITE_HOT_RELOAD_HTML.trimIndent())
+                }
+            }
+
 
             // Create lorem ipsum button
             val loremButton = JButton("Lorem Ipsum").apply {
                 addActionListener {
                     val currentTime = java.time.LocalDateTime.now()
-                    println("lorem button clicked at ${currentTime}")
-                    browser.loadHTML("""
+                    log.debug("lorem button clicked at $currentTime")
+                    browser.loadHTML(
+                        """
                         <!DOCTYPE html>
                         <html>
                         <head><title>Lorem Ipsum</title></head>
@@ -98,7 +136,8 @@ class BamlToolWindowFactory : ToolWindowFactory {
                             <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
                         </body>
                         </html>
-                    """.trimIndent())
+                    """.trimIndent()
+                    )
                 }
             }
 
@@ -107,15 +146,16 @@ class BamlToolWindowFactory : ToolWindowFactory {
                     browser.openDevtools()
                 }
             }
-            
+
             controlPanel.add(reloadButton)
+            controlPanel.add(viteButton)
             controlPanel.add(loremButton)
             controlPanel.add(openDevToolsButton)
         }
 
         // Create main panel with controls and browser
         val mainPanel = JPanel(BorderLayout()).apply {
-            if (BamlIdeConfig.isDebugMode) {
+            if (BamlIdeConfig.shouldShowToolWindowDebuggers()) {
                 add(controlPanel, BorderLayout.NORTH)
             }
             add(browser.component, BorderLayout.CENTER)
@@ -125,21 +165,19 @@ class BamlToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(mainPanel, null, false)
         toolWindow.contentManager.addContent(content)
 
-        val savedPort = project.getService(BamlGetPortService::class.java).port
-        if (savedPort != null) {
-            // LS was up before the tool-window opened
-            browser.loadURL(BamlIdeConfig.getPlaygroundUrl(savedPort))
-        } else {
-            // LS not ready yet wait for a port message
-            val busConnection = project.messageBus.connect(toolWindow.disposable)
-            busConnection.subscribe(
-                BamlGetPortService.TOPIC,
-                BamlGetPortService.Listener { port ->
-                    browser.loadURL(BamlIdeConfig.getPlaygroundUrl(port))
-                    busConnection.disconnect()        // one-shot, avoid duplicates
-                }
-            )
-        }
+        // NOTE: this must reload every time we receive a notification, because if we restart the language server
+        // then the webview's connection to the old language server is dead.
+        val busConnection = ApplicationManager.getApplication().messageBus.connect(toolWindow.disposable)
+        busConnection.subscribe(
+            BamlLanguageServerService.PORT_TOPIC,
+            BamlLanguageServerService.PortListener { port ->
+                thisLogger().info("received port notification $port before loadUrl")
+                // Without this, it's possible for the user to open the tool window too fast
+                Thread.sleep(500)
+                browser.loadURL(BamlIdeConfig.getPlaygroundUrl(port))
+                thisLogger().info("received port notification $port after loadUrl")
+            }
+        )
 
         Disposer.register(toolWindow.disposable, browser)
     }

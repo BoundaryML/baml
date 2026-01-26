@@ -1,0 +1,167 @@
+---
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn array_length() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: List(Int) // array
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Void
+    let _6: Unknown
+    let _7: List(Int)
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        _6 = const fn baml.Array.length;
+        _7 = copy _1;
+        _0 = call copy _6(copy _7) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+
+}
+
+fn Greeting(self: Class(FullyQualifiedName { namespace: Local, name: "Baz" })) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // self // param
+    let _2: String
+    let _3: String
+    let _4: String
+    let _5: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
+    let _6: String
+
+    bb0: {
+        _3 = const "Hello, ";
+        _5 = copy _1;
+        _4 = copy _5.0;
+        _2 = copy _3 + copy _4;
+        _6 = const "!";
+        _0 = copy _2 + copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn param_in_if_statement(b: Bool) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Bool // b // param
+    let _2: Bool
+
+    bb0: {
+        _2 = copy _1;
+        branch copy _2 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 2_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+}
+
+fn Bar() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // x
+    let _2: Function { params: [Int], ret: Int }
+    let _3: Int
+
+    bb0: {
+        _2 = const fn Foo;
+        _3 = const 1_i64;
+        _1 = call copy _2(copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+}
+
+fn Foo(x: Int) -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Int // x // param
+    let _2: Int
+    let _3: Int
+
+    bb0: {
+        _2 = copy _1;
+        _3 = const 1_i64;
+        _0 = copy _2 + copy _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn GreetBaz(n: String) -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // n // param
+    let _2: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // baz
+    let _3: String
+    let _4: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
+    let _5: Function { params: [Class(FullyQualifiedName { namespace: Local, name: "Baz" })], ret: String }
+
+    bb0: {
+        _3 = copy _1;
+        _2 = Baz { copy _3 };
+        _4 = copy _2;
+        _5 = const fn Greeting;
+        _0 = call copy _5(copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

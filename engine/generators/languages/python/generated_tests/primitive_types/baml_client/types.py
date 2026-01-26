@@ -15,7 +15,7 @@ import typing_extensions
 from enum import Enum
 
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 import baml_py

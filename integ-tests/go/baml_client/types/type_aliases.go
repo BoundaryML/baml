@@ -52,3 +52,5 @@ type RecursiveListAlias = []any
 type RecursiveMapAlias = map[string]any
 
 type RecursiveUnion = Union2MapStringKeyRecursiveUnionValueOrString
+
+type TodoTool = Union2AddTodoItemOrTodoMessageToUser

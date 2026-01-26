@@ -1,0 +1,1677 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/AIContentPipeline.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Fetch Resources\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 145,\n                        end: 164,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Retrieve Emails and Posts from Database\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 170,\n                        end: 214,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"emails\",\n                value: Call {\n                    function: Identifier(\n                        \"GetEmails\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 232,\n                            end: 241,\n                        },\n                    ),\n                    type_args: [],\n                    args: [],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 232,\n                        end: 243,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 219,\n                    end: 245,\n                },\n            },\n            DeclareAndAssign {\n                name: \"posts\",\n                value: Call {\n                    function: Identifier(\n                        \"GetPosts\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 261,\n                            end: 269,\n                        },\n                    ),\n                    type_args: [],\n                    args: [],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 261,\n                        end: 271,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 249,\n                    end: 273,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Process and Load Video\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 278,\n                        end: 305,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"processed\",\n                value: Call {\n                    function: Identifier(\n                        \"ProcessVideo\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 326,\n                            end: 338,\n                        },\n                    ),\n                    type_args: [],\n                    args: [\n                        Identifier(\n                            \"video_id\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 339,\n                                end: 347,\n                            },\n                        ),\n                        Identifier(\n                            \"zoom_meeting_id\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 349,\n                                end: 364,\n                            },\n                        ),\n                    ],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 326,\n                        end: 365,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 310,\n                    end: 367,\n                },\n            },\n            DeclareAndAssign {\n                name: \"video_record\",\n                value: Call {\n                    function: Identifier(\n                        \"GetVideo\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 390,\n                            end: 398,\n                        },\n                    ),\n                    type_args: [],\n                    args: [\n                        Identifier(\n                            \"video_id\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 399,\n                                end: 407,\n                            },\n                        ),\n                    ],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 390,\n                        end: 408,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 371,\n                    end: 410,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Generate Content\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 416,\n                        end: 436,\n                    },\n                },\n            ),\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Video Summarization\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 442,\n                        end: 466,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"has_transcript\",\n                value: BinaryOperation {\n                    left: Identifier(\n                        \"transcript\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 492,\n                            end: 502,\n                        },\n                    ),\n                    operator: Neq,\n                    right: StringValue(\n                        \"\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 506,\n                            end: 508,\n                        },\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 492,\n                        end: 508,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 471,\n                    end: 510,\n                },\n            },\n            DeclareAndAssign {\n                name: \"summary\",\n                value: If {\n                    condition: Identifier(\n                        \"has_transcript\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 532,\n                            end: 546,\n                        },\n                    ),\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"Generate Summary\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 558,\n                                            end: 580,\n                                        },\n                                    },\n                                ),\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 2,\n                                        title: \"Create Summary Text\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 590,\n                                            end: 616,\n                                        },\n                                    },\n                                ),\n                                DeclareAndAssign {\n                                    name: \"s\",\n                                    value: Call {\n                                        function: Identifier(\n                                            \"SummarizeVideo\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 633,\n                                                end: 647,\n                                            },\n                                        ),\n                                        type_args: [],\n                                        args: [\n                                            Identifier(\n                                                \"transcript\",\n                                                Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                    start: 648,\n                                                    end: 658,\n                                                },\n                                            ),\n                                            Identifier(\n                                                \"title\",\n                                                Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                    start: 660,\n                                                    end: 665,\n                                                },\n                                            ),\n                                        ],\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 633,\n                                            end: 666,\n                                        },\n                                    },\n                                    annotated_type: None,\n                                    watch: None,\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 625,\n                                        end: 668,\n                                    },\n                                },\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 2,\n                                        title: \"Label Summary Category\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 677,\n                                            end: 706,\n                                        },\n                                    },\n                                ),\n                                DeclareAndAssign {\n                                    name: \"category\",\n                                    value: Call {\n                                        function: Identifier(\n                                            \"LabelSummaryCategory\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 730,\n                                                end: 750,\n                                            },\n                                        ),\n                                        type_args: [],\n                                        args: [\n                                            Identifier(\n                                                \"s\",\n                                                Span {\n                                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                    start: 751,\n                                                    end: 752,\n                                                },\n                                            ),\n                                        ],\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 730,\n                                            end: 753,\n                                        },\n                                    },\n                                    annotated_type: None,\n                                    watch: None,\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 715,\n                                        end: 755,\n                                    },\n                                },\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"Save Summary\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 764,\n                                            end: 782,\n                                        },\n                                    },\n                                ),\n                            ],\n                            trailing_expr: Some(\n                                Call {\n                                    function: Identifier(\n                                        \"SaveSummary\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 791,\n                                            end: 802,\n                                        },\n                                    ),\n                                    type_args: [],\n                                    args: [\n                                        Identifier(\n                                            \"video_id\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 803,\n                                                end: 811,\n                                            },\n                                        ),\n                                        Identifier(\n                                            \"s\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 813,\n                                                end: 814,\n                                            },\n                                        ),\n                                    ],\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 791,\n                                        end: 815,\n                                    },\n                                },\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 548,\n                            end: 821,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"Skip Summarization\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 837,\n                                                end: 861,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    StringValue(\n                                        \"no-transcript\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 870,\n                                            end: 885,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 827,\n                                end: 891,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 528,\n                        end: 891,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 514,\n                    end: 893,\n                },\n            },\n            DeclareAndAssign {\n                name: \"content_types\",\n                value: Array(\n                    [\n                        StringValue(\n                            \"email\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 919,\n                                end: 926,\n                            },\n                        ),\n                        StringValue(\n                            \"x\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 928,\n                                end: 931,\n                            },\n                        ),\n                        StringValue(\n                            \"linkedin\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 933,\n                                end: 943,\n                            },\n                        ),\n                    ],\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 918,\n                        end: 944,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 898,\n                    end: 946,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Generate Drafts for Posts\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 951,\n                        end: 981,\n                    },\n                },\n            ),\n            ForLoop {\n                identifier: \"kind\",\n                iterator: Identifier(\n                    \"content_types\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 1003,\n                        end: 1016,\n                    },\n                ),\n                block: Block {\n                    statements: [\n                        HeaderContextEnter(\n                            HeaderContext {\n                                level: 1,\n                                title: \"Get Content Type and Generate Draft\",\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                    start: 1028,\n                                    end: 1069,\n                                },\n                            },\n                        ),\n                        DeclareAndAssign {\n                            name: \"structure\",\n                            value: Call {\n                                function: Identifier(\n                                    \"GetStructure\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 1094,\n                                        end: 1106,\n                                    },\n                                ),\n                                type_args: [],\n                                args: [\n                                    Identifier(\n                                        \"kind\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1107,\n                                            end: 1111,\n                                        },\n                                    ),\n                                ],\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                    start: 1094,\n                                    end: 1112,\n                                },\n                            },\n                            annotated_type: None,\n                            watch: None,\n                            span: Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1078,\n                                end: 1114,\n                            },\n                        },\n                        DeclareAndAssign {\n                            name: \"draft\",\n                            value: Call {\n                                function: Identifier(\n                                    \"GenerateContent\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 1134,\n                                        end: 1149,\n                                    },\n                                ),\n                                type_args: [],\n                                args: [\n                                    Identifier(\n                                        \"kind\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1150,\n                                            end: 1154,\n                                        },\n                                    ),\n                                    Identifier(\n                                        \"video_id\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1156,\n                                            end: 1164,\n                                        },\n                                    ),\n                                    Identifier(\n                                        \"summary\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1166,\n                                            end: 1173,\n                                        },\n                                    ),\n                                ],\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                    start: 1134,\n                                    end: 1174,\n                                },\n                            },\n                            annotated_type: None,\n                            watch: None,\n                            span: Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1122,\n                                end: 1176,\n                            },\n                        },\n                        HeaderContextEnter(\n                            HeaderContext {\n                                level: 1,\n                                title: \"Save Draft\",\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                    start: 1185,\n                                    end: 1201,\n                                },\n                            },\n                        ),\n                        DeclareAndAssign {\n                            name: \"saved_draft\",\n                            value: Call {\n                                function: Identifier(\n                                    \"SaveDraft\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 1228,\n                                        end: 1237,\n                                    },\n                                ),\n                                type_args: [],\n                                args: [\n                                    Identifier(\n                                        \"video_id\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1238,\n                                            end: 1246,\n                                        },\n                                    ),\n                                    Identifier(\n                                        \"draft\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1248,\n                                            end: 1253,\n                                        },\n                                    ),\n                                ],\n                                span: Span {\n                                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                    start: 1228,\n                                    end: 1254,\n                                },\n                            },\n                            annotated_type: None,\n                            watch: None,\n                            span: Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1210,\n                                end: 1256,\n                            },\n                        },\n                    ],\n                    trailing_expr: Some(\n                        Identifier(\n                            \"saved_draft\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1265,\n                                end: 1276,\n                            },\n                        ),\n                    ),\n                },\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 986,\n                    end: 1282,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Prepare Pull Request\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 1288,\n                        end: 1312,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"pr_status\",\n                value: If {\n                    condition: BinaryOperation {\n                        left: Identifier(\n                            \"summary\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1337,\n                                end: 1344,\n                            },\n                        ),\n                        operator: Neq,\n                        right: StringValue(\n                            \"no-transcript\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1348,\n                                end: 1363,\n                            },\n                        ),\n                        span: Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 1337,\n                            end: 1363,\n                        },\n                    },\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"Create GitHub PR\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1375,\n                                            end: 1397,\n                                        },\n                                    },\n                                ),\n                            ],\n                            trailing_expr: Some(\n                                Call {\n                                    function: Identifier(\n                                        \"CreatePR\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1406,\n                                            end: 1414,\n                                        },\n                                    ),\n                                    type_args: [],\n                                    args: [\n                                        Identifier(\n                                            \"video_id\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 1415,\n                                                end: 1423,\n                                            },\n                                        ),\n                                        Identifier(\n                                            \"summary\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 1425,\n                                                end: 1432,\n                                            },\n                                        ),\n                                    ],\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                        start: 1406,\n                                        end: 1433,\n                                    },\n                                },\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                            start: 1365,\n                            end: 1439,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"Missing Summary\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                                start: 1455,\n                                                end: 1476,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    StringValue(\n                                        \"no-pr\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                            start: 1485,\n                                            end: 1492,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                                start: 1445,\n                                end: 1498,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 1333,\n                        end: 1498,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 1317,\n                    end: 1500,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Complete\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                        start: 1505,\n                        end: 1517,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            StringValue(\n                \"done\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/AIContentPipeline.baml\", contents: ... },\n                    start: 1522,\n                    end: 1528,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: AIContentPipeline
+      log_filter_key: "AIContentPipeline|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 24
+        end: 1530
+    "1":
+      label: Fetch Resources
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 145
+        end: 164
+    "10":
+      label: Label Summary Category
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+      node_type: header
+      parent: "8"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 677
+        end: 706
+    "11":
+      label: Save Summary
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+      node_type: header
+      parent: "7"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 764
+        end: 782
+    "12":
+      label: else
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+      node_type: branch-arm
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 827
+        end: 891
+    "13":
+      label: Skip Summarization
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+      node_type: header
+      parent: "12"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 837
+        end: 861
+    "14":
+      label: Generate Drafts for Posts
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+      node_type: header
+      parent: "4"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 951
+        end: 981
+    "15":
+      label: for (kind in content_types)
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+      node_type: loop
+      parent: "14"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 986
+        end: 1282
+    "16":
+      label: Get Content Type and Generate Draft
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+      node_type: header
+      parent: "15"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1028
+        end: 1069
+    "17":
+      label: Save Draft
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+      node_type: header
+      parent: "15"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1185
+        end: 1201
+    "18":
+      label: Prepare Pull Request
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1288
+        end: 1312
+    "19":
+      label: "if (summary != \"no-transcript\")"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+      node_type: branch-group
+      parent: "18"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1333
+        end: 1498
+    "2":
+      label: Retrieve Emails and Posts from Database
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 170
+        end: 214
+    "20":
+      label: "if (summary != \"no-transcript\")"
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+      node_type: branch-arm
+      parent: "19"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1365
+        end: 1439
+    "21":
+      label: Create GitHub PR
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+      node_type: header
+      parent: "20"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1375
+        end: 1397
+    "22":
+      label: else
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+      node_type: branch-arm
+      parent: "19"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1445
+        end: 1498
+    "23":
+      label: Missing Summary
+      log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+      node_type: header
+      parent: "22"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1455
+        end: 1476
+    "24":
+      label: Complete
+      log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 1505
+        end: 1517
+    "3":
+      label: Process and Load Video
+      log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 278
+        end: 305
+    "4":
+      label: Generate Content
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 416
+        end: 436
+    "5":
+      label: Video Summarization
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+      node_type: header
+      parent: "4"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 442
+        end: 466
+    "6":
+      label: if (has_transcript)
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+      node_type: branch-group
+      parent: "5"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 528
+        end: 891
+    "7":
+      label: if (has_transcript)
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+      node_type: branch-arm
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 548
+        end: 821
+    "8":
+      label: Generate Summary
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+      node_type: header
+      parent: "7"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 558
+        end: 580
+    "9":
+      label: Create Summary Text
+      log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+      node_type: header
+      parent: "8"
+      span:
+        file: src/control_flow/testdata/AIContentPipeline.baml
+        start: 590
+        end: 616
+  edges:
+    "1":
+      - "4"
+    "16":
+      - "17"
+    "18":
+      - "24"
+    "2":
+      - "3"
+    "4":
+      - "18"
+    "5":
+      - "14"
+    "8":
+      - "11"
+    "9":
+      - "10"
+mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      subgraph n6[\"6: BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"8: Generate Summary\"]\n            direction TB\n            n9[\"9: Create Summary Text\"]\n            n10[\"10: Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"11: Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"12: BranchArm: else\"]\n          direction TB\n          n13[\"13: Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"21: Create GitHub PR\"]\n      end\n      subgraph n22[\"22: BranchArm: else\"]\n        direction TB\n        n23[\"23: Missing Summary\"]\n      end\n    end\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "19"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "19"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    json:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "19"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "19"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      subgraph n6[\"6: BranchGroup: if (has_transcript)\"]\n        direction TB\n        subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n          direction TB\n          subgraph n8[\"8: Generate Summary\"]\n            direction TB\n            n9[\"9: Create Summary Text\"]\n            n10[\"10: Label Summary Category\"]\n            n9 --> n10\n          end\n          n11[\"11: Save Summary\"]\n          n8 --> n11\n        end\n        subgraph n12[\"12: BranchArm: else\"]\n          direction TB\n          n13[\"13: Skip Summarization\"]\n        end\n      end\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    subgraph n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n      direction TB\n      subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n        direction TB\n        n21[\"21: Create GitHub PR\"]\n      end\n      subgraph n22[\"22: BranchArm: else\"]\n        direction TB\n        n23[\"23: Missing Summary\"]\n      end\n    end\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "20"
+          - "22"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "12"
+          - "7"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    json:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "12":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 827
+            end: 891
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "12"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "20":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1365
+            end: 1439
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "20"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "22":
+          label: else
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1"
+          node_type: branch-arm
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1445
+            end: 1498
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "22"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "7":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0"
+          node_type: branch-arm
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 548
+            end: 821
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "7"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "20"
+          - "22"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "12"
+          - "7"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      n6[\"6: BranchGroup: if (has_transcript)\"]\n      subgraph n7[\"7: BranchArm: if (has_transcript)\"]\n        direction TB\n        subgraph n8[\"8: Generate Summary\"]\n          direction TB\n          n9[\"9: Create Summary Text\"]\n          n10[\"10: Label Summary Category\"]\n          n9 --> n10\n        end\n        n11[\"11: Save Summary\"]\n        n8 --> n11\n      end\n      subgraph n12[\"12: BranchArm: else\"]\n        direction TB\n        n13[\"13: Skip Summarization\"]\n      end\n      n6 --> n7\n      n6 --> n12\n    end\n    subgraph n14[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n15[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n16[\"16: Get Content Type and Generate Draft\"]\n        n17[\"17: Save Draft\"]\n        n16 --> n17\n      end\n    end\n    n5 --> n14\n  end\n  subgraph n18[\"18: Prepare Pull Request\"]\n    direction TB\n    n19[\"19: BranchGroup: if (summary != no-transcript)\"]\n    subgraph n20[\"20: BranchArm: if (summary != no-transcript)\"]\n      direction TB\n      n21[\"21: Create GitHub PR\"]\n    end\n    subgraph n22[\"22: BranchArm: else\"]\n      direction TB\n      n23[\"23: Missing Summary\"]\n    end\n    n19 --> n20\n    n19 --> n22\n  end\n  n24[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n18\n  n18 --> n24\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "21"
+          - "23"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "13"
+          - "8"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    json:
+      nodes:
+        "0":
+          label: AIContentPipeline
+          log_filter_key: "AIContentPipeline|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 24
+            end: 1530
+        "1":
+          label: Fetch Resources
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 145
+            end: 164
+        "10":
+          label: Label Summary Category
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:label-summary-category:1"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 677
+            end: 706
+        "11":
+          label: Save Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:save-summary:1"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 764
+            end: 782
+        "13":
+          label: Skip Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:else:1|hdr:skip-summarization:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 837
+            end: 861
+        "14":
+          label: Generate Drafts for Posts
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 951
+            end: 981
+        "15":
+          label: for (kind in content_types)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0"
+          node_type: loop
+          parent: "14"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 986
+            end: 1282
+        "16":
+          label: Get Content Type and Generate Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:get-content-type-and-generate-draft:0"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1028
+            end: 1069
+        "17":
+          label: Save Draft
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:generate-drafts-for-posts:1|loop:for-kind-in-content-types:0|hdr:save-draft:1"
+          node_type: header
+          parent: "15"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1185
+            end: 1201
+        "18":
+          label: Prepare Pull Request
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1288
+            end: 1312
+        "19":
+          label: "if (summary != \"no-transcript\")"
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0"
+          node_type: branch-group
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1333
+            end: 1498
+        "2":
+          label: Retrieve Emails and Posts from Database
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:retrieve-emails-and-posts-from-database:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 170
+            end: 214
+        "21":
+          label: Create GitHub PR
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:if-summary-no-transcript:0|hdr:create-github-pr:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1375
+            end: 1397
+        "23":
+          label: Missing Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:prepare-pull-request:2|bg:if-summary-no-transcript:0|arm:else:1|hdr:missing-summary:0"
+          node_type: header
+          parent: "18"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1455
+            end: 1476
+        "24":
+          label: Complete
+          log_filter_key: "AIContentPipeline|root:0|hdr:complete:3"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 1505
+            end: 1517
+        "3":
+          label: Process and Load Video
+          log_filter_key: "AIContentPipeline|root:0|hdr:fetch-resources:0|hdr:process-and-load-video:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 278
+            end: 305
+        "4":
+          label: Generate Content
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 416
+            end: 436
+        "5":
+          label: Video Summarization
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 442
+            end: 466
+        "6":
+          label: if (has_transcript)
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0"
+          node_type: branch-group
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 528
+            end: 891
+        "8":
+          label: Generate Summary
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "5"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 558
+            end: 580
+        "9":
+          label: Create Summary Text
+          log_filter_key: "AIContentPipeline|root:0|hdr:generate-content:1|hdr:video-summarization:0|bg:if-has-transcript:0|arm:if-has-transcript:0|hdr:generate-summary:0|hdr:create-summary-text:0"
+          node_type: header
+          parent: "8"
+          span:
+            file: src/control_flow/testdata/AIContentPipeline.baml
+            start: 590
+            end: 616
+      edges:
+        "1":
+          - "4"
+        "16":
+          - "17"
+        "18":
+          - "24"
+        "19":
+          - "21"
+          - "23"
+        "2":
+          - "3"
+        "4":
+          - "18"
+        "5":
+          - "14"
+        "6":
+          - "13"
+          - "8"
+        "8":
+          - "11"
+        "9":
+          - "10"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: AIContentPipeline\"]\n  direction TB\n  subgraph n1[\"1: Fetch Resources\"]\n    direction TB\n    n2[\"2: Retrieve Emails and Posts from Database\"]\n    n3[\"3: Process and Load Video\"]\n    n2 --> n3\n  end\n  subgraph n4[\"4: Generate Content\"]\n    direction TB\n    subgraph n5[\"5: Video Summarization\"]\n      direction TB\n      n6[\"6: BranchGroup: if (has_transcript)\"]\n      subgraph n7[\"8: Generate Summary\"]\n        direction TB\n        n8[\"9: Create Summary Text\"]\n        n9[\"10: Label Summary Category\"]\n        n8 --> n9\n      end\n      n10[\"11: Save Summary\"]\n      n11[\"13: Skip Summarization\"]\n      n7 --> n10\n      n6 --> n7\n      n6 --> n11\n    end\n    subgraph n12[\"14: Generate Drafts for Posts\"]\n      direction TB\n      subgraph n13[\"15: Loop: for (kind in content_types)\"]\n        direction TB\n        n14[\"16: Get Content Type and Generate Draft\"]\n        n15[\"17: Save Draft\"]\n        n14 --> n15\n      end\n    end\n    n5 --> n12\n  end\n  subgraph n16[\"18: Prepare Pull Request\"]\n    direction TB\n    n17[\"19: BranchGroup: if (summary != no-transcript)\"]\n    n18[\"21: Create GitHub PR\"]\n    n19[\"23: Missing Summary\"]\n    n17 --> n18\n    n17 --> n19\n  end\n  n20[\"24: Complete\"]\n  n1 --> n4\n  n4 --> n16\n  n16 --> n20\nend\n"

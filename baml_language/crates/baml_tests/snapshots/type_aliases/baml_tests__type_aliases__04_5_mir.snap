@@ -1,0 +1,85 @@
+---
+source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Bar() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) {
+    // Locals:
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Foo() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) {
+    // Locals:
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "foo" }) // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Baz() -> TypeAlias(FullyQualifiedName { namespace: Local, name: "Json" }) {
+    // Locals:
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "Json" }) // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn EchoJSON(i: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" })) -> TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) {
+    // Locals:
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // return
+    let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // i // param
+    let _2: String
+
+    bb0: {
+        _2 = const "Whoops";
+        _0 = NotJSON { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn MakeJSON(i: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" })) -> TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) {
+    // Locals:
+    let _0: TypeAlias(FullyQualifiedName { namespace: Local, name: "JSON" }) // return
+    let _1: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" }) // i // param
+    let _2: Class(FullyQualifiedName { namespace: Local, name: "NotJSON" })
+
+    bb0: {
+        _2 = copy _1;
+        _0 = copy _2.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}

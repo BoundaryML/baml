@@ -12,7 +12,7 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 import baml_py
 
@@ -27,12 +27,12 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class ClassWithBlockDone(BaseModel):
-    i_16_digits: typing.Optional[int] = None
-    s_20_words: typing.Optional[str] = None
+    i_16_digits: int
+    s_20_words: str
 
 class ClassWithoutDone(BaseModel):
     i_16_digits: typing.Optional[int] = None
-    s_20_words: StreamState[typing.Optional[str]]
+    s_20_words: StreamState[typing.Optional[str]] = Field(description='A string with 20 words in it')
 
 class SemanticContainer(BaseModel):
     sixteen_digit_number: typing.Optional[int] = None
@@ -41,7 +41,7 @@ class SemanticContainer(BaseModel):
     class_2: typing.Optional["types.ClassWithBlockDone"] = None
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.List["SmallThing"]
+    three_small_things: typing.List["SmallThing"] = Field(description='Should have three items.')
     final_string: typing.Optional[str] = None
 
 class SmallThing(BaseModel):

@@ -1,0 +1,160 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::ForLoopWithHeaders":
+  nodes:
+    "ForLoopWithHeaders|c:func:0":
+      label: ForLoopWithHeaders
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 0
+        end: 359
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 204
+        end: 230
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:accumulation:0":
+      label: Accumulation
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:item-processing:0":
+      label: Item Processing
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 204
+        end: 230
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 267
+        end: 301
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 310
+        end: 317
+    "ForLoopWithHeaders|c:func:0|h:final-result:0":
+      label: Final Result
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ForLoopWithHeaders|c:func:0|h:loop-processing:0":
+      label: Loop Processing
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ForLoopWithHeaders|c:func:0|h:main-loop:0":
+      label: Main Loop
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ForLoopWithHeaders|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 67
+        end: 96
+    "ForLoopWithHeaders|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 100
+        end: 116
+    "ForLoopWithHeaders|c:func:0|s:2":
+      label: for
+      node_type: loop
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 140
+        end: 323
+    "ForLoopWithHeaders|c:func:0|s:4":
+      label: expr
+      node_type: expr
+      parent: "ForLoopWithHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/for_loops.baml
+        start: 351
+        end: 357
+  edges:
+    "ForLoopWithHeaders|c:func:0":
+      - dst: "ForLoopWithHeaders|c:func:0|h:loop-processing:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:item-processing:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:accumulation:0":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:1"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:item-processing:0":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:0":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|h:accumulation:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:1":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:2"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0|s:2":
+      - dst: "ForLoopWithHeaders|c:func:0|s:2"
+        label: repeat
+    "ForLoopWithHeaders|c:func:0|h:final-result:0":
+      - dst: "ForLoopWithHeaders|c:func:0|s:4"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|h:loop-processing:0":
+      - dst: "ForLoopWithHeaders|c:func:0|s:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|h:main-loop:0":
+      - dst: "ForLoopWithHeaders|c:func:0|s:2"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|s:0":
+      - dst: "ForLoopWithHeaders|c:func:0|s:1"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|s:1":
+      - dst: "ForLoopWithHeaders|c:func:0|h:main-loop:0"
+        label: ""
+    "ForLoopWithHeaders|c:func:0|s:2":
+      - dst: "ForLoopWithHeaders|c:func:0|c:loop:0|c:block:0"
+        label: ""
+      - dst: "ForLoopWithHeaders|c:func:0|h:final-result:0"
+        label: ""

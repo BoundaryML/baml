@@ -2,7 +2,7 @@ import TypeBuilder, { FieldType } from "../baml_client/type_builder";
 import { b, b_sync } from "./test-setup";
 
 describe("Dynamic Enum Request Tests", () => {
-  it("should include dynamic enum values in RenderDynamicEnum request", async () => {
+  it("should include dynamic enum values in RenderDynamicEnum request (direct options)", async () => {
     const tb = new TypeBuilder();
     
     // Add values to RenderTestEnum
@@ -48,6 +48,23 @@ Multiple value tests:
 
 'other' is MOTORCYCLE, as expected
 `)
+  });
+
+  it("should include dynamic enum values in RenderDynamicEnum request (withOptions default)", async () => {
+    const tb = new TypeBuilder();
+    tb.RenderTestEnum.addValue("CHRISTMAS_SLEIGH").alias("motorized two-wheeler");
+
+    const myB = b.withOptions({ tb });
+    const request = await myB.request.RenderDynamicEnum(
+      "BIKE",
+      "CHRISTMAS_SLEIGH"
+    );
+
+    const requestBody = request.body.json();
+    const messageContent = requestBody.messages[0].content[0].text;
+    console.log(messageContent);
+    expect(messageContent).toContain("Available dynamic enum values:");
+    expect(messageContent).toContain("CHRISTMAS_SLEIGH");
   });
 
   it("should include dynamic class properties in RenderDynamicClass request", async () => {

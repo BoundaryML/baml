@@ -68,6 +68,10 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -138,6 +142,10 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -206,6 +214,10 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

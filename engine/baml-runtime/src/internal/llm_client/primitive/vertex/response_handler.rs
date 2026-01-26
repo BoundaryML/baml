@@ -39,7 +39,8 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -58,6 +59,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
                 response.candidates.len()
             ),
             code: ErrorCode::Other(200),
+            raw_response: Some(response_body.to_string()),
         });
     }
 
@@ -77,6 +79,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: "No content".to_string(),
             code: ErrorCode::Other(200),
+            raw_response: Some(response_body.to_string()),
         });
     };
 
@@ -99,6 +102,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage_metadata.prompt_token_count,
             output_tokens: usage_metadata.candidates_token_count,
             total_tokens: usage_metadata.total_token_count,
+            cached_input_tokens: usage_metadata.cached_content_token_count,
         },
     })
 }
@@ -124,7 +128,9 @@ pub fn scan_vertex_response_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(()),
+        Err(e) => {
+            return Ok(());
+        }
     };
 
     let event = VertexResponse::deserialize(&event_body)
@@ -141,7 +147,8 @@ pub fn scan_vertex_response_stream(
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(event_body.to_string()),
         })?;
 
     if let Some(choice) = event.candidates.first() {
@@ -162,6 +169,22 @@ pub fn scan_vertex_response_stream(
         if choice.finish_reason == Some("STOP".to_string()) {
             inner.metadata.baml_is_complete = true;
         }
+        inner.metadata.prompt_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.prompt_token_count);
+        inner.metadata.output_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.candidates_token_count);
+        inner.metadata.total_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.total_token_count);
+        inner.metadata.cached_input_tokens = event
+            .usage_metadata
+            .as_ref()
+            .and_then(|u| u.cached_content_token_count);
     }
 
     inner.latency = instant_now.elapsed();
@@ -257,6 +280,7 @@ mod tests {
                 prompt_tokens: Some(79),
                 output_tokens: Some(35),
                 total_tokens: Some(114),
+                cached_input_tokens: None,
             },
         };
 

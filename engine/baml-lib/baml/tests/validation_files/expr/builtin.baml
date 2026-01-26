@@ -6,34 +6,34 @@ class Todo {
 }
 
 function GetTodo() -> Todo {
-  std::fetch_value<Todo>(std::Request {
-    base_url: "https://dummyjson.com/todos/1",
-    headers: {},
-    query_params: {},
+  baml.fetch_as<Todo>(baml.HttpRequest {
+    method: baml.HttpMethod.Get,
+    url: "https://dummyjson.com/todos/1",
   })
 }
 
 function GetTodoMissingTypeArg() -> Todo {
-  std::fetch_value(std::Request {
-    base_url: "https://dummyjson.com/todos/1",
-    headers: {},
-    query_params: {},
+  baml.fetch_as(baml.HttpRequest {
+    method: baml.HttpMethod.Get,
+    url: "https://dummyjson.com/todos/1",
   })
 }
 
-// error: Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>
-//   -->  expr/builtin.baml:17
+// error: Error validating: Generic function baml.fetch_as must have a type argument. Try adding a type argument like this: baml.fetch_as<Type>
+//   -->  expr/builtin.baml:16
 //    | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-// 17 |   std::fetch_value(std::Request {
-// 18 |     base_url: "https://dummyjson.com/todos/1",
-// 19 |     headers: {},
-// 20 |     query_params: {},
-// 21 |   })
+// 15 | function GetTodoMissingTypeArg() -> Todo {
+// 16 |   baml.fetch_as(baml.HttpRequest {
+// 17 |     method: baml.HttpMethod.Get,
+// 18 |     url: "https://dummyjson.com/todos/1",
+// 19 |   })
 //    | 
-// error: Error validating: Generic function std::fetch_value must have a type argument. Try adding a type argument like this: std::fetch_value<Type>
-//   -->  expr/builtin.baml:17
+// error: Error validating: Generic function baml.fetch_as must have a type argument. Try adding a type argument like this: baml.fetch_as<Type>
+//   -->  expr/builtin.baml:16
 //    | 
-// 16 | function GetTodoMissingTypeArg() -> Todo {
-// 17 |   std::fetch_value(std::Request {
+// 15 | function GetTodoMissingTypeArg() -> Todo {
+// 16 |   baml.fetch_as(baml.HttpRequest {
+// 17 |     method: baml.HttpMethod.Get,
+// 18 |     url: "https://dummyjson.com/todos/1",
+// 19 |   })
 //    | 

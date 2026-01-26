@@ -1,0 +1,19 @@
+[package]
+name = "baml_codegen_tests"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_codegen_types = { workspace = true }
+insta = { workspace = true }
+paste.workspace = true

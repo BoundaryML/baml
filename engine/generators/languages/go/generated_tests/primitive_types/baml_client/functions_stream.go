@@ -68,6 +68,10 @@ func (*stream) TestEmptyCollections(ctx context.Context, input string, opts ...C
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -136,6 +140,10 @@ func (*stream) TestMixedPrimitives(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -208,6 +216,10 @@ func (*stream) TestPrimitiveArrays(ctx context.Context, input string, opts ...Ca
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -276,6 +288,10 @@ func (*stream) TestPrimitiveMaps(ctx context.Context, input string, opts ...Call
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -348,6 +364,10 @@ func (*stream) TestPrimitiveTypes(ctx context.Context, input string, opts ...Cal
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -416,6 +436,10 @@ func (*stream) TestTopLevelBool(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -488,6 +512,10 @@ func (*stream) TestTopLevelFloat(ctx context.Context, input string, opts ...Call
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -558,6 +586,10 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -604,7 +636,7 @@ func (*stream) TestTopLevelInt(ctx context.Context, input string, opts ...CallOp
 }
 
 // / Streaming version of TestTopLevelNull
-func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[any, any], error) {
+func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*interface{}, *interface{}], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -628,6 +660,10 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -641,11 +677,11 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[any, any])
+	channel := make(chan StreamValue[*interface{}, *interface{}])
 	go func() {
 		for result := range internal_channel {
 			if result.Error != nil {
-				channel <- StreamValue[any, any]{
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsError: true,
 					Error:   result.Error,
 				}
@@ -653,14 +689,14 @@ func (*stream) TestTopLevelNull(ctx context.Context, input string, opts ...CallO
 				return
 			}
 			if result.HasData {
-				data := (result.Data).(any)
-				channel <- StreamValue[any, any]{
+				data := (result.Data).(*interface{})
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsFinal:  true,
 					as_final: &data,
 				}
 			} else {
-				data := (result.StreamData).(any)
-				channel <- StreamValue[any, any]{
+				data := (result.StreamData).(*interface{})
+				channel <- StreamValue[*interface{}, *interface{}]{
 					IsFinal:   false,
 					as_stream: &data,
 				}
@@ -696,6 +732,10 @@ func (*stream) TestTopLevelString(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

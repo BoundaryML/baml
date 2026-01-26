@@ -49,14 +49,24 @@ func init() {
 }
 
 type callOption struct {
+	client         *string
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
+	tags           map[string]string
 	collectors     []baml.Collector
 	onTick         baml.OnTickCallbackData
 	typeBuilder    baml.TypeBuilder
 }
 
 type CallOptionFunc func(*callOption)
+
+// Set the client for the specific function call (shorthand for ClientRegistry with primary).
+// If both WithClient and WithClientRegistry are used, WithClient takes precedence.
+func WithClient(client string) CallOptionFunc {
+	return func(o *callOption) {
+		o.client = &client
+	}
+}
 
 // Add a client registry to the specific function call.
 func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
@@ -69,6 +79,13 @@ func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
 func WithEnv(env map[string]string) CallOptionFunc {
 	return func(o *callOption) {
 		o.env = env
+	}
+}
+
+// Add tags to the specific function call.
+func WithTags(tags map[string]string) CallOptionFunc {
+	return func(o *callOption) {
+		o.tags = tags
 	}
 }
 

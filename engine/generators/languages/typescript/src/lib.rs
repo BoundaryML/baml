@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_types::GeneratorOutputType;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
@@ -13,8 +15,10 @@ mod functions;
 mod generated_types;
 mod ir_to_ts;
 mod package;
+mod test_macros;
 mod r#type;
 mod utils;
+mod watchers;
 
 #[derive(Default, Debug)]
 pub struct TsLanguageFeatures;
@@ -61,11 +65,36 @@ $ pnpm add @boundaryml/baml
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
         types.sort();
-        let functions = ir
-            .functions
-            .iter()
-            .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
-            .collect::<Vec<_>>();
+        let expr_fn_wrappers = ir.expr_fns_as_functions();
+        let mut function_name_map: HashMap<String, String> = HashMap::new();
+        let mut functions = Vec::new();
+
+        for func in ir.functions.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
+
+        for func in expr_fn_wrappers.iter() {
+            let ts_fn = ir_to_ts::functions::ir_function_to_ts(func, &pkg);
+            function_name_map.insert(func.elem.name().to_string(), ts_fn.name.clone());
+            functions.push(ts_fn);
+        }
+
+        let event_collectors = watchers::build_event_collectors(args, &pkg, &function_name_map)?;
+
+        // Build a map of function names to their event collector types
+        let mut event_collector_map: HashMap<String, String> = HashMap::new();
+        for collector in &event_collectors {
+            event_collector_map.insert(collector.ts_name.clone(), collector.interface_name.clone());
+        }
+
+        // Update functions with their event collector types
+        for func in &mut functions {
+            if let Some(collector_type) = event_collector_map.get(&func.name) {
+                func.event_collector_type = Some(collector_type.clone());
+            }
+        }
 
         // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
@@ -90,6 +119,8 @@ $ pnpm add @boundaryml/baml
             "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
+
+        collector.add_file("watchers.ts", watchers::render_events(&event_collectors)?)?;
 
         // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();
@@ -503,5 +534,51 @@ mod tests {
             ),
             "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
         );
+    }
+
+    #[test]
+    fn templates_do_not_shadow_common_user_arg_names() {
+        // These templates render functions that take user-defined argument names.
+        // If we introduce locals like `options`, `env`, or `stream`, a BAML arg with the same
+        // name can cause TS compile errors (duplicate identifier) or incorrect payload binding.
+
+        let async_client = include_str!("./_templates/async_client.ts.j2");
+        assert!(!async_client.contains("const options ="));
+        assert!(!async_client.contains("const signal = options.signal"));
+        assert!(!async_client.contains("const collector = options.collector"));
+        assert!(!async_client.contains("let collector = options.collector"));
+        assert!(!async_client.contains("const rawEnv ="));
+        assert!(!async_client.contains("const env: Record<string, string> ="));
+        assert!(!async_client.contains("const raw = await this.runtime.callFunction"));
+        assert!(!async_client.contains("const raw = this.runtime.streamFunction"));
+        assert!(!async_client.contains("const stream = this.stream."));
+        assert!(async_client.contains("const __options__ ="));
+
+        let sync_client = include_str!("./_templates/sync_client.ts.j2");
+        assert!(!sync_client.contains("const options ="));
+        assert!(!sync_client.contains("const signal = options.signal"));
+        assert!(!sync_client.contains("const collector = options.collector"));
+        assert!(!sync_client.contains("const rawEnv ="));
+        assert!(!sync_client.contains("const env: Record<string, string> ="));
+        assert!(!sync_client.contains("const raw = this.runtime.callFunctionSync"));
+        assert!(sync_client.contains("const __options__ ="));
+
+        let async_request = include_str!("./_templates/async_request.ts.j2");
+        assert!(!async_request.contains("const rawEnv ="));
+        assert!(!async_request.contains("const env: Record<string, string> ="));
+
+        let sync_request = include_str!("./_templates/sync_request.ts.j2");
+        assert!(!sync_request.contains("const rawEnv ="));
+        assert!(!sync_request.contains("const env: Record<string, string> ="));
+
+        let react_server_streaming = include_str!("./_templates/react/server_streaming.ts.j2");
+        assert!(!react_server_streaming.contains("const stream ="));
+        assert!(react_server_streaming.contains("const __stream__ ="));
+
+        let parser = include_str!("./_templates/parser.ts.j2");
+        assert!(!parser.contains("const rawEnv ="));
+        assert!(!parser.contains("const env: Record<string, string> ="));
+        assert!(parser.contains("const __rawEnv__ ="));
+        assert!(parser.contains("const __env__: Record<string, string> ="));
     }
 }

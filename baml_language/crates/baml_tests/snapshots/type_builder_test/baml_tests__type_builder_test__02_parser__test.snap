@@ -1,0 +1,133 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Fn"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD
+        KW_CLIENT "client"
+        STRING_LITERAL "openai/gpt-4o"
+          QUOTE """
+          WORD "openai"
+          SLASH "/"
+          WORD "gpt-4o"
+          QUOTE """
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"Hi"#
+          HASH "#"
+          QUOTE """
+          WORD "Hi"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TopLevelClass"
+    L_BRACE "{"
+    FIELD
+      WORD "a"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "TopLevelEnum"
+    L_BRACE "{"
+    ENUM_VARIANT "A"
+      WORD "A"
+    ENUM_VARIANT "B"
+      WORD "B"
+    R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "MyTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "Fn"
+              WORD "Fn"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "InnerClass"
+          L_BRACE "{"
+          FIELD
+            WORD "b"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "DynamicInner"
+            L_BRACE "{"
+            FIELD
+              WORD "c"
+              TYPE_EXPR "string"
+                WORD "string"
+            R_BRACE "}"
+        ENUM_DEF
+          KW_ENUM "enum"
+          WORD "InnerEnum"
+          L_BRACE "{"
+          ENUM_VARIANT "X"
+            WORD "X"
+          ENUM_VARIANT "Y"
+            WORD "Y"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          ENUM_DEF
+            KW_ENUM "enum"
+            WORD "DynamicEnum"
+            L_BRACE "{"
+            ENUM_VARIANT "P"
+              WORD "P"
+            ENUM_VARIANT "Q"
+              WORD "Q"
+            R_BRACE "}"
+        TYPE_ALIAS_DEF
+          WORD "type"
+          WORD "MyAlias"
+          EQUALS "="
+          TYPE_EXPR "string | int"
+            WORD "string"
+            PIPE "|"
+            WORD "int"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "from_text"
+            CONFIG_VALUE
+              STRING_LITERAL "test"
+                QUOTE """
+                KW_TEST "test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

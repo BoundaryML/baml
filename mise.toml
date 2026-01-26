@@ -2,22 +2,24 @@
 
 [tools]
 # Core languages
-rust = "1.88.0"
 go = "1.23.11"
-python = "3.13"  # Will use uv for Python package management
+python = "3.13"     # Will use uv for Python package management
 ruby = "3.2.2"
-node = "lts"     # For pnpm
+node = "22"         # For pnpm
 java = "temurin-23"
 
 # Rust tools
 "cargo:bacon" = "latest"
 "cargo:cross" = "latest"
 "cargo:cargo-watch" = "latest"
-"cargo:wasm-pack" = "0.13.1"
+"cargo:wasm-pack" = "0.14.0"
+"cargo:ripgrep" = "latest"
+"cargo:just" = "latest"
+"cargo:prek" = "latest"
 
 # Go tools
 # locked to match the version in .github/actions/setup-go/action.yml
-"protoc-gen-go" = "v1.34.1"
+"protoc-gen-go" = "1.34.1"
 "go:golang.org/x/tools/cmd/goimports" = "0.36.0"
 
 # Python tools
@@ -28,6 +30,13 @@ java = "temurin-23"
 # Node tools
 "npm:pnpm" = "10.14.0"
 "npm:@infisical/cli" = "latest"
+
+[tasks]
+"bep:readme" = "./beps/scripts/update_bep_readme.py"
+"bep:new" = "./beps/scripts/new_bep.py"
+"bep:update" = "./beps/scripts/update_bep.py"
+"bep:check" = "./beps/scripts/update_bep_readme.py --check"
+"bep:serve" = "cd beps && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin --with click==8.2.1 --with mkdocs-git-revision-date-localized-plugin --with mkdocs-git-committers-plugin-2 mkdocs serve"
 
 [settings]
 experimental = true

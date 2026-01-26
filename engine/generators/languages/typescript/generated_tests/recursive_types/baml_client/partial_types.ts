@@ -48,7 +48,7 @@ export type Nonrecursive2 = string | null
 export type Recursive1 = number | Recursive1[] | null
 
 export interface JSON {
-  [key: string]: string | number | number | Record<string, JSON> | JSON[] | null
+  [key: string]: string | number | Record<string, JSON> | JSON[] | null
 }
 
 }

@@ -2,10 +2,13 @@
   "extends": "../../workspace-tools/typescript/react-library.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json",
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["vscode"]
+    "types": ["vscode", "jest"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

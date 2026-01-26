@@ -1,0 +1,59 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::BasicIf":
+  nodes:
+    "BasicIf|c:func:0":
+      label: BasicIf
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/basic_if.baml
+        start: 16
+        end: 225
+    "BasicIf|c:func:0|h:this-is-a-named-statement:0":
+      label: This is a named statement
+      node_type: expr
+      parent: "BasicIf|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicIf|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "BasicIf|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_if.baml
+        start: 51
+        end: 62
+    "BasicIf|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "BasicIf|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_if.baml
+        start: 101
+        end: 217
+    "BasicIf|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "BasicIf|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_if.baml
+        start: 222
+        end: 223
+  edges:
+    "BasicIf|c:func:0":
+      - dst: "BasicIf|c:func:0|s:0"
+        label: ""
+    "BasicIf|c:func:0|h:this-is-a-named-statement:0":
+      - dst: "BasicIf|c:func:0|s:1"
+        label: ""
+    "BasicIf|c:func:0|s:0":
+      - dst: "BasicIf|c:func:0|h:this-is-a-named-statement:0"
+        label: ""
+    "BasicIf|c:func:0|s:1":
+      - dst: "BasicIf|c:func:0|s:2"
+        label: ""

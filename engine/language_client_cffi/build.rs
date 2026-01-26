@@ -324,8 +324,13 @@ mod protoc_lang_out {
 
 fn main() -> std::io::Result<()> {
     println!("running build for baml_cffi");
+    // Re-run if any of the proto files change.
+    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_outbound.proto");
+    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_inbound.proto");
+    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_object.proto");
+    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_object_methods.proto");
+
     // Re-run build.rs if these files change.
-    println!("cargo:rerun-if-changed=types/cffi.proto");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/ctypes/baml_type_encode.rs");
@@ -333,14 +338,23 @@ fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=src/ctypes/baml_type_decode.rs");
     println!("cargo:rerun-if-changed=build.rs");
 
-    std::env::set_var(
-        "PROTOC",
-        protoc_bin_vendored::protoc_bin_path()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-    );
-    prost_build::compile_protos(&["types/cffi.proto"], &["types/"])?;
+    unsafe {
+        std::env::set_var(
+            "PROTOC",
+            protoc_bin_vendored::protoc_bin_path()
+                .unwrap()
+                .to_str()
+                .unwrap(),
+        );
+    }
+    let protos = [
+        "types/baml/cffi/v1/baml_outbound.proto",
+        "types/baml/cffi/v1/baml_inbound.proto",
+        "types/baml/cffi/v1/baml_object.proto",
+        "types/baml/cffi/v1/baml_object_methods.proto",
+    ];
+
+    prost_build::compile_protos(&protos, &["types"])?;
 
     {
         let lang = "go";
@@ -355,7 +369,8 @@ fn main() -> std::io::Result<()> {
         let mut protoc = protoc_lang_out::ProtocLangOut::new();
         protoc
             .lang(lang)
-            .input("types/cffi.proto")
+            .inputs(protos)
+            .includes(["types"])
             .out_dir(lang_dir);
 
         // Allow overriding the protoc-gen-go plugin path
@@ -406,10 +421,16 @@ fn main() -> std::io::Result<()> {
             .write_to_file(out_path.clone());
         if std::env::var("CI").is_ok() && res {
             let new_content = std::fs::read_to_string(&out_path).unwrap();
-            println!("New header content: \n==============\n{new_content}");
-            println!("\n\n");
-            println!("Old header content: \n==============\n{outpath_content}");
-            panic!("cbindgen generated a diff");
+            // Normalize line endings for comparison (Windows CRLF vs Unix LF)
+            let normalized_old = outpath_content.replace("\r\n", "\n");
+            let normalized_new = new_content.replace("\r\n", "\n");
+
+            if normalized_old != normalized_new {
+                println!("New header content: \n==============\n{new_content}");
+                println!("\n\n");
+                println!("Old header content: \n==============\n{outpath_content}");
+                panic!("cbindgen generated a diff");
+            }
         }
     }
 

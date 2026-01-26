@@ -1,0 +1,27 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function ReadAndClose:
+    Return: String
+  Function ReadMultipleFiles:
+    Return: String
+  Function ReadFile:
+    Return: String
+  Function ReadFileInline:
+    Return: String
+  Function MultipleConnections:
+    Return: String
+  Function ConnectAndReadInline:
+    Return: String
+  Function ConnectAndRead:
+    Return: String
+  Function ConnectReadAndClose:
+    Return: String
+  Function ChainCommands:
+    Return: String
+  Function RunCommandWithVar:
+    Return: String
+  Function RunCommand:
+    Return: String

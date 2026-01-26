@@ -269,7 +269,7 @@ pub fn from_str(
 
             Ok::<BamlValueWithFlags, anyhow::Error>(v)
         }
-        Err(e) => anyhow::bail!("Failed to coerce value: {}", e),
+        Err(e) => anyhow::bail!("Failed to coerce value: {:?}", e),
     }?;
 
     log::debug!("Parsed JSONish (step 2 of parsing): {parsed_value:#?}");

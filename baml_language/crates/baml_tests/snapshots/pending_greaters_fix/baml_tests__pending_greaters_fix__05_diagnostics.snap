@@ -1,0 +1,44 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+   ╭─[ extra_greater.baml:7:28 ]
+   │
+ 7 │   bad_field map<string, int>>
+   │                            ─┬  
+   │                             ╰── Unmatched '>' in type expression (found 1 extra)
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:23:37 ]
+    │
+ 23 │ function BadParam(x: map<string, int>>) -> string {
+    │                                     ─┬  
+    │                                      ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:29:44 ]
+    │
+ 29 │ function BadReturnType() -> map<string, int>> {
+    │                                            ─┬  
+    │                                             ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:35:32 ]
+    │
+ 35 │ type BadAlias = map<string, int>>
+    │                                ─┬  
+    │                                 ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯

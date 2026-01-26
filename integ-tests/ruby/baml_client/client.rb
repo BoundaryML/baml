@@ -35,20 +35,21 @@ module BamlClient
           @options = options
       end
 
-      sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String])).returns(BamlSyncClient)}
-      def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil)
+      sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String]), tags: T.nilable(T::Hash[String, String])).returns(BamlSyncClient)}
+      def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil, tags: nil)
           BamlSyncClient.new(@options.merge_options(BamlCallOptions.from_hash({
               collector: collector,
               tb: tb,
               client_registry: client_registry,
               env_vars: env_vars,
+              tags: tags,
           })))
       end
 
       sig {params(
           varargs: T.untyped,
           recipe: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Recipe)}
       def AaaSamOutputFormat(
           *varargs,
@@ -59,21 +60,21 @@ module BamlClient
               raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AaaSamOutputFormat", args: {
+          __result__ = __options__.call_function_sync(function_name: "AaaSamOutputFormat", args: {
               recipe: recipe,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Recipe)
+          __parsed__.cast_to(BamlClient::Types::Recipe)
       end
       sig {params(
           varargs: T.untyped,
           data: BamlClient::Types::LinkedListAliasNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LinkedListAliasNode)}
       def AliasThatPointsToRecursiveType(
           *varargs,
@@ -84,21 +85,21 @@ module BamlClient
               raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasThatPointsToRecursiveType", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasThatPointsToRecursiveType", args: {
               data: data,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::LinkedListAliasNode)
+          __parsed__.cast_to(BamlClient::Types::LinkedListAliasNode)
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def AliasWithMultipleAttrs(
           *varargs,
@@ -109,21 +110,21 @@ module BamlClient
               raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasWithMultipleAttrs", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasWithMultipleAttrs", args: {
               money: money,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Checked[Integer])
+          __parsed__.cast_to(BamlClient::Types::Checked[Integer])
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClass(
           *varargs,
@@ -134,21 +135,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasedInputClass", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasedInputClass", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClass2(
           *varargs,
@@ -159,21 +160,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasedInputClass2", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasedInputClass2", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClassNested,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputClassNested(
           *varargs,
@@ -184,21 +185,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasedInputClassNested", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasedInputClassNested", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::AliasedEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputEnum(
           *varargs,
@@ -209,21 +210,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasedInputEnum", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasedInputEnum", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::AliasedEnum],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AliasedInputList(
           *varargs,
@@ -234,21 +235,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AliasedInputList", args: {
+          __result__ = __options__.call_function_sync(function_name: "AliasedInputList", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           optionals: BamlClient::Types::OptionalListAndMap,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::OptionalListAndMap)}
       def AllowedOptionals(
           *varargs,
@@ -259,21 +260,21 @@ module BamlClient
               raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AllowedOptionals", args: {
+          __result__ = __options__.call_function_sync(function_name: "AllowedOptionals", args: {
               optionals: optionals,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::OptionalListAndMap)
+          __parsed__.cast_to(BamlClient::Types::OptionalListAndMap)
       end
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def AssertFn(
           *varargs,
@@ -284,21 +285,21 @@ module BamlClient
               raise ArgumentError.new("AssertFn may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AssertFn", args: {
+          __result__ = __options__.call_function_sync(function_name: "AssertFn", args: {
               a: a,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AudioInput(
           *varargs,
@@ -309,21 +310,21 @@ module BamlClient
               raise ArgumentError.new("AudioInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AudioInput", args: {
+          __result__ = __options__.call_function_sync(function_name: "AudioInput", args: {
               aud: aud,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def AudioInputOpenai(
           *varargs,
@@ -334,21 +335,21 @@ module BamlClient
               raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "AudioInputOpenai", args: {
+          __result__ = __options__.call_function_sync(function_name: "AudioInputOpenai", args: {
               aud: aud,prompt: prompt,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[Integer],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LinkedList)}
       def BuildLinkedList(
           *varargs,
@@ -359,21 +360,21 @@ module BamlClient
               raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "BuildLinkedList", args: {
+          __result__ = __options__.call_function_sync(function_name: "BuildLinkedList", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::LinkedList)
+          __parsed__.cast_to(BamlClient::Types::LinkedList)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::BinaryNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Tree)}
       def BuildTree(
           *varargs,
@@ -384,21 +385,71 @@ module BamlClient
               raise ArgumentError.new("BuildTree may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "BuildTree", args: {
+          __result__ = __options__.call_function_sync(function_name: "BuildTree", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Tree)
+          __parsed__.cast_to(BamlClient::Types::Tree)
+      end
+      sig {params(
+          varargs: T.untyped,
+          word: String,target: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(T::Boolean)}
+      def CheckWordEquality(
+          *varargs,
+          word:,target:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("CheckWordEquality may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "CheckWordEquality", args: {
+              word: word,target: target,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(T::Boolean)
+      end
+      sig {params(
+          varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)])}
+      def ChooseTodoTools(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ChooseTodoTools may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "ChooseTodoTools", args: {
+              query: query,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)])
       end
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassToRecAlias)}
       def ClassThatPointsToRecursiveClassThroughAlias(
           *varargs,
@@ -409,21 +460,21 @@ module BamlClient
               raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassThatPointsToRecursiveClassThroughAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassThatPointsToRecursiveClassThroughAlias", args: {
               cls: cls,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ClassToRecAlias)
+          __parsed__.cast_to(BamlClient::Types::ClassToRecAlias)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::DynEnumTwo, String))}
       def ClassifyDynEnumTwo(
           *varargs,
@@ -434,21 +485,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassifyDynEnumTwo", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassifyDynEnumTwo", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(BamlClient::Types::DynEnumTwo, String))
+          __parsed__.cast_to(T.any(BamlClient::Types::DynEnumTwo, String))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::DynEnumOne, String))}
       def ClassifyDynamicStatus(
           *varargs,
@@ -459,21 +510,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyDynamicStatus may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassifyDynamicStatus", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassifyDynamicStatus", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(BamlClient::Types::DynEnumOne, String))
+          __parsed__.cast_to(T.any(BamlClient::Types::DynEnumOne, String))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage(
           *varargs,
@@ -484,21 +535,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassifyMessage", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassifyMessage", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Category)
+          __parsed__.cast_to(BamlClient::Types::Category)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage2(
           *varargs,
@@ -509,21 +560,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassifyMessage2", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassifyMessage2", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Category)
+          __parsed__.cast_to(BamlClient::Types::Category)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Category)}
       def ClassifyMessage3(
           *varargs,
@@ -534,21 +585,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ClassifyMessage3", args: {
+          __result__ = __options__.call_function_sync(function_name: "ClassifyMessage3", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Category)
+          __parsed__.cast_to(BamlClient::Types::Category)
       end
       sig {params(
           varargs: T.untyped,
           prefix: String,suffix: String,language: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def Completion(
           *varargs,
@@ -559,21 +610,21 @@ module BamlClient
               raise ArgumentError.new("Completion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "Completion", args: {
+          __result__ = __options__.call_function_sync(function_name: "Completion", args: {
               prefix: prefix,suffix: suffix,language: language,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt))}
       def CustomTask(
           *varargs,
@@ -584,21 +635,21 @@ module BamlClient
               raise ArgumentError.new("CustomTask may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "CustomTask", args: {
+          __result__ = __options__.call_function_sync(function_name: "CustomTask", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt))
+          __parsed__.cast_to(T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt))
       end
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeAudio(
           *varargs,
@@ -609,21 +660,21 @@ module BamlClient
               raise ArgumentError.new("DescribeAudio may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeAudio", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeAudio", args: {
               audio: audio,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeAudio2(
           *varargs,
@@ -634,21 +685,21 @@ module BamlClient
               raise ArgumentError.new("DescribeAudio2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeAudio2", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeAudio2", args: {
               audio: audio,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage(
           *varargs,
@@ -659,21 +710,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeImage", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeImage", args: {
               img: img,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage2(
           *varargs,
@@ -684,21 +735,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeImage2", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeImage2", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage3(
           *varargs,
@@ -709,21 +760,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeImage3", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeImage3", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeImage4(
           *varargs,
@@ -734,21 +785,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeImage4", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeImage4", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,client_sector: String,client_name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def DescribeMedia1599(
           *varargs,
@@ -759,21 +810,21 @@ module BamlClient
               raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DescribeMedia1599", args: {
+          __result__ = __options__.call_function_sync(function_name: "DescribeMedia1599", args: {
               img: img,client_sector: client_sector,client_name: client_name,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB))}
       def DifferentiateUnions(
           *varargs,
@@ -784,21 +835,21 @@ module BamlClient
               raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DifferentiateUnions", args: {
+          __result__ = __options__.call_function_sync(function_name: "DifferentiateUnions", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB))
+          __parsed__.cast_to(T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DummyOutput)}
       def DummyOutputFunction(
           *varargs,
@@ -809,21 +860,21 @@ module BamlClient
               raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DummyOutputFunction", args: {
+          __result__ = __options__.call_function_sync(function_name: "DummyOutputFunction", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::DummyOutput)
+          __parsed__.cast_to(BamlClient::Types::DummyOutput)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynamicClassOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicClassTwo)}
       def DynamicFunc(
           *varargs,
@@ -834,21 +885,21 @@ module BamlClient
               raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DynamicFunc", args: {
+          __result__ = __options__.call_function_sync(function_name: "DynamicFunc", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::DynamicClassTwo)
+          __parsed__.cast_to(BamlClient::Types::DynamicClassTwo)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynInputOutput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynInputOutput)}
       def DynamicInputOutput(
           *varargs,
@@ -859,21 +910,21 @@ module BamlClient
               raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DynamicInputOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "DynamicInputOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::DynInputOutput)
+          __parsed__.cast_to(BamlClient::Types::DynInputOutput)
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::DynInputOutput],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::DynInputOutput])}
       def DynamicListInputOutput(
           *varargs,
@@ -884,21 +935,21 @@ module BamlClient
               raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "DynamicListInputOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "DynamicListInputOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[BamlClient::Types::DynInputOutput])
+          __parsed__.cast_to(T::Array[BamlClient::Types::DynInputOutput])
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ExpectFailure(
           *varargs,
@@ -909,21 +960,21 @@ module BamlClient
               raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExpectFailure", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExpectFailure", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           document: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ContactInfo)}
       def ExtractContactInfo(
           *varargs,
@@ -934,21 +985,21 @@ module BamlClient
               raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractContactInfo", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractContactInfo", args: {
               document: document,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ContactInfo)
+          __parsed__.cast_to(BamlClient::Types::ContactInfo)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])}
       def ExtractDynamicCategories(
           *varargs,
@@ -959,21 +1010,21 @@ module BamlClient
               raise ArgumentError.new("ExtractDynamicCategories may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractDynamicCategories", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractDynamicCategories", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])
+          __parsed__.cast_to(T::Array[T.any(BamlClient::Types::DynEnumTwo, String)])
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicSchema)}
       def ExtractEntities(
           *varargs,
@@ -984,21 +1035,21 @@ module BamlClient
               raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractEntities", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractEntities", args: {
               text: text,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::DynamicSchema)
+          __parsed__.cast_to(BamlClient::Types::DynamicSchema)
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(BamlClient::Types::Hobby, String)])}
       def ExtractHobby(
           *varargs,
@@ -1009,21 +1060,21 @@ module BamlClient
               raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractHobby", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractHobby", args: {
               text: text,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[T.any(BamlClient::Types::Hobby, String)])
+          __parsed__.cast_to(T::Array[T.any(BamlClient::Types::Hobby, String)])
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ExtractName(
           *varargs,
@@ -1034,21 +1085,21 @@ module BamlClient
               raise ArgumentError.new("ExtractName may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractName", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractName", args: {
               text: text,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def ExtractNames(
           *varargs,
@@ -1059,21 +1110,21 @@ module BamlClient
               raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractNames", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractNames", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[String])
+          __parsed__.cast_to(T::Array[String])
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::Person])}
       def ExtractPeople(
           *varargs,
@@ -1084,21 +1135,46 @@ module BamlClient
               raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractPeople", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractPeople", args: {
               text: text,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[BamlClient::Types::Person])
+          __parsed__.cast_to(T::Array[BamlClient::Types::Person])
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(BamlClient::Types::PersonWithMeta)}
+      def ExtractPersonWithMeta(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ExtractPersonWithMeta may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "ExtractPersonWithMeta", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(BamlClient::Types::PersonWithMeta)
       end
       sig {params(
           varargs: T.untyped,
           email: String,reason: T.any(String, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ReceiptInfo)}
       def ExtractReceiptInfo(
           *varargs,
@@ -1109,21 +1185,21 @@ module BamlClient
               raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractReceiptInfo", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractReceiptInfo", args: {
               email: email,reason: reason,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ReceiptInfo)
+          __parsed__.cast_to(BamlClient::Types::ReceiptInfo)
       end
       sig {params(
           varargs: T.untyped,
           resume: String,img: T.nilable(Baml::Image),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Resume)}
       def ExtractResume(
           *varargs,
@@ -1134,21 +1210,21 @@ module BamlClient
               raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractResume", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractResume", args: {
               resume: resume,img: img,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Resume)
+          __parsed__.cast_to(BamlClient::Types::Resume)
       end
       sig {params(
           varargs: T.untyped,
           resume: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Resume)}
       def ExtractResume2(
           *varargs,
@@ -1159,21 +1235,46 @@ module BamlClient
               raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ExtractResume2", args: {
+          __result__ = __options__.call_function_sync(function_name: "ExtractResume2", args: {
               resume: resume,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Resume)
+          __parsed__.cast_to(BamlClient::Types::Resume)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def FnAlwaysFails(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("FnAlwaysFails may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "FnAlwaysFails", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(BamlClient::Types::ClassOptionalOutput))}
       def FnClassOptionalOutput(
           *varargs,
@@ -1184,21 +1285,21 @@ module BamlClient
               raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnClassOptionalOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnClassOptionalOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.nilable(BamlClient::Types::ClassOptionalOutput))
+          __parsed__.cast_to(T.nilable(BamlClient::Types::ClassOptionalOutput))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(BamlClient::Types::ClassOptionalOutput2))}
       def FnClassOptionalOutput2(
           *varargs,
@@ -1209,21 +1310,21 @@ module BamlClient
               raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnClassOptionalOutput2", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnClassOptionalOutput2", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.nilable(BamlClient::Types::ClassOptionalOutput2))
+          __parsed__.cast_to(T.nilable(BamlClient::Types::ClassOptionalOutput2))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::EnumOutput])}
       def FnEnumListOutput(
           *varargs,
@@ -1234,21 +1335,21 @@ module BamlClient
               raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnEnumListOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnEnumListOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[BamlClient::Types::EnumOutput])
+          __parsed__.cast_to(T::Array[BamlClient::Types::EnumOutput])
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::EnumOutput)}
       def FnEnumOutput(
           *varargs,
@@ -1259,21 +1360,21 @@ module BamlClient
               raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnEnumOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnEnumOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::EnumOutput)
+          __parsed__.cast_to(BamlClient::Types::EnumOutput)
       end
       sig {params(
           varargs: T.untyped,
           retries: Integer,delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnFailRetryConstantDelay(
           *varargs,
@@ -1284,21 +1385,21 @@ module BamlClient
               raise ArgumentError.new("FnFailRetryConstantDelay may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnFailRetryConstantDelay", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnFailRetryConstantDelay", args: {
               retries: retries,delay_ms: delay_ms,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           retries: Integer,initial_delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnFailRetryExponentialDelay(
           *varargs,
@@ -1309,21 +1410,46 @@ module BamlClient
               raise ArgumentError.new("FnFailRetryExponentialDelay may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnFailRetryExponentialDelay", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnFailRetryExponentialDelay", args: {
               retries: retries,initial_delay_ms: initial_delay_ms,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def FnFallbackAlwaysFails(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("FnFallbackAlwaysFails may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "FnFallbackAlwaysFails", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::LiteralClassHello,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::LiteralClassHello)}
       def FnLiteralClassInputOutput(
           *varargs,
@@ -1334,21 +1460,21 @@ module BamlClient
               raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnLiteralClassInputOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnLiteralClassInputOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::LiteralClassHello)
+          __parsed__.cast_to(BamlClient::Types::LiteralClassHello)
       end
       sig {params(
           varargs: T.untyped,
           input: T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo))}
       def FnLiteralUnionClassInputOutput(
           *varargs,
@@ -1359,21 +1485,21 @@ module BamlClient
               raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnLiteralUnionClassInputOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnLiteralUnionClassInputOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo))
+          __parsed__.cast_to(T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo))
       end
       sig {params(
           varargs: T.untyped,
           myString: T.nilable(String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnNamedArgsSingleStringOptional(
           *varargs,
@@ -1384,21 +1510,21 @@ module BamlClient
               raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnNamedArgsSingleStringOptional", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnNamedArgsSingleStringOptional", args: {
               myString: myString,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Boolean)}
       def FnOutputBool(
           *varargs,
@@ -1409,21 +1535,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputBool", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputBool", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Boolean)
+          __parsed__.cast_to(T::Boolean)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestOutputClass)}
       def FnOutputClass(
           *varargs,
@@ -1434,21 +1560,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputClass", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputClass", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestOutputClass)
+          __parsed__.cast_to(BamlClient::Types::TestOutputClass)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[BamlClient::Types::TestOutputClass])}
       def FnOutputClassList(
           *varargs,
@@ -1459,21 +1585,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputClassList", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputClassList", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[BamlClient::Types::TestOutputClass])
+          __parsed__.cast_to(T::Array[BamlClient::Types::TestOutputClass])
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassNested)}
       def FnOutputClassNested(
           *varargs,
@@ -1484,21 +1610,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputClassNested", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputClassNested", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestClassNested)
+          __parsed__.cast_to(BamlClient::Types::TestClassNested)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassWithEnum)}
       def FnOutputClassWithEnum(
           *varargs,
@@ -1509,21 +1635,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputClassWithEnum", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputClassWithEnum", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestClassWithEnum)
+          __parsed__.cast_to(BamlClient::Types::TestClassWithEnum)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def FnOutputInt(
           *varargs,
@@ -1534,21 +1660,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputInt", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputInt", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Boolean)}
       def FnOutputLiteralBool(
           *varargs,
@@ -1559,21 +1685,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputLiteralBool", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputLiteralBool", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Boolean)
+          __parsed__.cast_to(T::Boolean)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def FnOutputLiteralInt(
           *varargs,
@@ -1584,21 +1710,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputLiteralInt", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputLiteralInt", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnOutputLiteralString(
           *varargs,
@@ -1609,21 +1735,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputLiteralString", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputLiteralString", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def FnOutputStringList(
           *varargs,
@@ -1634,21 +1760,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnOutputStringList", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnOutputStringList", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[String])
+          __parsed__.cast_to(T::Array[String])
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestEnum)}
       def FnTestAliasedEnumOutput(
           *varargs,
@@ -1659,21 +1785,21 @@ module BamlClient
               raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnTestAliasedEnumOutput", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnTestAliasedEnumOutput", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestEnum)
+          __parsed__.cast_to(BamlClient::Types::TestEnum)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestClassAlias)}
       def FnTestClassAlias(
           *varargs,
@@ -1684,21 +1810,21 @@ module BamlClient
               raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnTestClassAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnTestClassAlias", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestClassAlias)
+          __parsed__.cast_to(BamlClient::Types::TestClassAlias)
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def FnTestNamedArgsSingleEnum(
           *varargs,
@@ -1709,21 +1835,21 @@ module BamlClient
               raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "FnTestNamedArgsSingleEnum", args: {
+          __result__ = __options__.call_function_sync(function_name: "FnTestNamedArgsSingleEnum", args: {
               myArg: myArg,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RaysData)}
       def GetDataType(
           *varargs,
@@ -1734,21 +1860,21 @@ module BamlClient
               raise ArgumentError.new("GetDataType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "GetDataType", args: {
+          __result__ = __options__.call_function_sync(function_name: "GetDataType", args: {
               text: text,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RaysData)
+          __parsed__.cast_to(BamlClient::Types::RaysData)
       end
       sig {params(
           varargs: T.untyped,
           email: BamlClient::Types::Email,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::OrderInfo)}
       def GetOrderInfo(
           *varargs,
@@ -1759,21 +1885,21 @@ module BamlClient
               raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "GetOrderInfo", args: {
+          __result__ = __options__.call_function_sync(function_name: "GetOrderInfo", args: {
               email: email,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::OrderInfo)
+          __parsed__.cast_to(BamlClient::Types::OrderInfo)
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::SearchParams)}
       def GetQuery(
           *varargs,
@@ -1784,21 +1910,21 @@ module BamlClient
               raise ArgumentError.new("GetQuery may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "GetQuery", args: {
+          __result__ = __options__.call_function_sync(function_name: "GetQuery", args: {
               query: query,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::SearchParams)
+          __parsed__.cast_to(BamlClient::Types::SearchParams)
       end
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[BamlClient::Types::MapKey, String],i2: T::Hash[BamlClient::Types::MapKey, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[BamlClient::Types::MapKey, String])}
       def InOutEnumMapKey(
           *varargs,
@@ -1809,21 +1935,21 @@ module BamlClient
               raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "InOutEnumMapKey", args: {
+          __result__ = __options__.call_function_sync(function_name: "InOutEnumMapKey", args: {
               i1: i1,i2: i2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[BamlClient::Types::MapKey, String])
+          __parsed__.cast_to(T::Hash[BamlClient::Types::MapKey, String])
       end
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[T.any(String, String, String, String), String],i2: T::Hash[T.any(String, String, String, String), String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[T.any(String, String, String, String), String])}
       def InOutLiteralStringUnionMapKey(
           *varargs,
@@ -1834,21 +1960,21 @@ module BamlClient
               raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "InOutLiteralStringUnionMapKey", args: {
+          __result__ = __options__.call_function_sync(function_name: "InOutLiteralStringUnionMapKey", args: {
               i1: i1,i2: i2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[T.any(String, String, String, String), String])
+          __parsed__.cast_to(T::Hash[T.any(String, String, String, String), String])
       end
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, String])}
       def InOutSingleLiteralStringMapKey(
           *varargs,
@@ -1859,21 +1985,21 @@ module BamlClient
               raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "InOutSingleLiteralStringMapKey", args: {
+          __result__ = __options__.call_function_sync(function_name: "InOutSingleLiteralStringMapKey", args: {
               m: m,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[String, String])
+          __parsed__.cast_to(T::Hash[String, String])
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::JsonValue,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::JsonValue)}
       def JsonTypeAliasCycle(
           *varargs,
@@ -1884,21 +2010,21 @@ module BamlClient
               raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "JsonTypeAliasCycle", args: {
+          __result__ = __options__.call_function_sync(function_name: "JsonTypeAliasCycle", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::JsonValue)
+          __parsed__.cast_to(BamlClient::Types::JsonValue)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def LLMEcho(
           *varargs,
@@ -1909,21 +2035,21 @@ module BamlClient
               raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "LLMEcho", args: {
+          __result__ = __options__.call_function_sync(function_name: "LLMEcho", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, T::Boolean, String))}
       def LiteralUnionsTest(
           *varargs,
@@ -1934,21 +2060,21 @@ module BamlClient
               raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "LiteralUnionsTest", args: {
+          __result__ = __options__.call_function_sync(function_name: "LiteralUnionsTest", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(Integer, T::Boolean, String))
+          __parsed__.cast_to(T.any(Integer, T::Boolean, String))
       end
       sig {params(
           varargs: T.untyped,
           n: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def LlmReturnNumber(
           *varargs,
@@ -1959,21 +2085,21 @@ module BamlClient
               raise ArgumentError.new("LlmReturnNumber may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "LlmReturnNumber", args: {
+          __result__ = __options__.call_function_sync(function_name: "LlmReturnNumber", args: {
               n: n,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[BamlClient::Types::BlockConstraint])}
       def MakeBlockConstraint(
           *varargs,
@@ -1984,21 +2110,21 @@ module BamlClient
               raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MakeBlockConstraint", args: {
+          __result__ = __options__.call_function_sync(function_name: "MakeBlockConstraint", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Checked[BamlClient::Types::BlockConstraint])
+          __parsed__.cast_to(BamlClient::Types::Checked[BamlClient::Types::BlockConstraint])
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassWithBlockDone)}
       def MakeClassWithBlockDone(
           *varargs,
@@ -2009,21 +2135,21 @@ module BamlClient
               raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MakeClassWithBlockDone", args: {
+          __result__ = __options__.call_function_sync(function_name: "MakeClassWithBlockDone", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ClassWithBlockDone)
+          __parsed__.cast_to(BamlClient::Types::ClassWithBlockDone)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassWithoutDone)}
       def MakeClassWithExternalDone(
           *varargs,
@@ -2034,21 +2160,21 @@ module BamlClient
               raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MakeClassWithExternalDone", args: {
+          __result__ = __options__.call_function_sync(function_name: "MakeClassWithExternalDone", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ClassWithoutDone)
+          __parsed__.cast_to(BamlClient::Types::ClassWithoutDone)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::NestedBlockConstraint)}
       def MakeNestedBlockConstraint(
           *varargs,
@@ -2059,21 +2185,21 @@ module BamlClient
               raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MakeNestedBlockConstraint", args: {
+          __result__ = __options__.call_function_sync(function_name: "MakeNestedBlockConstraint", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::NestedBlockConstraint)
+          __parsed__.cast_to(BamlClient::Types::NestedBlockConstraint)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::SemanticContainer)}
       def MakeSemanticContainer(
           *varargs,
@@ -2084,21 +2210,21 @@ module BamlClient
               raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MakeSemanticContainer", args: {
+          __result__ = __options__.call_function_sync(function_name: "MakeSemanticContainer", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::SemanticContainer)
+          __parsed__.cast_to(BamlClient::Types::SemanticContainer)
       end
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, T::Array[String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, T::Array[String]])}
       def MapAlias(
           *varargs,
@@ -2109,21 +2235,21 @@ module BamlClient
               raise ArgumentError.new("MapAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MapAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "MapAlias", args: {
               m: m,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[String, T::Array[String]])
+          __parsed__.cast_to(T::Hash[String, T::Array[String]])
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MergeAttrs)}
       def MergeAliasAttributes(
           *varargs,
@@ -2134,21 +2260,21 @@ module BamlClient
               raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MergeAliasAttributes", args: {
+          __result__ = __options__.call_function_sync(function_name: "MergeAliasAttributes", args: {
               money: money,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::MergeAttrs)
+          __parsed__.cast_to(BamlClient::Types::MergeAttrs)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::DynamicOutput)}
       def MyFunc(
           *varargs,
@@ -2159,21 +2285,21 @@ module BamlClient
               raise ArgumentError.new("MyFunc may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "MyFunc", args: {
+          __result__ = __options__.call_function_sync(function_name: "MyFunc", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::DynamicOutput)
+          __parsed__.cast_to(BamlClient::Types::DynamicOutput)
       end
       sig {params(
           varargs: T.untyped,
           c: T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]))}
       def NestedAlias(
           *varargs,
@@ -2184,21 +2310,21 @@ module BamlClient
               raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "NestedAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "NestedAlias", args: {
               c: c,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]))
+          __parsed__.cast_to(T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]))
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::ClassForNullLiteral)}
       def NullLiteralClassHello(
           *varargs,
@@ -2209,21 +2335,46 @@ module BamlClient
               raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "NullLiteralClassHello", args: {
+          __result__ = __options__.call_function_sync(function_name: "NullLiteralClassHello", args: {
               s: s,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::ClassForNullLiteral)
+          __parsed__.cast_to(BamlClient::Types::ClassForNullLiteral)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def OpenAIGPT4oMissingBaseUrlEnvVar(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("OpenAIGPT4oMissingBaseUrlEnvVar may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "OpenAIGPT4oMissingBaseUrlEnvVar", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def OpenAIWithAnthropicResponseHello(
           *varargs,
@@ -2234,21 +2385,21 @@ module BamlClient
               raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "OpenAIWithAnthropicResponseHello", args: {
+          __result__ = __options__.call_function_sync(function_name: "OpenAIWithAnthropicResponseHello", args: {
               s: s,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)])}
       def OptionalTest_Function(
           *varargs,
@@ -2259,21 +2410,21 @@ module BamlClient
               raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "OptionalTest_Function", args: {
+          __result__ = __options__.call_function_sync(function_name: "OptionalTest_Function", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)])
+          __parsed__.cast_to(T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)])
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInput(
           *varargs,
@@ -2284,21 +2435,21 @@ module BamlClient
               raise ArgumentError.new("PdfInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PdfInput", args: {
+          __result__ = __options__.call_function_sync(function_name: "PdfInput", args: {
               pdf: pdf,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputAnthropic(
           *varargs,
@@ -2309,21 +2460,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PdfInputAnthropic", args: {
+          __result__ = __options__.call_function_sync(function_name: "PdfInputAnthropic", args: {
               pdf: pdf,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputOpenai(
           *varargs,
@@ -2334,21 +2485,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputOpenai may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PdfInputOpenai", args: {
+          __result__ = __options__.call_function_sync(function_name: "PdfInputOpenai", args: {
               pdf: pdf,prompt: prompt,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PdfInputVertex(
           *varargs,
@@ -2359,21 +2510,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PdfInputVertex", args: {
+          __result__ = __options__.call_function_sync(function_name: "PdfInputVertex", args: {
               pdf: pdf,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::FooAny)}
       def PredictAge(
           *varargs,
@@ -2384,21 +2535,21 @@ module BamlClient
               raise ArgumentError.new("PredictAge may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PredictAge", args: {
+          __result__ = __options__.call_function_sync(function_name: "PredictAge", args: {
               name: name,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::FooAny)
+          __parsed__.cast_to(BamlClient::Types::FooAny)
       end
       sig {params(
           varargs: T.untyped,
           inp: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def PredictAgeBare(
           *varargs,
@@ -2409,21 +2560,21 @@ module BamlClient
               raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PredictAgeBare", args: {
+          __result__ = __options__.call_function_sync(function_name: "PredictAgeBare", args: {
               inp: inp,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Checked[Integer])
+          __parsed__.cast_to(BamlClient::Types::Checked[Integer])
       end
       sig {params(
           varargs: T.untyped,
           p: T.any(Integer, String, T::Boolean, Float),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.any(Integer, String, T::Boolean, Float))}
       def PrimitiveAlias(
           *varargs,
@@ -2434,21 +2585,21 @@ module BamlClient
               raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PrimitiveAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "PrimitiveAlias", args: {
               p: p,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.any(Integer, String, T::Boolean, Float))
+          __parsed__.cast_to(T.any(Integer, String, T::Boolean, Float))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaude(
           *varargs,
@@ -2459,21 +2610,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestClaude", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestClaude", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaudeChat(
           *varargs,
@@ -2484,21 +2635,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestClaudeChat", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestClaudeChat", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestClaudeChatNoSystem(
           *varargs,
@@ -2509,21 +2660,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestClaudeChatNoSystem", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestClaudeChatNoSystem", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAI(
           *varargs,
@@ -2534,21 +2685,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestOpenAI", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestOpenAI", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAIChat(
           *varargs,
@@ -2559,21 +2710,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestOpenAIChat", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestOpenAIChat", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestOpenAIChatNoSystem(
           *varargs,
@@ -2584,21 +2735,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestOpenAIChatNoSystem", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestOpenAIChatNoSystem", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def PromptTestStreaming(
           *varargs,
@@ -2609,21 +2760,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "PromptTestStreaming", args: {
+          __result__ = __options__.call_function_sync(function_name: "PromptTestStreaming", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecAliasOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecAliasOne)}
       def RecursiveAliasCycle(
           *varargs,
@@ -2634,21 +2785,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "RecursiveAliasCycle", args: {
+          __result__ = __options__.call_function_sync(function_name: "RecursiveAliasCycle", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RecAliasOne)
+          __parsed__.cast_to(BamlClient::Types::RecAliasOne)
       end
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::NodeWithAliasIndirection,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::NodeWithAliasIndirection)}
       def RecursiveClassWithAliasIndirection(
           *varargs,
@@ -2659,21 +2810,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "RecursiveClassWithAliasIndirection", args: {
+          __result__ = __options__.call_function_sync(function_name: "RecursiveClassWithAliasIndirection", args: {
               cls: cls,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::NodeWithAliasIndirection)
+          __parsed__.cast_to(BamlClient::Types::NodeWithAliasIndirection)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveUnion,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveUnion)}
       def RecursiveUnionTest(
           *varargs,
@@ -2684,21 +2835,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "RecursiveUnionTest", args: {
+          __result__ = __options__.call_function_sync(function_name: "RecursiveUnionTest", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RecursiveUnion)
+          __parsed__.cast_to(BamlClient::Types::RecursiveUnion)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RenderTestClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def RenderDynamicClass(
           *varargs,
@@ -2709,21 +2860,21 @@ module BamlClient
               raise ArgumentError.new("RenderDynamicClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "RenderDynamicClass", args: {
+          __result__ = __options__.call_function_sync(function_name: "RenderDynamicClass", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def RenderDynamicEnum(
           *varargs,
@@ -2734,21 +2885,21 @@ module BamlClient
               raise ArgumentError.new("RenderDynamicEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "RenderDynamicEnum", args: {
+          __result__ = __options__.call_function_sync(function_name: "RenderDynamicEnum", args: {
               bike: bike,other: other,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Checked[Integer])}
       def ReturnAliasWithMergedAttributes(
           *varargs,
@@ -2759,21 +2910,21 @@ module BamlClient
               raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ReturnAliasWithMergedAttributes", args: {
+          __result__ = __options__.call_function_sync(function_name: "ReturnAliasWithMergedAttributes", args: {
               money: money,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Checked[Integer])
+          __parsed__.cast_to(BamlClient::Types::Checked[Integer])
       end
       sig {params(
           varargs: T.untyped,
           inp: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def ReturnFailingAssert(
           *varargs,
@@ -2784,21 +2935,21 @@ module BamlClient
               raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ReturnFailingAssert", args: {
+          __result__ = __options__.call_function_sync(function_name: "ReturnFailingAssert", args: {
               inp: inp,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::JsonTemplate)}
       def ReturnJsonEntry(
           *varargs,
@@ -2809,21 +2960,21 @@ module BamlClient
               raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ReturnJsonEntry", args: {
+          __result__ = __options__.call_function_sync(function_name: "ReturnJsonEntry", args: {
               s: s,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::JsonTemplate)
+          __parsed__.cast_to(BamlClient::Types::JsonTemplate)
       end
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MalformedConstraints)}
       def ReturnMalformedConstraints(
           *varargs,
@@ -2834,21 +2985,21 @@ module BamlClient
               raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ReturnMalformedConstraints", args: {
+          __result__ = __options__.call_function_sync(function_name: "ReturnMalformedConstraints", args: {
               a: a,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::MalformedConstraints)
+          __parsed__.cast_to(BamlClient::Types::MalformedConstraints)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Schema)}
       def SchemaDescriptions(
           *varargs,
@@ -2859,21 +3010,21 @@ module BamlClient
               raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "SchemaDescriptions", args: {
+          __result__ = __options__.call_function_sync(function_name: "SchemaDescriptions", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Schema)
+          __parsed__.cast_to(BamlClient::Types::Schema)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveListAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveListAlias)}
       def SimpleRecursiveListAlias(
           *varargs,
@@ -2884,21 +3035,21 @@ module BamlClient
               raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "SimpleRecursiveListAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "SimpleRecursiveListAlias", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RecursiveListAlias)
+          __parsed__.cast_to(BamlClient::Types::RecursiveListAlias)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveMapAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveMapAlias)}
       def SimpleRecursiveMapAlias(
           *varargs,
@@ -2909,21 +3060,21 @@ module BamlClient
               raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "SimpleRecursiveMapAlias", args: {
+          __result__ = __options__.call_function_sync(function_name: "SimpleRecursiveMapAlias", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RecursiveMapAlias)
+          __parsed__.cast_to(BamlClient::Types::RecursiveMapAlias)
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::BigNumbers)}
       def StreamBigNumbers(
           *varargs,
@@ -2934,21 +3085,21 @@ module BamlClient
               raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamBigNumbers", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamBigNumbers", args: {
               digits: digits,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::BigNumbers)
+          __parsed__.cast_to(BamlClient::Types::BigNumbers)
       end
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TwoStoriesOneTitle)}
       def StreamFailingAssertion(
           *varargs,
@@ -2959,21 +3110,21 @@ module BamlClient
               raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamFailingAssertion", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamFailingAssertion", args: {
               theme: theme,length: length,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TwoStoriesOneTitle)
+          __parsed__.cast_to(BamlClient::Types::TwoStoriesOneTitle)
       end
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TwoStoriesOneTitleCheck)}
       def StreamFailingCheck(
           *varargs,
@@ -2984,21 +3135,21 @@ module BamlClient
               raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamFailingCheck", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamFailingCheck", args: {
               theme: theme,length: length,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TwoStoriesOneTitleCheck)
+          __parsed__.cast_to(BamlClient::Types::TwoStoriesOneTitleCheck)
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def StreamOneBigNumber(
           *varargs,
@@ -3009,21 +3160,21 @@ module BamlClient
               raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamOneBigNumber", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamOneBigNumber", args: {
               digits: digits,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[T.any(Integer, String)])}
       def StreamUnionIntegers(
           *varargs,
@@ -3034,21 +3185,21 @@ module BamlClient
               raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamUnionIntegers", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamUnionIntegers", args: {
               digits: digits,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[T.any(Integer, String)])
+          __parsed__.cast_to(T::Array[T.any(Integer, String)])
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,yapping: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::CompoundBigNumbers)}
       def StreamingCompoundNumbers(
           *varargs,
@@ -3059,21 +3210,21 @@ module BamlClient
               raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StreamingCompoundNumbers", args: {
+          __result__ = __options__.call_function_sync(function_name: "StreamingCompoundNumbers", args: {
               digits: digits,yapping: yapping,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::CompoundBigNumbers)
+          __parsed__.cast_to(BamlClient::Types::CompoundBigNumbers)
       end
       sig {params(
           varargs: T.untyped,
           document_txt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Document1559)}
       def StructureDocument1559(
           *varargs,
@@ -3084,21 +3235,21 @@ module BamlClient
               raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "StructureDocument1559", args: {
+          __result__ = __options__.call_function_sync(function_name: "StructureDocument1559", args: {
               document_txt: document_txt,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Document1559)
+          __parsed__.cast_to(BamlClient::Types::Document1559)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveAliasDependency,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::RecursiveAliasDependency)}
       def TakeRecAliasDep(
           *varargs,
@@ -3109,21 +3260,21 @@ module BamlClient
               raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TakeRecAliasDep", args: {
+          __result__ = __options__.call_function_sync(function_name: "TakeRecAliasDep", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::RecursiveAliasDependency)
+          __parsed__.cast_to(BamlClient::Types::RecursiveAliasDependency)
       end
       sig {params(
           varargs: T.untyped,
           story: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TellStory(
           *varargs,
@@ -3134,21 +3285,46 @@ module BamlClient
               raise ArgumentError.new("TellStory may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TellStory", args: {
+          __result__ = __options__.call_function_sync(function_name: "TellStory", args: {
               story: story,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TemplateStringTestEcho(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TemplateStringTestEcho may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TemplateStringTestEcho", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAbortFallbackChain(
           *varargs,
@@ -3159,21 +3335,21 @@ module BamlClient
               raise ArgumentError.new("TestAbortFallbackChain may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAbortFallbackChain", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAbortFallbackChain", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAnthropic(
           *varargs,
@@ -3184,21 +3360,21 @@ module BamlClient
               raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAnthropic", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAnthropic", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAnthropicShorthand(
           *varargs,
@@ -3209,21 +3385,21 @@ module BamlClient
               raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAnthropicShorthand", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAnthropicShorthand", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAws(
           *varargs,
@@ -3234,21 +3410,21 @@ module BamlClient
               raise ArgumentError.new("TestAws may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAws", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAws", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsClaude37(
           *varargs,
@@ -3259,21 +3435,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsClaude37", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsClaude37", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInferenceProfile(
           *varargs,
@@ -3284,21 +3460,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsInferenceProfile", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInferenceProfile", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidAccessKey(
           *varargs,
@@ -3309,21 +3485,46 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsInvalidAccessKey", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInvalidAccessKey", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestAwsInvalidEndpoint(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsInvalidEndpoint may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInvalidEndpoint", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidProfile(
           *varargs,
@@ -3334,21 +3535,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsInvalidProfile", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInvalidProfile", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidRegion(
           *varargs,
@@ -3359,21 +3560,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsInvalidRegion", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInvalidRegion", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAwsInvalidSessionToken(
           *varargs,
@@ -3384,21 +3585,46 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAwsInvalidSessionToken", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAwsInvalidSessionToken", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          video_input: Baml::Video,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestAwsVideoDescribe(
+          *varargs,
+          video_input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsVideoDescribe may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestAwsVideoDescribe", args: {
+              video_input: video_input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzure(
           *varargs,
@@ -3409,21 +3635,21 @@ module BamlClient
               raise ArgumentError.new("TestAzure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzure", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzure", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureFailure(
           *varargs,
@@ -3434,21 +3660,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureFailure", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureFailure", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1NoMaxTokens(
           *varargs,
@@ -3459,21 +3685,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureO1NoMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureO1NoMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1WithMaxCompletionTokens(
           *varargs,
@@ -3484,21 +3710,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureO1WithMaxCompletionTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureO1WithMaxCompletionTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO1WithMaxTokens(
           *varargs,
@@ -3509,21 +3735,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureO1WithMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureO1WithMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO3NoMaxTokens(
           *varargs,
@@ -3534,21 +3760,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureO3NoMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureO3NoMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureO3WithMaxCompletionTokens(
           *varargs,
@@ -3559,21 +3785,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureO3WithMaxCompletionTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureO3WithMaxCompletionTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestAzureWithMaxTokens(
           *varargs,
@@ -3584,21 +3810,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestAzureWithMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestAzureWithMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,not_cached: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestCaching(
           *varargs,
@@ -3609,21 +3835,46 @@ module BamlClient
               raise ArgumentError.new("TestCaching may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestCaching", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestCaching", args: {
               input: input,not_cached: not_cached,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestDefaultStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestDefaultStreamingTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestDefaultStreamingTimeout", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackClient(
           *varargs,
@@ -3634,21 +3885,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFallbackClient", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFallbackClient", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackStrategy(
           *varargs,
@@ -3659,21 +3910,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFallbackStrategy", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFallbackStrategy", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFallbackToShorthand(
           *varargs,
@@ -3684,21 +3935,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFallbackToShorthand", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFallbackToShorthand", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleBool(
           *varargs,
@@ -3709,21 +3960,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleBool", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleBool", args: {
               myBool: myBool,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleClass(
           *varargs,
@@ -3734,21 +3985,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleClass", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleClass", args: {
               myArg: myArg,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[BamlClient::Types::NamedArgsSingleEnumList],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleEnumList(
           *varargs,
@@ -3759,21 +4010,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleEnumList", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleEnumList", args: {
               myArg: myArg,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myFloat: Float,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleFloat(
           *varargs,
@@ -3784,21 +4035,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleFloat", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleFloat", args: {
               myFloat: myFloat,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleInt(
           *varargs,
@@ -3809,21 +4060,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleInt", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleInt", args: {
               myInt: myInt,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, BamlClient::Types::StringToClassEntry],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, BamlClient::Types::StringToClassEntry])}
       def TestFnNamedArgsSingleMapStringToClass(
           *varargs,
@@ -3834,21 +4085,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToClass", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToClass", args: {
               myMap: myMap,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[String, BamlClient::Types::StringToClassEntry])
+          __parsed__.cast_to(T::Hash[String, BamlClient::Types::StringToClassEntry])
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, T::Hash[String, String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, T::Hash[String, String]])}
       def TestFnNamedArgsSingleMapStringToMap(
           *varargs,
@@ -3859,21 +4110,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToMap", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToMap", args: {
               myMap: myMap,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[String, T::Hash[String, String]])
+          __parsed__.cast_to(T::Hash[String, T::Hash[String, String]])
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Hash[String, String])}
       def TestFnNamedArgsSingleMapStringToString(
           *varargs,
@@ -3884,21 +4135,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToString", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleMapStringToString", args: {
               myMap: myMap,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Hash[String, String])
+          __parsed__.cast_to(T::Hash[String, String])
       end
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleString(
           *varargs,
@@ -3909,21 +4160,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleString", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleString", args: {
               myString: myString,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myStringArray: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestFnNamedArgsSingleStringArray(
           *varargs,
@@ -3934,21 +4185,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleStringArray", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleStringArray", args: {
               myStringArray: myStringArray,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T::Array[String])}
       def TestFnNamedArgsSingleStringList(
           *varargs,
@@ -3959,21 +4210,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestFnNamedArgsSingleStringList", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestFnNamedArgsSingleStringList", args: {
               myArg: myArg,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[String])
+          __parsed__.cast_to(T::Array[String])
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGemini(
           *varargs,
@@ -3984,21 +4235,21 @@ module BamlClient
               raise ArgumentError.new("TestGemini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGemini", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGemini", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiOpenAiGeneric(
           *varargs,
@@ -4009,21 +4260,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGeminiOpenAiGeneric", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGeminiOpenAiGeneric", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiSystem(
           *varargs,
@@ -4034,21 +4285,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGeminiSystem", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGeminiSystem", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiSystemAsChat(
           *varargs,
@@ -4059,21 +4310,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGeminiSystemAsChat", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGeminiSystemAsChat", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGeminiThinking(
           *varargs,
@@ -4084,21 +4335,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiThinking may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGeminiThinking", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGeminiThinking", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestGroq(
           *varargs,
@@ -4109,21 +4360,21 @@ module BamlClient
               raise ArgumentError.new("TestGroq may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestGroq", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestGroq", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageInput(
           *varargs,
@@ -4134,21 +4385,21 @@ module BamlClient
               raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestImageInput", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestImageInput", args: {
               img: img,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageInputAnthropic(
           *varargs,
@@ -4159,21 +4410,21 @@ module BamlClient
               raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestImageInputAnthropic", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestImageInputAnthropic", args: {
               img: img,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           imgs: T::Array[Baml::Image],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestImageListInput(
           *varargs,
@@ -4184,21 +4435,21 @@ module BamlClient
               raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestImageListInput", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestImageListInput", args: {
               imgs: imgs,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::TestMemoryOutput)}
       def TestMemory(
           *varargs,
@@ -4209,21 +4460,21 @@ module BamlClient
               raise ArgumentError.new("TestMemory may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestMemory", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestMemory", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::TestMemoryOutput)
+          __parsed__.cast_to(BamlClient::Types::TestMemoryOutput)
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,myArg2: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestMulticlassNamedArgs(
           *varargs,
@@ -4234,21 +4485,21 @@ module BamlClient
               raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestMulticlassNamedArgs", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestMulticlassNamedArgs", args: {
               myArg: myArg,myArg2: myArg2,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralBool(
           *varargs,
@@ -4259,21 +4510,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestNamedArgsLiteralBool", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestNamedArgsLiteralBool", args: {
               myBool: myBool,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralInt(
           *varargs,
@@ -4284,21 +4535,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestNamedArgsLiteralInt", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestNamedArgsLiteralInt", args: {
               myInt: myInt,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestNamedArgsLiteralString(
           *varargs,
@@ -4309,21 +4560,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestNamedArgsLiteralString", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestNamedArgsLiteralString", args: {
               myString: myString,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(T.nilable(String))}
       def TestOllama(
           *varargs,
@@ -4334,21 +4585,21 @@ module BamlClient
               raise ArgumentError.new("TestOllama may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOllama", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOllama", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T.nilable(String))
+          __parsed__.cast_to(T.nilable(String))
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::Haiku)}
       def TestOllamaHaiku(
           *varargs,
@@ -4359,21 +4610,21 @@ module BamlClient
               raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOllamaHaiku", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOllamaHaiku", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::Haiku)
+          __parsed__.cast_to(BamlClient::Types::Haiku)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAI(
           *varargs,
@@ -4384,21 +4635,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAI", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAI", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIDummyClient(
           *varargs,
@@ -4409,21 +4660,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIDummyClient", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIDummyClient", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini(
           *varargs,
@@ -4434,21 +4685,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIGPT4oMini", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIGPT4oMini", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini2(
           *varargs,
@@ -4459,21 +4710,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIGPT4oMini2", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIGPT4oMini2", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIGPT4oMini3(
           *varargs,
@@ -4484,21 +4735,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIGPT4oMini3", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIGPT4oMini3", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAILegacyProvider(
           *varargs,
@@ -4509,21 +4760,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAILegacyProvider", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAILegacyProvider", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1NoMaxTokens(
           *varargs,
@@ -4534,21 +4785,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIO1NoMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIO1NoMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1WithMaxCompletionTokens(
           *varargs,
@@ -4559,21 +4810,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIO1WithMaxCompletionTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIO1WithMaxCompletionTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIO1WithMaxTokens(
           *varargs,
@@ -4584,21 +4835,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIO1WithMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIO1WithMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIProviderWithResponsesType(
           *varargs,
@@ -4609,21 +4860,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIProviderWithResponsesType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIProviderWithResponsesType", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIProviderWithResponsesType", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponses(
           *varargs,
@@ -4634,21 +4885,46 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponses may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponses", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponses", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          problem: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestOpenAIResponsesAllRoles(
+          *varargs,
+          problem:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesAllRoles may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesAllRoles", args: {
+              problem: problem,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesAutoType(
           *varargs,
@@ -4659,21 +4935,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesAutoType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesAutoType", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesAutoType", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           topic: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesConversation(
           *varargs,
@@ -4684,21 +4960,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesConversation may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesConversation", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesConversation", args: {
               topic: topic,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesCustomURL(
           *varargs,
@@ -4709,21 +4985,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesCustomURL may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesCustomURL", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesCustomURL", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesDifferentModel(
           *varargs,
@@ -4734,21 +5010,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesDifferentModel may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesDifferentModel", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesDifferentModel", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesEndpoint(
           *varargs,
@@ -4759,21 +5035,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesEndpoint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesEndpoint", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesEndpoint", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesExplicit(
           *varargs,
@@ -4784,21 +5060,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesExplicit may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesExplicit", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesExplicit", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesFunctionCall(
           *varargs,
@@ -4809,21 +5085,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesFunctionCall may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesFunctionCall", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesFunctionCall", args: {
               query: query,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesImageInput(
           *varargs,
@@ -4834,21 +5110,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesImageInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesImageInput", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesImageInput", args: {
               image: image,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesReasoning(
           *varargs,
@@ -4859,21 +5135,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesReasoning may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesReasoning", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesReasoning", args: {
               problem: problem,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesShorthand(
           *varargs,
@@ -4884,21 +5160,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesShorthand", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesShorthand", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesWebSearch(
           *varargs,
@@ -4909,21 +5185,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesWebSearch may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesWebSearch", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesWebSearch", args: {
               query: query,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIResponsesWithOpenAIResponseType(
           *varargs,
@@ -4934,21 +5210,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesWithOpenAIResponseType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIResponsesWithOpenAIResponseType", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIResponsesWithOpenAIResponseType", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIShorthand(
           *varargs,
@@ -4959,21 +5235,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIShorthand", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIShorthand", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithFinishReasonError(
           *varargs,
@@ -4984,21 +5260,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIWithFinishReasonError", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIWithFinishReasonError", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithMaxTokens(
           *varargs,
@@ -5009,21 +5285,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIWithMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIWithMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenAIWithNullMaxTokens(
           *varargs,
@@ -5034,21 +5310,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenAIWithNullMaxTokens", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenAIWithNullMaxTokens", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestOpenRouterMistralSmall3_1_24b(
           *varargs,
@@ -5059,21 +5335,71 @@ module BamlClient
               raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestOpenRouterMistralSmall3_1_24b", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestOpenRouterMistralSmall3_1_24b", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          pdf: Baml::Pdf,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestOpenaiResponsesPdfs(
+          *varargs,
+          pdf:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenaiResponsesPdfs may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestOpenaiResponsesPdfs", args: {
+              pdf: pdf,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestRequestTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestRequestTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestRequestTimeout", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRetryConstant(
           *varargs,
@@ -5084,21 +5410,21 @@ module BamlClient
               raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestRetryConstant", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestRetryConstant", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRetryExponential(
           *varargs,
@@ -5109,21 +5435,21 @@ module BamlClient
               raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestRetryExponential", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestRetryExponential", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestRoundRobinStrategy(
           *varargs,
@@ -5134,21 +5460,21 @@ module BamlClient
               raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestRoundRobinStrategy", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestRoundRobinStrategy", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestSingleFallbackClient(
           *varargs,
@@ -5159,21 +5485,96 @@ module BamlClient
               raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestSingleFallbackClient", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestSingleFallbackClient", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(BamlClient::Types::SkipDynamicClass)}
+      def TestSkipDynamic(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestSkipDynamic may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestSkipDynamic", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(BamlClient::Types::SkipDynamicClass)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(BamlClient::Types::SkipNonDynamicClass)}
+      def TestSkipNonDynamic(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestSkipNonDynamic may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestSkipNonDynamic", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(BamlClient::Types::SkipNonDynamicClass)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestStreamingTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestStreamingTimeout", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::CustomStory)}
       def TestThinking(
           *varargs,
@@ -5184,21 +5585,71 @@ module BamlClient
               raise ArgumentError.new("TestThinking may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestThinking", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestThinking", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::CustomStory)
+          __parsed__.cast_to(BamlClient::Types::CustomStory)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestTimeoutError(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutError may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestTimeoutError", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestTimeoutFallback(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutFallback may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestTimeoutFallback", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           question: BamlClient::Types::UniverseQuestionInput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::UniverseQuestion)}
       def TestUniverseQuestion(
           *varargs,
@@ -5209,21 +5660,21 @@ module BamlClient
               raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestUniverseQuestion", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestUniverseQuestion", args: {
               question: question,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::UniverseQuestion)
+          __parsed__.cast_to(BamlClient::Types::UniverseQuestion)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertex(
           *varargs,
@@ -5234,21 +5685,21 @@ module BamlClient
               raise ArgumentError.new("TestVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestVertex", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestVertex", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertexClaude(
           *varargs,
@@ -5259,21 +5710,21 @@ module BamlClient
               raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestVertexClaude", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestVertexClaude", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def TestVertexWithSystemInstructions(
           *varargs,
@@ -5284,21 +5735,46 @@ module BamlClient
               raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "TestVertexWithSystemInstructions", args: {
+          __result__ = __options__.call_function_sync(function_name: "TestVertexWithSystemInstructions", args: {
 
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(String)}
+      def TestZeroTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestZeroTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __result__ = __options__.call_function_sync(function_name: "TestZeroTimeout", args: {
+              input: input,
+          })
+
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          # for sorbet we need to cast to the return type since parsed is now the right value
+          # We just need to tell sorbet that the return type is the right type
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: T.any(String, T::Boolean),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::UnionTest_ReturnType)}
       def UnionTest_Function(
           *varargs,
@@ -5309,21 +5785,21 @@ module BamlClient
               raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "UnionTest_Function", args: {
+          __result__ = __options__.call_function_sync(function_name: "UnionTest_Function", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::UnionTest_ReturnType)
+          __parsed__.cast_to(BamlClient::Types::UnionTest_ReturnType)
       end
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::BlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseBlockConstraint(
           *varargs,
@@ -5334,21 +5810,21 @@ module BamlClient
               raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "UseBlockConstraint", args: {
+          __result__ = __options__.call_function_sync(function_name: "UseBlockConstraint", args: {
               inp: inp,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::MaintainFieldOrder,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(BamlClient::Types::MaintainFieldOrder)}
       def UseMaintainFieldOrder(
           *varargs,
@@ -5359,21 +5835,21 @@ module BamlClient
               raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "UseMaintainFieldOrder", args: {
+          __result__ = __options__.call_function_sync(function_name: "UseMaintainFieldOrder", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(BamlClient::Types::MaintainFieldOrder)
+          __parsed__.cast_to(BamlClient::Types::MaintainFieldOrder)
       end
       sig {params(
           varargs: T.untyped,
           a: BamlClient::Types::MalformedConstraints2,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseMalformedConstraints(
           *varargs,
@@ -5384,21 +5860,21 @@ module BamlClient
               raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "UseMalformedConstraints", args: {
+          __result__ = __options__.call_function_sync(function_name: "UseMalformedConstraints", args: {
               a: a,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::NestedBlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Integer)}
       def UseNestedBlockConstraint(
           *varargs,
@@ -5409,21 +5885,21 @@ module BamlClient
               raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "UseNestedBlockConstraint", args: {
+          __result__ = __options__.call_function_sync(function_name: "UseNestedBlockConstraint", args: {
               inp: inp,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(Integer)
+          __parsed__.cast_to(Integer)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ValidateBasicResponses(
           *varargs,
@@ -5434,21 +5910,21 @@ module BamlClient
               raise ArgumentError.new("ValidateBasicResponses may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ValidateBasicResponses", args: {
+          __result__ = __options__.call_function_sync(function_name: "ValidateBasicResponses", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def ValidateResponseTypes(
           *varargs,
@@ -5459,21 +5935,21 @@ module BamlClient
               raise ArgumentError.new("ValidateResponseTypes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "ValidateResponseTypes", args: {
+          __result__ = __options__.call_function_sync(function_name: "ValidateResponseTypes", args: {
               input: input,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def VideoInputGemini(
           *varargs,
@@ -5484,21 +5960,21 @@ module BamlClient
               raise ArgumentError.new("VideoInputGemini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "VideoInputGemini", args: {
+          __result__ = __options__.call_function_sync(function_name: "VideoInputGemini", args: {
               vid: vid,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(String)}
       def VideoInputVertex(
           *varargs,
@@ -5509,16 +5985,16 @@ module BamlClient
               raise ArgumentError.new("VideoInputVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          result = options.call_function_sync(function_name: "VideoInputVertex", args: {
+          __result__ = __options__.call_function_sync(function_name: "VideoInputVertex", args: {
               vid: vid,
           })
 
-          parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+          __parsed__ = __result__.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(String)
+          __parsed__.cast_to(String)
       end
 
   end
@@ -5534,7 +6010,7 @@ module BamlClient
       sig {params(
           varargs: T.untyped,
           recipe: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Recipe, BamlClient::Types::Recipe])}
       def AaaSamOutputFormat(
           *varargs,
@@ -5545,21 +6021,21 @@ module BamlClient
               raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AaaSamOutputFormat", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AaaSamOutputFormat", args: {
               recipe: recipe,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Recipe, BamlClient::Types::Recipe].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           data: BamlClient::Types::LinkedListAliasNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedListAliasNode, BamlClient::Types::LinkedListAliasNode])}
       def AliasThatPointsToRecursiveType(
           *varargs,
@@ -5570,21 +6046,21 @@ module BamlClient
               raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasThatPointsToRecursiveType", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasThatPointsToRecursiveType", args: {
               data: data,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::LinkedListAliasNode, BamlClient::Types::LinkedListAliasNode].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def AliasWithMultipleAttrs(
           *varargs,
@@ -5595,21 +6071,21 @@ module BamlClient
               raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasWithMultipleAttrs", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasWithMultipleAttrs", args: {
               money: money,
           })
 
           Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass(
           *varargs,
@@ -5620,21 +6096,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasedInputClass", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasedInputClass", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass2(
           *varargs,
@@ -5645,21 +6121,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasedInputClass2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasedInputClass2", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::InputClassNested,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClassNested(
           *varargs,
@@ -5670,21 +6146,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasedInputClassNested", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasedInputClassNested", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::AliasedEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputEnum(
           *varargs,
@@ -5695,21 +6171,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasedInputEnum", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasedInputEnum", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::AliasedEnum],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AliasedInputList(
           *varargs,
@@ -5720,21 +6196,21 @@ module BamlClient
               raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AliasedInputList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AliasedInputList", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           optionals: BamlClient::Types::OptionalListAndMap,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::OptionalListAndMap, BamlClient::Types::OptionalListAndMap])}
       def AllowedOptionals(
           *varargs,
@@ -5745,21 +6221,21 @@ module BamlClient
               raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AllowedOptionals", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AllowedOptionals", args: {
               optionals: optionals,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::OptionalListAndMap, BamlClient::Types::OptionalListAndMap].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def AssertFn(
           *varargs,
@@ -5770,21 +6246,21 @@ module BamlClient
               raise ArgumentError.new("AssertFn may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AssertFn", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AssertFn", args: {
               a: a,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInput(
           *varargs,
@@ -5795,21 +6271,21 @@ module BamlClient
               raise ArgumentError.new("AudioInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AudioInput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AudioInput", args: {
               aud: aud,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           aud: Baml::Audio,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def AudioInputOpenai(
           *varargs,
@@ -5820,21 +6296,21 @@ module BamlClient
               raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "AudioInputOpenai", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "AudioInputOpenai", args: {
               aud: aud,prompt: prompt,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[Integer],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedList, BamlClient::Types::LinkedList])}
       def BuildLinkedList(
           *varargs,
@@ -5845,21 +6321,21 @@ module BamlClient
               raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "BuildLinkedList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "BuildLinkedList", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::LinkedList, BamlClient::Types::LinkedList].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::BinaryNode,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree])}
       def BuildTree(
           *varargs,
@@ -5870,21 +6346,71 @@ module BamlClient
               raise ArgumentError.new("BuildTree may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "BuildTree", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "BuildTree", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          word: String,target: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
+      def CheckWordEquality(
+          *varargs,
+          word:,target:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("CheckWordEquality may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "CheckWordEquality", args: {
+              word: word,target: target,
+          })
+
+          Baml::BamlStream[T::Boolean, T::Boolean].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          query: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::StreamTypes::TodoMessageToUser)], T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)]])}
+      def ChooseTodoTools(
+          *varargs,
+          query:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ChooseTodoTools may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ChooseTodoTools", args: {
+              query: query,
+          })
+
+          Baml::BamlStream[T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::StreamTypes::TodoMessageToUser)], T::Array[T.any(BamlClient::Types::AddTodoItem, BamlClient::Types::TodoMessageToUser)]].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassToRecAlias, BamlClient::Types::ClassToRecAlias])}
       def ClassThatPointsToRecursiveClassThroughAlias(
           *varargs,
@@ -5895,21 +6421,21 @@ module BamlClient
               raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassThatPointsToRecursiveClassThroughAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassThatPointsToRecursiveClassThroughAlias", args: {
               cls: cls,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::ClassToRecAlias, BamlClient::Types::ClassToRecAlias].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumTwo, String), T.any(BamlClient::Types::DynEnumTwo, String)])}
       def ClassifyDynEnumTwo(
           *varargs,
@@ -5920,21 +6446,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassifyDynEnumTwo", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassifyDynEnumTwo", args: {
               input: input,
           })
 
           Baml::BamlStream[T.any(BamlClient::Types::DynEnumTwo, String), T.any(BamlClient::Types::DynEnumTwo, String)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumOne, String), T.any(BamlClient::Types::DynEnumOne, String)])}
       def ClassifyDynamicStatus(
           *varargs,
@@ -5945,21 +6471,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyDynamicStatus may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassifyDynamicStatus", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassifyDynamicStatus", args: {
               input: input,
           })
 
           Baml::BamlStream[T.any(BamlClient::Types::DynEnumOne, String), T.any(BamlClient::Types::DynEnumOne, String)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage(
           *varargs,
@@ -5970,21 +6496,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassifyMessage", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassifyMessage", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage2(
           *varargs,
@@ -5995,21 +6521,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassifyMessage2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassifyMessage2", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage3(
           *varargs,
@@ -6020,21 +6546,21 @@ module BamlClient
               raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ClassifyMessage3", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ClassifyMessage3", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           prefix: String,suffix: String,language: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def Completion(
           *varargs,
@@ -6045,21 +6571,21 @@ module BamlClient
               raise ArgumentError.new("Completion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "Completion", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "Completion", args: {
               prefix: prefix,suffix: suffix,language: language,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)])}
       def CustomTask(
           *varargs,
@@ -6070,21 +6596,21 @@ module BamlClient
               raise ArgumentError.new("CustomTask may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "CustomTask", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "CustomTask", args: {
               input: input,
           })
 
           Baml::BamlStream[T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeAudio(
           *varargs,
@@ -6095,21 +6621,21 @@ module BamlClient
               raise ArgumentError.new("DescribeAudio may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeAudio", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeAudio", args: {
               audio: audio,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           audio: Baml::Audio,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeAudio2(
           *varargs,
@@ -6120,21 +6646,21 @@ module BamlClient
               raise ArgumentError.new("DescribeAudio2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeAudio2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeAudio2", args: {
               audio: audio,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage(
           *varargs,
@@ -6145,21 +6671,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeImage", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeImage", args: {
               img: img,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage2(
           *varargs,
@@ -6170,21 +6696,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeImage2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeImage2", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage3(
           *varargs,
@@ -6195,21 +6721,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeImage3", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeImage3", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeImage4(
           *varargs,
@@ -6220,21 +6746,21 @@ module BamlClient
               raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeImage4", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeImage4", args: {
               classWithImage: classWithImage,img2: img2,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,client_sector: String,client_name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def DescribeMedia1599(
           *varargs,
@@ -6245,21 +6771,21 @@ module BamlClient
               raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DescribeMedia1599", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DescribeMedia1599", args: {
               img: img,client_sector: client_sector,client_name: client_name,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)])}
       def DifferentiateUnions(
           *varargs,
@@ -6270,21 +6796,21 @@ module BamlClient
               raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DifferentiateUnions", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DifferentiateUnions", args: {
 
           })
 
           Baml::BamlStream[T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DummyOutput, BamlClient::Types::DummyOutput])}
       def DummyOutputFunction(
           *varargs,
@@ -6295,21 +6821,21 @@ module BamlClient
               raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DummyOutputFunction", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DummyOutputFunction", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::DummyOutput, BamlClient::Types::DummyOutput].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynamicClassOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicClassTwo, BamlClient::Types::DynamicClassTwo])}
       def DynamicFunc(
           *varargs,
@@ -6320,21 +6846,21 @@ module BamlClient
               raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DynamicFunc", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DynamicFunc", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::DynamicClassTwo, BamlClient::Types::DynamicClassTwo].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::DynInputOutput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynInputOutput, BamlClient::Types::DynInputOutput])}
       def DynamicInputOutput(
           *varargs,
@@ -6345,21 +6871,21 @@ module BamlClient
               raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DynamicInputOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DynamicInputOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::DynInputOutput, BamlClient::Types::DynInputOutput].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::DynInputOutput],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::DynInputOutput], T::Array[BamlClient::Types::DynInputOutput]])}
       def DynamicListInputOutput(
           *varargs,
@@ -6370,21 +6896,21 @@ module BamlClient
               raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "DynamicListInputOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "DynamicListInputOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[BamlClient::StreamTypes::DynInputOutput], T::Array[BamlClient::Types::DynInputOutput]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ExpectFailure(
           *varargs,
@@ -6395,21 +6921,21 @@ module BamlClient
               raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExpectFailure", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExpectFailure", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           document: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo])}
       def ExtractContactInfo(
           *varargs,
@@ -6420,21 +6946,21 @@ module BamlClient
               raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractContactInfo", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractContactInfo", args: {
               document: document,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::DynEnumTwo, String)], T::Array[T.any(BamlClient::Types::DynEnumTwo, String)]])}
       def ExtractDynamicCategories(
           *varargs,
@@ -6445,21 +6971,21 @@ module BamlClient
               raise ArgumentError.new("ExtractDynamicCategories may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractDynamicCategories", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractDynamicCategories", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[T.any(BamlClient::Types::DynEnumTwo, String)], T::Array[T.any(BamlClient::Types::DynEnumTwo, String)]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicSchema, BamlClient::Types::DynamicSchema])}
       def ExtractEntities(
           *varargs,
@@ -6470,21 +6996,21 @@ module BamlClient
               raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractEntities", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractEntities", args: {
               text: text,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::DynamicSchema, BamlClient::Types::DynamicSchema].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::Hobby, String)], T::Array[T.any(BamlClient::Types::Hobby, String)]])}
       def ExtractHobby(
           *varargs,
@@ -6495,21 +7021,21 @@ module BamlClient
               raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractHobby", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractHobby", args: {
               text: text,
           })
 
           Baml::BamlStream[T::Array[T.any(BamlClient::Types::Hobby, String)], T::Array[T.any(BamlClient::Types::Hobby, String)]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ExtractName(
           *varargs,
@@ -6520,21 +7046,21 @@ module BamlClient
               raise ArgumentError.new("ExtractName may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractName", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractName", args: {
               text: text,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def ExtractNames(
           *varargs,
@@ -6545,21 +7071,21 @@ module BamlClient
               raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractNames", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractNames", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[String], T::Array[String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::Person], T::Array[BamlClient::Types::Person]])}
       def ExtractPeople(
           *varargs,
@@ -6570,21 +7096,46 @@ module BamlClient
               raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractPeople", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractPeople", args: {
               text: text,
           })
 
           Baml::BamlStream[T::Array[BamlClient::StreamTypes::Person], T::Array[BamlClient::Types::Person]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::PersonWithMeta, BamlClient::Types::PersonWithMeta])}
+      def ExtractPersonWithMeta(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("ExtractPersonWithMeta may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractPersonWithMeta", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[BamlClient::StreamTypes::PersonWithMeta, BamlClient::Types::PersonWithMeta].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           email: String,reason: T.any(String, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ReceiptInfo, BamlClient::Types::ReceiptInfo])}
       def ExtractReceiptInfo(
           *varargs,
@@ -6595,21 +7146,21 @@ module BamlClient
               raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractReceiptInfo", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractReceiptInfo", args: {
               email: email,reason: reason,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::ReceiptInfo, BamlClient::Types::ReceiptInfo].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           resume: String,img: T.nilable(Baml::Image),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume(
           *varargs,
@@ -6620,21 +7171,21 @@ module BamlClient
               raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractResume", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractResume", args: {
               resume: resume,img: img,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           resume: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume2(
           *varargs,
@@ -6645,21 +7196,46 @@ module BamlClient
               raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ExtractResume2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ExtractResume2", args: {
               resume: resume,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def FnAlwaysFails(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("FnAlwaysFails may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnAlwaysFails", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput), T.nilable(BamlClient::Types::ClassOptionalOutput)])}
       def FnClassOptionalOutput(
           *varargs,
@@ -6670,21 +7246,21 @@ module BamlClient
               raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnClassOptionalOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnClassOptionalOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput), T.nilable(BamlClient::Types::ClassOptionalOutput)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput2), T.nilable(BamlClient::Types::ClassOptionalOutput2)])}
       def FnClassOptionalOutput2(
           *varargs,
@@ -6695,21 +7271,21 @@ module BamlClient
               raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnClassOptionalOutput2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnClassOptionalOutput2", args: {
               input: input,
           })
 
           Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassOptionalOutput2), T.nilable(BamlClient::Types::ClassOptionalOutput2)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::Types::EnumOutput], T::Array[BamlClient::Types::EnumOutput]])}
       def FnEnumListOutput(
           *varargs,
@@ -6720,21 +7296,21 @@ module BamlClient
               raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnEnumListOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnEnumListOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[BamlClient::Types::EnumOutput], T::Array[BamlClient::Types::EnumOutput]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::EnumOutput, BamlClient::Types::EnumOutput])}
       def FnEnumOutput(
           *varargs,
@@ -6745,21 +7321,21 @@ module BamlClient
               raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnEnumOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnEnumOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::Types::EnumOutput, BamlClient::Types::EnumOutput].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           retries: Integer,delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnFailRetryConstantDelay(
           *varargs,
@@ -6770,21 +7346,21 @@ module BamlClient
               raise ArgumentError.new("FnFailRetryConstantDelay may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnFailRetryConstantDelay", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnFailRetryConstantDelay", args: {
               retries: retries,delay_ms: delay_ms,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           retries: Integer,initial_delay_ms: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnFailRetryExponentialDelay(
           *varargs,
@@ -6795,21 +7371,46 @@ module BamlClient
               raise ArgumentError.new("FnFailRetryExponentialDelay may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnFailRetryExponentialDelay", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnFailRetryExponentialDelay", args: {
               retries: retries,initial_delay_ms: initial_delay_ms,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def FnFallbackAlwaysFails(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("FnFallbackAlwaysFails may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnFallbackAlwaysFails", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::LiteralClassHello,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::LiteralClassHello, BamlClient::Types::LiteralClassHello])}
       def FnLiteralClassInputOutput(
           *varargs,
@@ -6820,21 +7421,21 @@ module BamlClient
               raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnLiteralClassInputOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnLiteralClassInputOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::LiteralClassHello, BamlClient::Types::LiteralClassHello].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)])}
       def FnLiteralUnionClassInputOutput(
           *varargs,
@@ -6845,21 +7446,21 @@ module BamlClient
               raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnLiteralUnionClassInputOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnLiteralUnionClassInputOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myString: T.nilable(String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnNamedArgsSingleStringOptional(
           *varargs,
@@ -6870,21 +7471,21 @@ module BamlClient
               raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnNamedArgsSingleStringOptional", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnNamedArgsSingleStringOptional", args: {
               myString: myString,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputBool(
           *varargs,
@@ -6895,21 +7496,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputBool", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputBool", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Boolean, T::Boolean].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestOutputClass, BamlClient::Types::TestOutputClass])}
       def FnOutputClass(
           *varargs,
@@ -6920,21 +7521,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputClass", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputClass", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TestOutputClass, BamlClient::Types::TestOutputClass].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::TestOutputClass], T::Array[BamlClient::Types::TestOutputClass]])}
       def FnOutputClassList(
           *varargs,
@@ -6945,21 +7546,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputClassList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputClassList", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[BamlClient::StreamTypes::TestOutputClass], T::Array[BamlClient::Types::TestOutputClass]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassNested, BamlClient::Types::TestClassNested])}
       def FnOutputClassNested(
           *varargs,
@@ -6970,21 +7571,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputClassNested", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputClassNested", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TestClassNested, BamlClient::Types::TestClassNested].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassWithEnum, BamlClient::Types::TestClassWithEnum])}
       def FnOutputClassWithEnum(
           *varargs,
@@ -6995,21 +7596,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputClassWithEnum", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputClassWithEnum", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TestClassWithEnum, BamlClient::Types::TestClassWithEnum].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputInt(
           *varargs,
@@ -7020,21 +7621,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputInt", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputInt", args: {
               input: input,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputLiteralBool(
           *varargs,
@@ -7045,21 +7646,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputLiteralBool", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputLiteralBool", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Boolean, T::Boolean].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputLiteralInt(
           *varargs,
@@ -7070,21 +7671,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputLiteralInt", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputLiteralInt", args: {
               input: input,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnOutputLiteralString(
           *varargs,
@@ -7095,21 +7696,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputLiteralString", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputLiteralString", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def FnOutputStringList(
           *varargs,
@@ -7120,21 +7721,21 @@ module BamlClient
               raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnOutputStringList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnOutputStringList", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[String], T::Array[String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum])}
       def FnTestAliasedEnumOutput(
           *varargs,
@@ -7145,21 +7746,21 @@ module BamlClient
               raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnTestAliasedEnumOutput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnTestAliasedEnumOutput", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassAlias, BamlClient::Types::TestClassAlias])}
       def FnTestClassAlias(
           *varargs,
@@ -7170,21 +7771,21 @@ module BamlClient
               raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnTestClassAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnTestClassAlias", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TestClassAlias, BamlClient::Types::TestClassAlias].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleEnum,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def FnTestNamedArgsSingleEnum(
           *varargs,
@@ -7195,21 +7796,21 @@ module BamlClient
               raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "FnTestNamedArgsSingleEnum", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "FnTestNamedArgsSingleEnum", args: {
               myArg: myArg,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           text: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RaysData, BamlClient::Types::RaysData])}
       def GetDataType(
           *varargs,
@@ -7220,21 +7821,21 @@ module BamlClient
               raise ArgumentError.new("GetDataType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "GetDataType", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "GetDataType", args: {
               text: text,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RaysData, BamlClient::Types::RaysData].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           email: BamlClient::Types::Email,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::OrderInfo, BamlClient::Types::OrderInfo])}
       def GetOrderInfo(
           *varargs,
@@ -7245,21 +7846,21 @@ module BamlClient
               raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "GetOrderInfo", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "GetOrderInfo", args: {
               email: email,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::OrderInfo, BamlClient::Types::OrderInfo].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::SearchParams, BamlClient::Types::SearchParams])}
       def GetQuery(
           *varargs,
@@ -7270,21 +7871,21 @@ module BamlClient
               raise ArgumentError.new("GetQuery may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "GetQuery", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "GetQuery", args: {
               query: query,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::SearchParams, BamlClient::Types::SearchParams].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[BamlClient::Types::MapKey, String],i2: T::Hash[BamlClient::Types::MapKey, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[BamlClient::Types::MapKey, String], T::Hash[BamlClient::Types::MapKey, String]])}
       def InOutEnumMapKey(
           *varargs,
@@ -7295,21 +7896,21 @@ module BamlClient
               raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "InOutEnumMapKey", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "InOutEnumMapKey", args: {
               i1: i1,i2: i2,
           })
 
           Baml::BamlStream[T::Hash[BamlClient::Types::MapKey, String], T::Hash[BamlClient::Types::MapKey, String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           i1: T::Hash[T.any(String, String, String, String), String],i2: T::Hash[T.any(String, String, String, String), String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[T.any(String, String, String, String), String], T::Hash[T.any(String, String, String, String), String]])}
       def InOutLiteralStringUnionMapKey(
           *varargs,
@@ -7320,21 +7921,21 @@ module BamlClient
               raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "InOutLiteralStringUnionMapKey", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "InOutLiteralStringUnionMapKey", args: {
               i1: i1,i2: i2,
           })
 
           Baml::BamlStream[T::Hash[T.any(String, String, String, String), String], T::Hash[T.any(String, String, String, String), String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def InOutSingleLiteralStringMapKey(
           *varargs,
@@ -7345,21 +7946,21 @@ module BamlClient
               raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "InOutSingleLiteralStringMapKey", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "InOutSingleLiteralStringMapKey", args: {
               m: m,
           })
 
           Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::JsonValue,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonValue, BamlClient::Types::JsonValue])}
       def JsonTypeAliasCycle(
           *varargs,
@@ -7370,21 +7971,21 @@ module BamlClient
               raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "JsonTypeAliasCycle", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "JsonTypeAliasCycle", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::JsonValue, BamlClient::Types::JsonValue].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def LLMEcho(
           *varargs,
@@ -7395,21 +7996,21 @@ module BamlClient
               raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "LLMEcho", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "LLMEcho", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, T::Boolean, String), T.any(Integer, T::Boolean, String)])}
       def LiteralUnionsTest(
           *varargs,
@@ -7420,21 +8021,21 @@ module BamlClient
               raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "LiteralUnionsTest", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "LiteralUnionsTest", args: {
               input: input,
           })
 
           Baml::BamlStream[T.any(Integer, T::Boolean, String), T.any(Integer, T::Boolean, String)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           n: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def LlmReturnNumber(
           *varargs,
@@ -7445,21 +8046,21 @@ module BamlClient
               raise ArgumentError.new("LlmReturnNumber may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "LlmReturnNumber", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "LlmReturnNumber", args: {
               n: n,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint], BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]])}
       def MakeBlockConstraint(
           *varargs,
@@ -7470,21 +8071,21 @@ module BamlClient
               raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MakeBlockConstraint", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MakeBlockConstraint", args: {
 
           })
 
           Baml::BamlStream[BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint], BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone])}
       def MakeClassWithBlockDone(
           *varargs,
@@ -7495,21 +8096,21 @@ module BamlClient
               raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MakeClassWithBlockDone", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MakeClassWithBlockDone", args: {
 
           })
 
           Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone])}
       def MakeClassWithExternalDone(
           *varargs,
@@ -7520,21 +8121,21 @@ module BamlClient
               raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MakeClassWithExternalDone", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MakeClassWithExternalDone", args: {
 
           })
 
           Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::NestedBlockConstraint, BamlClient::Types::NestedBlockConstraint])}
       def MakeNestedBlockConstraint(
           *varargs,
@@ -7545,21 +8146,21 @@ module BamlClient
               raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MakeNestedBlockConstraint", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MakeNestedBlockConstraint", args: {
 
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::NestedBlockConstraint, BamlClient::Types::NestedBlockConstraint].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer])}
       def MakeSemanticContainer(
           *varargs,
@@ -7570,21 +8171,21 @@ module BamlClient
               raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MakeSemanticContainer", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MakeSemanticContainer", args: {
 
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           m: T::Hash[String, T::Array[String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Array[String]], T::Hash[String, T::Array[String]]])}
       def MapAlias(
           *varargs,
@@ -7595,21 +8196,21 @@ module BamlClient
               raise ArgumentError.new("MapAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MapAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MapAlias", args: {
               m: m,
           })
 
           Baml::BamlStream[T::Hash[String, T::Array[String]], T::Hash[String, T::Array[String]]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MergeAttrs, BamlClient::Types::MergeAttrs])}
       def MergeAliasAttributes(
           *varargs,
@@ -7620,21 +8221,21 @@ module BamlClient
               raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MergeAliasAttributes", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MergeAliasAttributes", args: {
               money: money,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::MergeAttrs, BamlClient::Types::MergeAttrs].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicOutput, BamlClient::Types::DynamicOutput])}
       def MyFunc(
           *varargs,
@@ -7645,21 +8246,21 @@ module BamlClient
               raise ArgumentError.new("MyFunc may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "MyFunc", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "MyFunc", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::DynamicOutput, BamlClient::Types::DynamicOutput].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           c: T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])])}
       def NestedAlias(
           *varargs,
@@ -7670,21 +8271,21 @@ module BamlClient
               raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "NestedAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "NestedAlias", args: {
               c: c,
           })
 
           Baml::BamlStream[T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassForNullLiteral, BamlClient::Types::ClassForNullLiteral])}
       def NullLiteralClassHello(
           *varargs,
@@ -7695,21 +8296,46 @@ module BamlClient
               raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "NullLiteralClassHello", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "NullLiteralClassHello", args: {
               s: s,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::ClassForNullLiteral, BamlClient::Types::ClassForNullLiteral].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def OpenAIGPT4oMissingBaseUrlEnvVar(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("OpenAIGPT4oMissingBaseUrlEnvVar may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "OpenAIGPT4oMissingBaseUrlEnvVar", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def OpenAIWithAnthropicResponseHello(
           *varargs,
@@ -7720,21 +8346,21 @@ module BamlClient
               raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "OpenAIWithAnthropicResponseHello", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "OpenAIWithAnthropicResponseHello", args: {
               s: s,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)], T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]])}
       def OptionalTest_Function(
           *varargs,
@@ -7745,21 +8371,21 @@ module BamlClient
               raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "OptionalTest_Function", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "OptionalTest_Function", args: {
               input: input,
           })
 
           Baml::BamlStream[T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)], T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInput(
           *varargs,
@@ -7770,21 +8396,21 @@ module BamlClient
               raise ArgumentError.new("PdfInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PdfInput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PdfInput", args: {
               pdf: pdf,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputAnthropic(
           *varargs,
@@ -7795,21 +8421,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PdfInputAnthropic", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PdfInputAnthropic", args: {
               pdf: pdf,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,prompt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputOpenai(
           *varargs,
@@ -7820,21 +8446,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputOpenai may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PdfInputOpenai", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PdfInputOpenai", args: {
               pdf: pdf,prompt: prompt,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           pdf: Baml::Pdf,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PdfInputVertex(
           *varargs,
@@ -7845,21 +8471,21 @@ module BamlClient
               raise ArgumentError.new("PdfInputVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PdfInputVertex", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PdfInputVertex", args: {
               pdf: pdf,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           name: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::FooAny, BamlClient::Types::FooAny])}
       def PredictAge(
           *varargs,
@@ -7870,21 +8496,21 @@ module BamlClient
               raise ArgumentError.new("PredictAge may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PredictAge", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PredictAge", args: {
               name: name,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::FooAny, BamlClient::Types::FooAny].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           inp: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def PredictAgeBare(
           *varargs,
@@ -7895,21 +8521,21 @@ module BamlClient
               raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PredictAgeBare", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PredictAgeBare", args: {
               inp: inp,
           })
 
           Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           p: T.any(Integer, String, T::Boolean, Float),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float), T.any(Integer, String, T::Boolean, Float)])}
       def PrimitiveAlias(
           *varargs,
@@ -7920,21 +8546,21 @@ module BamlClient
               raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PrimitiveAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PrimitiveAlias", args: {
               p: p,
           })
 
           Baml::BamlStream[T.any(Integer, String, T::Boolean, Float), T.any(Integer, String, T::Boolean, Float)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaude(
           *varargs,
@@ -7945,21 +8571,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestClaude", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestClaude", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChat(
           *varargs,
@@ -7970,21 +8596,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestClaudeChat", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestClaudeChat", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChatNoSystem(
           *varargs,
@@ -7995,21 +8621,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestClaudeChatNoSystem", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestClaudeChatNoSystem", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAI(
           *varargs,
@@ -8020,21 +8646,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestOpenAI", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestOpenAI", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChat(
           *varargs,
@@ -8045,21 +8671,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestOpenAIChat", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestOpenAIChat", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChatNoSystem(
           *varargs,
@@ -8070,21 +8696,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestOpenAIChatNoSystem", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestOpenAIChatNoSystem", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def PromptTestStreaming(
           *varargs,
@@ -8095,21 +8721,21 @@ module BamlClient
               raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "PromptTestStreaming", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "PromptTestStreaming", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecAliasOne,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecAliasOne, BamlClient::Types::RecAliasOne])}
       def RecursiveAliasCycle(
           *varargs,
@@ -8120,21 +8746,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "RecursiveAliasCycle", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "RecursiveAliasCycle", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecAliasOne, BamlClient::Types::RecAliasOne].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           cls: BamlClient::Types::NodeWithAliasIndirection,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::NodeWithAliasIndirection, BamlClient::Types::NodeWithAliasIndirection])}
       def RecursiveClassWithAliasIndirection(
           *varargs,
@@ -8145,21 +8771,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "RecursiveClassWithAliasIndirection", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "RecursiveClassWithAliasIndirection", args: {
               cls: cls,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::NodeWithAliasIndirection, BamlClient::Types::NodeWithAliasIndirection].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveUnion,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion])}
       def RecursiveUnionTest(
           *varargs,
@@ -8170,21 +8796,21 @@ module BamlClient
               raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "RecursiveUnionTest", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "RecursiveUnionTest", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RenderTestClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def RenderDynamicClass(
           *varargs,
@@ -8195,21 +8821,21 @@ module BamlClient
               raise ArgumentError.new("RenderDynamicClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "RenderDynamicClass", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "RenderDynamicClass", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           bike: T.any(BamlClient::Types::RenderTestEnum, String),other: T.any(BamlClient::Types::RenderTestEnum, String),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def RenderDynamicEnum(
           *varargs,
@@ -8220,21 +8846,21 @@ module BamlClient
               raise ArgumentError.new("RenderDynamicEnum may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "RenderDynamicEnum", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "RenderDynamicEnum", args: {
               bike: bike,other: other,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           money: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def ReturnAliasWithMergedAttributes(
           *varargs,
@@ -8245,21 +8871,21 @@ module BamlClient
               raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ReturnAliasWithMergedAttributes", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ReturnAliasWithMergedAttributes", args: {
               money: money,
           })
 
           Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           inp: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def ReturnFailingAssert(
           *varargs,
@@ -8270,21 +8896,21 @@ module BamlClient
               raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ReturnFailingAssert", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ReturnFailingAssert", args: {
               inp: inp,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           s: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonTemplate, BamlClient::Types::JsonTemplate])}
       def ReturnJsonEntry(
           *varargs,
@@ -8295,21 +8921,21 @@ module BamlClient
               raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ReturnJsonEntry", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ReturnJsonEntry", args: {
               s: s,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::JsonTemplate, BamlClient::Types::JsonTemplate].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           a: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MalformedConstraints, BamlClient::Types::MalformedConstraints])}
       def ReturnMalformedConstraints(
           *varargs,
@@ -8320,21 +8946,21 @@ module BamlClient
               raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ReturnMalformedConstraints", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ReturnMalformedConstraints", args: {
               a: a,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::MalformedConstraints, BamlClient::Types::MalformedConstraints].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Schema, BamlClient::Types::Schema])}
       def SchemaDescriptions(
           *varargs,
@@ -8345,21 +8971,21 @@ module BamlClient
               raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "SchemaDescriptions", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "SchemaDescriptions", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Schema, BamlClient::Types::Schema].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveListAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveListAlias, BamlClient::Types::RecursiveListAlias])}
       def SimpleRecursiveListAlias(
           *varargs,
@@ -8370,21 +8996,21 @@ module BamlClient
               raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "SimpleRecursiveListAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "SimpleRecursiveListAlias", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecursiveListAlias, BamlClient::Types::RecursiveListAlias].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveMapAlias,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveMapAlias, BamlClient::Types::RecursiveMapAlias])}
       def SimpleRecursiveMapAlias(
           *varargs,
@@ -8395,21 +9021,21 @@ module BamlClient
               raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "SimpleRecursiveMapAlias", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "SimpleRecursiveMapAlias", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecursiveMapAlias, BamlClient::Types::RecursiveMapAlias].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers])}
       def StreamBigNumbers(
           *varargs,
@@ -8420,21 +9046,21 @@ module BamlClient
               raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamBigNumbers", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamBigNumbers", args: {
               digits: digits,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitle, BamlClient::Types::TwoStoriesOneTitle])}
       def StreamFailingAssertion(
           *varargs,
@@ -8445,21 +9071,21 @@ module BamlClient
               raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamFailingAssertion", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamFailingAssertion", args: {
               theme: theme,length: length,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitle, BamlClient::Types::TwoStoriesOneTitle].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           theme: String,length: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitleCheck, BamlClient::Types::TwoStoriesOneTitleCheck])}
       def StreamFailingCheck(
           *varargs,
@@ -8470,21 +9096,21 @@ module BamlClient
               raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamFailingCheck", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamFailingCheck", args: {
               theme: theme,length: length,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitleCheck, BamlClient::Types::TwoStoriesOneTitleCheck].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def StreamOneBigNumber(
           *varargs,
@@ -8495,21 +9121,21 @@ module BamlClient
               raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamOneBigNumber", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamOneBigNumber", args: {
               digits: digits,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(Integer, String)], T::Array[T.any(Integer, String)]])}
       def StreamUnionIntegers(
           *varargs,
@@ -8520,21 +9146,21 @@ module BamlClient
               raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamUnionIntegers", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamUnionIntegers", args: {
               digits: digits,
           })
 
           Baml::BamlStream[T::Array[T.any(Integer, String)], T::Array[T.any(Integer, String)]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           digits: Integer,yapping: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::CompoundBigNumbers, BamlClient::Types::CompoundBigNumbers])}
       def StreamingCompoundNumbers(
           *varargs,
@@ -8545,21 +9171,21 @@ module BamlClient
               raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StreamingCompoundNumbers", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StreamingCompoundNumbers", args: {
               digits: digits,yapping: yapping,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::CompoundBigNumbers, BamlClient::Types::CompoundBigNumbers].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           document_txt: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Document1559, BamlClient::Types::Document1559])}
       def StructureDocument1559(
           *varargs,
@@ -8570,21 +9196,21 @@ module BamlClient
               raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "StructureDocument1559", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "StructureDocument1559", args: {
               document_txt: document_txt,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Document1559, BamlClient::Types::Document1559].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveAliasDependency,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveAliasDependency, BamlClient::Types::RecursiveAliasDependency])}
       def TakeRecAliasDep(
           *varargs,
@@ -8595,21 +9221,21 @@ module BamlClient
               raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TakeRecAliasDep", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TakeRecAliasDep", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::RecursiveAliasDependency, BamlClient::Types::RecursiveAliasDependency].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           story: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TellStory(
           *varargs,
@@ -8620,21 +9246,46 @@ module BamlClient
               raise ArgumentError.new("TellStory may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TellStory", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TellStory", args: {
               story: story,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TemplateStringTestEcho(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TemplateStringTestEcho may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TemplateStringTestEcho", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAbortFallbackChain(
           *varargs,
@@ -8645,21 +9296,21 @@ module BamlClient
               raise ArgumentError.new("TestAbortFallbackChain may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAbortFallbackChain", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAbortFallbackChain", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAnthropic(
           *varargs,
@@ -8670,21 +9321,21 @@ module BamlClient
               raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAnthropic", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAnthropic", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAnthropicShorthand(
           *varargs,
@@ -8695,21 +9346,21 @@ module BamlClient
               raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAnthropicShorthand", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAnthropicShorthand", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAws(
           *varargs,
@@ -8720,21 +9371,21 @@ module BamlClient
               raise ArgumentError.new("TestAws may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAws", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAws", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsClaude37(
           *varargs,
@@ -8745,21 +9396,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsClaude37", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsClaude37", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInferenceProfile(
           *varargs,
@@ -8770,21 +9421,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsInferenceProfile", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInferenceProfile", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidAccessKey(
           *varargs,
@@ -8795,21 +9446,46 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidAccessKey", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInvalidAccessKey", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestAwsInvalidEndpoint(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsInvalidEndpoint may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInvalidEndpoint", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidProfile(
           *varargs,
@@ -8820,21 +9496,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidProfile", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInvalidProfile", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidRegion(
           *varargs,
@@ -8845,21 +9521,21 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidRegion", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInvalidRegion", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidSessionToken(
           *varargs,
@@ -8870,21 +9546,46 @@ module BamlClient
               raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAwsInvalidSessionToken", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsInvalidSessionToken", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          video_input: Baml::Video,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestAwsVideoDescribe(
+          *varargs,
+          video_input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestAwsVideoDescribe may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAwsVideoDescribe", args: {
+              video_input: video_input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzure(
           *varargs,
@@ -8895,21 +9596,21 @@ module BamlClient
               raise ArgumentError.new("TestAzure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzure", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzure", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureFailure(
           *varargs,
@@ -8920,21 +9621,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureFailure", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureFailure", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1NoMaxTokens(
           *varargs,
@@ -8945,21 +9646,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureO1NoMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureO1NoMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxCompletionTokens(
           *varargs,
@@ -8970,21 +9671,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureO1WithMaxCompletionTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureO1WithMaxCompletionTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxTokens(
           *varargs,
@@ -8995,21 +9696,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureO1WithMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureO1WithMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3NoMaxTokens(
           *varargs,
@@ -9020,21 +9721,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureO3NoMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureO3NoMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3WithMaxCompletionTokens(
           *varargs,
@@ -9045,21 +9746,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureO3WithMaxCompletionTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureO3WithMaxCompletionTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestAzureWithMaxTokens(
           *varargs,
@@ -9070,21 +9771,21 @@ module BamlClient
               raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestAzureWithMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestAzureWithMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,not_cached: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestCaching(
           *varargs,
@@ -9095,21 +9796,46 @@ module BamlClient
               raise ArgumentError.new("TestCaching may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestCaching", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestCaching", args: {
               input: input,not_cached: not_cached,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestDefaultStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestDefaultStreamingTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestDefaultStreamingTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackClient(
           *varargs,
@@ -9120,21 +9846,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFallbackClient", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFallbackClient", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackStrategy(
           *varargs,
@@ -9145,21 +9871,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFallbackStrategy", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFallbackStrategy", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFallbackToShorthand(
           *varargs,
@@ -9170,21 +9896,21 @@ module BamlClient
               raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFallbackToShorthand", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFallbackToShorthand", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleBool(
           *varargs,
@@ -9195,21 +9921,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleBool", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleBool", args: {
               myBool: myBool,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleClass(
           *varargs,
@@ -9220,21 +9946,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleClass", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleClass", args: {
               myArg: myArg,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[BamlClient::Types::NamedArgsSingleEnumList],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleEnumList(
           *varargs,
@@ -9245,21 +9971,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleEnumList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleEnumList", args: {
               myArg: myArg,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myFloat: Float,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleFloat(
           *varargs,
@@ -9270,21 +9996,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleFloat", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleFloat", args: {
               myFloat: myFloat,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleInt(
           *varargs,
@@ -9295,21 +10021,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleInt", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleInt", args: {
               myInt: myInt,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, BamlClient::Types::StringToClassEntry],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, BamlClient::StreamTypes::StringToClassEntry], T::Hash[String, BamlClient::Types::StringToClassEntry]])}
       def TestFnNamedArgsSingleMapStringToClass(
           *varargs,
@@ -9320,21 +10046,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToClass", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToClass", args: {
               myMap: myMap,
           })
 
           Baml::BamlStream[T::Hash[String, BamlClient::StreamTypes::StringToClassEntry], T::Hash[String, BamlClient::Types::StringToClassEntry]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, T::Hash[String, String]],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]], T::Hash[String, T::Hash[String, String]]])}
       def TestFnNamedArgsSingleMapStringToMap(
           *varargs,
@@ -9345,21 +10071,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToMap", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToMap", args: {
               myMap: myMap,
           })
 
           Baml::BamlStream[T::Hash[String, T::Hash[String, String]], T::Hash[String, T::Hash[String, String]]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myMap: T::Hash[String, String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def TestFnNamedArgsSingleMapStringToString(
           *varargs,
@@ -9370,21 +10096,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToString", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleMapStringToString", args: {
               myMap: myMap,
           })
 
           Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleString(
           *varargs,
@@ -9395,21 +10121,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleString", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleString", args: {
               myString: myString,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myStringArray: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleStringArray(
           *varargs,
@@ -9420,21 +10146,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleStringArray", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleStringArray", args: {
               myStringArray: myStringArray,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myArg: T::Array[String],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def TestFnNamedArgsSingleStringList(
           *varargs,
@@ -9445,21 +10171,21 @@ module BamlClient
               raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestFnNamedArgsSingleStringList", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestFnNamedArgsSingleStringList", args: {
               myArg: myArg,
           })
 
           Baml::BamlStream[T::Array[String], T::Array[String]].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGemini(
           *varargs,
@@ -9470,21 +10196,21 @@ module BamlClient
               raise ArgumentError.new("TestGemini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGemini", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGemini", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiOpenAiGeneric(
           *varargs,
@@ -9495,21 +10221,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGeminiOpenAiGeneric", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGeminiOpenAiGeneric", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystem(
           *varargs,
@@ -9520,21 +10246,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGeminiSystem", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGeminiSystem", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystemAsChat(
           *varargs,
@@ -9545,21 +10271,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGeminiSystemAsChat", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGeminiSystemAsChat", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGeminiThinking(
           *varargs,
@@ -9570,21 +10296,21 @@ module BamlClient
               raise ArgumentError.new("TestGeminiThinking may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGeminiThinking", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGeminiThinking", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestGroq(
           *varargs,
@@ -9595,21 +10321,21 @@ module BamlClient
               raise ArgumentError.new("TestGroq may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestGroq", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestGroq", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageInput(
           *varargs,
@@ -9620,21 +10346,21 @@ module BamlClient
               raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestImageInput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestImageInput", args: {
               img: img,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           img: Baml::Image,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageInputAnthropic(
           *varargs,
@@ -9645,21 +10371,21 @@ module BamlClient
               raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestImageInputAnthropic", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestImageInputAnthropic", args: {
               img: img,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           imgs: T::Array[Baml::Image],
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestImageListInput(
           *varargs,
@@ -9670,21 +10396,21 @@ module BamlClient
               raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestImageListInput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestImageListInput", args: {
               imgs: imgs,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestMemoryOutput, BamlClient::Types::TestMemoryOutput])}
       def TestMemory(
           *varargs,
@@ -9695,21 +10421,21 @@ module BamlClient
               raise ArgumentError.new("TestMemory may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestMemory", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestMemory", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::TestMemoryOutput, BamlClient::Types::TestMemoryOutput].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,myArg2: BamlClient::Types::NamedArgsSingleClass,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestMulticlassNamedArgs(
           *varargs,
@@ -9720,21 +10446,21 @@ module BamlClient
               raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestMulticlassNamedArgs", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestMulticlassNamedArgs", args: {
               myArg: myArg,myArg2: myArg2,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myBool: T::Boolean,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralBool(
           *varargs,
@@ -9745,21 +10471,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestNamedArgsLiteralBool", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestNamedArgsLiteralBool", args: {
               myBool: myBool,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myInt: Integer,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralInt(
           *varargs,
@@ -9770,21 +10496,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestNamedArgsLiteralInt", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestNamedArgsLiteralInt", args: {
               myInt: myInt,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           myString: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralString(
           *varargs,
@@ -9795,21 +10521,21 @@ module BamlClient
               raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestNamedArgsLiteralString", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestNamedArgsLiteralString", args: {
               myString: myString,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[T.nilable(String), T.nilable(String)])}
       def TestOllama(
           *varargs,
@@ -9820,21 +10546,21 @@ module BamlClient
               raise ArgumentError.new("TestOllama may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOllama", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOllama", args: {
               input: input,
           })
 
           Baml::BamlStream[T.nilable(String), T.nilable(String)].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::Haiku, BamlClient::Types::Haiku])}
       def TestOllamaHaiku(
           *varargs,
@@ -9845,21 +10571,21 @@ module BamlClient
               raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOllamaHaiku", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOllamaHaiku", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::Haiku, BamlClient::Types::Haiku].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAI(
           *varargs,
@@ -9870,21 +10596,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAI", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAI", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIDummyClient(
           *varargs,
@@ -9895,21 +10621,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIDummyClient", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIDummyClient", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini(
           *varargs,
@@ -9920,21 +10646,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIGPT4oMini", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIGPT4oMini", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini2(
           *varargs,
@@ -9945,21 +10671,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini2 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIGPT4oMini2", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIGPT4oMini2", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini3(
           *varargs,
@@ -9970,21 +10696,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIGPT4oMini3 may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIGPT4oMini3", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIGPT4oMini3", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAILegacyProvider(
           *varargs,
@@ -9995,21 +10721,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAILegacyProvider", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAILegacyProvider", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1NoMaxTokens(
           *varargs,
@@ -10020,21 +10746,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIO1NoMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIO1NoMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxCompletionTokens(
           *varargs,
@@ -10045,21 +10771,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIO1WithMaxCompletionTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIO1WithMaxCompletionTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxTokens(
           *varargs,
@@ -10070,21 +10796,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIO1WithMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIO1WithMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIProviderWithResponsesType(
           *varargs,
@@ -10095,21 +10821,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIProviderWithResponsesType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIProviderWithResponsesType", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIProviderWithResponsesType", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponses(
           *varargs,
@@ -10120,21 +10846,46 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponses may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponses", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponses", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          problem: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestOpenAIResponsesAllRoles(
+          *varargs,
+          problem:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenAIResponsesAllRoles may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesAllRoles", args: {
+              problem: problem,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesAutoType(
           *varargs,
@@ -10145,21 +10896,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesAutoType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesAutoType", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesAutoType", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           topic: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesConversation(
           *varargs,
@@ -10170,21 +10921,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesConversation may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesConversation", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesConversation", args: {
               topic: topic,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesCustomURL(
           *varargs,
@@ -10195,21 +10946,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesCustomURL may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesCustomURL", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesCustomURL", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesDifferentModel(
           *varargs,
@@ -10220,21 +10971,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesDifferentModel may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesDifferentModel", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesDifferentModel", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesEndpoint(
           *varargs,
@@ -10245,21 +10996,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesEndpoint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesEndpoint", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesEndpoint", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesExplicit(
           *varargs,
@@ -10270,21 +11021,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesExplicit may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesExplicit", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesExplicit", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesFunctionCall(
           *varargs,
@@ -10295,21 +11046,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesFunctionCall may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesFunctionCall", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesFunctionCall", args: {
               query: query,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           image: T.any(Baml::Image, String, Baml::Pdf, Baml::Audio),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesImageInput(
           *varargs,
@@ -10320,21 +11071,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesImageInput may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesImageInput", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesImageInput", args: {
               image: image,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           problem: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesReasoning(
           *varargs,
@@ -10345,21 +11096,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesReasoning may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesReasoning", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesReasoning", args: {
               problem: problem,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesShorthand(
           *varargs,
@@ -10370,21 +11121,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesShorthand", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesShorthand", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           query: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesWebSearch(
           *varargs,
@@ -10395,21 +11146,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesWebSearch may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesWebSearch", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesWebSearch", args: {
               query: query,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIResponsesWithOpenAIResponseType(
           *varargs,
@@ -10420,21 +11171,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIResponsesWithOpenAIResponseType may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIResponsesWithOpenAIResponseType", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIResponsesWithOpenAIResponseType", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIShorthand(
           *varargs,
@@ -10445,21 +11196,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIShorthand", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIShorthand", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithFinishReasonError(
           *varargs,
@@ -10470,21 +11221,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIWithFinishReasonError", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIWithFinishReasonError", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithMaxTokens(
           *varargs,
@@ -10495,21 +11246,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIWithMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIWithMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithNullMaxTokens(
           *varargs,
@@ -10520,21 +11271,21 @@ module BamlClient
               raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenAIWithNullMaxTokens", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenAIWithNullMaxTokens", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestOpenRouterMistralSmall3_1_24b(
           *varargs,
@@ -10545,21 +11296,71 @@ module BamlClient
               raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestOpenRouterMistralSmall3_1_24b", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenRouterMistralSmall3_1_24b", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          pdf: Baml::Pdf,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestOpenaiResponsesPdfs(
+          *varargs,
+          pdf:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestOpenaiResponsesPdfs may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestOpenaiResponsesPdfs", args: {
+              pdf: pdf,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestRequestTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestRequestTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestRequestTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRetryConstant(
           *varargs,
@@ -10570,21 +11371,21 @@ module BamlClient
               raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestRetryConstant", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestRetryConstant", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRetryExponential(
           *varargs,
@@ -10595,21 +11396,21 @@ module BamlClient
               raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestRetryExponential", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestRetryExponential", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestRoundRobinStrategy(
           *varargs,
@@ -10620,21 +11421,21 @@ module BamlClient
               raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestRoundRobinStrategy", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestRoundRobinStrategy", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestSingleFallbackClient(
           *varargs,
@@ -10645,21 +11446,96 @@ module BamlClient
               raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestSingleFallbackClient", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestSingleFallbackClient", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SkipDynamicClass, BamlClient::Types::SkipDynamicClass])}
+      def TestSkipDynamic(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestSkipDynamic may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestSkipDynamic", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[BamlClient::StreamTypes::SkipDynamicClass, BamlClient::Types::SkipDynamicClass].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SkipNonDynamicClass, BamlClient::Types::SkipNonDynamicClass])}
+      def TestSkipNonDynamic(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestSkipNonDynamic may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestSkipNonDynamic", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[BamlClient::StreamTypes::SkipNonDynamicClass, BamlClient::Types::SkipNonDynamicClass].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestStreamingTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestStreamingTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestStreamingTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory])}
       def TestThinking(
           *varargs,
@@ -10670,21 +11546,71 @@ module BamlClient
               raise ArgumentError.new("TestThinking may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestThinking", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestThinking", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestTimeoutError(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutError may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestTimeoutError", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestTimeoutFallback(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestTimeoutFallback may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestTimeoutFallback", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           question: BamlClient::Types::UniverseQuestionInput,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::UniverseQuestion, BamlClient::Types::UniverseQuestion])}
       def TestUniverseQuestion(
           *varargs,
@@ -10695,21 +11621,21 @@ module BamlClient
               raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestUniverseQuestion", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestUniverseQuestion", args: {
               question: question,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::UniverseQuestion, BamlClient::Types::UniverseQuestion].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertex(
           *varargs,
@@ -10720,21 +11646,21 @@ module BamlClient
               raise ArgumentError.new("TestVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestVertex", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestVertex", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertexClaude(
           *varargs,
@@ -10745,21 +11671,21 @@ module BamlClient
               raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestVertexClaude", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestVertexClaude", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
 
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def TestVertexWithSystemInstructions(
           *varargs,
@@ -10770,21 +11696,46 @@ module BamlClient
               raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "TestVertexWithSystemInstructions", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestVertexWithSystemInstructions", args: {
 
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
+          )
+      end
+      sig {params(
+          varargs: T.untyped,
+          input: String,
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
+      ).returns(Baml::BamlStream[String, String])}
+      def TestZeroTimeout(
+          *varargs,
+          input:,
+          baml_options: {}
+      )
+          if varargs.any?
+              raise ArgumentError.new("TestZeroTimeout may only be called with keyword arguments")
+          end
+
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "TestZeroTimeout", args: {
+              input: input,
+          })
+
+          Baml::BamlStream[String, String].new(
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: T.any(String, T::Boolean),
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::UnionTest_ReturnType, BamlClient::Types::UnionTest_ReturnType])}
       def UnionTest_Function(
           *varargs,
@@ -10795,21 +11746,21 @@ module BamlClient
               raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "UnionTest_Function", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "UnionTest_Function", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::UnionTest_ReturnType, BamlClient::Types::UnionTest_ReturnType].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::BlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseBlockConstraint(
           *varargs,
@@ -10820,21 +11771,21 @@ module BamlClient
               raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "UseBlockConstraint", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "UseBlockConstraint", args: {
               inp: inp,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: BamlClient::Types::MaintainFieldOrder,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[BamlClient::StreamTypes::MaintainFieldOrder, BamlClient::Types::MaintainFieldOrder])}
       def UseMaintainFieldOrder(
           *varargs,
@@ -10845,21 +11796,21 @@ module BamlClient
               raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "UseMaintainFieldOrder", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "UseMaintainFieldOrder", args: {
               input: input,
           })
 
           Baml::BamlStream[BamlClient::StreamTypes::MaintainFieldOrder, BamlClient::Types::MaintainFieldOrder].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           a: BamlClient::Types::MalformedConstraints2,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseMalformedConstraints(
           *varargs,
@@ -10870,21 +11821,21 @@ module BamlClient
               raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "UseMalformedConstraints", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "UseMalformedConstraints", args: {
               a: a,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           inp: BamlClient::Types::NestedBlockConstraintForParam,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[Integer, Integer])}
       def UseNestedBlockConstraint(
           *varargs,
@@ -10895,21 +11846,21 @@ module BamlClient
               raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "UseNestedBlockConstraint", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "UseNestedBlockConstraint", args: {
               inp: inp,
           })
 
           Baml::BamlStream[Integer, Integer].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ValidateBasicResponses(
           *varargs,
@@ -10920,21 +11871,21 @@ module BamlClient
               raise ArgumentError.new("ValidateBasicResponses may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ValidateBasicResponses", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ValidateBasicResponses", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           input: String,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def ValidateResponseTypes(
           *varargs,
@@ -10945,21 +11896,21 @@ module BamlClient
               raise ArgumentError.new("ValidateResponseTypes may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "ValidateResponseTypes", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "ValidateResponseTypes", args: {
               input: input,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def VideoInputGemini(
           *varargs,
@@ -10970,21 +11921,21 @@ module BamlClient
               raise ArgumentError.new("VideoInputGemini may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "VideoInputGemini", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "VideoInputGemini", args: {
               vid: vid,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
       sig {params(
           varargs: T.untyped,
           vid: Baml::Video,
-          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+          baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String], T::Hash[String, String])]
       ).returns(Baml::BamlStream[String, String])}
       def VideoInputVertex(
           *varargs,
@@ -10995,15 +11946,15 @@ module BamlClient
               raise ArgumentError.new("VideoInputVertex may only be called with keyword arguments")
           end
 
-          options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+          __options__ = @options.merge_options(BamlCallOptions.from_hash(baml_options))
 
-          ctx, result = options.create_sync_stream(function_name: "VideoInputVertex", args: {
+          __ctx__, __result__ = __options__.create_sync_stream(function_name: "VideoInputVertex", args: {
               vid: vid,
           })
 
           Baml::BamlStream[String, String].new(
-              ffi_stream: result,
-              ctx_manager: ctx
+              ffi_stream: __result__,
+              ctx_manager: __ctx__
           )
       end
 

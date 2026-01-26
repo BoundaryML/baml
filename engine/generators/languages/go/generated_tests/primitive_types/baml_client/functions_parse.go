@@ -51,6 +51,10 @@ func (*parse) TestEmptyCollections(text string, opts ...CallOptionFunc) (types.P
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -92,6 +96,10 @@ func (*parse) TestMixedPrimitives(text string, opts ...CallOptionFunc) (types.Mi
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -137,6 +145,10 @@ func (*parse) TestPrimitiveArrays(text string, opts ...CallOptionFunc) (types.Pr
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -178,6 +190,10 @@ func (*parse) TestPrimitiveMaps(text string, opts ...CallOptionFunc) (types.Prim
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -223,6 +239,10 @@ func (*parse) TestPrimitiveTypes(text string, opts ...CallOptionFunc) (types.Pri
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -264,6 +284,10 @@ func (*parse) TestTopLevelBool(text string, opts ...CallOptionFunc) (bool, error
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -309,6 +333,10 @@ func (*parse) TestTopLevelFloat(text string, opts ...CallOptionFunc) (float64, e
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -352,6 +380,10 @@ func (*parse) TestTopLevelInt(text string, opts ...CallOptionFunc) (int64, error
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -370,8 +402,8 @@ func (*parse) TestTopLevelInt(text string, opts ...CallOptionFunc) (int64, error
 	return casted, nil
 }
 
-// / Parse version of TestTopLevelNull (Takes in string and returns any)
-func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error) {
+// / Parse version of TestTopLevelNull (Takes in string and returns *interface{})
+func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (*interface{}, error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -395,6 +427,10 @@ func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error)
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -405,10 +441,10 @@ func (*parse) TestTopLevelNull(text string, opts ...CallOptionFunc) (any, error)
 
 	result, err := bamlRuntime.CallFunctionParse(context.Background(), "TestTopLevelNull", encoded)
 	if err != nil {
-		return nil, err
+		return (*interface{})(nil), err
 	}
 
-	casted := (result).(any)
+	casted := (result).(*interface{})
 
 	return casted, nil
 }
@@ -436,6 +472,10 @@ func (*parse) TestTopLevelString(text string, opts ...CallOptionFunc) (string, e
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

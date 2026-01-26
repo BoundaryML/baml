@@ -88,26 +88,22 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                     let others = items
                         .iter()
                         .filter_map(|res| match res {
-                            MarkdownResult::String(s) => {
-                                Some(Value::String(s.to_string(), CompletionState::Incomplete))
-                            }
+                            MarkdownResult::String(s) => Some(s.as_str()),
                             _ => None,
                         })
-                        .map(|v| {
+                        .filter_map(|s| {
                             parse_func(
-                                str,
+                                s,
                                 options.next_from_mode(
                                     crate::jsonish::parser::ParsingMode::JsonMarkdownString,
                                 ),
                                 false,
                             )
-                        })
-                        .filter_map(|res| match res {
-                            Ok(v) => Some(v),
-                            Err(e) => {
+                            .map_err(|e| {
                                 log::debug!("Error parsing markdown string: {e:?}");
-                                None
-                            }
+                                e
+                            })
+                            .ok()
                         })
                         .collect::<Vec<_>>();
 
@@ -340,6 +336,59 @@ mod tests {
                 ),
                 "[1, 2, [3"
             )
+        );
+    }
+
+    #[test]
+    fn test_markdown_multi_item_does_not_reparse_entire_input_as_string() {
+        // When markdown parsing yields multiple items (e.g., multiple code blocks plus trailing text),
+        // we should only parse the trailing text in JsonMarkdownString mode, not the full original input.
+        //
+        // Re-parsing the full input can create nested AnyOf structures that later leak via Display
+        // (e.g. strings like `AnyOf[{,AnyOf[{,{},],]]i`).
+        let input = r#"```json
+{"a": 1}
+```
+
+```json
+{"b": 2}
+```
+
+i"#;
+
+        let res = parse_func(input, ParseOptions::default(), false).unwrap();
+        let Value::AnyOf(choices, _) = res else {
+            panic!("Expected AnyOf, got {res:#?}");
+        };
+
+        fn contains_trimmed_string(value: &Value, needle: &str) -> bool {
+            match value {
+                Value::String(s, _) => s.trim() == needle,
+                Value::Object(kvs, _) => {
+                    kvs.iter().any(|(_, v)| contains_trimmed_string(v, needle))
+                }
+                Value::Array(items, _) => items.iter().any(|v| contains_trimmed_string(v, needle)),
+                Value::Markdown(_, v, _) => contains_trimmed_string(v, needle),
+                Value::FixedJson(v, _) => contains_trimmed_string(v, needle),
+                Value::AnyOf(choices, original) => {
+                    original.trim() == needle
+                        || choices.iter().any(|v| contains_trimmed_string(v, needle))
+                }
+                Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
+            }
+        }
+
+        let contains_trailing_i = choices.iter().any(|v| contains_trimmed_string(v, "i"));
+        assert!(
+            contains_trailing_i,
+            "Expected trailing markdown string candidate, got {choices:#?}"
+        );
+
+        assert!(
+            !choices
+                .iter()
+                .any(|v| matches!(v, Value::AnyOf(_, original) if original == input)),
+            "Unexpected re-parse of the full input in markdown string candidates: {choices:#?}"
         );
     }
 }

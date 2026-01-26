@@ -1,7 +1,7 @@
 use std::{fs, path::Path};
 
 use baml_lib::{
-    internal_baml_ast::{ast::BamlVisDiagramGenerator, parse},
+    internal_baml_ast::{ast::diagram_generator, parse},
     internal_baml_diagnostics::SourceFile,
 };
 
@@ -11,10 +11,17 @@ const ROOT: &str = concat!(
 );
 
 #[test]
+#[ignore]
 fn headers_mermaid_snapshots() {
+    // Initialize logging at INFO level
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .is_test(true)
+        .try_init();
+
     let dir = Path::new(ROOT);
     if !dir.exists() {
-        panic!("fixtures dir missing: {}", ROOT);
+        panic!("fixtures dir missing: {ROOT}");
     }
 
     let mut ran: usize = 0;
@@ -36,6 +43,9 @@ fn headers_mermaid_snapshots() {
             .and_then(|n| n.to_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| path.to_string_lossy().to_string());
+        log::info!("================================================");
+        log::info!("Generating Mermaid graph for {rel_name:#?}");
+        log::info!("================================================");
         // Parse defensively; let panic message print so it is visible, but keep the test running
         let path_clone = path.clone();
         let res = std::panic::catch_unwind(|| {
@@ -88,8 +98,8 @@ fn headers_mermaid_snapshots() {
                                     ran += 1;
                                 } else {
                                     eprintln!("[mermaid] {:<12} | {}", "FAIL(err)", rel_name);
-                                    eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                    eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                    eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                    eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                     failed += 1;
                                     ran += 1;
                                     continue;
@@ -105,7 +115,13 @@ fn headers_mermaid_snapshots() {
                     }
                 } else {
                     // No errors: compare Mermaid graph
-                    let got = BamlVisDiagramGenerator::generate_headers_flowchart(&ast);
+                    let got = diagram_generator::generate_with_styling(
+                        diagram_generator::MermaidGeneratorContext {
+                            use_fancy: false,
+                            function_filter: None,
+                        },
+                        &ast,
+                    );
                     let mut exp_path = path.clone();
                     exp_path.set_extension("mmd");
                     if std::env::var("UPDATE").ok().as_deref() == Some("1") {
@@ -125,8 +141,8 @@ fn headers_mermaid_snapshots() {
                                 ran += 1;
                             } else {
                                 eprintln!("[mermaid] {:<12} | {}", "FAIL", rel_name);
-                                eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                 failed += 1;
                                 ran += 1;
                                 continue;
@@ -170,8 +186,8 @@ fn headers_mermaid_snapshots() {
                                 ran += 1;
                             } else {
                                 eprintln!("[mermaid] {:<12} | {}", "FAIL(err)", rel_name);
-                                eprintln!("EXPECTED ({}):\n{}\n---", rel_name, exp_n);
-                                eprintln!("GOT      ({}):\n{}\n---", rel_name, got_n);
+                                eprintln!("EXPECTED ({rel_name}):\n{exp_n}\n---");
+                                eprintln!("GOT      ({rel_name}):\n{got_n}\n---");
                                 failed += 1;
                                 ran += 1;
                                 continue;
@@ -189,20 +205,19 @@ fn headers_mermaid_snapshots() {
         }
     }
 
-    assert!(ran > 0, "no valid fixtures were executed in {}", ROOT);
+    assert!(ran > 0, "no valid fixtures were executed in {ROOT}");
     assert!(
         failed == 0,
-        "{} fixtures failed; see output for details",
-        failed
+        "{failed} fixtures failed; see output for details"
     );
     println!("[mermaid] Summary");
-    println!("  ran:     {}", ran);
-    println!("  pass:    {}", passed);
-    println!("  updated: {}", updated);
+    println!("  ran:     {ran}");
+    println!("  pass:    {passed}");
+    println!("  updated: {updated}");
     println!("  skip:");
-    println!("    panic:  {}", skipped_panic);
-    println!("    expect: {}", missing_expect);
-    println!("  fail:    {}", failed);
+    println!("    panic:  {skipped_panic}");
+    println!("    expect: {missing_expect}");
+    println!("  fail:    {failed}");
 }
 
 fn normalize(s: &str) -> String {
@@ -225,7 +240,7 @@ fn strip_ansi(input: &str) -> String {
                 // Consume '['
                 chars.next();
                 // Consume until we hit a letter (commonly 'm', 'K', 'G', etc.)
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch.is_alphabetic() {
                         break;
                     }

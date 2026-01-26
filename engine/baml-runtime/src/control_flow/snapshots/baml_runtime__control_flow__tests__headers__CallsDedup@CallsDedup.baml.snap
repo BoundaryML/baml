@@ -1,0 +1,318 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/CallsDedup.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Step A\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 48,\n                        end: 59,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"a\",\n                value: Call {\n                    function: Identifier(\n                        \"Foo\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                            start: 72,\n                            end: 75,\n                        },\n                    ),\n                    type_args: [],\n                    args: [],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 72,\n                        end: 77,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                    start: 64,\n                    end: 79,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Step B\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 84,\n                        end: 95,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"b\",\n                value: Call {\n                    function: Identifier(\n                        \"Foo\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                            start: 108,\n                            end: 111,\n                        },\n                    ),\n                    type_args: [],\n                    args: [],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 108,\n                        end: 113,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                    start: 100,\n                    end: 115,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Step C\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 120,\n                        end: 131,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"c\",\n                value: Call {\n                    function: Identifier(\n                        \"Foo\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                            start: 144,\n                            end: 147,\n                        },\n                    ),\n                    type_args: [],\n                    args: [],\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 144,\n                        end: 149,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                    start: 136,\n                    end: 151,\n                },\n            },\n        ],\n        trailing_expr: Some(\n            BinaryOperation {\n                left: Identifier(\n                    \"a\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 156,\n                        end: 157,\n                    },\n                ),\n                operator: Add,\n                right: Identifier(\n                    \"b\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                        start: 160,\n                        end: 161,\n                    },\n                ),\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/CallsDedup.baml\", contents: ... },\n                    start: 156,\n                    end: 161,\n                },\n            },\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: CallsDedup
+      log_filter_key: "CallsDedup|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/CallsDedup.baml
+        start: 13
+        end: 163
+    "1":
+      label: Step A
+      log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/CallsDedup.baml
+        start: 48
+        end: 59
+    "2":
+      label: Step B
+      log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/CallsDedup.baml
+        start: 84
+        end: 95
+    "3":
+      label: Step C
+      log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/CallsDedup.baml
+        start: 120
+        end: 131
+  edges:
+    "1":
+      - "2"
+    "2":
+      - "3"
+mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    json:
+      nodes:
+        "0":
+          label: CallsDedup
+          log_filter_key: "CallsDedup|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 13
+            end: 163
+        "1":
+          label: Step A
+          log_filter_key: "CallsDedup|root:0|hdr:step-a:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 48
+            end: 59
+        "2":
+          label: Step B
+          log_filter_key: "CallsDedup|root:0|hdr:step-b:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 84
+            end: 95
+        "3":
+          label: Step C
+          log_filter_key: "CallsDedup|root:0|hdr:step-c:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/CallsDedup.baml
+            start: 120
+            end: 131
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "3"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: CallsDedup\"]\n  direction TB\n  n1[\"1: Step A\"]\n  n2[\"2: Step B\"]\n  n3[\"3: Step C\"]\n  n1 --> n2\n  n2 --> n3\nend\n"

@@ -203,7 +203,8 @@ fn extract_blobs_from_trace_data<'a>(
     }
 }
 
-impl<'a, T: HasType<type_meta::NonStreaming>> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
+impl<'a, T: std::fmt::Debug + HasType<type_meta::NonStreaming>>
+    IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::TraceData<'a, T>
 {
     fn to_rpc_event(

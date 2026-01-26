@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --expose-gc ./node_modules/jest/bin/jest.js",
-    "build": "tsc",
+    "build": "tsc && pnpm run build:debug",
     "integ-tests:ci": "tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "tsc && infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000",
     "integ-tests:dotenv": "tsc && dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
@@ -34,9 +34,16 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.39.0",
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-sts": "3.721.0",
+    "@aws-sdk/credential-provider-node": "^3.908.0",
+    "@aws-sdk/credential-providers": "3.830.0",
     "@boundaryml/baml": "workspace:*",
     "@google/generative-ai": "0.24.0",
+    "@smithy/hash-node": "^4.1.1",
+    "@smithy/protocol-http": "^5.2.1",
+    "@smithy/signature-v4": "^5.2.1",
+    "@smithy/types": "^4.5.0",
     "dotenv": "16.4.5",
     "esbuild": "0.25.2",
     "openai": "4.87.3"

@@ -18,7 +18,9 @@ pub type TypeReference = TypeReferenceWithMetadata<TypeMetadata>;
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default, TS)]
 #[ts(export)]
 pub struct TypeMetadata {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     checks: Vec<CheckedType>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     asserts: Vec<AssertedType>,
 }
 
@@ -51,7 +53,7 @@ impl std::fmt::Display for TypeMetadata {
 
 /// FieldType represents the type of either a class field or a function arg.
 /// THIS IS ONLY FOR NON_STREAMING TYPES.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, TS)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TypeReferenceWithMetadata<Metadata> {
     // Unknown type

@@ -2,7 +2,10 @@
 ///
 use baml_types::ir_type::TypeIR;
 
-use crate::hir::{self, AssignOp, BinaryOperator, LlmFunction, UnaryOperator};
+use crate::{
+    hir::{self, AssignOp, BinaryOperator, HeaderContext, LlmFunction, UnaryOperator},
+    watch::{WatchSpec, WatchWhen},
+};
 
 pub mod interpret;
 pub mod typecheck;
@@ -20,11 +23,12 @@ use itertools::join;
 /// This differs from HIR in a few ways:
 ///   - Expressions are (optionally) typed.
 ///   - Variables are bound or free, using the locally nameless representation.
+///   - Type parameter `T` is used for both `BamlValueWithMeta` and expression meta.
 #[derive(Clone, Debug)]
 pub struct THir<T> {
     pub expr_functions: Vec<ExprFunction<T>>,
     pub llm_functions: Vec<LlmFunction>,
-    pub global_assignments: BamlMap<String, Expr<ExprMetadata>>,
+    pub global_assignments: BamlMap<String, GlobalAssignment<T>>,
     pub classes: BamlMap<String, Class<T>>,
     pub enums: BamlMap<String, Enum>,
 }
@@ -62,6 +66,18 @@ pub struct Enum {
     pub ty: TypeIR, // TODO: Used for type checking, but do we need this?
 }
 
+#[derive(Clone, Debug)]
+pub struct GlobalAssignment<T> {
+    pub expr: Expr<T>,
+    pub annotated_type: Option<TypeIR>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ClassConstructorField<T> {
+    Named { name: String, value: Expr<T> },
+    Spread { value: Expr<T> },
+}
+
 /// A BAML expression term.
 /// T is the type of the metadata.
 #[derive(Debug, Clone)]
@@ -72,8 +88,7 @@ pub enum Expr<T> {
     Block(Box<Block<T>>, T),
     ClassConstructor {
         name: String,
-        fields: BamlMap<String, Expr<T>>,
-        spread: Option<Box<Expr<T>>>,
+        fields: Vec<ClassConstructorField<T>>,
         meta: T,
     },
     Var(Name, T),
@@ -198,7 +213,7 @@ impl VarIndex {
 /// The metadata used during parsing, typechecking and evaluation of BAML expressions.
 pub type ExprMetadata = (Span, Option<TypeIR>);
 
-impl<T: Clone + std::fmt::Debug> Expr<T> {
+impl<T> Expr<T> {
     pub fn meta(&self) -> &T {
         match self {
             Expr::Value(baml_value) => baml_value.meta(),
@@ -241,7 +256,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
         }
     }
 
-    pub fn into_meta(self) -> T {
+    pub fn into_meta(self) -> T
+    where
+        T: Clone,
+    {
         match self {
             Expr::Value(baml_value) => baml_value.meta().clone(),
             Expr::Block(_, meta) => meta,
@@ -259,6 +277,17 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::UnaryOperation { meta, .. } => meta,
             Expr::MethodCall { meta, .. } => meta,
             Expr::Paren(_, meta) => meta,
+        }
+    }
+}
+
+impl<T: Clone + std::fmt::Debug> ClassConstructorField<T> {
+    pub fn dump_str(&self) -> String {
+        match self {
+            ClassConstructorField::Named { name, value } => {
+                format!("{}: {}", name, value.dump_str())
+            }
+            ClassConstructorField::Spread { value } => format!("...{}", value.dump_str()),
         }
     }
 }
@@ -298,22 +327,14 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     .join(", ");
                 format!("{{{entries}}}")
             }
-            Expr::ClassConstructor {
-                name,
-                fields,
-                spread,
-                ..
-            } => {
-                let fields = fields
+            Expr::ClassConstructor { name, fields, .. } => {
+                let fields_string = fields
                     .iter()
-                    .map(|(key, value)| format!("{}: {}", key, value.dump_str()))
+                    .map(|field| field.dump_str())
                     .collect::<Vec<_>>()
                     .join(", ");
-                let spread = match spread {
-                    Some(expr) => format!("..{}", expr.dump_str()),
-                    None => String::new(),
-                };
-                format!("Class({name} {{ {fields}{spread} }}")
+
+                format!("Class({name} {{ {fields_string}}}")
             }
             Expr::If(cond, then, else_, _) => {
                 format!(
@@ -360,6 +381,15 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
     }
 }
 
+impl<T: Clone> ClassConstructorField<T> {
+    pub fn variables(&self) -> HashSet<Name> {
+        match self {
+            ClassConstructorField::Named { value, .. } => value.variables(),
+            ClassConstructorField::Spread { value } => value.variables(),
+        }
+    }
+}
+
 impl<T: Clone> Expr<T> {
     pub fn variables(&self) -> HashSet<Name> {
         match self {
@@ -370,15 +400,8 @@ impl<T: Clone> Expr<T> {
                 .iter()
                 .flat_map(|(_, value)| value.variables())
                 .collect(),
-            Expr::ClassConstructor { fields, spread, .. } => {
-                let mut field_vars = fields
-                    .iter()
-                    .flat_map(|(_, value)| value.variables())
-                    .collect::<HashSet<_>>();
-                if let Some(spread) = spread {
-                    field_vars.extend(spread.variables());
-                }
-                field_vars
+            Expr::ClassConstructor { fields, .. } => {
+                fields.iter().flat_map(|field| field.variables()).collect()
             }
             Expr::Builtin(_, _) => HashSet::new(),
             Expr::Var(name, _) => HashSet::from([name.clone()]),
@@ -445,28 +468,27 @@ impl Expr<ExprMetadata> {
                 Some(BamlValueWithMeta::Map(atom_entries, meta.clone()))
             }
             // A class constructor may not be evaluated into an atom if it still contains a spread.
-            Expr::ClassConstructor {
-                name,
-                fields,
-                spread,
-                meta,
-            } => {
-                if spread.is_some() {
-                    None
-                } else {
-                    let atom_entries = fields
-                        .iter()
-                        .map(|(key, value)| {
+            Expr::ClassConstructor { name, fields, meta } => 'contructor: {
+                let mut atom_entries = BamlMap::new();
+
+                for field in fields {
+                    match field {
+                        // Short circuit on spreads.
+                        ClassConstructorField::Spread { .. } => {
+                            break 'contructor None;
+                        }
+                        ClassConstructorField::Named { name, value } => {
                             let atom = value.as_value()?;
-                            Some((key.clone(), atom))
-                        })
-                        .collect::<Option<BamlMap<String, BamlValueWithMeta<ExprMetadata>>>>()?;
-                    Some(BamlValueWithMeta::Class(
-                        name.clone(),
-                        atom_entries,
-                        meta.clone(),
-                    ))
+                            atom_entries.insert(name.clone(), atom);
+                        }
+                    }
                 }
+
+                Some(BamlValueWithMeta::Class(
+                    name.clone(),
+                    atom_entries,
+                    meta.clone(),
+                ))
             }
             _ => None,
         }
@@ -541,12 +563,16 @@ impl<T: Clone> Iterator for ExprIterator<T> {
                     self.stack.push_back(value);
                 }
             }
-            Expr::ClassConstructor { fields, spread, .. } => {
-                for (_, value) in fields.into_iter() {
-                    self.stack.push_back(value);
-                }
-                if let Some(spread) = spread {
-                    self.stack.push_back(*spread);
+            Expr::ClassConstructor { fields, .. } => {
+                for field in fields {
+                    match field {
+                        ClassConstructorField::Named { value, .. } => {
+                            self.stack.push_back(value);
+                        }
+                        ClassConstructorField::Spread { value } => {
+                            self.stack.push_back(value);
+                        }
+                    }
                 }
             }
             Expr::Var(_, _) => {}
@@ -614,6 +640,7 @@ pub enum Statement<T> {
     Let {
         name: String,
         value: Expr<T>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Declare a (mutable) reference.
@@ -638,6 +665,7 @@ pub enum Statement<T> {
     DeclareAndAssign {
         name: String,
         value: Expr<T>,
+        watch: Option<WatchSpec>,
         span: Span,
     },
     /// Return from a function.
@@ -678,6 +706,21 @@ pub enum Statement<T> {
         condition: Expr<T>,
         span: Span,
     },
+
+    /// Configure watch options for a watched variable.
+    WatchOptions {
+        variable: String,
+        channel: Option<String>,
+        when: Option<WatchWhen>,
+        span: Span,
+    },
+
+    /// Manually notify watchers of a variable.
+    WatchNotify {
+        variable: String,
+        span: Span,
+    },
+    HeaderContextEnter(HeaderContext),
 }
 
 impl<T: Clone> Statement<T> {
@@ -686,12 +729,21 @@ impl<T: Clone> Statement<T> {
         T: std::fmt::Debug,
     {
         match self {
+            Statement::HeaderContextEnter(header) => {
+                format!("//{} {}", "#".repeat(header.level as usize), header.title)
+            }
             Statement::Let {
                 name,
                 value,
+                watch,
                 span: _,
             } => {
-                format!("Let {} = {}", name, value.dump_str())
+                format!(
+                    "Let {} = {} {}",
+                    name,
+                    value.dump_str(),
+                    watch.as_ref().map_or("", |_| "<emit>")
+                )
             }
             Statement::Declare { name, span: _ } => format!("var {name}"),
             Statement::Assign { left, value } => {
@@ -706,9 +758,15 @@ impl<T: Clone> Statement<T> {
             Statement::DeclareAndAssign {
                 name,
                 value,
+                watch: emit,
                 span: _,
             } => {
-                format!("var {} <- {}", name, value.dump_str())
+                format!(
+                    "var {} <- {} {}",
+                    name,
+                    value.dump_str(),
+                    emit.as_ref().map_or("", |_| "<emit>")
+                )
             }
             Statement::Return { expr, span: _ } => {
                 format!("return {}", expr.dump_str())
@@ -758,6 +816,24 @@ impl<T: Clone> Statement<T> {
             Statement::Assert { condition, .. } => {
                 format!("assert {cond}", cond = condition.dump_str())
             }
+            Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let mut parts = vec![];
+                if let Some(c) = channel {
+                    parts.push(format!("channel: \"{c}\""));
+                }
+                if let Some(w) = when {
+                    parts.push(format!("when: {w:?}"));
+                }
+                format!("{}.$watch.options({{{}}})", variable, parts.join(", "))
+            }
+            Statement::WatchNotify { variable, .. } => {
+                format!("{variable}.$watch.notify()")
+            }
         }
     }
 
@@ -766,6 +842,7 @@ impl<T: Clone> Statement<T> {
         T: Clone,
     {
         match self {
+            Statement::HeaderContextEnter(_) => HashSet::new(),
             Statement::Declare { .. } | Statement::Break(_) | Statement::Continue(_) => {
                 HashSet::new()
             }
@@ -813,6 +890,10 @@ impl<T: Clone> Statement<T> {
                 block_vars
             }
             Statement::Assert { condition, .. } => condition.variables(),
+            Statement::WatchOptions { .. } | Statement::WatchNotify { .. } => {
+                // These don't reference variables themselves
+                HashSet::new()
+            }
         }
     }
 }

@@ -1,0 +1,112 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/GenerateTitle.baml
+---
+hir: None
+expr:
+  nodes:
+    "0":
+      label: GenerateTitle
+      log_filter_key: "GenerateTitle|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/GenerateTitle.baml
+        start: 61
+        end: 188
+    "1":
+      label: "LLM client: GPT4"
+      log_filter_key: "GenerateTitle|root:0|scope:llm:0"
+      node_type: other-scope
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/GenerateTitle.baml
+        start: 61
+        end: 188
+  edges:
+    "0":
+      - "1"
+mermaid: "flowchart TD\nsubgraph n0[\"0: GenerateTitle\"]\n  direction TB\n  n1[\"1: OtherScope: LLM client: GPT4\"]\nend\nn0 --> n1\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    mermaid: "flowchart TD\nn0[\"0: GenerateTitle\"]\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    mermaid: "flowchart TD\nn0[\"0: GenerateTitle\"]\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: GenerateTitle
+          log_filter_key: "GenerateTitle|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/GenerateTitle.baml
+            start: 61
+            end: 188
+      edges: {}
+    mermaid: "flowchart TD\nn0[\"0: GenerateTitle\"]\n"

@@ -1,0 +1,518 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/NestedScopes.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Top Level\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                        start: 40,\n                        end: 53,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"x\",\n                value: StringValue(\n                    \"hello\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                        start: 66,\n                        end: 73,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                    start: 58,\n                    end: 75,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"First Section\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                        start: 80,\n                        end: 98,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"z\",\n                value: If {\n                    condition: BinaryOperation {\n                        left: Identifier(\n                            \"x\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                start: 115,\n                                end: 116,\n                            },\n                        ),\n                        operator: Eq,\n                        right: StringValue(\n                            \"hello\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                start: 120,\n                                end: 127,\n                            },\n                        ),\n                        span: Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                            start: 115,\n                            end: 127,\n                        },\n                    },\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"Inside If Block\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                            start: 139,\n                                            end: 160,\n                                        },\n                                    },\n                                ),\n                                DeclareAndAssign {\n                                    name: \"y\",\n                                    value: StringValue(\n                                        \"world\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                            start: 177,\n                                            end: 184,\n                                        },\n                                    ),\n                                    annotated_type: None,\n                                    watch: None,\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                        start: 169,\n                                        end: 186,\n                                    },\n                                },\n                            ],\n                            trailing_expr: Some(\n                                BinaryOperation {\n                                    left: BinaryOperation {\n                                        left: Identifier(\n                                            \"x\",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                                start: 194,\n                                                end: 195,\n                                            },\n                                        ),\n                                        operator: Add,\n                                        right: StringValue(\n                                            \" \",\n                                            Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                                start: 198,\n                                                end: 201,\n                                            },\n                                        ),\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                            start: 194,\n                                            end: 205,\n                                        },\n                                    },\n                                    operator: Add,\n                                    right: Identifier(\n                                        \"y\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                            start: 204,\n                                            end: 205,\n                                        },\n                                    ),\n                                    span: Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                        start: 194,\n                                        end: 205,\n                                    },\n                                },\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                            start: 129,\n                            end: 211,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"Inside Else Block\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                                start: 227,\n                                                end: 250,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    StringValue(\n                                        \"goodbye\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                            start: 259,\n                                            end: 268,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                                start: 217,\n                                end: 274,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                        start: 111,\n                        end: 274,\n                    },\n                },\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                    start: 103,\n                    end: 276,\n                },\n            },\n        ],\n        trailing_expr: Some(\n            Identifier(\n                \"z\",\n                Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/NestedScopes.baml\", contents: ... },\n                    start: 281,\n                    end: 282,\n                },\n            ),\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: NestedScopes
+      log_filter_key: "NestedScopes|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 0
+        end: 284
+    "1":
+      label: Top Level
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 40
+        end: 53
+    "2":
+      label: First Section
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 80
+        end: 98
+    "3":
+      label: "if (x == \"hello\")"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+      node_type: branch-group
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 111
+        end: 274
+    "4":
+      label: "if (x == \"hello\")"
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 129
+        end: 211
+    "5":
+      label: Inside If Block
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+      node_type: header
+      parent: "4"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 139
+        end: 160
+    "6":
+      label: else
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 217
+        end: 274
+    "7":
+      label: Inside Else Block
+      log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+      node_type: header
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/NestedScopes.baml
+        start: 227
+        end: 250
+  edges: {}
+mermaid: "flowchart TD\nsubgraph n0[\"0: NestedScopes\"]\n  direction TB\n  subgraph n1[\"1: Top Level\"]\n    direction TB\n    subgraph n2[\"2: First Section\"]\n      direction TB\n      subgraph n3[\"3: BranchGroup: if (x == hello)\"]\n        direction TB\n        subgraph n4[\"4: BranchArm: if (x == hello)\"]\n          direction TB\n          n5[\"5: Inside If Block\"]\n        end\n        subgraph n6[\"6: BranchArm: else\"]\n          direction TB\n          n7[\"7: Inside Else Block\"]\n        end\n      end\n    end\n  end\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "4":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 129
+            end: 211
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "6":
+          label: else
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 217
+            end: 274
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges: {}
+    json:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "4":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 129
+            end: 211
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "6":
+          label: else
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 217
+            end: 274
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges: {}
+    mermaid: "flowchart TD\nsubgraph n0[\"0: NestedScopes\"]\n  direction TB\n  subgraph n1[\"1: Top Level\"]\n    direction TB\n    subgraph n2[\"2: First Section\"]\n      direction TB\n      subgraph n3[\"3: BranchGroup: if (x == hello)\"]\n        direction TB\n        subgraph n4[\"4: BranchArm: if (x == hello)\"]\n          direction TB\n          n5[\"5: Inside If Block\"]\n        end\n        subgraph n6[\"6: BranchArm: else\"]\n          direction TB\n          n7[\"7: Inside Else Block\"]\n        end\n      end\n    end\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "4":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 129
+            end: 211
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "6":
+          label: else
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 217
+            end: 274
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges:
+        "3":
+          - "4"
+          - "6"
+    json:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "4":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 129
+            end: 211
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "6":
+          label: else
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 217
+            end: 274
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges:
+        "3":
+          - "4"
+          - "6"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: NestedScopes\"]\n  direction TB\n  subgraph n1[\"1: Top Level\"]\n    direction TB\n    subgraph n2[\"2: First Section\"]\n      direction TB\n      n3[\"3: BranchGroup: if (x == hello)\"]\n      subgraph n4[\"4: BranchArm: if (x == hello)\"]\n        direction TB\n        n5[\"5: Inside If Block\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: Inside Else Block\"]\n      end\n      n3 --> n4\n      n3 --> n6\n    end\n  end\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges:
+        "3":
+          - "5"
+          - "7"
+    json:
+      nodes:
+        "0":
+          label: NestedScopes
+          log_filter_key: "NestedScopes|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 0
+            end: 284
+        "1":
+          label: Top Level
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 40
+            end: 53
+        "2":
+          label: First Section
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 80
+            end: 98
+        "3":
+          label: "if (x == \"hello\")"
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 111
+            end: 274
+        "5":
+          label: Inside If Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:if-x-hello:0|hdr:inside-if-block:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 139
+            end: 160
+        "7":
+          label: Inside Else Block
+          log_filter_key: "NestedScopes|root:0|hdr:top-level:0|hdr:first-section:0|bg:if-x-hello:0|arm:else:1|hdr:inside-else-block:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/NestedScopes.baml
+            start: 227
+            end: 250
+      edges:
+        "3":
+          - "5"
+          - "7"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: NestedScopes\"]\n  direction TB\n  subgraph n1[\"1: Top Level\"]\n    direction TB\n    subgraph n2[\"2: First Section\"]\n      direction TB\n      n3[\"3: BranchGroup: if (x == hello)\"]\n      n4[\"5: Inside If Block\"]\n      n5[\"7: Inside Else Block\"]\n      n3 --> n4\n      n3 --> n5\n    end\n  end\nend\n"

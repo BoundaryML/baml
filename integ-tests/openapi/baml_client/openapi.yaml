@@ -217,6 +217,36 @@ paths:
                 title: BuildTreeResponse
                 $ref: '#/components/schemas/Tree'
       operationId: BuildTree
+  /call/CheckWordEquality:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/CheckWordEquality'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: CheckWordEqualityResponse
+                type: boolean
+      operationId: CheckWordEquality
+  /call/ChooseTodoTools:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ChooseTodoTools'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ChooseTodoToolsResponse
+                type: array
+                items:
+                  oneOf:
+                  - $ref: '#/components/schemas/AddTodoItem'
+                  - $ref: '#/components/schemas/TodoMessageToUser'
+      operationId: ChooseTodoTools
   /call/ClassThatPointsToRecursiveClassThroughAlias:
     post:
       requestBody:
@@ -621,6 +651,19 @@ paths:
                 items:
                   $ref: '#/components/schemas/Person'
       operationId: ExtractPeople
+  /call/ExtractPersonWithMeta:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractPersonWithMeta'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractPersonWithMetaResponse
+                $ref: '#/components/schemas/PersonWithMeta'
+      operationId: ExtractPersonWithMeta
   /call/ExtractReceiptInfo:
     post:
       requestBody:
@@ -660,6 +703,19 @@ paths:
                 title: ExtractResume2Response
                 $ref: '#/components/schemas/Resume'
       operationId: ExtractResume2
+  /call/FnAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnAlwaysFailsResponse
+                type: string
+      operationId: FnAlwaysFails
   /call/FnClassOptionalOutput:
     post:
       requestBody:
@@ -748,6 +804,19 @@ paths:
                 title: FnFailRetryExponentialDelayResponse
                 type: string
       operationId: FnFailRetryExponentialDelay
+  /call/FnFallbackAlwaysFails:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/FnFallbackAlwaysFails'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: FnFallbackAlwaysFailsResponse
+                type: string
+      operationId: FnFallbackAlwaysFails
   /call/FnLiteralClassInputOutput:
     post:
       requestBody:
@@ -1276,6 +1345,19 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
+  /call/OpenAIGPT4oMissingBaseUrlEnvVar:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/OpenAIGPT4oMissingBaseUrlEnvVar'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: OpenAIGPT4oMissingBaseUrlEnvVarResponse
+                type: string
+      operationId: OpenAIGPT4oMissingBaseUrlEnvVar
   /call/OpenAIWithAnthropicResponseHello:
     post:
       requestBody:
@@ -1802,6 +1884,19 @@ paths:
                 title: TellStoryResponse
                 type: string
       operationId: TellStory
+  /call/TemplateStringTestEcho:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TemplateStringTestEcho'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TemplateStringTestEchoResponse
+                type: string
+      operationId: TemplateStringTestEcho
   /call/TestAbortFallbackChain:
     post:
       requestBody:
@@ -1893,6 +1988,19 @@ paths:
                 title: TestAwsInvalidAccessKeyResponse
                 type: string
       operationId: TestAwsInvalidAccessKey
+  /call/TestAwsInvalidEndpoint:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInvalidEndpoint'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInvalidEndpointResponse
+                type: string
+      operationId: TestAwsInvalidEndpoint
   /call/TestAwsInvalidProfile:
     post:
       requestBody:
@@ -1932,6 +2040,19 @@ paths:
                 title: TestAwsInvalidSessionTokenResponse
                 type: string
       operationId: TestAwsInvalidSessionToken
+  /call/TestAwsVideoDescribe:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsVideoDescribe'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsVideoDescribeResponse
+                type: string
+      operationId: TestAwsVideoDescribe
   /call/TestAzure:
     post:
       requestBody:
@@ -2049,6 +2170,19 @@ paths:
                 title: TestCachingResponse
                 type: string
       operationId: TestCaching
+  /call/TestDefaultStreamingTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestDefaultStreamingTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestDefaultStreamingTimeoutResponse
+                type: string
+      operationId: TestDefaultStreamingTimeout
   /call/TestFallbackClient:
     post:
       requestBody:
@@ -2596,6 +2730,19 @@ paths:
                 title: TestOpenAIResponsesResponse
                 type: string
       operationId: TestOpenAIResponses
+  /call/TestOpenAIResponsesAllRoles:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIResponsesAllRoles'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIResponsesAllRolesResponse
+                type: string
+      operationId: TestOpenAIResponsesAllRoles
   /call/TestOpenAIResponsesAutoType:
     post:
       requestBody:
@@ -2817,6 +2964,32 @@ paths:
                 title: TestOpenRouterMistralSmall3_1_24bResponse
                 type: string
       operationId: TestOpenRouterMistralSmall3_1_24b
+  /call/TestOpenaiResponsesPdfs:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenaiResponsesPdfs'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenaiResponsesPdfsResponse
+                type: string
+      operationId: TestOpenaiResponsesPdfs
+  /call/TestRequestTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestRequestTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestRequestTimeoutResponse
+                type: string
+      operationId: TestRequestTimeout
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -2869,6 +3042,45 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestSkipDynamic:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSkipDynamic'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSkipDynamicResponse
+                $ref: '#/components/schemas/SkipDynamicClass'
+      operationId: TestSkipDynamic
+  /call/TestSkipNonDynamic:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestSkipNonDynamic'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestSkipNonDynamicResponse
+                $ref: '#/components/schemas/SkipNonDynamicClass'
+      operationId: TestSkipNonDynamic
+  /call/TestStreamingTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestStreamingTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestStreamingTimeoutResponse
+                type: string
+      operationId: TestStreamingTimeout
   /call/TestThinking:
     post:
       requestBody:
@@ -2882,6 +3094,32 @@ paths:
                 title: TestThinkingResponse
                 $ref: '#/components/schemas/CustomStory'
       operationId: TestThinking
+  /call/TestTimeoutError:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestTimeoutError'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestTimeoutErrorResponse
+                type: string
+      operationId: TestTimeoutError
+  /call/TestTimeoutFallback:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestTimeoutFallback'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestTimeoutFallbackResponse
+                type: string
+      operationId: TestTimeoutFallback
   /call/TestUniverseQuestion:
     post:
       requestBody:
@@ -2934,6 +3172,19 @@ paths:
                 title: TestVertexWithSystemInstructionsResponse
                 type: string
       operationId: TestVertexWithSystemInstructions
+  /call/TestZeroTimeout:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestZeroTimeout'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestZeroTimeoutResponse
+                type: string
+      operationId: TestZeroTimeout
   /call/UnionTest_Function:
     post:
       requestBody:
@@ -3289,6 +3540,41 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    CheckWordEquality:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: CheckWordEqualityRequest
+            type: object
+            properties:
+              target:
+                type: string
+              word:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - target
+            - word
+            additionalProperties: false
+    ChooseTodoTools:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ChooseTodoToolsRequest
+            type: object
+            properties:
+              query:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - query
             additionalProperties: false
     ClassThatPointsToRecursiveClassThroughAlias:
       required: true
@@ -3755,6 +4041,22 @@ components:
             required:
             - text
             additionalProperties: false
+    ExtractPersonWithMeta:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractPersonWithMetaRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ExtractReceiptInfo:
       required: true
       content:
@@ -3809,6 +4111,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - resume
+            additionalProperties: false
+    FnAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     FnClassOptionalOutput:
       required: true
@@ -3911,6 +4229,22 @@ components:
             required:
             - initial_delay_ms
             - retries
+            additionalProperties: false
+    FnFallbackAlwaysFails:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: FnFallbackAlwaysFailsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     FnLiteralClassInputOutput:
       required: true
@@ -4516,6 +4850,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - s
+            additionalProperties: false
+    OpenAIGPT4oMissingBaseUrlEnvVar:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: OpenAIGPT4oMissingBaseUrlEnvVarRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     OpenAIWithAnthropicResponseHello:
       required: true
@@ -5138,6 +5488,22 @@ components:
             required:
             - story
             additionalProperties: false
+    TemplateStringTestEcho:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TemplateStringTestEchoRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestAbortFallbackChain:
       required: true
       content:
@@ -5250,6 +5616,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestAwsInvalidEndpoint:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInvalidEndpointRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestAwsInvalidProfile:
       required: true
       content:
@@ -5297,6 +5679,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestAwsVideoDescribe:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsVideoDescribeRequest
+            type: object
+            properties:
+              video_input:
+                $ref: '#/components/schemas/BamlVideo'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - video_input
             additionalProperties: false
     TestAzure:
       required: true
@@ -5444,6 +5842,22 @@ components:
             required:
             - input
             - not_cached
+            additionalProperties: false
+    TestDefaultStreamingTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestDefaultStreamingTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestFallbackClient:
       required: true
@@ -6121,6 +6535,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIResponsesAllRoles:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIResponsesAllRolesRequest
+            type: object
+            properties:
+              problem:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - problem
+            additionalProperties: false
     TestOpenAIResponsesAutoType:
       required: true
       content:
@@ -6397,6 +6827,38 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenaiResponsesPdfs:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenaiResponsesPdfsRequest
+            type: object
+            properties:
+              pdf:
+                $ref: '#/components/schemas/BamlPdf'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - pdf
+            additionalProperties: false
+    TestRequestTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestRequestTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestRetryConstant:
       required: true
       content:
@@ -6452,12 +6914,92 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestSkipDynamic:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSkipDynamicRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestSkipNonDynamic:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestSkipNonDynamicRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestStreamingTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestStreamingTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestThinking:
       required: true
       content:
         application/json:
           schema:
             title: TestThinkingRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestTimeoutError:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestTimeoutErrorRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestTimeoutFallback:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestTimeoutFallbackRequest
             type: object
             properties:
               input:
@@ -6528,6 +7070,22 @@ components:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required: []
+            additionalProperties: false
+    TestZeroTimeout:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestZeroTimeoutRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     UnionTest_Function:
       required: true
@@ -6810,6 +7368,37 @@ components:
       required:
       - name
       - expr
+      additionalProperties: false
+    AddTodoItem:
+      type: object
+      properties:
+        description:
+          type: string
+        item:
+          type: string
+        time:
+          type: string
+        type:
+          type: string
+      required:
+      - description
+      - item
+      - time
+      - type
+      additionalProperties: false
+    AddressWithMeta:
+      type: object
+      properties:
+        city:
+          type: string
+        street:
+          type: string
+        zipcode:
+          type: string
+      required:
+      - city
+      - street
+      - zipcode
       additionalProperties: false
     AliasedEnum:
       enum:
@@ -7122,6 +7711,37 @@ components:
       required:
       - client_details
       - notes
+      additionalProperties: false
+    DummyJsonTodo:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        id:
+          type: integer
+        todo:
+          type: string
+        userId:
+          type: integer
+      required:
+      - completed
+      - id
+      - todo
+      - userId
+      additionalProperties: false
+    DummyJsonTodoUpdate:
+      type: object
+      properties:
+        completed:
+          type: boolean
+        todo:
+          type: string
+        userId:
+          type: integer
+      required:
+      - completed
+      - todo
+      - userId
       additionalProperties: false
     DummyOutput:
       type: object
@@ -7868,6 +8488,25 @@ components:
           type: string
       required: []
       additionalProperties: false
+    PersonWithMeta:
+      type: object
+      properties:
+        address:
+          $ref: '#/components/schemas/AddressWithMeta'
+        age:
+          type: integer
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+      - address
+      - age
+      - name
+      - tags
+      additionalProperties: false
     PhoneNumber:
       type: object
       properties:
@@ -8133,6 +8772,28 @@ components:
       required:
       - field
       additionalProperties: false
+    SkipDynamicClass:
+      type: object
+      properties:
+        internal_id:
+          type: string
+        value:
+          type: string
+      required:
+      - value
+      additionalProperties: false
+    SkipNonDynamicClass:
+      type: object
+      properties:
+        description:
+          type: string
+        metadata:
+          type: string
+        name:
+          type: string
+      required:
+      - name
+      additionalProperties: false
     SmallThing:
       type: object
       properties:
@@ -8252,6 +8913,17 @@ components:
       required:
       - prop1
       - prop2
+      additionalProperties: false
+    TodoMessageToUser:
+      type: object
+      properties:
+        message:
+          type: string
+        type:
+          type: string
+      required:
+      - message
+      - type
       additionalProperties: false
     Tree:
       type: object

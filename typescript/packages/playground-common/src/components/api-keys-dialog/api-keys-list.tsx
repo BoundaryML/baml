@@ -7,9 +7,6 @@ export const ApiKeysList: React.FC = () => {
   const apiKeys = useAtomValue(renderedApiKeysAtom);
 
   const filteredKeys = apiKeys.filter(({ key }) => key !== 'BOUNDARY_PROXY_URL');
-  console.log('ApiKeysList: Rendering with apiKeys:', apiKeys);
-  console.log('ApiKeysList: Filtered keys (excluding BOUNDARY_PROXY_URL):', filteredKeys);
-  console.log('ApiKeysList: Number of filtered keys:', filteredKeys.length);
 
   if (filteredKeys.length === 0) {
     console.log('ApiKeysList: No API keys to display');

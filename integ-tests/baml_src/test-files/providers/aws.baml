@@ -5,6 +5,17 @@ function TestAws(input: string) -> string {
   "#
 }
 
+function TestAwsVideoDescribe(video_input: video) -> string {
+  client AwsBedrock
+  prompt #"
+    {{ _.role("user") }}
+
+    Describe the following video in one sentence.
+
+    {{ video_input }}
+  "#
+}
+
 /// my docs
 class UniverseQuestion {
   question string
@@ -32,6 +43,13 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
 
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
+function TestAwsInvalidEndpoint(input: string) -> string {
+  client AwsBedrockInvalidEndpoint
   prompt #"
     Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
@@ -86,7 +104,7 @@ test TestName {
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"
   options {
-    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
     additional_model_request_fields {
       thinking {
         type "enabled"
@@ -101,6 +119,6 @@ client<llm> AwsBedrockClaude37Client {
 client<llm> AwsBedrockInferenceProfileClient {
   provider "aws-bedrock"
   options {
-    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
   }
 }

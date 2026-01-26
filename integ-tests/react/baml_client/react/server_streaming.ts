@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -45,10 +45,10 @@ import type * as types from "../types"
 export const AaaSamOutputFormat = async (
   recipe: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AaaSamOutputFormat(
+  const __stream__ = b.stream.AaaSamOutputFormat(
     recipe,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -64,10 +64,10 @@ export const AaaSamOutputFormat = async (
 export const AliasThatPointsToRecursiveType = async (
   data: types.LinkedListAliasNode,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasThatPointsToRecursiveType(
+  const __stream__ = b.stream.AliasThatPointsToRecursiveType(
     data,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -83,10 +83,10 @@ export const AliasThatPointsToRecursiveType = async (
 export const AliasWithMultipleAttrs = async (
   money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasWithMultipleAttrs(
+  const __stream__ = b.stream.AliasWithMultipleAttrs(
     money,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -102,10 +102,10 @@ export const AliasWithMultipleAttrs = async (
 export const AliasedInputClass = async (
   input: types.InputClass,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasedInputClass(
+  const __stream__ = b.stream.AliasedInputClass(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -121,10 +121,10 @@ export const AliasedInputClass = async (
 export const AliasedInputClass2 = async (
   input: types.InputClass,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasedInputClass2(
+  const __stream__ = b.stream.AliasedInputClass2(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -140,10 +140,10 @@ export const AliasedInputClass2 = async (
 export const AliasedInputClassNested = async (
   input: types.InputClassNested,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasedInputClassNested(
+  const __stream__ = b.stream.AliasedInputClassNested(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -159,10 +159,10 @@ export const AliasedInputClassNested = async (
 export const AliasedInputEnum = async (
   input: types.AliasedEnum,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasedInputEnum(
+  const __stream__ = b.stream.AliasedInputEnum(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -178,10 +178,10 @@ export const AliasedInputEnum = async (
 export const AliasedInputList = async (
   input: types.AliasedEnum[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasedInputList(
+  const __stream__ = b.stream.AliasedInputList(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -197,10 +197,10 @@ export const AliasedInputList = async (
 export const AllowedOptionals = async (
   optionals: types.OptionalListAndMap,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AllowedOptionals(
+  const __stream__ = b.stream.AllowedOptionals(
     optionals,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -216,10 +216,10 @@ export const AllowedOptionals = async (
 export const AssertFn = async (
   a: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AssertFn(
+  const __stream__ = b.stream.AssertFn(
     a,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -235,10 +235,10 @@ export const AssertFn = async (
 export const AudioInput = async (
   aud: Audio,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AudioInput(
+  const __stream__ = b.stream.AudioInput(
     aud,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -256,11 +256,11 @@ export const AudioInputOpenai = async (
   aud: Audio,
   prompt: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AudioInputOpenai(
+  const __stream__ = b.stream.AudioInputOpenai(
     aud,
     prompt,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -276,10 +276,10 @@ export const AudioInputOpenai = async (
 export const BuildLinkedList = async (
   input: number[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.BuildLinkedList(
+  const __stream__ = b.stream.BuildLinkedList(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -295,10 +295,51 @@ export const BuildLinkedList = async (
 export const BuildTree = async (
   input: types.BinaryNode,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.BuildTree(
+  const __stream__ = b.stream.BuildTree(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "CheckWordEquality" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } word - Input parameter.
+ * @param { string } target - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const CheckWordEquality = async (
+  word: string,
+  target: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.CheckWordEquality(
+    word,
+    target,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ChooseTodoTools" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } query - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ChooseTodoTools = async (
+  query: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ChooseTodoTools(
+    query,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -314,10 +355,10 @@ export const BuildTree = async (
 export const ClassThatPointsToRecursiveClassThroughAlias = async (
   cls: types.ClassToRecAlias,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassThatPointsToRecursiveClassThroughAlias(
+  const __stream__ = b.stream.ClassThatPointsToRecursiveClassThroughAlias(
     cls,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -333,10 +374,10 @@ export const ClassThatPointsToRecursiveClassThroughAlias = async (
 export const ClassifyDynEnumTwo = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassifyDynEnumTwo(
+  const __stream__ = b.stream.ClassifyDynEnumTwo(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -352,10 +393,10 @@ export const ClassifyDynEnumTwo = async (
 export const ClassifyDynamicStatus = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassifyDynamicStatus(
+  const __stream__ = b.stream.ClassifyDynamicStatus(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -371,10 +412,10 @@ export const ClassifyDynamicStatus = async (
 export const ClassifyMessage = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassifyMessage(
+  const __stream__ = b.stream.ClassifyMessage(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -390,10 +431,10 @@ export const ClassifyMessage = async (
 export const ClassifyMessage2 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassifyMessage2(
+  const __stream__ = b.stream.ClassifyMessage2(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -409,10 +450,10 @@ export const ClassifyMessage2 = async (
 export const ClassifyMessage3 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ClassifyMessage3(
+  const __stream__ = b.stream.ClassifyMessage3(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -432,12 +473,12 @@ export const Completion = async (
   suffix: string,
   language: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.Completion(
+  const __stream__ = b.stream.Completion(
     prefix,
     suffix,
     language,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -453,10 +494,10 @@ export const Completion = async (
 export const CustomTask = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.CustomTask(
+  const __stream__ = b.stream.CustomTask(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -472,10 +513,10 @@ export const CustomTask = async (
 export const DescribeAudio = async (
   audio: Audio,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeAudio(
+  const __stream__ = b.stream.DescribeAudio(
     audio,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -491,10 +532,10 @@ export const DescribeAudio = async (
 export const DescribeAudio2 = async (
   audio: Audio,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeAudio2(
+  const __stream__ = b.stream.DescribeAudio2(
     audio,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -510,10 +551,10 @@ export const DescribeAudio2 = async (
 export const DescribeImage = async (
   img: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeImage(
+  const __stream__ = b.stream.DescribeImage(
     img,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -531,11 +572,11 @@ export const DescribeImage2 = async (
   classWithImage: types.ClassWithImage,
   img2: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeImage2(
+  const __stream__ = b.stream.DescribeImage2(
     classWithImage,
     img2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -553,11 +594,11 @@ export const DescribeImage3 = async (
   classWithImage: types.ClassWithImage,
   img2: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeImage3(
+  const __stream__ = b.stream.DescribeImage3(
     classWithImage,
     img2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -575,11 +616,11 @@ export const DescribeImage4 = async (
   classWithImage: types.ClassWithImage,
   img2: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeImage4(
+  const __stream__ = b.stream.DescribeImage4(
     classWithImage,
     img2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -599,12 +640,12 @@ export const DescribeMedia1599 = async (
   client_sector: string,
   client_name: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DescribeMedia1599(
+  const __stream__ = b.stream.DescribeMedia1599(
     img,
     client_sector,
     client_name,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -618,9 +659,9 @@ export const DescribeMedia1599 = async (
  */
 export const DifferentiateUnions = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DifferentiateUnions(
+  const __stream__ = b.stream.DifferentiateUnions(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -636,10 +677,10 @@ export const DifferentiateUnions = async (
 export const DummyOutputFunction = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DummyOutputFunction(
+  const __stream__ = b.stream.DummyOutputFunction(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -655,10 +696,10 @@ export const DummyOutputFunction = async (
 export const DynamicFunc = async (
   input: types.DynamicClassOne,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DynamicFunc(
+  const __stream__ = b.stream.DynamicFunc(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -674,10 +715,10 @@ export const DynamicFunc = async (
 export const DynamicInputOutput = async (
   input: types.DynInputOutput,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DynamicInputOutput(
+  const __stream__ = b.stream.DynamicInputOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -693,10 +734,10 @@ export const DynamicInputOutput = async (
 export const DynamicListInputOutput = async (
   input: types.DynInputOutput[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.DynamicListInputOutput(
+  const __stream__ = b.stream.DynamicListInputOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -710,9 +751,9 @@ export const DynamicListInputOutput = async (
  */
 export const ExpectFailure = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExpectFailure(
+  const __stream__ = b.stream.ExpectFailure(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -728,10 +769,10 @@ export const ExpectFailure = async (
 export const ExtractContactInfo = async (
   document: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractContactInfo(
+  const __stream__ = b.stream.ExtractContactInfo(
     document,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -747,10 +788,10 @@ export const ExtractContactInfo = async (
 export const ExtractDynamicCategories = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractDynamicCategories(
+  const __stream__ = b.stream.ExtractDynamicCategories(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -766,10 +807,10 @@ export const ExtractDynamicCategories = async (
 export const ExtractEntities = async (
   text: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractEntities(
+  const __stream__ = b.stream.ExtractEntities(
     text,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -785,10 +826,10 @@ export const ExtractEntities = async (
 export const ExtractHobby = async (
   text: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractHobby(
+  const __stream__ = b.stream.ExtractHobby(
     text,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -804,10 +845,10 @@ export const ExtractHobby = async (
 export const ExtractName = async (
   text: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractName(
+  const __stream__ = b.stream.ExtractName(
     text,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -823,10 +864,10 @@ export const ExtractName = async (
 export const ExtractNames = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractNames(
+  const __stream__ = b.stream.ExtractNames(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -842,10 +883,29 @@ export const ExtractNames = async (
 export const ExtractPeople = async (
   text: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractPeople(
+  const __stream__ = b.stream.ExtractPeople(
     text,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExtractPersonWithMeta" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExtractPersonWithMeta = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ExtractPersonWithMeta(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -863,11 +923,11 @@ export const ExtractReceiptInfo = async (
   email: string,
   reason: "curiosity" | "personal_finance",
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractReceiptInfo(
+  const __stream__ = b.stream.ExtractReceiptInfo(
     email,
     reason,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -885,11 +945,11 @@ export const ExtractResume = async (
   resume: string,
   img?: Image | null,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractResume(
+  const __stream__ = b.stream.ExtractResume(
     resume,
     img,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -905,10 +965,29 @@ export const ExtractResume = async (
 export const ExtractResume2 = async (
   resume: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractResume2(
+  const __stream__ = b.stream.ExtractResume2(
     resume,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnAlwaysFails" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnAlwaysFails = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnAlwaysFails(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -924,10 +1003,10 @@ export const ExtractResume2 = async (
 export const FnClassOptionalOutput = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnClassOptionalOutput(
+  const __stream__ = b.stream.FnClassOptionalOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -943,10 +1022,10 @@ export const FnClassOptionalOutput = async (
 export const FnClassOptionalOutput2 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnClassOptionalOutput2(
+  const __stream__ = b.stream.FnClassOptionalOutput2(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -962,10 +1041,10 @@ export const FnClassOptionalOutput2 = async (
 export const FnEnumListOutput = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnEnumListOutput(
+  const __stream__ = b.stream.FnEnumListOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -981,10 +1060,10 @@ export const FnEnumListOutput = async (
 export const FnEnumOutput = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnEnumOutput(
+  const __stream__ = b.stream.FnEnumOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1002,11 +1081,11 @@ export const FnFailRetryConstantDelay = async (
   retries: number,
   delay_ms: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnFailRetryConstantDelay(
+  const __stream__ = b.stream.FnFailRetryConstantDelay(
     retries,
     delay_ms,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1024,11 +1103,30 @@ export const FnFailRetryExponentialDelay = async (
   retries: number,
   initial_delay_ms: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnFailRetryExponentialDelay(
+  const __stream__ = b.stream.FnFailRetryExponentialDelay(
     retries,
     initial_delay_ms,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnFallbackAlwaysFails" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnFallbackAlwaysFails = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnFallbackAlwaysFails(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1044,10 +1142,10 @@ export const FnFailRetryExponentialDelay = async (
 export const FnLiteralClassInputOutput = async (
   input: types.LiteralClassHello,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnLiteralClassInputOutput(
+  const __stream__ = b.stream.FnLiteralClassInputOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1056,17 +1154,17 @@ export const FnLiteralClassInputOutput = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { LiteralClassOne | LiteralClassTwo } input - Input parameter.
+ * @param { types.LiteralClassOne | types.LiteralClassTwo } input - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const FnLiteralUnionClassInputOutput = async (
-  input: LiteralClassOne | LiteralClassTwo,
+  input: types.LiteralClassOne | types.LiteralClassTwo,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnLiteralUnionClassInputOutput(
+  const __stream__ = b.stream.FnLiteralUnionClassInputOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1082,10 +1180,10 @@ export const FnLiteralUnionClassInputOutput = async (
 export const FnNamedArgsSingleStringOptional = async (
   myString?: string | null,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnNamedArgsSingleStringOptional(
+  const __stream__ = b.stream.FnNamedArgsSingleStringOptional(
     myString,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1101,10 +1199,10 @@ export const FnNamedArgsSingleStringOptional = async (
 export const FnOutputBool = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputBool(
+  const __stream__ = b.stream.FnOutputBool(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1120,10 +1218,10 @@ export const FnOutputBool = async (
 export const FnOutputClass = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputClass(
+  const __stream__ = b.stream.FnOutputClass(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1139,10 +1237,10 @@ export const FnOutputClass = async (
 export const FnOutputClassList = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputClassList(
+  const __stream__ = b.stream.FnOutputClassList(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1158,10 +1256,10 @@ export const FnOutputClassList = async (
 export const FnOutputClassNested = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputClassNested(
+  const __stream__ = b.stream.FnOutputClassNested(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1177,10 +1275,10 @@ export const FnOutputClassNested = async (
 export const FnOutputClassWithEnum = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputClassWithEnum(
+  const __stream__ = b.stream.FnOutputClassWithEnum(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1196,10 +1294,10 @@ export const FnOutputClassWithEnum = async (
 export const FnOutputInt = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputInt(
+  const __stream__ = b.stream.FnOutputInt(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1215,10 +1313,10 @@ export const FnOutputInt = async (
 export const FnOutputLiteralBool = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputLiteralBool(
+  const __stream__ = b.stream.FnOutputLiteralBool(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1234,10 +1332,10 @@ export const FnOutputLiteralBool = async (
 export const FnOutputLiteralInt = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputLiteralInt(
+  const __stream__ = b.stream.FnOutputLiteralInt(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1253,10 +1351,10 @@ export const FnOutputLiteralInt = async (
 export const FnOutputLiteralString = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputLiteralString(
+  const __stream__ = b.stream.FnOutputLiteralString(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1272,10 +1370,10 @@ export const FnOutputLiteralString = async (
 export const FnOutputStringList = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnOutputStringList(
+  const __stream__ = b.stream.FnOutputStringList(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1291,10 +1389,10 @@ export const FnOutputStringList = async (
 export const FnTestAliasedEnumOutput = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnTestAliasedEnumOutput(
+  const __stream__ = b.stream.FnTestAliasedEnumOutput(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1310,10 +1408,10 @@ export const FnTestAliasedEnumOutput = async (
 export const FnTestClassAlias = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnTestClassAlias(
+  const __stream__ = b.stream.FnTestClassAlias(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1329,10 +1427,10 @@ export const FnTestClassAlias = async (
 export const FnTestNamedArgsSingleEnum = async (
   myArg: types.NamedArgsSingleEnum,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.FnTestNamedArgsSingleEnum(
+  const __stream__ = b.stream.FnTestNamedArgsSingleEnum(
     myArg,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1348,10 +1446,10 @@ export const FnTestNamedArgsSingleEnum = async (
 export const GetDataType = async (
   text: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.GetDataType(
+  const __stream__ = b.stream.GetDataType(
     text,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1367,10 +1465,10 @@ export const GetDataType = async (
 export const GetOrderInfo = async (
   email: types.Email,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.GetOrderInfo(
+  const __stream__ = b.stream.GetOrderInfo(
     email,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1386,10 +1484,10 @@ export const GetOrderInfo = async (
 export const GetQuery = async (
   query: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.GetQuery(
+  const __stream__ = b.stream.GetQuery(
     query,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1407,11 +1505,11 @@ export const InOutEnumMapKey = async (
   i1: Partial<Record<types.MapKey, string>>,
   i2: Partial<Record<types.MapKey, string>>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.InOutEnumMapKey(
+  const __stream__ = b.stream.InOutEnumMapKey(
     i1,
     i2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1429,11 +1527,11 @@ export const InOutLiteralStringUnionMapKey = async (
   i1: Partial<Record<"one" | "two" | "three" | "four", string>>,
   i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.InOutLiteralStringUnionMapKey(
+  const __stream__ = b.stream.InOutLiteralStringUnionMapKey(
     i1,
     i2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1449,10 +1547,10 @@ export const InOutLiteralStringUnionMapKey = async (
 export const InOutSingleLiteralStringMapKey = async (
   m: Record<"key", string>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.InOutSingleLiteralStringMapKey(
+  const __stream__ = b.stream.InOutSingleLiteralStringMapKey(
     m,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1468,10 +1566,10 @@ export const InOutSingleLiteralStringMapKey = async (
 export const JsonTypeAliasCycle = async (
   input: types.JsonValue,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.JsonTypeAliasCycle(
+  const __stream__ = b.stream.JsonTypeAliasCycle(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1487,10 +1585,10 @@ export const JsonTypeAliasCycle = async (
 export const LLMEcho = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.LLMEcho(
+  const __stream__ = b.stream.LLMEcho(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1506,10 +1604,10 @@ export const LLMEcho = async (
 export const LiteralUnionsTest = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.LiteralUnionsTest(
+  const __stream__ = b.stream.LiteralUnionsTest(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1525,10 +1623,10 @@ export const LiteralUnionsTest = async (
 export const LlmReturnNumber = async (
   n: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.LlmReturnNumber(
+  const __stream__ = b.stream.LlmReturnNumber(
     n,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1542,9 +1640,9 @@ export const LlmReturnNumber = async (
  */
 export const MakeBlockConstraint = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MakeBlockConstraint(
+  const __stream__ = b.stream.MakeBlockConstraint(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1558,9 +1656,9 @@ export const MakeBlockConstraint = async (
  */
 export const MakeClassWithBlockDone = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MakeClassWithBlockDone(
+  const __stream__ = b.stream.MakeClassWithBlockDone(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1574,9 +1672,9 @@ export const MakeClassWithBlockDone = async (
  */
 export const MakeClassWithExternalDone = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MakeClassWithExternalDone(
+  const __stream__ = b.stream.MakeClassWithExternalDone(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1590,9 +1688,9 @@ export const MakeClassWithExternalDone = async (
  */
 export const MakeNestedBlockConstraint = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MakeNestedBlockConstraint(
+  const __stream__ = b.stream.MakeNestedBlockConstraint(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1606,9 +1704,9 @@ export const MakeNestedBlockConstraint = async (
  */
 export const MakeSemanticContainer = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MakeSemanticContainer(
+  const __stream__ = b.stream.MakeSemanticContainer(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1624,10 +1722,10 @@ export const MakeSemanticContainer = async (
 export const MapAlias = async (
   m: Record<string, string[]>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MapAlias(
+  const __stream__ = b.stream.MapAlias(
     m,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1643,10 +1741,10 @@ export const MapAlias = async (
 export const MergeAliasAttributes = async (
   money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MergeAliasAttributes(
+  const __stream__ = b.stream.MergeAliasAttributes(
     money,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1662,10 +1760,10 @@ export const MergeAliasAttributes = async (
 export const MyFunc = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.MyFunc(
+  const __stream__ = b.stream.MyFunc(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1674,17 +1772,17 @@ export const MyFunc = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { number | string | boolean | number | string[] | Record<string, string[]> } c - Input parameter.
+ * @param { number | string | boolean | string[] | Record<string, string[]> } c - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const NestedAlias = async (
-  c: number | string | boolean | number | string[] | Record<string, string[]>,
+  c: number | string | boolean | string[] | Record<string, string[]>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.NestedAlias(
+  const __stream__ = b.stream.NestedAlias(
     c,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1700,10 +1798,29 @@ export const NestedAlias = async (
 export const NullLiteralClassHello = async (
   s: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.NullLiteralClassHello(
+  const __stream__ = b.stream.NullLiteralClassHello(
     s,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "OpenAIGPT4oMissingBaseUrlEnvVar" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const OpenAIGPT4oMissingBaseUrlEnvVar = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.OpenAIGPT4oMissingBaseUrlEnvVar(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1719,10 +1836,10 @@ export const NullLiteralClassHello = async (
 export const OpenAIWithAnthropicResponseHello = async (
   s: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.OpenAIWithAnthropicResponseHello(
+  const __stream__ = b.stream.OpenAIWithAnthropicResponseHello(
     s,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1738,10 +1855,10 @@ export const OpenAIWithAnthropicResponseHello = async (
 export const OptionalTest_Function = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.OptionalTest_Function(
+  const __stream__ = b.stream.OptionalTest_Function(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1757,10 +1874,10 @@ export const OptionalTest_Function = async (
 export const PdfInput = async (
   pdf: Pdf,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PdfInput(
+  const __stream__ = b.stream.PdfInput(
     pdf,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1776,10 +1893,10 @@ export const PdfInput = async (
 export const PdfInputAnthropic = async (
   pdf: Pdf,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PdfInputAnthropic(
+  const __stream__ = b.stream.PdfInputAnthropic(
     pdf,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1797,11 +1914,11 @@ export const PdfInputOpenai = async (
   pdf: Pdf,
   prompt: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PdfInputOpenai(
+  const __stream__ = b.stream.PdfInputOpenai(
     pdf,
     prompt,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1817,10 +1934,10 @@ export const PdfInputOpenai = async (
 export const PdfInputVertex = async (
   pdf: Pdf,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PdfInputVertex(
+  const __stream__ = b.stream.PdfInputVertex(
     pdf,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1836,10 +1953,10 @@ export const PdfInputVertex = async (
 export const PredictAge = async (
   name: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PredictAge(
+  const __stream__ = b.stream.PredictAge(
     name,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1855,10 +1972,10 @@ export const PredictAge = async (
 export const PredictAgeBare = async (
   inp: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PredictAgeBare(
+  const __stream__ = b.stream.PredictAgeBare(
     inp,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1867,17 +1984,17 @@ export const PredictAgeBare = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { number | string | boolean | number } p - Input parameter.
+ * @param { number | string | boolean } p - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const PrimitiveAlias = async (
-  p: number | string | boolean | number,
+  p: number | string | boolean,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PrimitiveAlias(
+  const __stream__ = b.stream.PrimitiveAlias(
     p,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1893,10 +2010,10 @@ export const PrimitiveAlias = async (
 export const PromptTestClaude = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestClaude(
+  const __stream__ = b.stream.PromptTestClaude(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1912,10 +2029,10 @@ export const PromptTestClaude = async (
 export const PromptTestClaudeChat = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestClaudeChat(
+  const __stream__ = b.stream.PromptTestClaudeChat(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1931,10 +2048,10 @@ export const PromptTestClaudeChat = async (
 export const PromptTestClaudeChatNoSystem = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestClaudeChatNoSystem(
+  const __stream__ = b.stream.PromptTestClaudeChatNoSystem(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1950,10 +2067,10 @@ export const PromptTestClaudeChatNoSystem = async (
 export const PromptTestOpenAI = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestOpenAI(
+  const __stream__ = b.stream.PromptTestOpenAI(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1969,10 +2086,10 @@ export const PromptTestOpenAI = async (
 export const PromptTestOpenAIChat = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestOpenAIChat(
+  const __stream__ = b.stream.PromptTestOpenAIChat(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -1988,10 +2105,10 @@ export const PromptTestOpenAIChat = async (
 export const PromptTestOpenAIChatNoSystem = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestOpenAIChatNoSystem(
+  const __stream__ = b.stream.PromptTestOpenAIChatNoSystem(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2007,10 +2124,10 @@ export const PromptTestOpenAIChatNoSystem = async (
 export const PromptTestStreaming = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.PromptTestStreaming(
+  const __stream__ = b.stream.PromptTestStreaming(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2026,10 +2143,10 @@ export const PromptTestStreaming = async (
 export const RecursiveAliasCycle = async (
   input: types.RecAliasOne,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.RecursiveAliasCycle(
+  const __stream__ = b.stream.RecursiveAliasCycle(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2045,10 +2162,10 @@ export const RecursiveAliasCycle = async (
 export const RecursiveClassWithAliasIndirection = async (
   cls: types.NodeWithAliasIndirection,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.RecursiveClassWithAliasIndirection(
+  const __stream__ = b.stream.RecursiveClassWithAliasIndirection(
     cls,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2064,10 +2181,10 @@ export const RecursiveClassWithAliasIndirection = async (
 export const RecursiveUnionTest = async (
   input: types.RecursiveUnion,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.RecursiveUnionTest(
+  const __stream__ = b.stream.RecursiveUnionTest(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2083,10 +2200,10 @@ export const RecursiveUnionTest = async (
 export const RenderDynamicClass = async (
   input: types.RenderTestClass,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.RenderDynamicClass(
+  const __stream__ = b.stream.RenderDynamicClass(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2104,11 +2221,11 @@ export const RenderDynamicEnum = async (
   bike: (string | types.RenderTestEnum),
   other: (string | types.RenderTestEnum),
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.RenderDynamicEnum(
+  const __stream__ = b.stream.RenderDynamicEnum(
     bike,
     other,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2124,10 +2241,10 @@ export const RenderDynamicEnum = async (
 export const ReturnAliasWithMergedAttributes = async (
   money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ReturnAliasWithMergedAttributes(
+  const __stream__ = b.stream.ReturnAliasWithMergedAttributes(
     money,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2143,10 +2260,10 @@ export const ReturnAliasWithMergedAttributes = async (
 export const ReturnFailingAssert = async (
   inp: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ReturnFailingAssert(
+  const __stream__ = b.stream.ReturnFailingAssert(
     inp,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2162,10 +2279,10 @@ export const ReturnFailingAssert = async (
 export const ReturnJsonEntry = async (
   s: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ReturnJsonEntry(
+  const __stream__ = b.stream.ReturnJsonEntry(
     s,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2181,10 +2298,10 @@ export const ReturnJsonEntry = async (
 export const ReturnMalformedConstraints = async (
   a: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ReturnMalformedConstraints(
+  const __stream__ = b.stream.ReturnMalformedConstraints(
     a,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2200,10 +2317,10 @@ export const ReturnMalformedConstraints = async (
 export const SchemaDescriptions = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.SchemaDescriptions(
+  const __stream__ = b.stream.SchemaDescriptions(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2219,10 +2336,10 @@ export const SchemaDescriptions = async (
 export const SimpleRecursiveListAlias = async (
   input: types.RecursiveListAlias,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.SimpleRecursiveListAlias(
+  const __stream__ = b.stream.SimpleRecursiveListAlias(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2238,10 +2355,10 @@ export const SimpleRecursiveListAlias = async (
 export const SimpleRecursiveMapAlias = async (
   input: types.RecursiveMapAlias,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.SimpleRecursiveMapAlias(
+  const __stream__ = b.stream.SimpleRecursiveMapAlias(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2257,10 +2374,10 @@ export const SimpleRecursiveMapAlias = async (
 export const StreamBigNumbers = async (
   digits: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamBigNumbers(
+  const __stream__ = b.stream.StreamBigNumbers(
     digits,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2278,11 +2395,11 @@ export const StreamFailingAssertion = async (
   theme: string,
   length: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamFailingAssertion(
+  const __stream__ = b.stream.StreamFailingAssertion(
     theme,
     length,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2300,11 +2417,11 @@ export const StreamFailingCheck = async (
   theme: string,
   length: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamFailingCheck(
+  const __stream__ = b.stream.StreamFailingCheck(
     theme,
     length,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2320,10 +2437,10 @@ export const StreamFailingCheck = async (
 export const StreamOneBigNumber = async (
   digits: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamOneBigNumber(
+  const __stream__ = b.stream.StreamOneBigNumber(
     digits,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2339,10 +2456,10 @@ export const StreamOneBigNumber = async (
 export const StreamUnionIntegers = async (
   digits: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamUnionIntegers(
+  const __stream__ = b.stream.StreamUnionIntegers(
     digits,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2360,11 +2477,11 @@ export const StreamingCompoundNumbers = async (
   digits: number,
   yapping: boolean,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StreamingCompoundNumbers(
+  const __stream__ = b.stream.StreamingCompoundNumbers(
     digits,
     yapping,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2380,10 +2497,10 @@ export const StreamingCompoundNumbers = async (
 export const StructureDocument1559 = async (
   document_txt: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.StructureDocument1559(
+  const __stream__ = b.stream.StructureDocument1559(
     document_txt,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2399,10 +2516,10 @@ export const StructureDocument1559 = async (
 export const TakeRecAliasDep = async (
   input: types.RecursiveAliasDependency,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TakeRecAliasDep(
+  const __stream__ = b.stream.TakeRecAliasDep(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2418,10 +2535,29 @@ export const TakeRecAliasDep = async (
 export const TellStory = async (
   story: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TellStory(
+  const __stream__ = b.stream.TellStory(
     story,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TemplateStringTestEcho" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TemplateStringTestEcho = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TemplateStringTestEcho(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2437,10 +2573,10 @@ export const TellStory = async (
 export const TestAbortFallbackChain = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAbortFallbackChain(
+  const __stream__ = b.stream.TestAbortFallbackChain(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2456,10 +2592,10 @@ export const TestAbortFallbackChain = async (
 export const TestAnthropic = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAnthropic(
+  const __stream__ = b.stream.TestAnthropic(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2475,10 +2611,10 @@ export const TestAnthropic = async (
 export const TestAnthropicShorthand = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAnthropicShorthand(
+  const __stream__ = b.stream.TestAnthropicShorthand(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2494,10 +2630,10 @@ export const TestAnthropicShorthand = async (
 export const TestAws = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAws(
+  const __stream__ = b.stream.TestAws(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2513,10 +2649,10 @@ export const TestAws = async (
 export const TestAwsClaude37 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsClaude37(
+  const __stream__ = b.stream.TestAwsClaude37(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2532,10 +2668,10 @@ export const TestAwsClaude37 = async (
 export const TestAwsInferenceProfile = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsInferenceProfile(
+  const __stream__ = b.stream.TestAwsInferenceProfile(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2551,10 +2687,29 @@ export const TestAwsInferenceProfile = async (
 export const TestAwsInvalidAccessKey = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsInvalidAccessKey(
+  const __stream__ = b.stream.TestAwsInvalidAccessKey(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestAwsInvalidEndpoint" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAwsInvalidEndpoint = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestAwsInvalidEndpoint(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2570,10 +2725,10 @@ export const TestAwsInvalidAccessKey = async (
 export const TestAwsInvalidProfile = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsInvalidProfile(
+  const __stream__ = b.stream.TestAwsInvalidProfile(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2589,10 +2744,10 @@ export const TestAwsInvalidProfile = async (
 export const TestAwsInvalidRegion = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsInvalidRegion(
+  const __stream__ = b.stream.TestAwsInvalidRegion(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2608,10 +2763,29 @@ export const TestAwsInvalidRegion = async (
 export const TestAwsInvalidSessionToken = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAwsInvalidSessionToken(
+  const __stream__ = b.stream.TestAwsInvalidSessionToken(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestAwsVideoDescribe" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Video } video_input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestAwsVideoDescribe = async (
+  video_input: Video,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestAwsVideoDescribe(
+    video_input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2627,10 +2801,10 @@ export const TestAwsInvalidSessionToken = async (
 export const TestAzure = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzure(
+  const __stream__ = b.stream.TestAzure(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2646,10 +2820,10 @@ export const TestAzure = async (
 export const TestAzureFailure = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureFailure(
+  const __stream__ = b.stream.TestAzureFailure(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2665,10 +2839,10 @@ export const TestAzureFailure = async (
 export const TestAzureO1NoMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureO1NoMaxTokens(
+  const __stream__ = b.stream.TestAzureO1NoMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2684,10 +2858,10 @@ export const TestAzureO1NoMaxTokens = async (
 export const TestAzureO1WithMaxCompletionTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureO1WithMaxCompletionTokens(
+  const __stream__ = b.stream.TestAzureO1WithMaxCompletionTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2703,10 +2877,10 @@ export const TestAzureO1WithMaxCompletionTokens = async (
 export const TestAzureO1WithMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureO1WithMaxTokens(
+  const __stream__ = b.stream.TestAzureO1WithMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2722,10 +2896,10 @@ export const TestAzureO1WithMaxTokens = async (
 export const TestAzureO3NoMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureO3NoMaxTokens(
+  const __stream__ = b.stream.TestAzureO3NoMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2741,10 +2915,10 @@ export const TestAzureO3NoMaxTokens = async (
 export const TestAzureO3WithMaxCompletionTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureO3WithMaxCompletionTokens(
+  const __stream__ = b.stream.TestAzureO3WithMaxCompletionTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2760,10 +2934,10 @@ export const TestAzureO3WithMaxCompletionTokens = async (
 export const TestAzureWithMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestAzureWithMaxTokens(
+  const __stream__ = b.stream.TestAzureWithMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2781,11 +2955,30 @@ export const TestCaching = async (
   input: string,
   not_cached: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestCaching(
+  const __stream__ = b.stream.TestCaching(
     input,
     not_cached,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestDefaultStreamingTimeout" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestDefaultStreamingTimeout = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestDefaultStreamingTimeout(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2799,9 +2992,9 @@ export const TestCaching = async (
  */
 export const TestFallbackClient = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFallbackClient(
+  const __stream__ = b.stream.TestFallbackClient(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2817,10 +3010,10 @@ export const TestFallbackClient = async (
 export const TestFallbackStrategy = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFallbackStrategy(
+  const __stream__ = b.stream.TestFallbackStrategy(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2836,10 +3029,10 @@ export const TestFallbackStrategy = async (
 export const TestFallbackToShorthand = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFallbackToShorthand(
+  const __stream__ = b.stream.TestFallbackToShorthand(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2855,10 +3048,10 @@ export const TestFallbackToShorthand = async (
 export const TestFnNamedArgsSingleBool = async (
   myBool: boolean,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleBool(
+  const __stream__ = b.stream.TestFnNamedArgsSingleBool(
     myBool,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2874,10 +3067,10 @@ export const TestFnNamedArgsSingleBool = async (
 export const TestFnNamedArgsSingleClass = async (
   myArg: types.NamedArgsSingleClass,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleClass(
+  const __stream__ = b.stream.TestFnNamedArgsSingleClass(
     myArg,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2893,10 +3086,10 @@ export const TestFnNamedArgsSingleClass = async (
 export const TestFnNamedArgsSingleEnumList = async (
   myArg: types.NamedArgsSingleEnumList[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleEnumList(
+  const __stream__ = b.stream.TestFnNamedArgsSingleEnumList(
     myArg,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2912,10 +3105,10 @@ export const TestFnNamedArgsSingleEnumList = async (
 export const TestFnNamedArgsSingleFloat = async (
   myFloat: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleFloat(
+  const __stream__ = b.stream.TestFnNamedArgsSingleFloat(
     myFloat,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2931,10 +3124,10 @@ export const TestFnNamedArgsSingleFloat = async (
 export const TestFnNamedArgsSingleInt = async (
   myInt: number,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleInt(
+  const __stream__ = b.stream.TestFnNamedArgsSingleInt(
     myInt,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2950,10 +3143,10 @@ export const TestFnNamedArgsSingleInt = async (
 export const TestFnNamedArgsSingleMapStringToClass = async (
   myMap: Record<string, types.StringToClassEntry>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleMapStringToClass(
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToClass(
     myMap,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2969,10 +3162,10 @@ export const TestFnNamedArgsSingleMapStringToClass = async (
 export const TestFnNamedArgsSingleMapStringToMap = async (
   myMap: Record<string, Record<string, string>>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleMapStringToMap(
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToMap(
     myMap,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -2988,10 +3181,10 @@ export const TestFnNamedArgsSingleMapStringToMap = async (
 export const TestFnNamedArgsSingleMapStringToString = async (
   myMap: Record<string, string>,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleMapStringToString(
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToString(
     myMap,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3007,10 +3200,10 @@ export const TestFnNamedArgsSingleMapStringToString = async (
 export const TestFnNamedArgsSingleString = async (
   myString: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleString(
+  const __stream__ = b.stream.TestFnNamedArgsSingleString(
     myString,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3026,10 +3219,10 @@ export const TestFnNamedArgsSingleString = async (
 export const TestFnNamedArgsSingleStringArray = async (
   myStringArray: string[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleStringArray(
+  const __stream__ = b.stream.TestFnNamedArgsSingleStringArray(
     myStringArray,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3045,10 +3238,10 @@ export const TestFnNamedArgsSingleStringArray = async (
 export const TestFnNamedArgsSingleStringList = async (
   myArg: string[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestFnNamedArgsSingleStringList(
+  const __stream__ = b.stream.TestFnNamedArgsSingleStringList(
     myArg,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3064,10 +3257,10 @@ export const TestFnNamedArgsSingleStringList = async (
 export const TestGemini = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGemini(
+  const __stream__ = b.stream.TestGemini(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3081,9 +3274,9 @@ export const TestGemini = async (
  */
 export const TestGeminiOpenAiGeneric = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGeminiOpenAiGeneric(
+  const __stream__ = b.stream.TestGeminiOpenAiGeneric(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3099,10 +3292,10 @@ export const TestGeminiOpenAiGeneric = async (
 export const TestGeminiSystem = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGeminiSystem(
+  const __stream__ = b.stream.TestGeminiSystem(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3118,10 +3311,10 @@ export const TestGeminiSystem = async (
 export const TestGeminiSystemAsChat = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGeminiSystemAsChat(
+  const __stream__ = b.stream.TestGeminiSystemAsChat(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3137,10 +3330,10 @@ export const TestGeminiSystemAsChat = async (
 export const TestGeminiThinking = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGeminiThinking(
+  const __stream__ = b.stream.TestGeminiThinking(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3156,10 +3349,10 @@ export const TestGeminiThinking = async (
 export const TestGroq = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestGroq(
+  const __stream__ = b.stream.TestGroq(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3175,10 +3368,10 @@ export const TestGroq = async (
 export const TestImageInput = async (
   img: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestImageInput(
+  const __stream__ = b.stream.TestImageInput(
     img,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3194,10 +3387,10 @@ export const TestImageInput = async (
 export const TestImageInputAnthropic = async (
   img: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestImageInputAnthropic(
+  const __stream__ = b.stream.TestImageInputAnthropic(
     img,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3213,10 +3406,10 @@ export const TestImageInputAnthropic = async (
 export const TestImageListInput = async (
   imgs: Image[],
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestImageListInput(
+  const __stream__ = b.stream.TestImageListInput(
     imgs,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3232,10 +3425,10 @@ export const TestImageListInput = async (
 export const TestMemory = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestMemory(
+  const __stream__ = b.stream.TestMemory(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3253,11 +3446,11 @@ export const TestMulticlassNamedArgs = async (
   myArg: types.NamedArgsSingleClass,
   myArg2: types.NamedArgsSingleClass,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestMulticlassNamedArgs(
+  const __stream__ = b.stream.TestMulticlassNamedArgs(
     myArg,
     myArg2,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3273,10 +3466,10 @@ export const TestMulticlassNamedArgs = async (
 export const TestNamedArgsLiteralBool = async (
   myBool: true,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestNamedArgsLiteralBool(
+  const __stream__ = b.stream.TestNamedArgsLiteralBool(
     myBool,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3292,10 +3485,10 @@ export const TestNamedArgsLiteralBool = async (
 export const TestNamedArgsLiteralInt = async (
   myInt: 1,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestNamedArgsLiteralInt(
+  const __stream__ = b.stream.TestNamedArgsLiteralInt(
     myInt,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3311,10 +3504,10 @@ export const TestNamedArgsLiteralInt = async (
 export const TestNamedArgsLiteralString = async (
   myString: "My String",
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestNamedArgsLiteralString(
+  const __stream__ = b.stream.TestNamedArgsLiteralString(
     myString,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3330,10 +3523,10 @@ export const TestNamedArgsLiteralString = async (
 export const TestOllama = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOllama(
+  const __stream__ = b.stream.TestOllama(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3349,10 +3542,10 @@ export const TestOllama = async (
 export const TestOllamaHaiku = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOllamaHaiku(
+  const __stream__ = b.stream.TestOllamaHaiku(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3368,10 +3561,10 @@ export const TestOllamaHaiku = async (
 export const TestOpenAI = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAI(
+  const __stream__ = b.stream.TestOpenAI(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3387,10 +3580,10 @@ export const TestOpenAI = async (
 export const TestOpenAIDummyClient = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIDummyClient(
+  const __stream__ = b.stream.TestOpenAIDummyClient(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3406,10 +3599,10 @@ export const TestOpenAIDummyClient = async (
 export const TestOpenAIGPT4oMini = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIGPT4oMini(
+  const __stream__ = b.stream.TestOpenAIGPT4oMini(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3425,10 +3618,10 @@ export const TestOpenAIGPT4oMini = async (
 export const TestOpenAIGPT4oMini2 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIGPT4oMini2(
+  const __stream__ = b.stream.TestOpenAIGPT4oMini2(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3444,10 +3637,10 @@ export const TestOpenAIGPT4oMini2 = async (
 export const TestOpenAIGPT4oMini3 = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIGPT4oMini3(
+  const __stream__ = b.stream.TestOpenAIGPT4oMini3(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3463,10 +3656,10 @@ export const TestOpenAIGPT4oMini3 = async (
 export const TestOpenAILegacyProvider = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAILegacyProvider(
+  const __stream__ = b.stream.TestOpenAILegacyProvider(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3482,10 +3675,10 @@ export const TestOpenAILegacyProvider = async (
 export const TestOpenAIO1NoMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIO1NoMaxTokens(
+  const __stream__ = b.stream.TestOpenAIO1NoMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3501,10 +3694,10 @@ export const TestOpenAIO1NoMaxTokens = async (
 export const TestOpenAIO1WithMaxCompletionTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIO1WithMaxCompletionTokens(
+  const __stream__ = b.stream.TestOpenAIO1WithMaxCompletionTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3520,10 +3713,10 @@ export const TestOpenAIO1WithMaxCompletionTokens = async (
 export const TestOpenAIO1WithMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIO1WithMaxTokens(
+  const __stream__ = b.stream.TestOpenAIO1WithMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3539,10 +3732,10 @@ export const TestOpenAIO1WithMaxTokens = async (
 export const TestOpenAIProviderWithResponsesType = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIProviderWithResponsesType(
+  const __stream__ = b.stream.TestOpenAIProviderWithResponsesType(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3558,10 +3751,29 @@ export const TestOpenAIProviderWithResponsesType = async (
 export const TestOpenAIResponses = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponses(
+  const __stream__ = b.stream.TestOpenAIResponses(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAIResponsesAllRoles" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } problem - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIResponsesAllRoles = async (
+  problem: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestOpenAIResponsesAllRoles(
+    problem,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3577,10 +3789,10 @@ export const TestOpenAIResponses = async (
 export const TestOpenAIResponsesAutoType = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesAutoType(
+  const __stream__ = b.stream.TestOpenAIResponsesAutoType(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3596,10 +3808,10 @@ export const TestOpenAIResponsesAutoType = async (
 export const TestOpenAIResponsesConversation = async (
   topic: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesConversation(
+  const __stream__ = b.stream.TestOpenAIResponsesConversation(
     topic,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3615,10 +3827,10 @@ export const TestOpenAIResponsesConversation = async (
 export const TestOpenAIResponsesCustomURL = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesCustomURL(
+  const __stream__ = b.stream.TestOpenAIResponsesCustomURL(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3634,10 +3846,10 @@ export const TestOpenAIResponsesCustomURL = async (
 export const TestOpenAIResponsesDifferentModel = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesDifferentModel(
+  const __stream__ = b.stream.TestOpenAIResponsesDifferentModel(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3653,10 +3865,10 @@ export const TestOpenAIResponsesDifferentModel = async (
 export const TestOpenAIResponsesEndpoint = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesEndpoint(
+  const __stream__ = b.stream.TestOpenAIResponsesEndpoint(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3672,10 +3884,10 @@ export const TestOpenAIResponsesEndpoint = async (
 export const TestOpenAIResponsesExplicit = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesExplicit(
+  const __stream__ = b.stream.TestOpenAIResponsesExplicit(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3691,10 +3903,10 @@ export const TestOpenAIResponsesExplicit = async (
 export const TestOpenAIResponsesFunctionCall = async (
   query: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesFunctionCall(
+  const __stream__ = b.stream.TestOpenAIResponsesFunctionCall(
     query,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3710,10 +3922,10 @@ export const TestOpenAIResponsesFunctionCall = async (
 export const TestOpenAIResponsesImageInput = async (
   image: Image | string | Pdf | Audio,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesImageInput(
+  const __stream__ = b.stream.TestOpenAIResponsesImageInput(
     image,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3729,10 +3941,10 @@ export const TestOpenAIResponsesImageInput = async (
 export const TestOpenAIResponsesReasoning = async (
   problem: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesReasoning(
+  const __stream__ = b.stream.TestOpenAIResponsesReasoning(
     problem,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3748,10 +3960,10 @@ export const TestOpenAIResponsesReasoning = async (
 export const TestOpenAIResponsesShorthand = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesShorthand(
+  const __stream__ = b.stream.TestOpenAIResponsesShorthand(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3767,10 +3979,10 @@ export const TestOpenAIResponsesShorthand = async (
 export const TestOpenAIResponsesWebSearch = async (
   query: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesWebSearch(
+  const __stream__ = b.stream.TestOpenAIResponsesWebSearch(
     query,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3786,10 +3998,10 @@ export const TestOpenAIResponsesWebSearch = async (
 export const TestOpenAIResponsesWithOpenAIResponseType = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIResponsesWithOpenAIResponseType(
+  const __stream__ = b.stream.TestOpenAIResponsesWithOpenAIResponseType(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3805,10 +4017,10 @@ export const TestOpenAIResponsesWithOpenAIResponseType = async (
 export const TestOpenAIShorthand = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIShorthand(
+  const __stream__ = b.stream.TestOpenAIShorthand(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3824,10 +4036,10 @@ export const TestOpenAIShorthand = async (
 export const TestOpenAIWithFinishReasonError = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIWithFinishReasonError(
+  const __stream__ = b.stream.TestOpenAIWithFinishReasonError(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3843,10 +4055,10 @@ export const TestOpenAIWithFinishReasonError = async (
 export const TestOpenAIWithMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIWithMaxTokens(
+  const __stream__ = b.stream.TestOpenAIWithMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3862,10 +4074,10 @@ export const TestOpenAIWithMaxTokens = async (
 export const TestOpenAIWithNullMaxTokens = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenAIWithNullMaxTokens(
+  const __stream__ = b.stream.TestOpenAIWithNullMaxTokens(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3881,10 +4093,48 @@ export const TestOpenAIWithNullMaxTokens = async (
 export const TestOpenRouterMistralSmall3_1_24b = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestOpenRouterMistralSmall3_1_24b(
+  const __stream__ = b.stream.TestOpenRouterMistralSmall3_1_24b(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenaiResponsesPdfs" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Pdf } pdf - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenaiResponsesPdfs = async (
+  pdf: Pdf,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestOpenaiResponsesPdfs(
+    pdf,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestRequestTimeout" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestRequestTimeout = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestRequestTimeout(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3898,9 +4148,9 @@ export const TestOpenRouterMistralSmall3_1_24b = async (
  */
 export const TestRetryConstant = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestRetryConstant(
+  const __stream__ = b.stream.TestRetryConstant(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3914,9 +4164,9 @@ export const TestRetryConstant = async (
  */
 export const TestRetryExponential = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestRetryExponential(
+  const __stream__ = b.stream.TestRetryExponential(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3932,10 +4182,10 @@ export const TestRetryExponential = async (
 export const TestRoundRobinStrategy = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestRoundRobinStrategy(
+  const __stream__ = b.stream.TestRoundRobinStrategy(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3949,9 +4199,66 @@ export const TestRoundRobinStrategy = async (
  */
 export const TestSingleFallbackClient = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestSingleFallbackClient(
+  const __stream__ = b.stream.TestSingleFallbackClient(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestSkipDynamic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestSkipDynamic = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestSkipDynamic(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestSkipNonDynamic" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestSkipNonDynamic = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestSkipNonDynamic(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestStreamingTimeout" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestStreamingTimeout = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestStreamingTimeout(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3967,10 +4274,48 @@ export const TestSingleFallbackClient = async (
 export const TestThinking = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestThinking(
+  const __stream__ = b.stream.TestThinking(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestTimeoutError" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestTimeoutError = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestTimeoutError(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestTimeoutFallback" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestTimeoutFallback = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestTimeoutFallback(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -3986,10 +4331,10 @@ export const TestThinking = async (
 export const TestUniverseQuestion = async (
   question: types.UniverseQuestionInput,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestUniverseQuestion(
+  const __stream__ = b.stream.TestUniverseQuestion(
     question,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4005,10 +4350,10 @@ export const TestUniverseQuestion = async (
 export const TestVertex = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestVertex(
+  const __stream__ = b.stream.TestVertex(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4024,10 +4369,10 @@ export const TestVertex = async (
 export const TestVertexClaude = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestVertexClaude(
+  const __stream__ = b.stream.TestVertexClaude(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4041,9 +4386,28 @@ export const TestVertexClaude = async (
  */
 export const TestVertexWithSystemInstructions = async (
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.TestVertexWithSystemInstructions(
+  const __stream__ = b.stream.TestVertexWithSystemInstructions(
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestZeroTimeout" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestZeroTimeout = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestZeroTimeout(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4059,10 +4423,10 @@ export const TestVertexWithSystemInstructions = async (
 export const UnionTest_Function = async (
   input: string | boolean,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.UnionTest_Function(
+  const __stream__ = b.stream.UnionTest_Function(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4078,10 +4442,10 @@ export const UnionTest_Function = async (
 export const UseBlockConstraint = async (
   inp: types.BlockConstraintForParam,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.UseBlockConstraint(
+  const __stream__ = b.stream.UseBlockConstraint(
     inp,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4097,10 +4461,10 @@ export const UseBlockConstraint = async (
 export const UseMaintainFieldOrder = async (
   input: types.MaintainFieldOrder,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.UseMaintainFieldOrder(
+  const __stream__ = b.stream.UseMaintainFieldOrder(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4116,10 +4480,10 @@ export const UseMaintainFieldOrder = async (
 export const UseMalformedConstraints = async (
   a: types.MalformedConstraints2,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.UseMalformedConstraints(
+  const __stream__ = b.stream.UseMalformedConstraints(
     a,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4135,10 +4499,10 @@ export const UseMalformedConstraints = async (
 export const UseNestedBlockConstraint = async (
   inp: types.NestedBlockConstraintForParam,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.UseNestedBlockConstraint(
+  const __stream__ = b.stream.UseNestedBlockConstraint(
     inp,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4154,10 +4518,10 @@ export const UseNestedBlockConstraint = async (
 export const ValidateBasicResponses = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ValidateBasicResponses(
+  const __stream__ = b.stream.ValidateBasicResponses(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4173,10 +4537,10 @@ export const ValidateBasicResponses = async (
 export const ValidateResponseTypes = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ValidateResponseTypes(
+  const __stream__ = b.stream.ValidateResponseTypes(
     input,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4192,10 +4556,10 @@ export const ValidateResponseTypes = async (
 export const VideoInputGemini = async (
   vid: Video,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.VideoInputGemini(
+  const __stream__ = b.stream.VideoInputGemini(
     vid,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
@@ -4211,8 +4575,576 @@ export const VideoInputGemini = async (
 export const VideoInputVertex = async (
   vid: Video,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.VideoInputVertex(
+  const __stream__ = b.stream.VideoInputVertex(
     vid,
   );
-  return Promise.resolve(stream.toStreamable());
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "AnotherTakedown" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string[] } xs - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const AnotherTakedown = async (
+  xs: string[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.AnotherTakedown(
+    xs,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "AssignElseIfExpr" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const AssignElseIfExpr = async (
+  a: boolean,
+  b: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.AssignElseIfExpr(
+    a,
+    b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "BoolToIntWithIfElse" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const BoolToIntWithIfElse = async (
+  b: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.BoolToIntWithIfElse(
+    b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "BoolToIntWithIfElseCallingLlm" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const BoolToIntWithIfElseCallingLlm = async (
+  b: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.BoolToIntWithIfElseCallingLlm(
+    b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "CallLlmDescribeImage" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } img - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const CallLlmDescribeImage = async (
+  img: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.CallLlmDescribeImage(
+    img,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "CallReturnOne" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const CallReturnOne = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.CallReturnOne(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ChainedCalls" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ChainedCalls = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ChainedCalls(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "EchoWorkflow" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const EchoWorkflow = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.EchoWorkflow(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExecFetchAs" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } url - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExecFetchAs = async (
+  url: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ExecFetchAs(
+    url,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExecFetchAsWithHttpPostRequest" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExecFetchAsWithHttpPostRequest = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ExecFetchAsWithHttpPostRequest(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExecFetchAsWithHttpPutRequestAndClassJson" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExecFetchAsWithHttpPutRequestAndClassJson = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "HomeEnvVarIsEmpty" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const HomeEnvVarIsEmpty = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.HomeEnvVarIsEmpty(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "IsTargetWord" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } word - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const IsTargetWord = async (
+  word: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.IsTargetWord(
+    word,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "IsTargetWord2" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } word - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const IsTargetWord2 = async (
+  word: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.IsTargetWord2(
+    word,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "IterativeFibonacci" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const IterativeFibonacci = async (
+  n: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.IterativeFibonacci(
+    n,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "NormalElseIfStmt" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const NormalElseIfStmt = async (
+  a: boolean,
+  b: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.NormalElseIfStmt(
+    a,
+    b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "NotEmpty" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } value - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const NotEmpty = async (
+  value: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.NotEmpty(
+    value,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnCategory" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { types.Category } category - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnCategory = async (
+  category: types.Category,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnCategory(
+    category,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnElseIfExpr" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } a - Input parameter.
+ * @param { boolean } b - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnElseIfExpr = async (
+  a: boolean,
+  b: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnElseIfExpr(
+    a,
+    b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnImageFromUrl" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } url - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnImageFromUrl = async (
+  url: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnImageFromUrl(
+    url,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnNumber" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnNumber = async (
+  n: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnNumber(
+    n,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnNumberCallingLlm" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnNumberCallingLlm = async (
+  n: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnNumberCallingLlm(
+    n,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ReturnOne" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ReturnOne = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.ReturnOne(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "SimpleWatchWithFilter" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const SimpleWatchWithFilter = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.SimpleWatchWithFilter(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "StoreFnCallInLocalVar" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const StoreFnCallInLocalVar = async (
+  n: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.StoreFnCallInLocalVar(
+    n,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "StoreLlmCallInLocalVar" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } n - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const StoreLlmCallInLocalVar = async (
+  n: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.StoreLlmCallInLocalVar(
+    n,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "SumArray" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number[] } arr - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const SumArray = async (
+  arr: number[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.SumArray(
+    arr,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "SumFromTo" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } x - Input parameter.
+ * @param { number } y - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const SumFromTo = async (
+  x: number,
+  y: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.SumFromTo(
+    x,
+    y,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "WorkflowWatch" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowWatch = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.WorkflowWatch(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "WorkflowWatchChild" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowWatchChild = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.WorkflowWatchChild(
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "WorkflowWatchWithFilter" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const WorkflowWatchWithFilter = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.WorkflowWatchWithFilter(
+  );
+  return Promise.resolve(__stream__.toStreamable());
 };

@@ -1,23 +1,23 @@
-fn EarlyReturn(x: int) -> int {
+function EarlyReturn(x: int) -> int {
    if (x == 42) { return 1; }
-   
+
    x + 5
 }
 
-fn WithStack(x: int) -> int {
+function WithStack(x: int) -> int {
    let a = 1;
 
    // NOTE: currently there's no empty returns.
 
    if (a == 0) { return 0; }
-   
+
    {
       let b = 1;
       if (a != b) {
          return 0;
       }
    }
-   
+
    {
       let c = 2;
       let b = 3;
@@ -31,7 +31,7 @@ fn WithStack(x: int) -> int {
     7
 }
 
-fn BadValueReturn(x: int) -> string {
+function BadValueReturn(x: int) -> string {
    // should error with `return int, expected string`
    return 1;
 }

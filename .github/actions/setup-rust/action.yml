@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "stable"
+    default: "1.92.0"
   enable-wasm:
     description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
     required: false
@@ -38,10 +38,31 @@ inputs:
     description: "Enable Rust cache"
     required: false
     default: "true"
+  github-token:
+    description: "GitHub token for API access (e.g., protoc installation)"
+    required: false
+    default: ${{ github.token }}
+  skip-protoc:
+    description: "Skip protoc installation (useful for cross-compilation targets)"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
   steps:
+    - name: Ensure rustup exists on Windows ARM64 runners
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "${RUNNER_OS:-}" == "Windows" && "${RUNNER_ARCH:-}" =~ [Aa][Rr][Mm]64 ]]; then
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl -LO "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe"
+            ./rustup-init.exe --default-toolchain stable -y
+            rm rustup-init.exe
+            echo "$USERPROFILE/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+        fi
+
     # - name: Check for mise Rust installation
     #   id: check-rust
     #   run: |
@@ -56,7 +77,7 @@ runs:
 
     - name: Setup Rust toolchain
       # if: steps.check-rust.outputs.rust-installed != 'true'
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ inputs.toolchain }}
         targets: ${{ inputs.targets }}
@@ -94,3 +115,9 @@ runs:
       if: inputs.enable-cross == 'true'
       run: cargo install cross --git https://github.com/cross-rs/cross
       shell: bash
+
+    - name: Install Protoc
+      if: inputs.skip-protoc != 'true'
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ inputs.github-token }}

@@ -25,6 +25,7 @@ pub fn make_trace_event_for_response(
                 input_tokens: llmcomplete_response.metadata.prompt_tokens,
                 output_tokens: llmcomplete_response.metadata.output_tokens,
                 total_tokens: llmcomplete_response.metadata.total_tokens,
+                cached_input_tokens: llmcomplete_response.metadata.cached_input_tokens,
             },
             llmcomplete_response.content.clone(),
             client_stack,

@@ -1,0 +1,124 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::ExampleHeaders":
+  nodes:
+    "ExampleHeaders|c:func:0":
+      label: ExampleHeaders
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 0
+        end: 212
+    "ExampleHeaders|c:func:0|c:arm:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "ExampleHeaders|c:func:0|c:arm:0"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 149
+        end: 150
+    "ExampleHeaders|c:func:0|c:arm:0|c:block:0|h:positive-path:0":
+      label: positive path
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0|c:arm:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ExampleHeaders|c:func:0|c:arm:0|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0|c:arm:0|c:block:0"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 149
+        end: 150
+    "ExampleHeaders|c:func:0|c:arm:1|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "ExampleHeaders|c:func:0|c:arm:1"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 203
+        end: 204
+    "ExampleHeaders|c:func:0|c:arm:1|c:block:0|h:non-positive-path:0":
+      label: non-positive path
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0|c:arm:1|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ExampleHeaders|c:func:0|c:arm:1|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0|c:arm:1|c:block:0"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 203
+        end: 204
+    "ExampleHeaders|c:func:0|h:branching:0":
+      label: branching
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ExampleHeaders|c:func:0|h:setup:0":
+      label: setup
+      node_type: expr
+      parent: "ExampleHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ExampleHeaders|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "ExampleHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 63
+        end: 78
+    "ExampleHeaders|c:func:0|s:1":
+      label: if
+      node_type: branch
+      parent: "ExampleHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/simple_if.baml
+        start: 101
+        end: 210
+  edges:
+    "ExampleHeaders|c:func:0":
+      - dst: "ExampleHeaders|c:func:0|h:setup:0"
+        label: ""
+    "ExampleHeaders|c:func:0|c:arm:0|c:block:0":
+      - dst: "ExampleHeaders|c:func:0|c:arm:0|c:block:0|h:positive-path:0"
+        label: ""
+    "ExampleHeaders|c:func:0|c:arm:0|c:block:0|h:positive-path:0":
+      - dst: "ExampleHeaders|c:func:0|c:arm:0|c:block:0|s:1"
+        label: ""
+    "ExampleHeaders|c:func:0|c:arm:1|c:block:0":
+      - dst: "ExampleHeaders|c:func:0|c:arm:1|c:block:0|h:non-positive-path:0"
+        label: ""
+    "ExampleHeaders|c:func:0|c:arm:1|c:block:0|h:non-positive-path:0":
+      - dst: "ExampleHeaders|c:func:0|c:arm:1|c:block:0|s:1"
+        label: ""
+    "ExampleHeaders|c:func:0|h:branching:0":
+      - dst: "ExampleHeaders|c:func:0|s:1"
+        label: ""
+    "ExampleHeaders|c:func:0|h:setup:0":
+      - dst: "ExampleHeaders|c:func:0|s:0"
+        label: ""
+    "ExampleHeaders|c:func:0|s:0":
+      - dst: "ExampleHeaders|c:func:0|h:branching:0"
+        label: ""
+    "ExampleHeaders|c:func:0|s:1":
+      - dst: "ExampleHeaders|c:func:0|c:arm:0|c:block:0"
+        label: ""
+      - dst: "ExampleHeaders|c:func:0|c:arm:1|c:block:0"
+        label: ""

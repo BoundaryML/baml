@@ -1,0 +1,50 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [validation] Error: Duplicate class `A`
+   ╭─[ repro.baml:1:7 ]
+   │
+ 1 │ class A {
+   │       ┬  
+   │       ╰── class `A` redefined here
+   │ 
+ 5 │ class A {
+   │       ┬  
+   │       ╰── `A` first defined in repro.baml
+   │ 
+   │ Note: Error code: E0011
+───╯
+
+  [validation] Error: Duplicate class `A`
+   ╭─[ repro.baml:5:7 ]
+   │
+ 5 │ class A {
+   │       ┬  
+   │       ╰── class `A` redefined here
+   │
+   ├─[ repro.baml:5:7 ]
+   │
+ 1 │ class A {
+   │       ┬  
+   │       ╰── `A` first defined in repro.baml
+   │ 
+   │ Note: Error code: E0011
+───╯
+
+  [validation] Error: Duplicate type alias `A`
+   ╭─[ repro.baml:9:6 ]
+   │
+ 9 │ type A = int
+   │      ┬  
+   │      ╰── type alias `A` redefined here
+   │
+   ├─[ repro.baml:9:6 ]
+   │
+ 1 │ class A {
+   │       ┬  
+   │       ╰── `A` first defined in repro.baml
+   │ 
+   │ Note: Error code: E0011
+───╯

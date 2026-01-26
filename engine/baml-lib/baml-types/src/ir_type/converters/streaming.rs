@@ -1,7 +1,7 @@
 use crate::{
     baml_value::TypeLookups,
     ir_type::{ArrowGeneric, TypeStreaming, UnionTypeGeneric},
-    type_meta, BamlMediaType, StreamingMode, TypeIR, TypeValue,
+    type_meta, StreamingMode, TypeIR, TypeValue,
 };
 
 pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming {
@@ -33,8 +33,8 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 TypeValue::Float => TypeStreaming::Primitive(TypeValue::Float, meta),
                 TypeValue::Bool => TypeStreaming::Primitive(TypeValue::Bool, meta),
                 TypeValue::String => TypeStreaming::Primitive(TypeValue::String, meta),
-                TypeValue::Media(_) => {
-                    TypeStreaming::Primitive(TypeValue::Media(BamlMediaType::Image), meta)
+                TypeValue::Media(media_type) => {
+                    TypeStreaming::Primitive(TypeValue::Media(*media_type), meta)
                 }
             },
             TypeIR::Enum { name, dynamic, .. } => TypeStreaming::Enum {
@@ -57,9 +57,13 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
             },
             TypeIR::List(item_type, _) => {
                 needed = true;
-                // items inside of arrays don't need to nullable.
+                // items inside of arrays don't need to be nullable.
+                // If @stream.done is on the list, propagate it to inner elements.
                 let mut item_type = item_type.clone();
                 item_type.meta_mut().streaming_behavior.needed = true;
+                if done {
+                    item_type.meta_mut().streaming_behavior.done = true;
+                }
                 TypeStreaming::List(Box::new(from_type_ir(&item_type, lookup)), meta)
             }
             TypeIR::Map(key_type, item_type, _) => {
@@ -69,12 +73,19 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                         // Keys cannot be null in maps
                         let mut clone = key_type.clone();
                         clone.meta_mut().streaming_behavior.needed = true;
+                        if done {
+                            clone.meta_mut().streaming_behavior.done = true;
+                        }
                         Box::new(from_type_ir(&clone, lookup))
                     },
                     {
                         // values don't need to be nullable.
+                        // If @stream.done is on the map, propagate it to inner elements.
                         let mut item_type = item_type.clone();
                         item_type.meta_mut().streaming_behavior.needed = true;
+                        if done {
+                            item_type.meta_mut().streaming_behavior.done = true;
+                        }
                         Box::new(from_type_ir(&item_type, lookup))
                     },
                     meta,
@@ -115,7 +126,10 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                     from_type_ir(&t, lookup)
                 });
 
-                let variants = if !needed || is_optional {
+                let meta_needs_wrapping =
+                    !meta.constraints.is_empty() || meta.streaming_behavior.done;
+
+                let variants = if is_optional || (!meta_needs_wrapping && !needed) {
                     variants
                         .chain(std::iter::once(TypeStreaming::null()))
                         .collect()

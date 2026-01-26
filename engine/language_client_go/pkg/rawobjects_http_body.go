@@ -16,8 +16,8 @@ func newHTTPBody(ptr int64, rt unsafe.Pointer) HTTPBody {
 	return &httpBody{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (h *httpBody) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_HTTP_BODY
+func (h *httpBody) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_HTTP_BODY
 }
 
 func (h *httpBody) pointer() int64 {

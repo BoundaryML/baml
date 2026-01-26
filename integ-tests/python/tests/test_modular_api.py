@@ -3,13 +3,19 @@ import math
 import time
 import typing
 import json
+import os
 import pytest
 import anthropic
 import requests
+import boto3
 from google import genai
 from openai import AsyncOpenAI, OpenAI, AsyncStream, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.responses import Response
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+from botocore.exceptions import ProfileNotFound
+from urllib.parse import urlsplit
 from baml_py import ClientRegistry, HTTPRequest as BamlHttpRequest
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
@@ -32,6 +38,10 @@ JOHN_DOE_TEXT_RESUME = """
     Experience
     Software Engineer at Google (2020 - Present)
 """
+
+LONG_CACHEABLE_CONTEXT = " ".join(
+    ["Reusable cacheable context paragraph." for _ in range(600)]
+)
 
 JOHN_DOE_PARSED_RESUME = types.Resume(
     name="John Doe",
@@ -121,6 +131,90 @@ async def test_modular_openai_gpt4():
 
 
 @pytest.mark.asyncio
+async def test_modular_bedrock_manual_cache_point():
+    req = await b.request.TestAws("Dr. Pepper")
+
+    body = req.body.json()
+    assert isinstance(body["messages"], list)
+    assert len(body["messages"]) > 0
+
+    content = body["messages"][0]["content"]
+    assert isinstance(content, list)
+    original_length = len(content)
+
+    content.insert(1, {"text": LONG_CACHEABLE_CONTEXT})
+    content.insert(2, {"cachePoint": {"type": "default"}})
+
+    assert content[1] == {"text": LONG_CACHEABLE_CONTEXT}
+    assert content[2] == {"cachePoint": {"type": "default"}}
+    assert len(content) == original_length + 2
+
+    # additional.setdefault("cacheConfig", {"type": "default"})
+
+    body_string = json.dumps(body)
+    body_bytes = body_string.encode("utf-8")
+
+    url = urlsplit(req.url)
+
+    base_headers = {
+        key: value for key, value in dict(req.headers).items() if value is not None
+    }
+
+    headers = {
+        **base_headers,
+        "content-type": "application/json",
+        "accept": "application/json",
+        "host": url.netloc,
+    }
+
+    try:
+        session = boto3.Session()
+    except ProfileNotFound:
+        session = boto3.Session(profile_name=None)
+    credentials = session.get_credentials()
+    if credentials is None:
+        pytest.skip("AWS credentials not configured")
+    frozen = credentials.get_frozen_credentials()
+
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    if not region:
+        region = session.region_name
+    if not region:
+        available = session.get_available_regions("bedrock-runtime")
+        region = available[0] if available else None
+    if not region:
+        pytest.skip("AWS region not configured")
+
+    aws_request = AWSRequest(
+        method=req.method,
+        url=req.url,
+        data=body_bytes,
+        headers=headers,
+    )
+
+    SigV4Auth(frozen, "bedrock", region).add_auth(aws_request)
+
+    response = requests.post(
+        req.url,
+        headers={key: str(value) for key, value in aws_request.headers.items()},
+        data=body_bytes,
+    )
+    if not response.ok:
+        raise AssertionError(
+            f"Bedrock returned {response.status_code}: {response.text}"
+        )
+    response.raise_for_status()
+
+    payload = response.json()
+    content_blocks = payload.get("output", {}).get("message", {}).get("content", [])
+    assert isinstance(content_blocks, list)
+    text_block = next(
+        (block.get("text") for block in content_blocks if "text" in block), ""
+    )
+    assert text_block
+
+
+@pytest.mark.asyncio
 async def test_modular_anthropic_claude_3_haiku():
     client = anthropic.AsyncAnthropic()
 
@@ -149,7 +243,7 @@ async def test_modular_google_gemini():
 
     body = req.body.json()
     response = await client.aio.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=body["contents"],
         config={"safety_settings": [body["safetySettings"]]},
     )
@@ -318,20 +412,18 @@ async def test_openai_batch_api():
 async def test_modular_openai_responses():
     """Test openai-responses provider using the modular API"""
     from openai import AsyncOpenAI
-    
+
     client = AsyncOpenAI()
-    
+
     # Use TestOpenAIResponses from the providers directory
     req = await b.request.TestOpenAIResponses("mountains")
-    
+
     # The openai-responses provider should use the /v1/responses endpoint.
 
-    response = typing.cast(
-        Response, await client.responses.create(**req.body.json())
-    )
-    
+    response = typing.cast(Response, await client.responses.create(**req.body.json()))
+
     parsed = b.parse.TestOpenAIResponses(response.output_text)
-    
+
     assert isinstance(parsed, str)
     assert len(parsed) > 0
 

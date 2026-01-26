@@ -1,0 +1,21 @@
+[package]
+edition = "2021"
+name = "generators-rust"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[dependencies]
+askama.workspace = true
+anyhow.workspace = true
+dir-writer = { path = "../../utils/dir_writer" }
+baml-types.workspace = true
+internal-baml-core.workspace = true
+
+[build-dependencies]
+type_test_spec = { path = "../../utils/type_test_spec" }
+
+[dev-dependencies]
+prettydiff = "0.8.0"
+test-harness = { path = "../../utils/test_harness" }

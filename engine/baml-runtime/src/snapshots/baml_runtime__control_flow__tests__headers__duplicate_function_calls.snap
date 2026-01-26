@@ -1,0 +1,92 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::CallsDedup":
+  nodes:
+    "CallsDedup|c:func:0":
+      label: CallsDedup
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/duplicate_function_calls.baml
+        start: 13
+        end: 166
+    "CallsDedup|c:func:0|h:step-a:0":
+      label: Step A
+      node_type: expr
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "CallsDedup|c:func:0|h:step-b:0":
+      label: Step B
+      node_type: expr
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "CallsDedup|c:func:0|h:step-c:0":
+      label: Step C
+      node_type: expr
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "CallsDedup|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: src/control_flow/headers/duplicate_function_calls.baml
+        start: 67
+        end: 82
+    "CallsDedup|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: src/control_flow/headers/duplicate_function_calls.baml
+        start: 103
+        end: 118
+    "CallsDedup|c:func:0|s:2":
+      label: stmt
+      node_type: stmt
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: src/control_flow/headers/duplicate_function_calls.baml
+        start: 139
+        end: 154
+    "CallsDedup|c:func:0|s:3":
+      label: expr
+      node_type: expr
+      parent: "CallsDedup|c:func:0"
+      span:
+        file: src/control_flow/headers/duplicate_function_calls.baml
+        start: 159
+        end: 164
+  edges:
+    "CallsDedup|c:func:0":
+      - dst: "CallsDedup|c:func:0|h:step-a:0"
+        label: ""
+    "CallsDedup|c:func:0|h:step-a:0":
+      - dst: "CallsDedup|c:func:0|s:0"
+        label: ""
+    "CallsDedup|c:func:0|h:step-b:0":
+      - dst: "CallsDedup|c:func:0|s:1"
+        label: ""
+    "CallsDedup|c:func:0|h:step-c:0":
+      - dst: "CallsDedup|c:func:0|s:2"
+        label: ""
+    "CallsDedup|c:func:0|s:0":
+      - dst: "CallsDedup|c:func:0|h:step-b:0"
+        label: ""
+    "CallsDedup|c:func:0|s:1":
+      - dst: "CallsDedup|c:func:0|h:step-c:0"
+        label: ""
+    "CallsDedup|c:func:0|s:2":
+      - dst: "CallsDedup|c:func:0|s:3"
+        label: ""

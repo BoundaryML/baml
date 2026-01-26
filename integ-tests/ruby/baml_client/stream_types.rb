@@ -26,8 +26,25 @@ module BamlClient
       const :state, Symbol
   end
   # #########################################################################
-  # Generated classes (101)
+  # Generated classes (109)
   # #########################################################################
+
+
+  class AddTodoItem < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :item, String
+      const :time, String
+      const :description, String
+  end
+
+
+  class AddressWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :street, T.nilable(String)
+      const :city, T.nilable(String)
+      const :zipcode, T.nilable(String)
+  end
 
 
   class AnotherObject < T::Struct
@@ -111,8 +128,8 @@ module BamlClient
 
   class ClassWithBlockDone < T::Struct
       include Baml::Sorbet::Struct
-      const :i_16_digits, T.nilable(Integer)
-      const :s_20_words, T.nilable(String)
+      const :i_16_digits, Integer
+      const :s_20_words, String
   end
 
 
@@ -187,6 +204,23 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :client_details, T.nilable(ClientDetails1559)
       const :notes, T::Array[Note1599]
+  end
+
+
+  class DummyJsonTodo < T::Struct
+      include Baml::Sorbet::Struct
+      const :id, T.nilable(Integer)
+      const :todo, T.nilable(String)
+      const :completed, T.nilable(T::Boolean)
+      const :userId, T.nilable(Integer)
+  end
+
+
+  class DummyJsonTodoUpdate < T::Struct
+      include Baml::Sorbet::Struct
+      const :todo, T.nilable(String)
+      const :completed, T.nilable(T::Boolean)
+      const :userId, T.nilable(Integer)
   end
 
 
@@ -552,6 +586,15 @@ module BamlClient
   end
 
 
+  class PersonWithMeta < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :age, T.nilable(Integer)
+      const :address, T.nilable(AddressWithMeta)
+      const :tags, T::Array[String]
+  end
+
+
   class PhoneNumber < T::Struct
       include Baml::Sorbet::Struct
       const :value, T.nilable(String)
@@ -668,6 +711,21 @@ module BamlClient
   end
 
 
+  class SkipDynamicClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :value, T.nilable(String)
+      const :internal_id, T.nilable(String)
+  end
+
+
+  class SkipNonDynamicClass < T::Struct
+      include Baml::Sorbet::Struct
+      const :name, T.nilable(String)
+      const :description, T.nilable(String)
+      const :metadata, T.nilable(String)
+  end
+
+
   class SmallThing < T::Struct
       include Baml::Sorbet::Struct
       const :i_16_digits, Integer
@@ -725,6 +783,13 @@ module BamlClient
   end
 
 
+  class TodoMessageToUser < T::Struct
+      include Baml::Sorbet::Struct
+      const :type, String
+      const :message, T.nilable(String)
+  end
+
+
   class Tree < T::Struct
       include Baml::Sorbet::Struct
       const :data, T.nilable(Integer)
@@ -777,7 +842,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated type aliases (20)
+  # Generated type aliases (21)
   # #########################################################################
 
 
@@ -839,6 +904,9 @@ module BamlClient
 
 
   RecursiveUnion = T.type_alias{ T.nilable(T.any(String, T::Hash[String, T.anything])) }
+
+
+  TodoTool = T.type_alias{ T.nilable(T.any(AddTodoItem, TodoMessageToUser)) }
 
 
   end

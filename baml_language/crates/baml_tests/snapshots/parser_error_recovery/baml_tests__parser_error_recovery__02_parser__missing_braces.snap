@@ -1,0 +1,34 @@
+---
+source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "User"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Another"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected '}', found class
+   ╭─[ missing_braces.baml:5:1 ]
+   │
+ 5 │ class Another {  // Should still parse this class
+   │ ──┬──  
+   │   ╰──── Expected '}', found class
+   │ 
+   │ Note: Error code: E0010
+───╯

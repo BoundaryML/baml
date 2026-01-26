@@ -14,6 +14,7 @@ use crate::TestStatus;
 impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap) {}
 
+    #[allow(clippy::print_stdout)]
     fn render_final(
         &self,
         test_status_map: &TestExecutionStatusMap,

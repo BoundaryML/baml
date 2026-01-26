@@ -1,0 +1,532 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/ExampleHeaders.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"setup\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                        start: 49,\n                        end: 58,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"x\",\n                value: Identifier(\n                    \"value\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                        start: 71,\n                        end: 76,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                    start: 63,\n                    end: 78,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"branching\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                        start: 83,\n                        end: 96,\n                    },\n                },\n            ),\n            Expression {\n                expr: If {\n                    condition: BinaryOperation {\n                        left: Identifier(\n                            \"x\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                start: 105,\n                                end: 106,\n                            },\n                        ),\n                        operator: Gt,\n                        right: NumericValue(\n                            \"0\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                start: 109,\n                                end: 110,\n                            },\n                        ),\n                        span: Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                            start: 105,\n                            end: 110,\n                        },\n                    },\n                    if_branch: Block(\n                        Block {\n                            statements: [\n                                HeaderContextEnter(\n                                    HeaderContext {\n                                        level: 1,\n                                        title: \"positive path\",\n                                        span: Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                            start: 122,\n                                            end: 140,\n                                        },\n                                    },\n                                ),\n                            ],\n                            trailing_expr: Some(\n                                NumericValue(\n                                    \"1\",\n                                    Span {\n                                        file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                        start: 149,\n                                        end: 150,\n                                    },\n                                ),\n                            ),\n                        },\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                            start: 112,\n                            end: 156,\n                        },\n                    ),\n                    else_branch: Some(\n                        Block(\n                            Block {\n                                statements: [\n                                    HeaderContextEnter(\n                                        HeaderContext {\n                                            level: 1,\n                                            title: \"non-positive path\",\n                                            span: Span {\n                                                file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                                start: 172,\n                                                end: 194,\n                                            },\n                                        },\n                                    ),\n                                ],\n                                trailing_expr: Some(\n                                    NumericValue(\n                                        \"0\",\n                                        Span {\n                                            file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                            start: 203,\n                                            end: 204,\n                                        },\n                                    ),\n                                ),\n                            },\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                                start: 162,\n                                end: 210,\n                            },\n                        ),\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                        start: 101,\n                        end: 210,\n                    },\n                },\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/ExampleHeaders.baml\", contents: ... },\n                    start: 101,\n                    end: 211,\n                },\n            },\n        ],\n        trailing_expr: None,\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: ExampleHeaders
+      log_filter_key: "ExampleHeaders|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 0
+        end: 212
+    "1":
+      label: setup
+      log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 49
+        end: 58
+    "2":
+      label: branching
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 83
+        end: 96
+    "3":
+      label: if (x > 0)
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+      node_type: branch-group
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 101
+        end: 210
+    "4":
+      label: if (x > 0)
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 112
+        end: 156
+    "5":
+      label: positive path
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+      node_type: header
+      parent: "4"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 122
+        end: 140
+    "6":
+      label: else
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+      node_type: branch-arm
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 162
+        end: 210
+    "7":
+      label: non-positive path
+      log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+      node_type: header
+      parent: "6"
+      span:
+        file: src/control_flow/testdata/ExampleHeaders.baml
+        start: 172
+        end: 194
+  edges:
+    "1":
+      - "2"
+mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"5: positive path\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+    json:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    subgraph n3[\"3: BranchGroup: if (x > 0)\"]\n      direction TB\n      subgraph n4[\"4: BranchArm: if (x > 0)\"]\n        direction TB\n        n5[\"5: positive path\"]\n      end\n      subgraph n6[\"6: BranchArm: else\"]\n        direction TB\n        n7[\"7: non-positive path\"]\n      end\n    end\n  end\n  n1 --> n2\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "4"
+          - "6"
+    json:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "4":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 112
+            end: 156
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "4"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "6":
+          label: else
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1"
+          node_type: branch-arm
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 162
+            end: 210
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "6"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "4"
+          - "6"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    n3[\"3: BranchGroup: if (x > 0)\"]\n    subgraph n4[\"4: BranchArm: if (x > 0)\"]\n      direction TB\n      n5[\"5: positive path\"]\n    end\n    subgraph n6[\"6: BranchArm: else\"]\n      direction TB\n      n7[\"7: non-positive path\"]\n    end\n    n3 --> n4\n    n3 --> n6\n  end\n  n1 --> n2\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "5"
+          - "7"
+    json:
+      nodes:
+        "0":
+          label: ExampleHeaders
+          log_filter_key: "ExampleHeaders|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 0
+            end: 212
+        "1":
+          label: setup
+          log_filter_key: "ExampleHeaders|root:0|hdr:setup:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 49
+            end: 58
+        "2":
+          label: branching
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 83
+            end: 96
+        "3":
+          label: if (x > 0)
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0"
+          node_type: branch-group
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 101
+            end: 210
+        "5":
+          label: positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:if-x-0:0|hdr:positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 122
+            end: 140
+        "7":
+          label: non-positive path
+          log_filter_key: "ExampleHeaders|root:0|hdr:branching:1|bg:if-x-0:0|arm:else:1|hdr:non-positive-path:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/ExampleHeaders.baml
+            start: 172
+            end: 194
+      edges:
+        "1":
+          - "2"
+        "3":
+          - "5"
+          - "7"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: ExampleHeaders\"]\n  direction TB\n  n1[\"1: setup\"]\n  subgraph n2[\"2: branching\"]\n    direction TB\n    n3[\"3: BranchGroup: if (x > 0)\"]\n    n4[\"5: positive path\"]\n    n5[\"7: non-positive path\"]\n    n3 --> n4\n    n3 --> n5\n  end\n  n1 --> n2\nend\n"

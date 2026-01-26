@@ -563,3 +563,82 @@ test_partial_deserializer_streaming!(
     TypeIR::class("Foo"),
     {"y": "hello"}
 );
+
+// Regression test for GitHub issue #2567: Streaming Bug with Parsing Artifacts
+// When streaming with partial data, AnyOf values should extract the original
+// string content, not leak internal parsing representations like "AnyOf[..."
+const STREAMING_ANYOF_BUG: &str = r#"
+class Inspiration {
+  Description string
+}
+"#;
+
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_string_field,
+    STREAMING_ANYOF_BUG,
+    r#"{"Description": "A beautiful sunset over the ocean"#,
+    TypeIR::class("Inspiration"),
+    {"Description": "A beautiful sunset over the ocean"}
+);
+
+// Test with a more complex partial input that might trigger AnyOf creation
+// This simulates the scenario where the parser is uncertain about structure
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_with_markdown_partial,
+    STREAMING_ANYOF_BUG,
+    r#"```json
+{"Description": "Test"#,
+    TypeIR::class("Inspiration"),
+    {"Description": "Test"}
+);
+
+test_partial_deserializer_streaming!(
+  test_person_with_check,
+  r#"
+  class Person {
+    known_ages int | null @check(hi, {{ false }})
+    name string
+  }
+  "#,
+  r#"{
+    known_ages: 10
+  "#,
+  TypeIR::class("Person"),
+  {"known_ages": {
+    "value": null,
+    "checks": {
+      "hi": {
+        "name": "hi",
+        "expression": "false",
+        "status": "failed"
+      }
+    }
+  }, "name": null}
+);
+
+// Regression test for nested AnyOf leaking into string output
+// This tests the scenario where a user sees "[json AnyOf[{,AnyOf[{,{},],]]i" in output
+const NESTED_ANYOF_BUG: &str = r#"
+class Response {
+  content string
+}
+"#;
+
+// Test that partial JSON with markdown doesn't leak AnyOf representations
+test_partial_deserializer_streaming!(
+    test_streaming_nested_anyof_no_leak,
+    NESTED_ANYOF_BUG,
+    r#"```json
+{"content": "[json"#,
+    TypeIR::class("Response"),
+    {"content": "[json"}
+);
+
+// Test with incomplete nested object that might create AnyOf
+test_partial_deserializer_streaming!(
+    test_streaming_anyof_with_nested_incomplete,
+    NESTED_ANYOF_BUG,
+    r#"{"content": "test value with {"#,
+    TypeIR::class("Response"),
+    {"content": "test value with {"}
+);

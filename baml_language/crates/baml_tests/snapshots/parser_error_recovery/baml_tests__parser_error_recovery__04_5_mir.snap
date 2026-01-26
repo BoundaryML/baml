@@ -1,0 +1,30 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn Foo:
+  (LLM function - no MIR)
+
+fn Incomplete:
+  (no MIR due to errors: function body is missing)
+
+fn NextFunction() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Void
+
+    bb0: {
+        _0 = const "parsed";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}

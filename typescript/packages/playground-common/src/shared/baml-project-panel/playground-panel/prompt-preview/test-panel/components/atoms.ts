@@ -17,7 +17,7 @@ export interface TabularViewConfig {
   showDuration: boolean
 }
 
-export const testPanelViewTypeAtom = atomWithStorage<TestPanelViewType>('testPanelViewType', TestPanelViewType.TABULAR, sessionStore)
+export const testPanelViewTypeAtom = atomWithStorage<TestPanelViewType>('testPanelViewType', TestPanelViewType.CARD_EXPANDED, sessionStore)
 export const tabularViewConfigAtom = atomWithStorage<TabularViewConfig>('tabularViewConfig', {
   showInputs: true,
   showModel: false,

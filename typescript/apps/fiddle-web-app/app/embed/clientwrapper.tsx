@@ -1,12 +1,12 @@
 'use client';
-import { filesAtom, useWaitForWasm } from '@baml/playground-common';
+import { filesAtom } from '@baml/playground-common';
 import { PromptPreview } from '@baml/playground-common/prompt-preview';
-import { JotaiProvider } from '@baml/playground-common/jotai-provider';
+import { BAMLSDKProvider, useBAMLSDK } from '@baml/playground-common/sdk';
 import { CodeMirrorViewer } from '@baml/playground-common/codemirror-viewer';
 import { EventListener } from '@baml/playground-common/event-listener';
 import { ResizableHandle, ResizablePanelGroup } from '@baml/ui/resizable';
 import { ResizablePanel } from '@baml/ui/resizable';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { isMobile } from 'react-device-detect';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,7 +14,6 @@ import { activeFileNameAtom } from '../[project_id]/_atoms/atoms';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Button } from '@baml/ui/button';
 import { RefreshCcw } from 'lucide-react';
-import { BrandedLoading } from '../_components/BrandedLoading';
 import FileViewer from '../[project_id]/_components/Tree/FileViewer';
 import { useSearchParams } from 'next/navigation';
 
@@ -73,19 +72,28 @@ interface EmbedComponentProps {
 }
 
 export default function EmbedComponent({ files }: EmbedComponentProps) {
+  // Convert files array to record format for SDK
+  const initialFiles = useMemo(() => {
+    const record: Record<string, string> = {};
+    for (const f of files) {
+      record[f.path] = f.content;
+    }
+    return record;
+  }, [files]);
+
   return (
-    <JotaiProvider>
+    <BAMLSDKProvider mode="wasm" initialFiles={initialFiles}>
       <EmbedComponentInner files={files} />
-    </JotaiProvider>
+    </BAMLSDKProvider>
   );
 }
 
 function EmbedComponentInner({ files }: EmbedComponentProps) {
-  const [editorFiles, setEditorFiles] = useAtom(filesAtom);
-  const [isLoading, setIsLoading] = useState(true);
+  const sdk = useBAMLSDK();
+  const editorFiles = useAtomValue(filesAtom);
   const [previewReady, setPreviewReady] = useState(false);
-  const isWasmReady = useWaitForWasm();
-  const activeFileNameAtomValue = useAtomValue(activeFileNameAtom);
+  // SDK provider already ensures WASM is loaded before rendering children
+  const activeFileName = useAtomValue(activeFileNameAtom);
   const setActiveFileName = useSetAtom(activeFileNameAtom);
   const searchParams = useSearchParams();
   const uiToggles = useMemo(() => {
@@ -101,24 +109,13 @@ function EmbedComponentInner({ files }: EmbedComponentProps) {
     };
   }, [searchParams]);
 
-  // Use fallback active file name when WASM is not ready
-  const fallbackFileName = files.find((f) => f.path.endsWith('.baml'))?.path || 'main.baml';
-  const activeFileName = isWasmReady ? activeFileNameAtomValue : fallbackFileName;
-
-  useEffect(() => {
-    // Populate files atom from provided project files
-    const record: Record<string, string> = {};
-    for (const f of files) {
-      record[f.path] = f.content;
-    }
-    setEditorFiles(record);
-    setIsLoading(false);
-  }, [files, setEditorFiles]);
+  // Note: Initial files are provided via BAMLSDKProvider's initialFiles prop
+  // No need for a useEffect here - the provider handles initialization
 
   // Apply default file if provided via URL (takes precedence once on mount when valid)
   const appliedDefaultRef = useRef(false);
   useEffect(() => {
-    if (isLoading || appliedDefaultRef.current) return;
+    if (appliedDefaultRef.current) return;
     const availablePaths = Object.keys(editorFiles);
     const isValidPath = (p: string | null | undefined) => !!p && availablePaths.includes(p);
     const defaultFile = searchParams.get('defaultFile') ?? undefined;
@@ -126,19 +123,15 @@ function EmbedComponentInner({ files }: EmbedComponentProps) {
       appliedDefaultRef.current = true;
       setActiveFileName(defaultFile as string);
     }
-  }, [isLoading, editorFiles, setActiveFileName, searchParams]);
+  }, [editorFiles, setActiveFileName, searchParams]);
 
   // Mark preview as ready after first paint to avoid flash between loader and preview
   useEffect(() => {
-    if (!isLoading && isWasmReady && !previewReady) {
+    if (!previewReady) {
       const id = requestAnimationFrame(() => setPreviewReady(true));
       return () => cancelAnimationFrame(id);
     }
-  }, [isLoading, isWasmReady, previewReady]);
-
-  if (isLoading) {
-    return <BrandedLoading />;
-  }
+  }, [previewReady]);
 
   return (
     <div className="flex justify-center items-center w-screen h-screen bg-background relative">
@@ -179,7 +172,7 @@ function EmbedComponentInner({ files }: EmbedComponentProps) {
                         Object.entries(editorFiles).forEach(([key, value]) => {
                           newFiles[key] = key === activeFileName ? v : value;
                         });
-                        setEditorFiles(newFiles);
+                        sdk.files.update(newFiles);
                       }}
                     />
                   )}

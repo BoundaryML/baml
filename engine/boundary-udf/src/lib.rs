@@ -50,13 +50,9 @@ impl<T: ?Sized> Ord for HashByPtr<'_, T> {
 
 impl<T: ?Sized> Eq for HashByPtr<'_, T> {}
 
-impl<'a, T: ?Sized> PartialOrd for HashByPtr<'a, T> {
+impl<T: ?Sized> PartialOrd for HashByPtr<'_, T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        // NOTE: (Jesus) cast to *const () removes metadata so that we're sure that we're only
-        // comparing raw addresses.
-        let self_ptr = self.0 as *const T as *const ();
-        let other_ptr = other.0 as *const T as *const ();
-        self_ptr.partial_cmp(&other_ptr)
+        Some(self.cmp(other))
     }
 }
 

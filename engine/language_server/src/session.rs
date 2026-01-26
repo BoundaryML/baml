@@ -13,7 +13,7 @@ use index::DocumentController;
 use itertools::any;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 use parking_lot::Mutex;
-use playground_server::{FrontendMessage, PreLangServerToWasmMessage};
+use playground_server::{WebviewCommand, WebviewRouterMessage};
 use serde_json::Value;
 
 pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
@@ -52,7 +52,7 @@ pub struct Session {
     pub baml_settings: BamlSettings,
 
     pub playground_port: u16,
-    pub playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+    pub to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
 }
 
 impl Clone for Session {
@@ -64,7 +64,7 @@ impl Clone for Session {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             baml_settings: self.baml_settings.clone(),
             playground_port: self.playground_port,
-            playground_tx: self.playground_tx.clone(),
+            to_webview_router_tx: self.to_webview_router_tx.clone(),
         }
     }
 }
@@ -76,7 +76,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
         playground_port: u16,
-        playground_tx: broadcast::Sender<PreLangServerToWasmMessage>,
+        to_webview_router_tx: broadcast::Sender<WebviewRouterMessage>,
         client_version: Option<String>,
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
@@ -122,11 +122,11 @@ impl Session {
                     global_settings.baml
                 );
                 let baml_settings = global_settings.baml.clone().unwrap_or_default();
-                tracing::info!("--- Session::new final baml_settings: {:?}", baml_settings);
+                tracing::info!("--- Session::new final baml_settings: {:#?}", baml_settings);
                 baml_settings
             },
             playground_port,
-            playground_tx,
+            to_webview_router_tx,
         })
     }
 
@@ -159,7 +159,17 @@ impl Session {
             }
         }
     }
+}
+#[derive(Debug, Clone)]
+pub struct NotInBamlSrc;
 
+impl std::fmt::Display for NotInBamlSrc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cannot resolve baml project")
+    }
+}
+
+impl Session {
     /// Gets or creates a project for the given path.
     ///
     /// This is the primary method for working with projects, replacing the multiple
@@ -171,30 +181,33 @@ impl Session {
     pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<Arc<Mutex<Project>>> {
+    ) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
         // Try to find the baml_src directory
-        let baml_src = find_top_level_parent(path.as_ref())?;
+        let baml_src_root_path = find_top_level_parent(path.as_ref()).ok_or(NotInBamlSrc)?;
 
         // Lock once and perform all operations within this scope
         let mut projects = self.baml_src_projects.lock();
 
         // If project exists, return it
-        if let Some(project) = projects.get(&baml_src) {
-            return Some(project.clone());
+        if let Some(project) = projects.get(&baml_src_root_path) {
+            return Ok(project.clone());
         }
 
         // Create a new project if needed
-        tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
+        tracing::info!(
+            "Creating new project for baml_src: {:?}",
+            baml_src_root_path
+        );
         let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
-            root_dir_name: baml_src.clone(),
+            root_dir_name: baml_src_root_path.clone(),
             files: HashMap::new(),
             unsaved_files: HashMap::new(),
             cached_runtime: None,
         })));
 
         // Insert and return the new project
-        projects.insert(baml_src, new_project.clone());
-        Some(new_project)
+        projects.insert(baml_src_root_path, new_project.clone());
+        Ok(new_project)
     }
 
     pub fn print_baml_projects(&self) {
@@ -232,12 +245,19 @@ impl Session {
 
         let project_updates: Vec<HashMap<_, _>> = baml_src_projects
             .iter_mut()
-            .map(|(_project_root, project)| {
+            .map(|(project_root, project)| {
                 let files_map = project
                     .lock()
                     .baml_project
                     .load_files()
                     .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
+
+                tracing::info!(
+                    "Loaded {} files for project root: {:?}",
+                    files_map.len(),
+                    project_root
+                );
+
                 {
                     let default_flags = vec!["beta".to_string()];
                     project.lock().update_runtime(
@@ -255,7 +275,13 @@ impl Session {
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        tracing::info!("Initial reload of {} files", project_updates.len());
+
+        let total_files: usize = project_updates.iter().map(|m| m.len()).sum();
+        tracing::info!(
+            "Initial reload complete: {} projects, {} total files",
+            project_updates.len(),
+            total_files
+        );
 
         // Guard no longer used. We can drop now instead of waiting for the end
         // of scope.
@@ -300,7 +326,7 @@ impl Session {
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
         let file_path = url.to_file_path().ok()?;
-        let project = self.get_or_create_project(&file_path)?;
+        let project = self.get_or_create_project(&file_path).ok()?;
 
         let document_key =
             DocumentKey::from_url(&project.lock().baml_project.root_dir_name, &url).ok()?;
@@ -440,8 +466,12 @@ impl DocumentSnapshot {
         self.position_encoding
     }
 
-    pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
-        let file_path = self.document_ref.file_url().to_file_path().ok()?;
+    pub(crate) fn project(&self) -> Result<Arc<Mutex<Project>>, NotInBamlSrc> {
+        let file_path = self
+            .document_ref
+            .file_url()
+            .to_file_path()
+            .expect("Failed to convert URL to path");
         self.session.get_or_create_project(&file_path)
     }
 
@@ -476,7 +506,7 @@ mod tests {
         let global_settings = ClientSettings::default();
         let workspace_folders = vec![]; // Start with empty workspace
 
-        let (playground_tx, _) = broadcast::channel(1);
+        let (to_webview_router_tx, _) = broadcast::channel(1);
 
         Session::new(
             &client_capabilities,
@@ -484,7 +514,7 @@ mod tests {
             global_settings,
             &workspace_folders,
             0,
-            playground_tx,
+            to_webview_router_tx,
             None, // No client_version for this test
         )
         .unwrap()
@@ -505,21 +535,21 @@ mod tests {
 
         // Create a project for key1
         let project1 = session.get_or_create_project(&key1);
-        assert!(project1.is_some(), "Project should be created for key1");
+        assert!(project1.is_ok(), "Project should be created for key1");
 
         // Verify that get_or_create_project returns the same project when called again
         let project1_again = session.get_or_create_project(&key1);
-        assert!(project1_again.is_some(), "Project should be found for key1");
+        assert!(project1_again.is_ok(), "Project should be found for key1");
 
         // Create a project for key2
         let project2 = session.get_or_create_project(&key2);
-        assert!(project2.is_some(), "Project should be created for key2");
+        assert!(project2.is_ok(), "Project should be created for key2");
 
         // Test with a file path inside key2
         let file_path_in_key2 = key2.join("chat.baml");
         let found_project = session.get_or_create_project(&file_path_in_key2);
         assert!(
-            found_project.is_some(),
+            found_project.is_ok(),
             "Project should be found for file path within key2"
         );
 

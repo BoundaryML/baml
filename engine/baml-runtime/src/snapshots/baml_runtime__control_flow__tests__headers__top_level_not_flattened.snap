@@ -1,0 +1,37 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::TopLevelNotFlattened":
+  nodes:
+    "TopLevelNotFlattened|c:func:0":
+      label: TopLevelNotFlattened
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/top_level_not_flattened.baml
+        start: 18
+        end: 94
+    "TopLevelNotFlattened|c:func:0|h:only-child:0":
+      label: Only Child
+      node_type: expr
+      parent: "TopLevelNotFlattened|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "TopLevelNotFlattened|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "TopLevelNotFlattened|c:func:0"
+      span:
+        file: src/control_flow/headers/top_level_not_flattened.baml
+        start: 86
+        end: 92
+  edges:
+    "TopLevelNotFlattened|c:func:0":
+      - dst: "TopLevelNotFlattened|c:func:0|h:only-child:0"
+        label: ""
+    "TopLevelNotFlattened|c:func:0|h:only-child:0":
+      - dst: "TopLevelNotFlattened|c:func:0|s:1"
+        label: ""

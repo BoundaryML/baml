@@ -33,6 +33,7 @@ baml-ids.workspace = true
 internal-baml-ast = { path = "../baml-lib/ast" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 baml-log.workspace = true
+baml-viz-events = { path = "../baml-viz-events" }
 baml-types.workspace = true
 baml-rpc.workspace = true
 baml-vm = { path = "../baml-vm" }
@@ -58,7 +59,6 @@ indoc.workspace = true
 json_comments = "0.2.2"
 jsonish.workspace = true
 generators-lib = { path = "../generators/utils/generators_lib" }
-internal-baml-codegen.workspace = true
 generators-openapi = { path = "../generators/languages/openapi" }
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
@@ -67,6 +67,7 @@ log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
 pretty.workspace = true
+percent-encoding = "2.3.1"
 regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
@@ -125,6 +126,9 @@ once_cell.workspace = true
 time.workspace = true
 tempfile = "3.19.0"
 sha2 = "0.10.9"
+blake3 = "1.8.2"
+flate2 = "1.1.5"
+similar = "2.6"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -135,14 +139,13 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
-
+aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
 ] }
-colored = { workspace = true, default-features = false, features = [
+colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "=0.3.69"
+js-sys.workspace = true
 reqwest = { version = "0.12.12", features = [
   "stream",
   "json",
@@ -157,18 +160,8 @@ uuid = { workspace = true, features = ["v4", "serde", "js"] }
 # It may produce a dependency cycle in projects that use wasm and import baml.
 wasm-bindgen = "^0.2.74"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3.69", features = [
-  "Crypto",
-  "CryptoKey",
-  "Headers",
-  "Request",
-  "RequestInit",
-  "Response",
-  "RequestMode",
-  "SubtleCrypto",
-  "Window",
-] }
-wasmtimer = "0.4.1"
+web-sys.workspace = true
+wasmtimer = "0.4.3"
 tokio = { version = "1", features = ["rt", "sync"] }
 
 
@@ -180,7 +173,7 @@ aws-config = "=1.5.3"
 # https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
-aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
+aws-sdk-bedrockruntime = { version = "=1.106.0", default-features = false, features = [
 ] }
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
@@ -198,6 +191,9 @@ which = "6.0.3"
 indicatif = "0.17"
 junit-report = "0.8.3"
 ratatui = "0.29"
+unicode-width = "0.1"
+dirs = "5.0"
+supports-color = "3"
 crossterm = "0.28"
 reedline = "0.37"
 
@@ -206,6 +202,8 @@ reedline = "0.37"
 defaults = ["skip-integ-tests"]
 internal = []
 skip-integ-tests = []
+# Use the THIR interpreter runtime instead of the VM bytecode runtime
+thir-interpreter = []
 
 
 [dev-dependencies]
@@ -222,3 +220,4 @@ walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 serial_test = "3.2.0"
 console_error_panic_hook = "0.1.7"
+insta = { version = "1.43.2", features = ["yaml", "glob"] }

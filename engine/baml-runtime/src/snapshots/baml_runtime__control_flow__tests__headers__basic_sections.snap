@@ -1,0 +1,125 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::BasicSections":
+  nodes:
+    "BasicSections|c:func:0":
+      label: BasicSections
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 0
+        end: 300
+    "BasicSections|c:func:0|h:final-output:0":
+      label: Final Output
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicSections|c:func:0|h:generate-summary:0":
+      label: Generate Summary
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicSections|c:func:0|h:main-processing:0":
+      label: Main Processing
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicSections|c:func:0|h:make-space:0":
+      label: Make Space
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicSections|c:func:0|h:prepare-final-output:0":
+      label: Prepare Final Output
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "BasicSections|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "BasicSections|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 65
+        end: 86
+    "BasicSections|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "BasicSections|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 117
+        end: 140
+    "BasicSections|c:func:0|s:2":
+      label: stmt
+      node_type: stmt
+      parent: "BasicSections|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 165
+        end: 182
+    "BasicSections|c:func:0|s:3":
+      label: stmt
+      node_type: stmt
+      parent: "BasicSections|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 218
+        end: 247
+    "BasicSections|c:func:0|s:5":
+      label: expr
+      node_type: expr
+      parent: "BasicSections|c:func:0"
+      span:
+        file: src/control_flow/headers/basic_sections.baml
+        start: 275
+        end: 298
+  edges:
+    "BasicSections|c:func:0":
+      - dst: "BasicSections|c:func:0|h:main-processing:0"
+        label: ""
+    "BasicSections|c:func:0|h:final-output:0":
+      - dst: "BasicSections|c:func:0|s:5"
+        label: ""
+    "BasicSections|c:func:0|h:generate-summary:0":
+      - dst: "BasicSections|c:func:0|s:1"
+        label: ""
+    "BasicSections|c:func:0|h:main-processing:0":
+      - dst: "BasicSections|c:func:0|s:0"
+        label: ""
+    "BasicSections|c:func:0|h:make-space:0":
+      - dst: "BasicSections|c:func:0|s:2"
+        label: ""
+    "BasicSections|c:func:0|h:prepare-final-output:0":
+      - dst: "BasicSections|c:func:0|s:3"
+        label: ""
+    "BasicSections|c:func:0|s:0":
+      - dst: "BasicSections|c:func:0|h:generate-summary:0"
+        label: ""
+    "BasicSections|c:func:0|s:1":
+      - dst: "BasicSections|c:func:0|h:make-space:0"
+        label: ""
+    "BasicSections|c:func:0|s:2":
+      - dst: "BasicSections|c:func:0|h:prepare-final-output:0"
+        label: ""
+    "BasicSections|c:func:0|s:3":
+      - dst: "BasicSections|c:func:0|h:final-output:0"
+        label: ""

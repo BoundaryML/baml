@@ -1,21 +1,19 @@
 //! VM tests for operators (arithmetic, logical, bitwise, comparison, assignment).
 
-use baml_vm::{Value, VmExecState};
-
 mod common;
-use common::{assert_vm_executes, Program};
+use common::{assert_vm_executes, ExecState, Program, Value};
 
 // Arithmetic operators
 #[test]
 fn basic_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 + 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -23,12 +21,12 @@ fn basic_add() -> anyhow::Result<()> {
 fn basic_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 - 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -36,12 +34,12 @@ fn basic_sub() -> anyhow::Result<()> {
 fn basic_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 1 * 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -49,12 +47,12 @@ fn basic_mul() -> anyhow::Result<()> {
 fn basic_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 / 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -62,12 +60,12 @@ fn basic_div() -> anyhow::Result<()> {
 fn basic_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 % 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -76,12 +74,12 @@ fn basic_mod() -> anyhow::Result<()> {
 fn basic_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 & 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -89,12 +87,12 @@ fn basic_bit_and() -> anyhow::Result<()> {
 fn basic_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 | 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(11)),
+        expected: ExecState::Complete(Value::Int(11)),
     })
 }
 
@@ -102,12 +100,12 @@ fn basic_bit_or() -> anyhow::Result<()> {
 fn basic_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 ^ 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(9)),
+        expected: ExecState::Complete(Value::Int(9)),
     })
 }
 
@@ -115,12 +113,12 @@ fn basic_bit_xor() -> anyhow::Result<()> {
 fn basic_bit_shift_left() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 << 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(80)),
+        expected: ExecState::Complete(Value::Int(80)),
     })
 }
 
@@ -128,12 +126,12 @@ fn basic_bit_shift_left() -> anyhow::Result<()> {
 fn basic_bit_shift_right() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 10 >> 3
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -142,12 +140,12 @@ fn basic_bit_shift_right() -> anyhow::Result<()> {
 fn unary_neg() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 -1
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -155,12 +153,12 @@ fn unary_neg() -> anyhow::Result<()> {
 fn unary_not() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 !true
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -169,12 +167,12 @@ fn unary_not() -> anyhow::Result<()> {
 fn basic_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 == 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -182,12 +180,12 @@ fn basic_eq() -> anyhow::Result<()> {
 fn basic_not_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 != 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -195,12 +193,12 @@ fn basic_not_eq() -> anyhow::Result<()> {
 fn basic_gt() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 > 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -208,12 +206,12 @@ fn basic_gt() -> anyhow::Result<()> {
 fn basic_gt_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 >= 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -221,12 +219,12 @@ fn basic_gt_eq() -> anyhow::Result<()> {
 fn basic_lt() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 < 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -234,12 +232,12 @@ fn basic_lt() -> anyhow::Result<()> {
 fn basic_lt_eq() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 1 <= 2
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -248,12 +246,12 @@ fn basic_lt_eq() -> anyhow::Result<()> {
 fn basic_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 true && false
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(false)),
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }
 
@@ -261,12 +259,12 @@ fn basic_and() -> anyhow::Result<()> {
 fn basic_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> bool {
+            function main() -> bool {
                 true || false
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Bool(true)),
+        expected: ExecState::Complete(Value::Bool(true)),
     })
 }
 
@@ -275,14 +273,14 @@ fn basic_or() -> anyhow::Result<()> {
 fn basic_assign_add() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x += 2;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(3)),
+        expected: ExecState::Complete(Value::Int(3)),
     })
 }
 
@@ -290,14 +288,14 @@ fn basic_assign_add() -> anyhow::Result<()> {
 fn basic_assign_sub() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x -= 2;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(-1)),
+        expected: ExecState::Complete(Value::Int(-1)),
     })
 }
 
@@ -305,14 +303,14 @@ fn basic_assign_sub() -> anyhow::Result<()> {
 fn basic_assign_mul() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 1;
                 x *= 2;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -320,14 +318,14 @@ fn basic_assign_mul() -> anyhow::Result<()> {
 fn basic_assign_div() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x /= 2;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(5)),
+        expected: ExecState::Complete(Value::Int(5)),
     })
 }
 
@@ -335,14 +333,14 @@ fn basic_assign_div() -> anyhow::Result<()> {
 fn basic_assign_mod() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x %= 3;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(1)),
+        expected: ExecState::Complete(Value::Int(1)),
     })
 }
 
@@ -350,14 +348,14 @@ fn basic_assign_mod() -> anyhow::Result<()> {
 fn basic_assign_bit_and() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x &= 3;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(2)),
+        expected: ExecState::Complete(Value::Int(2)),
     })
 }
 
@@ -365,14 +363,14 @@ fn basic_assign_bit_and() -> anyhow::Result<()> {
 fn basic_assign_bit_or() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x |= 3;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(11)),
+        expected: ExecState::Complete(Value::Int(11)),
     })
 }
 
@@ -380,13 +378,55 @@ fn basic_assign_bit_or() -> anyhow::Result<()> {
 fn basic_assign_bit_xor() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
-            fn main() -> int {
+            function main() -> int {
                 let x = 10;
                 x ^= 3;
                 x
             }
         "#,
         function: "main",
-        expected: VmExecState::Complete(Value::Int(9)),
+        expected: ExecState::Complete(Value::Int(9)),
+    })
+}
+
+#[test]
+fn instance_of_returns_true() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class StopTool {
+                action "stop"
+            }
+
+            function main() -> bool {
+                let t = StopTool { action: "stop" };
+
+                t instanceof StopTool
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(true)),
+    })
+}
+
+#[test]
+fn instance_of_returns_false() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            class StopTool {
+                action "stop"
+            }
+
+            class StartTool {
+                action "start"
+            }
+
+            function main() -> bool {
+                let t = StopTool { action: "stop" };
+
+                t instanceof StartTool
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Bool(false)),
     })
 }

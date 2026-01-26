@@ -78,6 +78,8 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust

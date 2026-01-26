@@ -1,0 +1,27 @@
+/* We already have react flow styles in packages/ui/src/styles/globals.css but for some reason this one needs to be imported lazily after all other ones run or it wont work. This one removes all the node handles. */
+.react-flow__handle {
+  width: 0;
+  min-width: 0;
+  height: 0;
+  min-height: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+:root {
+  --xy-controls-button-background-color-default: var(--background);
+  --xy-controls-button-background-color-hover-default: var(--muted);
+  --xy-controls-button-color-default: var(--foreground);
+  --xy-controls-button-color-hover-default: var(--foreground);
+  --xy-controls-button-border-color-default: var(--border);
+}
+
+.react-flow__controls-button {
+  background-color: var(--background);
+  border-color: var(--border);
+}
+
+.react-flow__attribution {
+  display: none;
+  visibility: hidden;
+}

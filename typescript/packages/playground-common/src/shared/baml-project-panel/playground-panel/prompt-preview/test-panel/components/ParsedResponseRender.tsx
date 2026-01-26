@@ -1,7 +1,7 @@
 import JsonView from '@uiw/react-json-view'
 import { githubLightTheme as lightTheme } from '@uiw/react-json-view/githubLight'
 import { vscodeTheme as darkTheme } from '@uiw/react-json-view/vscode'
-import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { TestResponseData } from '../../../../../../sdk/interface'
 import { useTheme } from 'next-themes'
 import { RenderPromptPart } from '../../render-text'
 import { ScrollArea } from '@baml/ui/scroll-area'
@@ -12,28 +12,24 @@ const ErrorText = ({ text }: { text: string }) => {
 
 // Renders the parsed response only
 export const ParsedResponseRenderer: React.FC<{
-  response?: WasmFunctionResponse | WasmTestResponse
+  response?: TestResponseData
 }> = ({ response }) => {
   if (!response) {
     return <div className='text-xs text-muted-foreground'>Waiting for response...</div>
   }
 
-  const llmFailure = response.llm_failure()
-  const failureMessage = 'failure_message' in response ? response.failure_message() : undefined
+  const llmFailure = response.llm_failure
+  const failureMessage = response.failure_message
 
   if (llmFailure) {
     return <ErrorText text={llmFailure.message} />
   }
 
-  const parsedResponse = response.parsed_response()
+  const parsedResponse = response.parsed_response
 
   return (
     <div>
-      {typeof parsedResponse === 'string' ? (
-        <ParsedResponseRender response={parsedResponse} />
-      ) : (
-        <ParsedResponseRender response={parsedResponse?.value} />
-      )}
+      <ParsedResponseRender response={parsedResponse?.value} />
       {failureMessage && <ErrorText text={failureMessage} />}
     </div>
   )
@@ -61,7 +57,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
   }
 
   return (
-    <div className='flex max-h-[500px]  text-xs'>
+    <div className='flex max-h-[600px]  text-xs'>
       <ScrollArea className='pr-2 w-full text-xs' type='always'>
         <JsonView
           className='p-1 w-full rounded-md'
@@ -75,7 +71,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
           style={theme === 'dark' ? darkTheme : lightTheme}
         >
           <JsonView.String
-            render={({ children, ...reset }, { type, value, keyName }) => {
+            render={({ children, style: _style, ...reset }, { type, value, keyName }) => {
               if (type === 'type') {
                 return <span />
               }
@@ -89,7 +85,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
             }}
           />
           <JsonView.Colon
-            render={(props, { parentValue, value, keyName }) => {
+            render={({ style: _style, ...props }, { parentValue, value, keyName }) => {
               if (Array.isArray(parentValue) && props.children == ':') {
                 return <span />
               }
@@ -98,21 +94,21 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
           />
 
           <JsonView.Null
-            render={({ children, ...reset }) => (
+            render={({ children, style: _style, ...reset }) => (
               <span {...reset} className='whitespace-pre-wrap break-words'>
                 null
               </span>
             )}
           />
           <JsonView.Undefined
-            render={({ children, ...reset }) => (
+            render={({ children, style: _style, ...reset }) => (
               <span {...reset} className='whitespace-pre-wrap break-words'>
                 undefined
               </span>
             )}
           />
           <JsonView.KeyName
-            render={({ ...props }, { parentValue, value, keyName }) => {
+            render={({ style: _style, ...props }, { parentValue, value, keyName }) => {
               if (Array.isArray(parentValue) && Number.isFinite(props.children)) {
                 return <span className='' />
               }

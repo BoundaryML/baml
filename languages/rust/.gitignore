@@ -1,0 +1,3 @@
+# Vendored FFI libraries - these are built artifacts, not source
+baml-ffi-*/lib/*.a
+baml-ffi-*/lib/*.lib

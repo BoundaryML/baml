@@ -1,5 +1,7 @@
 use anyhow::Result;
-use baml_runtime::{internal::llm_client::ResponseBamlValue, BamlRuntime, FunctionResult};
+use baml_runtime::{
+    errors::ExposedError, internal::llm_client::ResponseBamlValue, BamlRuntime, FunctionResult,
+};
 use once_cell::sync::OnceCell;
 
 use crate::ctypes::{EncodeMeta, EncodeToBuffer};
@@ -55,33 +57,32 @@ pub fn send_result_to_callback(
     let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if is_done {
             let meta = content.0.map_meta(|f| EncodeMeta {
-                field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
+                field_type: f.3.to_non_streaming_type(runtime.ir.as_ref()),
                 checks: &f.1,
             });
 
-            meta.encode_to_c_buffer(
-                runtime.inner.ir.as_ref(),
-                baml_types::StreamingMode::NonStreaming,
-            )
+            meta.encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::NonStreaming)
         } else {
             // Top level types in streaming always have `not_null` set to true.
             let mut content = content.0.clone();
             content.meta_mut().3.meta_mut().streaming_behavior.needed = true;
             let meta = content.map_meta(|f| EncodeMeta {
-                field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
+                field_type: f.3.to_streaming_type(runtime.ir.as_ref()),
                 checks: &f.1,
             });
-            meta.encode_to_c_buffer(
-                runtime.inner.ir.as_ref(),
-                baml_types::StreamingMode::Streaming,
-            )
+            meta.encode_to_c_buffer(runtime.ir.as_ref(), baml_types::StreamingMode::Streaming)
         }
     }));
 
     match buf_result {
         Ok(buf) => {
             let is_done_int = if is_done { 1 } else { 0 };
-            callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
+            // Use block_in_place to tell Tokio this is a blocking operation.
+            // This allows Tokio to move other async tasks to different worker threads,
+            // preventing deadlock when the callback performs blocking FFI calls.
+            tokio::task::block_in_place(|| {
+                callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());
+            });
         }
         Err(panic_info) => {
             let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -94,7 +95,10 @@ pub fn send_result_to_callback(
 
             if is_done {
                 // For final results, send error via callback
-                error_callback_fn(id, 1, error_msg.as_ptr() as *const i8, error_msg.len());
+                // Use block_in_place to tell Tokio this is a blocking operation.
+                tokio::task::block_in_place(|| {
+                    error_callback_fn(id, 1, error_msg.as_ptr() as *const i8, error_msg.len());
+                });
             } else {
                 // For streaming events, just log and drop the event
                 baml_log::error!("Encoding error: {}", error_msg);
@@ -108,7 +112,12 @@ pub fn send_error_to_callback(id: u32, error: &anyhow::Error) {
         .get()
         .expect("expected error callback function to be set. Did you call register_callbacks?");
     let message = error.to_string();
-    error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+    // Use block_in_place to tell Tokio this is a blocking operation.
+    // This allows Tokio to move other async tasks to different worker threads,
+    // preventing deadlock when the callback performs blocking FFI calls.
+    tokio::task::block_in_place(|| {
+        error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+    });
 }
 
 pub fn safe_trigger_callback(
@@ -118,23 +127,20 @@ pub fn safe_trigger_callback(
     runtime: &BamlRuntime,
 ) {
     match result {
-        Ok(result) => match result.parsed() {
-            Some(Ok(content)) => {
+        Ok(result) => match result.result_with_constraints_content() {
+            Ok(content) => {
                 send_result_to_callback(id, is_done, content, runtime);
             }
-            Some(Err(e)) => {
-                send_error_to_callback(id, e);
-            }
-            None => {
+            Err(e) => {
                 // IF YOU EVER CHANGE THIS THINK CAREFULLY.
                 // Almost definitely you should update ExposedError in engine/baml-runtime/src/errors.rs
                 // and then propagate that error.
-                send_error_to_callback(
-                    id,
-                    &anyhow::anyhow!(
-                        "No result from baml - Please report this error to our team with BAML_LOG=info enabled so we can improve this error message"
-                    ),
-                );
+                match e.downcast_ref::<ExposedError>() {
+                    Some(exposed_error) => {
+                        send_error_to_callback(id, &exposed_error.to_anyhow_with_details())
+                    }
+                    None => send_error_to_callback(id, &e),
+                }
             }
         },
         Err(e) => {
@@ -147,5 +153,10 @@ pub fn trigger_on_tick_callback(id: u32) {
     let on_tick_fn = ON_TICK_CALLBACK_FN
         .get()
         .expect("expected on tick callback function to be set. Did you call register_callbacks?");
-    on_tick_fn(id);
+    // Use block_in_place to tell Tokio this is a blocking operation.
+    // This allows Tokio to move other async tasks to different worker threads,
+    // preventing deadlock when the callback performs blocking FFI calls.
+    tokio::task::block_in_place(|| {
+        on_tick_fn(id);
+    });
 }

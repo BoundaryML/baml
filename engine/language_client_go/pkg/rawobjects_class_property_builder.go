@@ -14,8 +14,8 @@ type classPropertyBuilder struct {
 	llmRenderableObject
 }
 
-func (cpb *classPropertyBuilder) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_CLASS_PROPERTY_BUILDER
+func (cpb *classPropertyBuilder) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_CLASS_PROPERTY_BUILDER
 }
 
 func newClassPropertyBuilder(ptr int64, rt unsafe.Pointer) ClassPropertyBuilder {

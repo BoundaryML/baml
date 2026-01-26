@@ -122,13 +122,18 @@ fn process_node(
             let mut deletion_nulls: BamlMap<String, BamlValueWithMeta<Completion>> = BamlMap::new();
 
             // Null values used to fill gaps in the input map.
+            // Note: fields_needing_null contains fields that are NOT in value_fields,
+            // so we must look up their types from the class definition in the IR.
+            let class_field_types = ir.class_fields(class_name).unwrap_or_default();
             let filler_nulls = fields_needing_null
                 .into_iter()
                 .map(|ref null_field_name| {
-                    let field = value_fields
+                    // Get the field type from the class definition, not from value_fields
+                    // (which doesn't contain these fields - that's why they need null fillers)
+                    let use_state = class_field_types
                         .get(null_field_name)
-                        .expect("This field is guaranteed to be in the field set");
-                    let use_state = field.meta().1.meta().streaming_behavior.state;
+                        .map(|field_type| field_type.meta().streaming_behavior.state)
+                        .unwrap_or(false);
                     let field_stream_state = Completion {
                         state: CompletionState::Pending,
                         display: use_state,

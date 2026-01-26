@@ -1,0 +1,48 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::NestedIfStatements":
+  nodes:
+    "NestedIfStatements|c:func:0":
+      label: NestedIfStatements
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/nested_if_statements.baml
+        start: 18
+        end: 1205
+    "NestedIfStatements|c:func:0|h:if-statement-1:0":
+      label: If statement 1
+      node_type: expr
+      parent: "NestedIfStatements|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "NestedIfStatements|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "NestedIfStatements|c:func:0"
+      span:
+        file: src/control_flow/headers/nested_if_statements.baml
+        start: 88
+        end: 1197
+    "NestedIfStatements|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "NestedIfStatements|c:func:0"
+      span:
+        file: src/control_flow/headers/nested_if_statements.baml
+        start: 1202
+        end: 1203
+  edges:
+    "NestedIfStatements|c:func:0":
+      - dst: "NestedIfStatements|c:func:0|h:if-statement-1:0"
+        label: ""
+    "NestedIfStatements|c:func:0|h:if-statement-1:0":
+      - dst: "NestedIfStatements|c:func:0|s:0"
+        label: ""
+    "NestedIfStatements|c:func:0|s:0":
+      - dst: "NestedIfStatements|c:func:0|s:1"
+        label: ""

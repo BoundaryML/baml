@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use internal_baml_ast::{parse, BamlVisDiagramGenerator};
+use internal_baml_ast::{diagram_generator, parse};
 use internal_baml_diagnostics::SourceFile;
 
 fn main() {
@@ -33,6 +33,12 @@ fn main() {
     }
 
     // Nicely styled header graph
-    let mermaid = BamlVisDiagramGenerator::generate_with_styling(&ast, true);
+    let mermaid = diagram_generator::generate_with_styling(
+        diagram_generator::MermaidGeneratorContext {
+            use_fancy: true,
+            function_filter: None,
+        },
+        &ast,
+    );
     println!("{mermaid}");
 }

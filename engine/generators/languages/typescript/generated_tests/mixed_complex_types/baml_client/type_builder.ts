@@ -95,7 +95,7 @@ export default class TypeBuilder {
     
     Variant: ClassViewer<'Variant', "sku" | "price" | "stock" | "options">;
     
-    Widget: ClassViewer<'Widget', "type" | "button" | "text" | "image" | "container">;
+    Widget: ClassViewer<'Widget', "type" | "button" | "text" | "img" | "container">;
     
     
 
@@ -247,7 +247,7 @@ export default class TypeBuilder {
         ]);
         
         this.Widget = this.tb.classViewer("Widget", [
-          "type","button","text","image","container",
+          "type","button","text","img","container",
         ]);
         
         

@@ -1,0 +1,70 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"llm::CombineOutputs":
+  nodes:
+    "CombineOutputs|c:func:0":
+      label: CombineOutputs
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 308
+        end: 440
+    "CombineOutputs|c:func:0|s:0":
+      label: "LLM client: GPT4"
+      node_type: llm
+      parent: "CombineOutputs|c:func:0"
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 308
+        end: 440
+  edges:
+    "CombineOutputs|c:func:0":
+      - dst: "CombineOutputs|c:func:0|s:0"
+        label: ""
+"llm::GenerateTitle":
+  nodes:
+    "GenerateTitle|c:func:0":
+      label: GenerateTitle
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 61
+        end: 188
+    "GenerateTitle|c:func:0|s:0":
+      label: "LLM client: GPT4"
+      node_type: llm
+      parent: "GenerateTitle|c:func:0"
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 61
+        end: 188
+  edges:
+    "GenerateTitle|c:func:0":
+      - dst: "GenerateTitle|c:func:0|s:0"
+        label: ""
+"llm::SummarizeVideo":
+  nodes:
+    "SummarizeVideo|c:func:0":
+      label: SummarizeVideo
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 190
+        end: 306
+    "SummarizeVideo|c:func:0|s:0":
+      label: "LLM client: GPT4"
+      node_type: llm
+      parent: "SummarizeVideo|c:func:0"
+      span:
+        file: src/control_flow/headers/with_llm_functions.baml
+        start: 190
+        end: 306
+  edges:
+    "SummarizeVideo|c:func:0":
+      - dst: "SummarizeVideo|c:func:0|s:0"
+        label: ""

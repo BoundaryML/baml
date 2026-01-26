@@ -11,7 +11,7 @@ import {
 } from '@baml/ui/dialog';
 import { AlertTriangle, XCircle, Info } from 'lucide-react';
 import { useAtomValue } from 'jotai';
-import { diagnosticsAtom } from '@baml/playground-common';
+import { diagnosticsAtom } from '../sdk/atoms/core.atoms';
 
 export const ErrorWarningDialog: React.FC<{
   open?: boolean;

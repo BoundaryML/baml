@@ -16,8 +16,8 @@ func newUsage(ptr int64, rt unsafe.Pointer) Usage {
 	return &usage{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (u *usage) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_USAGE
+func (u *usage) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_USAGE
 }
 
 func (u *usage) pointer() int64 {
@@ -47,6 +47,20 @@ func (u *usage) OutputTokens() (int64, error) {
 	tokens, ok := result.(int64)
 	if !ok {
 		return 0, fmt.Errorf("unexpected type for output tokens: %T", result)
+	}
+
+	return tokens, nil
+}
+
+func (u *usage) CachedInputTokens() (int64, error) {
+	result, err := raw_objects.CallMethod(u, "cached_input_tokens", nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get cached input tokens: %w", err)
+	}
+
+	tokens, ok := result.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected type for cached input tokens: %T", result)
 	}
 
 	return tokens, nil

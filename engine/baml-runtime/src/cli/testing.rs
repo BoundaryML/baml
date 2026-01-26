@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
@@ -75,11 +75,8 @@ pub struct TestArgs {
     #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"), hide = true)]
     junit_path: String,
 
-    #[arg(long, default_value_t = true)]
-    dotenv: bool,
-
-    #[arg(long)]
-    dotenv_path: Option<PathBuf>,
+    #[command(flatten)]
+    dotenv: dotenv::DotenvArgs,
 }
 
 #[derive(Clone, Debug)]
@@ -118,22 +115,37 @@ pub enum TestRunResult {
 }
 
 impl TestArgs {
+    /// Creates a runtime to run tests with baml-cli tests.
+    ///
+    /// This has to be created outside of async contexts because the runtime
+    /// creation calls `blocking_send` on the publisher channel.
+    ///
+    /// `blocking_send` panics inside of async contexts.
+    pub fn create_cli_testing_runtime(
+        &self,
+        feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+    ) -> Result<(Arc<BamlRuntime>, HashMap<String, String>)> {
+        let from = BamlRuntime::parse_baml_src_path(&self.from)?;
+
+        self.dotenv.load()?;
+
+        let env_vars = std::env::vars().collect::<HashMap<String, String>>();
+
+        let runtime = Arc::new(BamlRuntime::from_directory(
+            &from,
+            env_vars.clone(),
+            feature_flags,
+        )?);
+
+        Ok((runtime, env_vars))
+    }
+
     pub async fn run(
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
+        runtime: Arc<BamlRuntime>,
+        env_vars: HashMap<String, String>,
     ) -> Result<TestRunResult> {
-        let from = BamlRuntime::parse_baml_src_path(&self.from)?;
-
-        if self.dotenv {
-            if let Some(env_path) = dotenv::dotenv(self.dotenv_path.clone())? {
-                baml_log::warn!("Loading environment variables from {}", env_path.display());
-            }
-        }
-
-        let env_vars = std::env::vars().collect::<HashMap<String, String>>();
-        let runtime = BamlRuntime::from_directory(&from, env_vars.clone(), feature_flags)?;
-        let runtime = std::sync::Arc::new(runtime);
-
         let test_execution_args = TestFilter::from(
             self.include.iter().map(|s| s.as_str()),
             self.exclude.iter().map(|s| s.as_str()),

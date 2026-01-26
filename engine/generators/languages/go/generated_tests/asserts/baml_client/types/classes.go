@@ -43,7 +43,7 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			c.Name = baml.Decode(valueHolder).Interface().(string)
 
 		case "age":
-			c.Age = baml.Decode(valueHolder).Interface().(int64)
+			c.Age = baml.Decode(valueHolder).Int()
 
 		default:
 
@@ -54,23 +54,16 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Person) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Person) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
 
 	fields["age"] = c.Age
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Person", fields, nil)
 }
 
 func (c Person) BamlTypeName() string {
 	return "Person"
-}
-
-func (u Person) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-		Name:      "Person",
-	}
 }

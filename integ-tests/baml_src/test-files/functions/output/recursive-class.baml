@@ -11,7 +11,7 @@ class LinkedList {
 client<llm> O1 {
   provider "openai"
   options {
-    model "o1-mini"
+    model "o4-mini"
     default_role "user"
   }
 }

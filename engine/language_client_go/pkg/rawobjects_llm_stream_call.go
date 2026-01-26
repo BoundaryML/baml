@@ -16,8 +16,8 @@ func newLLMStreamCall(ptr int64, rt unsafe.Pointer) LLMStreamCall {
 	return &llmStreamCall{&llmCall{raw_objects.FromPointer(ptr, rt)}}
 }
 
-func (l *llmStreamCall) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_LLM_STREAM_CALL
+func (l *llmStreamCall) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_LLM_STREAM_CALL
 }
 
 func (l *llmStreamCall) SSEChunks() ([]SSEResponse, error) {

@@ -1,11 +1,10 @@
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use super::{
-    helpers::{parsing_catch_all, Pair},
+    helpers::{assert_correct_parser, parsing_catch_all, Pair},
     Rule,
 };
 use crate::{
-    assert_correct_parser,
     ast::*,
     parser::{
         parse_assignment::parse_assignment,
@@ -17,7 +16,7 @@ pub fn parse_type_builder_block(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Result<TypeBuilderBlock, DatamodelError> {
-    assert_correct_parser!(pair, Rule::type_builder_block);
+    assert_correct_parser(&pair, &[Rule::type_builder_block], diagnostics);
 
     let span = diagnostics.span(pair.as_span());
     let mut entries = Vec::new();
@@ -38,7 +37,7 @@ pub fn parse_type_builder_block(
             // Last token, closing bracket.
             Rule::BLOCK_CLOSE => {}
 
-            _ => parsing_catch_all(current, "type_builder_block"),
+            _ => parsing_catch_all(current, "type_builder_block", diagnostics),
         }
     }
 
@@ -50,7 +49,7 @@ pub fn parse_type_builder_contents(
     entries: &mut Vec<TypeBuilderEntry>,
     diagnostics: &mut Diagnostics,
 ) {
-    assert_correct_parser!(pair, Rule::type_builder_contents);
+    assert_correct_parser(&pair, &[Rule::type_builder_contents], diagnostics);
 
     let mut pending_block_comment = None;
 
@@ -96,7 +95,9 @@ pub fn parse_type_builder_contents(
                             }
                         }
 
-                        _ => parsing_catch_all(nested, "dynamic_type_expression_block"),
+                        _ => {
+                            parsing_catch_all(nested, "dynamic_type_expression_block", diagnostics)
+                        }
                     }
                 }
             }
@@ -124,7 +125,7 @@ pub fn parse_type_builder_contents(
                 ))
             }
 
-            _ => parsing_catch_all(current, "type_builder_contents"),
+            _ => parsing_catch_all(current, "type_builder_contents", diagnostics),
         }
     }
 }

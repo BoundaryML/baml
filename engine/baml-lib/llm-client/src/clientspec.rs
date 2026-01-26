@@ -65,6 +65,8 @@ pub enum OpenAIClientProviderVariant {
     Responses,
     /// The generic client provider variant
     Generic,
+    /// The OpenRouter client provider variant
+    OpenRouter,
 }
 
 /// The strategy client provider variant
@@ -97,6 +99,7 @@ impl std::fmt::Display for OpenAIClientProviderVariant {
             OpenAIClientProviderVariant::Azure => write!(f, "azure-openai"),
             OpenAIClientProviderVariant::Responses => write!(f, "openai-responses"),
             OpenAIClientProviderVariant::Generic => write!(f, "openai-generic"),
+            OpenAIClientProviderVariant::OpenRouter => write!(f, "openrouter"),
         }
     }
 }
@@ -125,6 +128,9 @@ impl std::str::FromStr for ClientProvider {
             )),
             "baml-ollama-chat" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
             "ollama" => Ok(ClientProvider::OpenAI(OpenAIClientProviderVariant::Ollama)),
+            "openrouter" => Ok(ClientProvider::OpenAI(
+                OpenAIClientProviderVariant::OpenRouter,
+            )),
             "anthropic" => Ok(ClientProvider::Anthropic),
             "baml-anthropic-chat" => Ok(ClientProvider::Anthropic),
             "aws-bedrock" => Ok(ClientProvider::AwsBedrock),
@@ -149,6 +155,7 @@ impl std::str::FromStr for OpenAIClientProviderVariant {
             "azure-openai" => Ok(OpenAIClientProviderVariant::Azure),
             "openai-responses" => Ok(OpenAIClientProviderVariant::Responses),
             "openai-generic" => Ok(OpenAIClientProviderVariant::Generic),
+            "openrouter" => Ok(OpenAIClientProviderVariant::OpenRouter),
             _ => Err(anyhow::anyhow!(
                 "Invalid OpenAI client provider variant: {}",
                 s
@@ -181,6 +188,7 @@ impl ClientProvider {
             "openai-responses",
             "anthropic",
             "ollama",
+            "openrouter",
             "round-robin",
             "fallback",
             "google-ai",
@@ -516,6 +524,95 @@ impl UnresolvedResponseType {
     }
 }
 
+// Duplicate of the ResolveMediaUrls enum from baml-runtime
+// This will be properly resolved when the runtime imports from llm-client
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum ResolveMediaUrls {
+    SendBase64,
+    SendBase64UnlessGoogleUrl,
+    SendUrlAddMimeType,
+    SendUrl,
+}
+
+/// Controls how media URLs are processed before sending to LLM providers
+///
+/// # Variants
+///
+/// * `SendBase64` - Always download URLs and convert to base64
+/// * `SendUrl` - Pass URLs through unchanged
+/// * `SendUrlAddMimeType` - Ensure MIME type is present (may require download)
+/// * `SendBase64UnlessGoogleUrl` - Only process non-gs:// URLs
+#[derive(Clone, Debug, Hash)]
+pub enum UnresolvedResolveMediaUrls {
+    SendBase64,
+    SendUrl,
+    SendUrlAddMimeType,
+    SendBase64UnlessGoogleUrl,
+}
+
+impl UnresolvedResolveMediaUrls {
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        HashSet::new()
+    }
+
+    pub fn resolve(&self, _: &impl GetEnvVar) -> Result<ResolveMediaUrls> {
+        Ok(match self {
+            Self::SendBase64 => ResolveMediaUrls::SendBase64,
+            Self::SendUrl => ResolveMediaUrls::SendUrl,
+            Self::SendUrlAddMimeType => ResolveMediaUrls::SendUrlAddMimeType,
+            Self::SendBase64UnlessGoogleUrl => ResolveMediaUrls::SendBase64UnlessGoogleUrl,
+        })
+    }
+}
+
+/// Configuration for media URL handling behavior
+///
+/// # Example
+///
+/// ```baml
+/// client<llm> MyClient {
+///   provider openai
+///   options {
+///     media_url_handler {
+///       image "send_base64"           // Convert image URLs to base64
+///       audio "send_url"              // Pass audio URLs through
+///       pdf "send_url_add_mime_type"  // Add MIME type if missing
+///       video "send_url"              // Pass video URLs through
+///     }
+///   }
+/// }
+/// ```
+#[derive(Clone, Debug, Default, Hash)]
+pub struct UnresolvedMediaUrlHandler {
+    pub images: Option<UnresolvedResolveMediaUrls>,
+    pub audio: Option<UnresolvedResolveMediaUrls>,
+    pub pdf: Option<UnresolvedResolveMediaUrls>,
+    pub video: Option<UnresolvedResolveMediaUrls>,
+}
+
+impl UnresolvedMediaUrlHandler {
+    pub fn required_env_vars(&self) -> HashSet<String> {
+        HashSet::new()
+    }
+
+    pub fn resolve(&self, ctx: &impl GetEnvVar) -> Result<MediaUrlHandler> {
+        Ok(MediaUrlHandler {
+            images: self.images.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            audio: self.audio.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            pdf: self.pdf.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+            video: self.video.as_ref().map(|u| u.resolve(ctx)).transpose()?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MediaUrlHandler {
+    pub images: Option<ResolveMediaUrls>,
+    pub audio: Option<ResolveMediaUrls>,
+    pub pdf: Option<ResolveMediaUrls>,
+    pub video: Option<ResolveMediaUrls>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -554,24 +651,6 @@ mod tests {
     fn test_openai_responses_in_allowed_providers() {
         let allowed = ClientProvider::allowed_providers();
         assert!(allowed.contains(&"openai-responses"));
-    }
-
-    #[test]
-    fn test_response_type_parsing() {
-        // Test UnresolvedResponseType
-        let unresolved = match "openai-responses" {
-            "openai" => UnresolvedResponseType::OpenAI,
-            "openai-responses" => UnresolvedResponseType::OpenAIResponses,
-            "anthropic" => UnresolvedResponseType::Anthropic,
-            "google" => UnresolvedResponseType::Google,
-            "vertex" => UnresolvedResponseType::Vertex,
-            _ => panic!("Unknown response type"),
-        };
-
-        assert!(matches!(
-            unresolved,
-            UnresolvedResponseType::OpenAIResponses
-        ));
     }
 
     #[test]
@@ -619,5 +698,52 @@ mod tests {
 
         let result = OpenAIClientProviderVariant::from_str("invalid-variant");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_openrouter_provider_parsing() {
+        let provider = ClientProvider::from_str("openrouter");
+        assert!(provider.is_ok());
+
+        let provider = provider.unwrap();
+        match provider {
+            ClientProvider::OpenAI(OpenAIClientProviderVariant::OpenRouter) => {
+                // Success!
+            }
+            _ => panic!("Expected OpenRouter variant, got {provider:?}"),
+        }
+    }
+
+    #[test]
+    fn test_openrouter_variant_parsing() {
+        let variant = OpenAIClientProviderVariant::from_str("openrouter");
+        assert!(variant.is_ok());
+        assert_eq!(variant.unwrap(), OpenAIClientProviderVariant::OpenRouter);
+    }
+
+    #[test]
+    fn test_openrouter_display() {
+        let variant = OpenAIClientProviderVariant::OpenRouter;
+        assert_eq!(variant.to_string(), "openrouter");
+    }
+
+    #[test]
+    fn test_openrouter_in_allowed_providers() {
+        let allowed = ClientProvider::allowed_providers();
+        assert!(allowed.contains(&"openrouter"));
+    }
+
+    #[test]
+    fn test_openrouter_roundtrip() {
+        let original = ClientProvider::OpenAI(OpenAIClientProviderVariant::OpenRouter);
+        let string_repr = match &original {
+            ClientProvider::OpenAI(variant) => variant.to_string(),
+            _ => panic!("Expected OpenAI provider"),
+        };
+
+        assert_eq!(string_repr, "openrouter");
+
+        let parsed_back = ClientProvider::from_str(&string_repr).unwrap();
+        assert_eq!(original, parsed_back);
     }
 }

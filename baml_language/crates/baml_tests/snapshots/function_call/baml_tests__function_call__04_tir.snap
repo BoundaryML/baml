@@ -1,0 +1,17 @@
+---
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function array_length:
+    Return: Int
+  Function Greeting:
+    Return: String
+  Function param_in_if_statement:
+    Return: Union([Literal(Int(1)), Literal(Int(2))])
+  Function Bar:
+    Return: Int
+  Function Foo:
+    Return: Int
+  Function GreetBaz:
+    Return: String

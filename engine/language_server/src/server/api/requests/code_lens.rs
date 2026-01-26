@@ -34,18 +34,12 @@ impl SyncRequestHandler for CodeLens {
     ) -> Result<Option<Vec<lsp_types::CodeLens>>> {
         tracing::info!("CodeLens request");
         let url = params.text_document.uri.clone();
-        if !url.to_string().contains("baml_src") {
-            return Ok(None);
-        }
-
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-
-        // session.reload(Some(notifier)).internal_error()?;
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
+        let Ok(project) = session.get_or_create_project(&path) else {
+            return Ok(None);
+        };
         let fake_env = HashMap::new();
         let default_flags = vec!["beta".to_string()];
         let baml_diagnostics = match project.lock().baml_project.runtime(
@@ -56,7 +50,7 @@ impl SyncRequestHandler for CodeLens {
                 .as_ref()
                 .unwrap_or(&default_flags),
         ) {
-            Ok(runtime) => runtime.internal().diagnostics().clone(),
+            Ok(runtime) => runtime.diagnostics().clone(),
             Err(err) => err,
         };
 
@@ -114,8 +108,6 @@ impl SyncRequestHandler for CodeLens {
                 }
             })
             .collect();
-
-        tracing::info!("Function lenses calculated");
 
         // TODO(sam): there is a bug in here, where for a `test` block which test N functions,
         // we generate N^2 "Test {function}" code lenses, even though we should only generate N

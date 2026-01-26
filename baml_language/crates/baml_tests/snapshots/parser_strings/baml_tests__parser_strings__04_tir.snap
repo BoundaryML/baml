@@ -1,0 +1,11 @@
+---
+source: target/debug/build/baml_tests-e89f2b4de47549a5/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function FormatMessage:
+    Return: String
+  Function ProcessText:
+    Return: String
+  Function GetRole:
+    Return: Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))])

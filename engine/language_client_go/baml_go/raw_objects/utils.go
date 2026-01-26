@@ -1,9 +1,14 @@
+//go:build cgo
+
 package raw_objects
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"runtime"
+	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/boundaryml/baml/engine/language_client_go/baml_go/serde"
@@ -21,22 +26,64 @@ import (
 */
 import "C"
 
-var _decodeRawObjectImpl func(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error)
+var (
+	ffiLogFile     *os.File
+	ffiLogFileMu   sync.Mutex
+	ffiLogFileOnce sync.Once
+)
 
-func SetDecodeRawObjectImpl(impl func(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error)) {
+// getFfiLogFile returns the log file for client FFI events, or nil if logging is disabled
+func getFfiLogFile() *os.File {
+	ffiLogFileOnce.Do(func() {
+		if path := os.Getenv("BAML_FFI_CLIENT_LOG"); path != "" {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err == nil {
+				ffiLogFile = f
+			}
+		}
+	})
+	return ffiLogFile
+}
+
+// ffiLog writes a log message to the Go FFI log file with timestamp
+func ffiLog(format string, args ...any) {
+	if f := getFfiLogFile(); f != nil {
+		ffiLogFileMu.Lock()
+		defer ffiLogFileMu.Unlock()
+		ts := time.Now().UnixMicro()
+		msg := fmt.Sprintf(format, args...)
+		// Insert timestamp after the opening bracket
+		if len(msg) > 0 && msg[0] == '[' {
+			bracketEnd := 0
+			for i, c := range msg {
+				if c == ']' {
+					bracketEnd = i
+					break
+				}
+			}
+			fmt.Fprintf(f, "%s ts=%d%s\n", msg[:bracketEnd], ts, msg[bracketEnd:])
+		} else {
+			fmt.Fprintf(f, "ts=%d %s\n", ts, msg)
+		}
+	}
+}
+
+var _decodeRawObjectImpl func(rt unsafe.Pointer, cRaw *cffi.BamlObjectHandle) (RawPointer, error)
+
+func SetDecodeRawObjectImpl(impl func(rt unsafe.Pointer, cRaw *cffi.BamlObjectHandle) (RawPointer, error)) {
 	_decodeRawObjectImpl = impl
 }
 
 type RawPointer interface {
-	ObjectType() cffi.CFFIObjectType
+	ObjectType() cffi.BamlObjectType
 	pointer() int64
 	Runtime() unsafe.Pointer
 }
 
 type RawObject struct {
-	ptr int64     // pointer to the raw object in C
+	ptr          int64 // pointer to the raw object in C
 	baml_runtime unsafe.Pointer
-	_   [0]func() // prevents copying
+	_            [0]func() // prevents copying
 }
 
 func (r *RawObject) Pointer() int64 {
@@ -56,8 +103,8 @@ func FromPointer(ptr int64, rt unsafe.Pointer) *RawObject {
 }
 
 // newRawObject creates a new refcounted rawObject
-func NewRawObject(rt unsafe.Pointer, objectType cffi.CFFIObjectType, kwargs []*cffi.CFFIMapEntry) (any, error) {
-	args := cffi.CFFIObjectConstructorArgs{
+func NewRawObject(rt unsafe.Pointer, objectType cffi.BamlObjectType, kwargs []*cffi.HostMapEntry) (any, error) {
+	args := cffi.BamlObjectConstructorInvocation{
 		Type:   objectType,
 		Kwargs: kwargs,
 	}
@@ -80,7 +127,7 @@ func NewRawObject(rt unsafe.Pointer, objectType cffi.CFFIObjectType, kwargs []*c
 		return nil, fmt.Errorf("object constructor returned nil pointer")
 	}
 
-	var content_holder cffi.CFFIObjectResponse
+	var content_holder cffi.InvocationResponse
 	err = proto.Unmarshal(content_bytes, &content_holder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal content bytes: %w", err)
@@ -112,7 +159,7 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 		return nil, fmt.Errorf("encoding method arguments: %w", err)
 	}
 
-	args := cffi.CFFIObjectMethodArguments{
+	args := cffi.BamlObjectMethodInvocation{
 		Kwargs:     cffi_kwargs,
 		Object:     EncodeRawObject(object),
 		MethodName: method_name,
@@ -135,7 +182,7 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 		return nil, fmt.Errorf("object method function returned nil pointer")
 	}
 
-	var content_holder cffi.CFFIObjectResponse
+	var content_holder cffi.InvocationResponse
 	err = proto.Unmarshal(content_bytes, &content_holder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal content bytes: %w", err)
@@ -149,21 +196,25 @@ func CallMethod(object RawPointer, method_name string, kwargs map[string]any) (a
 	return parsed, nil
 }
 
-func decodeObjectResponse(rt unsafe.Pointer, response *cffi.CFFIObjectResponse) (any, error) {
+type nilObject struct {
+	any
+}
+
+func decodeObjectResponse(rt unsafe.Pointer, response *cffi.InvocationResponse) (any, error) {
 	if response == nil {
 		return nil, fmt.Errorf("nil response")
 	}
 
 	switch response.GetResponse().(type) {
-	case *cffi.CFFIObjectResponse_Error:
-		return nil, fmt.Errorf("%s", response.GetError().Error)
-	case *cffi.CFFIObjectResponse_Success:
+	case *cffi.InvocationResponse_Error:
+		return nil, fmt.Errorf("%s", response.GetError())
+	case *cffi.InvocationResponse_Success:
 		success := response.GetSuccess()
 		switch success.Result.(type) {
-		case *cffi.CFFIObjectResponseSuccess_Object:
+		case *cffi.InvocationResponseSuccess_Object:
 			object := success.GetObject()
 			return decodeRawObject(rt, object)
-		case *cffi.CFFIObjectResponseSuccess_Objects:
+		case *cffi.InvocationResponseSuccess_Objects:
 			objects := success.GetObjects()
 			parsed := make([]RawPointer, len(objects.Objects))
 			for i, obj := range objects.Objects {
@@ -174,11 +225,16 @@ func decodeObjectResponse(rt unsafe.Pointer, response *cffi.CFFIObjectResponse) 
 				parsed[i] = decoded
 			}
 			return parsed, nil
-		case *cffi.CFFIObjectResponseSuccess_Value:
+		case *cffi.InvocationResponseSuccess_Value:
 			value := success.GetValue()
-			return serde.Decode(value, serde.TypeMap{
-				"INTERNAL.nil": reflect.TypeOf((*interface{})(nil)).Elem(),
-			}).Interface(), nil
+			nilType := reflect.TypeOf((*nilObject)(nil)).Elem()
+			decodedValue, goType := serde.Decode(value, serde.NewInternalTypeMap(map[string]reflect.Type{
+				"INTERNAL.nil": nilType,
+			}))
+			if goType == nilType {
+				return nil, nil
+			}
+			return decodedValue.Interface(), nil
 		default:
 			panic("unexpected cffi.isCFFIObjectResponseSuccess_Result")
 		}
@@ -187,7 +243,7 @@ func decodeObjectResponse(rt unsafe.Pointer, response *cffi.CFFIObjectResponse) 
 	}
 }
 
-func decodeRawObject(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, error) {
+func decodeRawObject(rt unsafe.Pointer, cRaw *cffi.BamlObjectHandle) (RawPointer, error) {
 	if _decodeRawObjectImpl == nil {
 		return nil, fmt.Errorf("decodeRawObjectImpl is not set. Please call SetDecodeRawObjectImpl() before using this function")
 	}
@@ -196,151 +252,159 @@ func decodeRawObject(rt unsafe.Pointer, cRaw *cffi.CFFIRawObject) (RawPointer, e
 	if err != nil {
 		return nil, err
 	}
+
+	// Log when Go receives an object from Rust
+	ffiLog("[CLIENT_GO_RECEIVE] type=%s ptr=0x%x", raw.ObjectType(), raw.pointer())
+
 	// on finalization, we need to call the destructor
 	runtime.SetFinalizer(raw, func(r RawPointer) {
+		ffiLog("[CLIENT_GO_DESTRUCTOR_START] type=%s ptr=0x%x", r.ObjectType(), r.pointer())
 		if err := destructor(r); err != nil {
-			fmt.Printf("Error during finalization of raw object (%s): %v\n", r.ObjectType(), err)
+			// Always log errors (even if general logging disabled)
+			ffiLog("[CLIENT_GO_DESTRUCTOR_ERROR] type=%s ptr=0x%x error=%v", r.ObjectType(), r.pointer(), err)
+		} else {
+			ffiLog("[CLIENT_GO_DESTRUCTOR_OK] type=%s ptr=0x%x", r.ObjectType(), r.pointer())
 		}
 	})
 
 	return raw, nil
 }
 
-func EncodeRawObject(object RawPointer) *cffi.CFFIRawObject {
-	pointer := &cffi.CFFIPointerType{
+func EncodeRawObject(object RawPointer) *cffi.BamlObjectHandle {
+	pointer := &cffi.BamlPointerType{
 		Pointer: object.pointer(),
 	}
 
 	switch object.ObjectType() {
-	case cffi.CFFIObjectType_OBJECT_COLLECTOR:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_Collector{
+	case cffi.BamlObjectType_OBJECT_COLLECTOR:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_Collector{
 				Collector: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_FUNCTION_LOG:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_FunctionLog{
+	case cffi.BamlObjectType_OBJECT_FUNCTION_LOG:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_FunctionLog{
 				FunctionLog: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_HTTP_BODY:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_HttpBody{
+	case cffi.BamlObjectType_OBJECT_HTTP_BODY:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_HttpBody{
 				HttpBody: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_HTTP_REQUEST:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_HttpRequest{
+	case cffi.BamlObjectType_OBJECT_HTTP_REQUEST:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_HttpRequest{
 				HttpRequest: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_HTTP_RESPONSE:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_HttpResponse{
+	case cffi.BamlObjectType_OBJECT_HTTP_RESPONSE:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_HttpResponse{
 				HttpResponse: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_LLM_CALL:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_LlmCall{
+	case cffi.BamlObjectType_OBJECT_LLM_CALL:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_LlmCall{
 				LlmCall: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_LLM_STREAM_CALL:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_LlmStreamCall{
+	case cffi.BamlObjectType_OBJECT_LLM_STREAM_CALL:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_LlmStreamCall{
 				LlmStreamCall: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_SSE_RESPONSE:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_SseResponse{
+	case cffi.BamlObjectType_OBJECT_SSE_RESPONSE:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_SseResponse{
 				SseResponse: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_STREAM_TIMING:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_StreamTiming{
+	case cffi.BamlObjectType_OBJECT_STREAM_TIMING:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_StreamTiming{
 				StreamTiming: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_TIMING:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_Timing{
+	case cffi.BamlObjectType_OBJECT_TIMING:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_Timing{
 				Timing: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_USAGE:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_Usage{
+	case cffi.BamlObjectType_OBJECT_USAGE:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_Usage{
 				Usage: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_MEDIA_IMAGE:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_MediaImage{
+	case cffi.BamlObjectType_OBJECT_MEDIA_IMAGE:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_MediaImage{
 				MediaImage: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_MEDIA_AUDIO:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_MediaAudio{
+	case cffi.BamlObjectType_OBJECT_MEDIA_AUDIO:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_MediaAudio{
 				MediaAudio: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_MEDIA_PDF:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_MediaPdf{
+	case cffi.BamlObjectType_OBJECT_MEDIA_PDF:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_MediaPdf{
 				MediaPdf: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_MEDIA_VIDEO:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_MediaVideo{
+	case cffi.BamlObjectType_OBJECT_MEDIA_VIDEO:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_MediaVideo{
 				MediaVideo: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_TYPE:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_Type{
+	case cffi.BamlObjectType_OBJECT_TYPE:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_Type{
 				Type: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_TYPE_BUILDER:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_TypeBuilder{
+	case cffi.BamlObjectType_OBJECT_TYPE_BUILDER:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_TypeBuilder{
 				TypeBuilder: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_ENUM_BUILDER:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_EnumBuilder{
+	case cffi.BamlObjectType_OBJECT_ENUM_BUILDER:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_EnumBuilder{
 				EnumBuilder: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_ENUM_VALUE_BUILDER:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_EnumValueBuilder{
+	case cffi.BamlObjectType_OBJECT_ENUM_VALUE_BUILDER:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_EnumValueBuilder{
 				EnumValueBuilder: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_CLASS_BUILDER:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_ClassBuilder{
+	case cffi.BamlObjectType_OBJECT_CLASS_BUILDER:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_ClassBuilder{
 				ClassBuilder: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_CLASS_PROPERTY_BUILDER:
-		return &cffi.CFFIRawObject{
-			Object: &cffi.CFFIRawObject_ClassPropertyBuilder{
+	case cffi.BamlObjectType_OBJECT_CLASS_PROPERTY_BUILDER:
+		return &cffi.BamlObjectHandle{
+			Object: &cffi.BamlObjectHandle_ClassPropertyBuilder{
 				ClassPropertyBuilder: pointer,
 			},
 		}
-	case cffi.CFFIObjectType_OBJECT_UNSPECIFIED:
-		panic("unexpected cffi.CFFIObjectType_OBJECT_UNSPECIFIED")
+	case cffi.BamlObjectType_OBJECT_UNSPECIFIED:
+		panic("unexpected cffi.BamlObjectType_OBJECT_UNSPECIFIED")
 	default:
-		panic(fmt.Sprintf("unexpected cffi.CFFIObjectType: %v", object.ObjectType()))
+		panic(fmt.Sprintf("unexpected cffi.BamlObjectType: %v", object.ObjectType()))
 	}
 }

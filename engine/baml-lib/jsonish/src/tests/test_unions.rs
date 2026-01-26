@@ -1,6 +1,7 @@
 use baml_types::{ir_type::UnionConstructor, type_meta::base::TypeMeta};
 
 use super::*;
+use crate::deserializer::deserialize_flags::Flag;
 
 //
 const FOO_FILE: &str = r#"
@@ -360,3 +361,93 @@ test_deserializer!(
     ]),
     "1 cup unsalted butter, room temperature"
 );
+
+// Test that Flag::Incomplete is properly added when try_cast_union returns early
+// via the hint optimization path or the score==0 short-circuit path.
+// This is a regression test for a bug where early returns bypassed completion state handling.
+//
+// The bug: In try_cast_union, when we return early (either via hint success or score==0),
+// we bypass the completion-state handling at the end of the function. This means
+// Flag::Incomplete is not added to the union result when the input value is incomplete.
+
+#[test_log::test]
+fn test_try_cast_union_early_return_preserves_incomplete_flag() {
+    use baml_types::CompletionState;
+
+    use crate::{
+        deserializer::coercer::{ParsingContext, TypeCoercer},
+        jsonish::Value as JsonishValue,
+    };
+
+    // Create a simple union type: string | int
+    let union_type = TypeIR::union(vec![
+        TypeIR::Primitive(TypeValue::String, TypeMeta::default()),
+        TypeIR::Primitive(TypeValue::Int, TypeMeta::default()),
+    ]);
+
+    // Create an incomplete jsonish value - a string marked as Incomplete
+    let incomplete_value = JsonishValue::String("hello".to_string(), CompletionState::Incomplete);
+
+    // Create parsing context
+    let ir = crate::helpers::load_test_ir("");
+    let output_format = crate::helpers::render_output_format(
+        &ir,
+        &union_type,
+        &Default::default(),
+        baml_types::StreamingMode::Streaming,
+    )
+    .unwrap();
+    let ctx = ParsingContext::new(&output_format, baml_types::StreamingMode::Streaming);
+
+    // First, coerce without hint to establish baseline and get the winning variant index
+    let result_no_hint = union_type.try_cast(&ctx, &union_type, Some(&incomplete_value));
+    assert!(
+        result_no_hint.is_some(),
+        "try_cast should succeed for string in string|int union"
+    );
+
+    let result_no_hint = result_no_hint.unwrap();
+
+    // Check if the result has the Incomplete flag
+    let has_incomplete_no_hint = result_no_hint
+        .conditions()
+        .flags()
+        .iter()
+        .any(|f| matches!(f, Flag::Incomplete));
+
+    // Now test with hint set (simulating second array element)
+    // The hint should cause try_cast_union to use the early-return path
+    let ctx_with_hint = ctx.enter_scope_with_hint("test", Some(0)); // hint to try string first
+
+    let result_with_hint =
+        union_type.try_cast(&ctx_with_hint, &union_type, Some(&incomplete_value));
+    assert!(
+        result_with_hint.is_some(),
+        "try_cast with hint should succeed"
+    );
+
+    let result_with_hint = result_with_hint.unwrap();
+
+    // Check if the result has the Incomplete flag
+    let has_incomplete_with_hint = result_with_hint
+        .conditions()
+        .flags()
+        .iter()
+        .any(|f| matches!(f, Flag::Incomplete));
+
+    log::info!(
+        "Without hint: has_incomplete={}, With hint: has_incomplete={}",
+        has_incomplete_no_hint,
+        has_incomplete_with_hint
+    );
+
+    // Both paths should preserve the Incomplete flag
+    // If the hint path doesn't have it but the non-hint path does, that's the bug
+    assert!(
+        has_incomplete_with_hint,
+        "BUG: try_cast_union early return (hint path) does not preserve Flag::Incomplete. \
+         The result should have Flag::Incomplete because the input value was incomplete. \
+         Without hint: has_incomplete={}, With hint: has_incomplete={}",
+        has_incomplete_no_hint, has_incomplete_with_hint
+    );
+}

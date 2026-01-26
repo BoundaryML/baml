@@ -2,8 +2,7 @@ import { ChevronLeft, ChevronRight, FileText, ZoomIn, ZoomOut, RotateCcw } from 
 import { useState, useEffect, useRef, useCallback } from 'react';
 // @ts-ignore - react-pdf types are handled at runtime
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
+// Note: CSS imports moved to webview-media.tsx to avoid Vite modulepreload issues in VSCode webviews
 
 // Configure PDF.js worker - use CDN to ensure version compatibility
 // react-pdf 9.0.0 uses pdfjs-dist API version 4.3.136

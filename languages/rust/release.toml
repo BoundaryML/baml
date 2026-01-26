@@ -1,0 +1,20 @@
+# cargo-release configuration for BAML Rust crates
+# See: https://github.com/crate-ci/cargo-release
+# 
+# cargo-release will automatically discover all workspace members and publish them
+# in the correct dependency order.
+
+# Sync workspace versions (all crates get the same version)
+shared-version = true
+
+# Publish all packages after version bump
+publish = true
+
+# Create git tags for releases
+tag = true
+
+# Push changes to remote
+push = true
+
+# Number of crates we have
+rate-limit = { existing = 7 }

@@ -1,0 +1,58 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function Calculate() -> int {
+      let a = 1 + 2;
+      let b = a * 3;
+      let c = b / 2 - 1;
+      let d = a + b * c;
+      return d;
+}
+
+function FieldAccess(user: User) -> string {
+      let name = user.name;
+      let bio = user.profile.bio;
+      let theme = user.profile.settings.theme;
+      let firstTag = user.tags[0];
+      return theme;
+}
+
+class Settings {
+  theme: string
+}
+
+class User {
+  name: string
+  profile: Profile
+  tags: string[]
+}
+
+class Profile {
+  bio: string
+  settings: Settings
+}
+
+function IndexAccess(users: IndexUser[]) -> string {
+      let first = users[0];
+      let idx = 1;
+      let second = users[idx];
+      let firstName = users[0].name;
+      let tag = users[0].tags[0];
+      return firstName;
+}
+
+class IndexUser {
+  name: string
+  age: int
+  tags: string[]
+}
+
+function TestPrecedence() -> bool {
+      let a = 2 + 3 * 4;
+      let c = 2 * 3 + 4;
+      let b = a > 10 + 2;
+      let d = true || false && false;
+      return d;
+}

@@ -53,6 +53,7 @@ impl BamlError {
                     prompt,
                     raw_output,
                     message,
+                    ..
                 } => Self::ValidationFailure {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -63,6 +64,7 @@ impl BamlError {
                     raw_output,
                     message,
                     finish_reason,
+                    ..
                 } => Self::FinishReasonError {
                     prompt: prompt.to_string(),
                     raw_output: raw_output.to_string(),
@@ -73,12 +75,21 @@ impl BamlError {
                     client_name,
                     message,
                     status_code,
+                    ..
                 } => Self::ClientHttpError {
                     client_name: client_name.to_string(),
                     message: message.to_string(),
                     status_code: status_code.to_u16(),
                 },
-                ExposedError::AbortError => Self::InternalError {
+                ExposedError::TimeoutError {
+                    client_name,
+                    message,
+                } => Self::ClientHttpError {
+                    client_name: client_name.to_string(),
+                    message: message.to_string(),
+                    status_code: 408, // HTTP 408 Request Timeout
+                },
+                ExposedError::AbortError { .. } => Self::InternalError {
                     message: "AbortError".into(),
                 },
             }
@@ -101,11 +112,10 @@ impl BamlError {
                     | crate::internal::llm_client::ErrorCode::RateLimited
                     | crate::internal::llm_client::ErrorCode::ServerError
                     | crate::internal::llm_client::ErrorCode::ServiceUnavailable
-                    | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
-                        Self::ClientError {
-                            message: format!("{err:?}"),
-                        }
-                    }
+                    | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_)
+                    | crate::internal::llm_client::ErrorCode::Timeout => Self::ClientError {
+                        message: format!("{err:?}"),
+                    },
                 },
                 LLMResponse::UserFailure(msg) => Self::InvalidArgument {
                     message: format!("Invalid argument: {msg}"),

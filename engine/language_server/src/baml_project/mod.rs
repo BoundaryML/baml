@@ -11,8 +11,8 @@ use std::{
 
 use anyhow::Context;
 use baml_lsp_types::{
-    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlParam, BamlParentFunction,
-    BamlSpan, SymbolLocation,
+    BamlFunction, BamlFunctionTestCasePair, BamlGeneratorConfig, BamlNotification, BamlParam,
+    BamlParentFunction, BamlSpan, RuntimeUpdated, SymbolLocation,
 };
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
@@ -22,9 +22,9 @@ use baml_runtime::{
     // RenderedPrompt,
     // runtime::InternalBamlRuntime
 };
-use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
+use baml_types::{BamlMediaType, BamlValue, FunctionFlavor, GeneratorOutputType, TypeValue};
 use file_utils::gather_files;
-use internal_baml_codegen::{
+use generators_lib::{
     version_check::{check_version, GeneratorType, VersionCheckMode},
     GenerateOutput,
 };
@@ -92,10 +92,14 @@ impl BamlProject {
         }
     }
 
-    pub fn list_functions(&mut self, feature_flags: &[String]) -> Vec<BamlFunction> {
+    pub fn list_functions(
+        &mut self,
+        feature_flags: &[String],
+        filter: Option<FunctionFlavor>,
+    ) -> Vec<BamlFunction> {
         let runtime = self.runtime(HashMap::new(), feature_flags);
         if let Ok(runtime) = runtime {
-            runtime.list_functions()
+            runtime.list_functions(filter)
         } else {
             vec![]
         }
@@ -170,7 +174,12 @@ impl BamlProject {
         }
         let runtime = runtime.unwrap();
 
-        let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
+        let generated = match runtime.run_codegen(
+            &all_files,
+            no_version_check.unwrap_or(false),
+            GeneratorType::VSCode,
+            false, // strip_tests - not applicable for VSCode extension
+        ) {
             Ok(gen) => {
                 let elapsed = start_time.elapsed();
                 tracing::debug!(
@@ -365,7 +374,7 @@ impl BamlProject {
             match internal_baml_core::FeatureFlags::from_vec(feature_flags.to_vec()) {
                 Ok(flags) => {
                     tracing::info!(
-                        "Successfully converted feature flags to FeatureFlags struct: {:?}",
+                        "Successfully converted feature flags to FeatureFlags struct: {:?}.",
                         flags
                     );
                     flags
@@ -417,7 +426,8 @@ pub trait BamlRuntimeExt {
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
-    fn list_functions(&self) -> Vec<BamlFunction>;
+    fn list_functions(&self, filter: Option<FunctionFlavor>) -> Vec<BamlFunction>;
+    fn list_expr_fns(&self) -> Vec<BamlFunction>;
     fn list_generators(&self) -> Vec<BamlGeneratorConfig>;
     fn is_valid_class(&self, symbol: &str) -> bool;
     fn is_valid_enum(&self, symbol: &str) -> bool;
@@ -491,24 +501,23 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn is_valid_class(&self, symbol: &str) -> bool {
-        self.inner.ir.find_class(symbol).is_ok()
+        self.ir.find_class(symbol).is_ok()
     }
 
     fn is_valid_enum(&self, symbol: &str) -> bool {
-        self.inner.ir.find_enum(symbol).is_ok()
+        self.ir.find_enum(symbol).is_ok()
     }
 
     fn is_valid_type_alias(&self, symbol: &str) -> bool {
-        self.inner.ir.find_type_alias(symbol).is_ok()
+        self.ir.find_type_alias(symbol).is_ok()
     }
 
     fn is_valid_function(&self, symbol: &str) -> bool {
-        self.inner.ir.find_function(symbol).is_ok()
+        self.ir.find_function(symbol).is_ok()
     }
 
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_class_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -526,8 +535,7 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_enum_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -545,8 +553,7 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner
-            .ir
+        self.ir
             .find_type_alias_locations(symbol)
             .into_iter()
             .map(|span| {
@@ -563,15 +570,17 @@ impl BamlRuntimeExt for BamlRuntime {
             .collect()
     }
 
-    fn list_functions(&self) -> Vec<BamlFunction> {
+    fn list_functions(&self, filter: Option<FunctionFlavor>) -> Vec<BamlFunction> {
         let ctx = &self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
 
-        self.inner
-            .ir
-            .walk_functions()
-            .map(|f| {
+        let include_llm = matches!(filter, None | Some(FunctionFlavor::Llm));
+        let include_expr = matches!(filter, None | Some(FunctionFlavor::Expr));
+
+        macro_rules! build_function {
+            ($f:expr, $function_type:expr) => {{
+                let f = $f;
                 let snippet = format!(
                     r#"test TestName {{
   functions [{name}]
@@ -593,7 +602,7 @@ impl BamlRuntimeExt for BamlRuntime {
                             .collect::<indexmap::IndexMap<String, _>>();
 
                         // Use the IR's get_dummy_args method
-                        self.inner.ir.get_dummy_args(2, true, &params)
+                        self.ir.get_dummy_args(2, true, &params)
                     }
                 );
 
@@ -605,6 +614,7 @@ impl BamlRuntimeExt for BamlRuntime {
                 BamlFunction {
                     name: f.name().to_string(),
                     span: wasm_span,
+                    function_type: $function_type,
                     signature: {
                         let inputs = {
                             let params = f
@@ -613,8 +623,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
                                 .collect::<indexmap::IndexMap<String, _>>();
 
-                            self.inner
-                                .ir
+                            self.ir
                                 .get_dummy_args(2, false, &params)
                                 .split('\n')
                                 .map(|line| line.trim().to_string())
@@ -707,11 +716,173 @@ impl BamlRuntimeExt for BamlRuntime {
                         })
                         .collect(),
                 }
+            }};
+        }
+
+        let mut functions = Vec::new();
+
+        if include_llm {
+            functions.extend(
+                self.ir
+                    .walk_functions()
+                    .map(|f| build_function!(f, FunctionFlavor::Llm)),
+            );
+        }
+
+        if include_expr {
+            functions.extend(
+                self.ir
+                    .walk_expr_fns()
+                    .map(|f| build_function!(f, FunctionFlavor::Expr)),
+            );
+        }
+
+        functions
+    }
+
+    fn list_expr_fns(&self) -> Vec<BamlFunction> {
+        let ctx = &self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
+        let ctx = ctx.create_ctx_with_default();
+        let ctx = ctx.eval_ctx(false);
+
+        self.ir
+            .walk_expr_fns()
+            .map(|f| {
+                let snippet = format!(
+                    r#"test TestName {{
+  functions [{name}]
+  args {{
+{args}
+  }}
+}}
+"#,
+                    name = f.name(),
+                    args = {
+                        let params = f
+                            .inputs()
+                            .iter()
+                            .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                            .collect::<indexmap::IndexMap<String, _>>();
+
+                        self.ir.get_dummy_args(2, true, &params)
+                    }
+                );
+
+                let wasm_span = match f.span() {
+                    Some(span) => span.into(),
+                    None => BamlSpan::default(),
+                };
+
+                BamlFunction {
+                    name: f.name().to_string(),
+                    span: wasm_span,
+                    function_type: FunctionFlavor::Expr,
+                    signature: {
+                        let inputs = {
+                            let params = f
+                                .inputs()
+                                .iter()
+                                .map(|(k, runtime_type)| (k.clone(), runtime_type.clone()))
+                                .collect::<indexmap::IndexMap<String, _>>();
+
+                            self.ir
+                                .get_dummy_args(2, false, &params)
+                                .split('\n')
+                                .map(|line| line.trim().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        };
+
+                        format!("({}) -> {}", inputs, f.output())
+                    },
+                    test_snippet: snippet,
+                    test_cases: f
+                        .walk_tests()
+                        .map(|tc| {
+                            let params = match tc.test_case_params(&ctx) {
+                                Ok(params) => Ok(params
+                                    .iter()
+                                    .map(|(k, v)| {
+                                        let as_str = match v {
+                                            Ok(v) => match serde_json::to_string(v) {
+                                                Ok(s) => Ok(s),
+                                                Err(e) => Err(e.to_string()),
+                                            },
+                                            Err(e) => Err(e.to_string()),
+                                        };
+
+                                        let (value, error) = match as_str {
+                                            Ok(s) => (Some(s), None),
+                                            Err(e) => (None, Some(e)),
+                                        };
+
+                                        BamlParam {
+                                            name: k.to_string(),
+                                            value,
+                                            error,
+                                        }
+                                    })
+                                    .collect()),
+                                Err(e) => Err(e.to_string()),
+                            };
+
+                            let (mut params, error) = match params {
+                                Ok(p) => (p, None),
+                                Err(e) => (Vec::new(), Some(e)),
+                            };
+
+                            f.inputs().iter().for_each(|(param_name, t)| {
+                                if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
+                                {
+                                    params.insert(
+                                        0,
+                                        BamlParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
+                                }
+                            });
+
+                            let wasm_span = match tc.span() {
+                                Some(span) => span.into(),
+                                None => BamlSpan::default(),
+                            };
+                            let function_name_span = tc
+                                .test_case()
+                                .functions
+                                .iter()
+                                .find(|func| func.elem.name() == tc.function().name())
+                                .and_then(|func| func.attributes.span.as_ref())
+                                .map(|span| span.into());
+
+                            BamlFunctionTestCasePair {
+                                name: tc.test_case().name.clone(),
+                                inputs: params,
+                                error,
+                                span: wasm_span,
+                                function: {
+                                    let func = tc.function();
+                                    let (start, end) =
+                                        func.span().map_or((0, 0), |f| (f.start, f.end));
+                                    BamlParentFunction {
+                                        start,
+                                        end,
+                                        name: func.name().to_string(),
+                                    }
+                                },
+                                function_name_span,
+                            }
+                        })
+                        .collect(),
+                }
             })
             .collect()
     }
+
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation> {
-        let runtime = self.inner.ir.clone();
+        let runtime = self.ir.clone();
 
         if let Ok(walker) = runtime.find_enum(symbol) {
             let elem = walker.span().unwrap();
@@ -816,10 +987,10 @@ impl BamlRuntimeExt for BamlRuntime {
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(true);
 
-        self.inner
-            .ir
-            .walk_function_test_pairs()
-            .map(|tc| {
+        // Helper macro to convert a test case walker to BamlFunctionTestCasePair
+        macro_rules! build_test_pair {
+            ($tc:expr) => {{
+                let tc = $tc;
                 let params = match tc.test_case_params(&ctx) {
                     Ok(params) => Ok(params
                         .iter()
@@ -851,7 +1022,6 @@ impl BamlRuntimeExt for BamlRuntime {
                     Ok(p) => (p, None),
                     Err(e) => (Vec::new(), Some(e)),
                 };
-                // Any missing params should be set to an error
                 // Any missing params should be set to an error
                 tc.function().inputs().iter().for_each(|func_params| {
                     let (param_name, t) = func_params;
@@ -891,8 +1061,26 @@ impl BamlRuntimeExt for BamlRuntime {
                     },
                     function_name_span,
                 }
-            })
-            .collect()
+            }};
+        }
+
+        let mut test_pairs = Vec::new();
+
+        // Include LLM function test pairs
+        test_pairs.extend(
+            self.ir
+                .walk_function_test_pairs()
+                .map(|tc| build_test_pair!(tc)),
+        );
+
+        // Include expr function test pairs
+        test_pairs.extend(
+            self.ir
+                .walk_expr_fn_test_pairs()
+                .map(|tc| build_test_pair!(tc)),
+        );
+
+        test_pairs
     }
 }
 
@@ -991,15 +1179,10 @@ impl Project {
         }
 
         if let Some(notifier) = runtime_notifier {
-            notifier
-                .0
-                .send(lsp_server::Message::Notification(Notification::new(
-                    "runtime_updated".to_string(),
-                    serde_json::json!({
-                        "root_path": self.root_path(),
-                        "files": file_map,
-                    }),
-                )))?;
+            notifier.notify::<RuntimeUpdated>(RuntimeUpdated {
+                root_path: self.root_path().to_string_lossy().to_string(),
+                files: file_map,
+            })?;
         }
 
         let runtime = self.baml_project.runtime(fake_env_vars, feature_flags);
@@ -1153,7 +1336,16 @@ impl Project {
     /// Returns a list of functions from the WASM runtime.
     pub fn list_functions(&self) -> Result<Vec<BamlFunction>, &str> {
         if let Ok(runtime) = self.runtime() {
-            Ok(runtime.list_functions())
+            Ok(runtime.list_functions(None))
+        } else {
+            Err("BAML Generate failed. Project has errors.")
+        }
+    }
+
+    /// Returns a list of expr functions from the WASM runtime.
+    pub fn list_expr_fns(&self) -> Result<Vec<BamlFunction>, &str> {
+        if let Ok(runtime) = self.runtime() {
+            Ok(runtime.list_expr_fns())
         } else {
             Err("BAML Generate failed. Project has errors.")
         }
@@ -1270,16 +1462,23 @@ impl Project {
     // }
 
     /// Checks if all generators use the same major.minor version.
-    /// Returns Ok(()) if they do,
+    /// Returns Ok(Some(version)) if generators exist and have matching versions,
+    /// Ok(None) if no generators exist,
     /// otherwise returns an Err with a descriptive message.
-    pub fn get_common_generator_version(&self) -> anyhow::Result<String> {
+    pub fn get_common_generator_version(&self) -> anyhow::Result<Option<String>> {
         // list generators. If we can't get the runtime, we'll error out.
-        let generators = self
+        let generators: Vec<_> = self
             .runtime()?
             .codegen_generators()
-            .map(|gen| gen.version.as_str());
+            .map(|gen| gen.version.as_str())
+            .collect();
 
-        common_version_up_to_patch(generators)
+        // If there are no generators, that's valid - just return None
+        if generators.is_empty() {
+            return Ok(None);
+        }
+
+        common_version_up_to_patch(generators).map(Some)
     }
 }
 

@@ -3,7 +3,7 @@ use std::{
     fmt,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use indexmap::IndexMap;
 use pretty::RcDoc;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
@@ -1004,6 +1004,32 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
+    pub fn value_clone(&self) -> BamlValue {
+        match self {
+            BamlValueWithMeta::String(v, _) => BamlValue::String(v.clone()),
+            BamlValueWithMeta::Int(v, _) => BamlValue::Int(*v),
+            BamlValueWithMeta::Float(v, _) => BamlValue::Float(*v),
+            BamlValueWithMeta::Bool(v, _) => BamlValue::Bool(*v),
+            BamlValueWithMeta::Map(v, _) => BamlValue::Map(
+                v.into_iter()
+                    .map(|(k, v)| (k.clone(), v.value_clone()))
+                    .collect(),
+            ),
+            BamlValueWithMeta::List(v, _) => {
+                BamlValue::List(v.iter().map(|v| v.value_clone()).collect())
+            }
+            BamlValueWithMeta::Media(v, _) => BamlValue::Media(v.clone()),
+            BamlValueWithMeta::Enum(v, w, _) => BamlValue::Enum(v.clone(), w.clone()),
+            BamlValueWithMeta::Class(n, fs, _) => BamlValue::Class(
+                n.clone(),
+                fs.into_iter()
+                    .map(|(k, v)| (k.clone(), v.value_clone()))
+                    .collect(),
+            ),
+            BamlValueWithMeta::Null(_) => BamlValue::Null,
+        }
+    }
+
     pub fn meta(&self) -> &T {
         match self {
             BamlValueWithMeta::String(_, m) => m,
@@ -1086,7 +1112,7 @@ impl<T> BamlValueWithMeta<T> {
     }
 
     /// Apply the same meta value to every node throughout a BamlValue.
-    pub fn with_const_meta(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
+    pub fn with_same_meta_at_all_nodes(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
     where
         T: Clone,
     {
@@ -1099,14 +1125,19 @@ impl<T> BamlValueWithMeta<T> {
             BamlValue::Map(entries) => BamlValueWithMeta::Map(
                 entries
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            Self::with_same_meta_at_all_nodes(v, meta.clone()),
+                        )
+                    })
                     .collect(),
                 meta,
             ),
             BamlValue::List(items) => List(
                 items
                     .iter()
-                    .map(|i| Self::with_const_meta(i, meta.clone()))
+                    .map(|i| Self::with_same_meta_at_all_nodes(i, meta.clone()))
                     .collect(),
                 meta,
             ),
@@ -1116,7 +1147,12 @@ impl<T> BamlValueWithMeta<T> {
                 class_name.clone(),
                 items
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            Self::with_same_meta_at_all_nodes(v, meta.clone()),
+                        )
+                    })
                     .collect(),
                 meta,
             ),
@@ -1256,11 +1292,17 @@ impl<T> BamlValueWithMeta<T> {
                 // let map_result = fields1.into_iter().zip(fields2).map(|((k1,v1),(_k2,v2))| {
                 //     v1.zip_meta(v2).map(|r| (k1, r))
                 // }).collect::<Result<IndexMap<_,_>>>()?;
+
+                // Only zip fields that exist in both. Fields that exist only in fields1
+                // (e.g., @skip fields added as null fillers by semantic streaming) are
+                // dropped because they don't have corresponding metadata in fields2.
+                // These fields will be re-added with proper null values when converting
+                // to the final response type.
                 let map_result = fields1
                     .into_iter()
-                    .map(|(k1, v1)| {
-                        let v2 = fields2.get(&k1).context("Missing expected key")?;
-                        v1.zip_meta(v2).map(|r| (k1, r))
+                    .filter_map(|(k1, v1)| {
+                        // Skip fields only in fields1 (e.g., @skip fields)
+                        fields2.get(&k1).map(|v2| v1.zip_meta(v2).map(|r| (k1, r)))
                     })
                     .collect::<Result<IndexMap<_, _>>>()?;
                 Ok(BamlValueWithMeta::Class(

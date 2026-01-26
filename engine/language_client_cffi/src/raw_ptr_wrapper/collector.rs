@@ -71,6 +71,11 @@ impl UsageWrapper {
     fn output_tokens(&self) -> i64 {
         self.output_tokens.unwrap_or_default()
     }
+
+    #[export_baml_fn]
+    fn cached_input_tokens(&self) -> Option<i64> {
+        self.cached_input_tokens
+    }
 }
 
 #[export_baml_fn]
@@ -131,6 +136,23 @@ impl FunctionLogWrapper {
     fn metadata(&self) -> BamlValue {
         let mut log_clone = (self.as_ref()).clone();
         let metadata = log_clone.metadata();
+        BamlValue::Map(
+            metadata
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.clone(),
+                        baml_types::BamlValue::try_from(v.clone()).unwrap(),
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    #[export_baml_fn]
+    fn tags(&self) -> BamlValue {
+        let mut log_clone = (self.as_ref()).clone();
+        let metadata = log_clone.tags();
         BamlValue::Map(
             metadata
                 .iter()

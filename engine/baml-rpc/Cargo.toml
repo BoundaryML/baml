@@ -40,7 +40,7 @@ strsim.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 time.workspace = true
-ts-rs = { version = "11.0.0", features = ["indexmap-impl"] }
+ts-rs = { version = "11.0.0", features = ["indexmap-impl", "no-serde-warnings"] }
 type-safe-id = "0.3.2"
 uuid.workspace = true
 web-time.workspace = true

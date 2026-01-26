@@ -1,0 +1,15 @@
+---
+source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  LET_STMT "let x = 1;"
+    KW_LET "let"
+    WORD "x"
+    EQUALS "="
+    INTEGER_LITERAL "1"
+    SEMICOLON ";"
+
+=== ERRORS ===
+None

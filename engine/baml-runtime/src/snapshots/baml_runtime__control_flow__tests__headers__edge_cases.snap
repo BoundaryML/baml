@@ -1,0 +1,932 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::ConsecutiveHeaders":
+  nodes:
+    "ConsecutiveHeaders|c:func:0":
+      label: ConsecutiveHeaders
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1789
+        end: 1999
+    "ConsecutiveHeaders|c:func:0|h:first-header:0":
+      label: First Header
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|h:second-header:1":
+      label: Second Header
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|h:subsection-a:3":
+      label: Subsection A
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|h:subsection-b:4":
+      label: Subsection B
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|h:subsection-c:5":
+      label: Subsection C
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|h:third-header:2":
+      label: Third Header
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ConsecutiveHeaders|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "ConsecutiveHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1967
+        end: 1997
+  edges:
+    "ConsecutiveHeaders|c:func:0":
+      - dst: "ConsecutiveHeaders|c:func:0|h:first-header:0"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:first-header:0":
+      - dst: "ConsecutiveHeaders|c:func:0|h:second-header:1"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:second-header:1":
+      - dst: "ConsecutiveHeaders|c:func:0|h:third-header:2"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:subsection-a:3":
+      - dst: "ConsecutiveHeaders|c:func:0|h:subsection-b:4"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:subsection-b:4":
+      - dst: "ConsecutiveHeaders|c:func:0|h:subsection-c:5"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:subsection-c:5":
+      - dst: "ConsecutiveHeaders|c:func:0|s:1"
+        label: ""
+    "ConsecutiveHeaders|c:func:0|h:third-header:2":
+      - dst: "ConsecutiveHeaders|c:func:0|h:subsection-a:3"
+        label: ""
+"expr::HeaderLevels":
+  nodes:
+    "HeaderLevels|c:func:0":
+      label: HeaderLevels
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 224
+        end: 482
+    "HeaderLevels|c:func:0|h:level-1:0":
+      label: Level 1
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-2:1":
+      label: Level 2
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-3:2":
+      label: Level 3
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-4:3":
+      label: Level 4
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-5:4":
+      label: Level 5
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-6:5":
+      label: Level 6
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-7-more-than-6-levels:6":
+      label: Level 7 - More than 6 levels
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-8:7":
+      label: Level 8
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|h:level-9:8":
+      label: Level 9
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderLevels|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeaderLevels|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 466
+        end: 480
+  edges:
+    "HeaderLevels|c:func:0":
+      - dst: "HeaderLevels|c:func:0|h:level-1:0"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-1:0":
+      - dst: "HeaderLevels|c:func:0|h:level-2:1"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-2:1":
+      - dst: "HeaderLevels|c:func:0|h:level-3:2"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-3:2":
+      - dst: "HeaderLevels|c:func:0|h:level-4:3"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-4:3":
+      - dst: "HeaderLevels|c:func:0|h:level-5:4"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-5:4":
+      - dst: "HeaderLevels|c:func:0|h:level-6:5"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-6:5":
+      - dst: "HeaderLevels|c:func:0|h:level-7-more-than-6-levels:6"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-7-more-than-6-levels:6":
+      - dst: "HeaderLevels|c:func:0|h:level-8:7"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-8:7":
+      - dst: "HeaderLevels|c:func:0|h:level-9:8"
+        label: ""
+    "HeaderLevels|c:func:0|h:level-9:8":
+      - dst: "HeaderLevels|c:func:0|s:1"
+        label: ""
+"expr::HeaderOnlyFunction":
+  nodes:
+    "HeaderOnlyFunction|c:func:0":
+      label: HeaderOnlyFunction
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2812
+        end: 3018
+    "HeaderOnlyFunction|c:func:0|h:just-headers:0":
+      label: Just Headers
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|h:no-code:1":
+      label: No Code
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|h:no-expressions:4":
+      label: No Expressions
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|h:only-documentation:2":
+      label: Only Documentation
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|h:pure-annotation:3":
+      label: Pure Annotation
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|h:until-the-end:5":
+      label: Until The End
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeaderOnlyFunction|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeaderOnlyFunction|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 3007
+        end: 3016
+  edges:
+    "HeaderOnlyFunction|c:func:0":
+      - dst: "HeaderOnlyFunction|c:func:0|h:just-headers:0"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:just-headers:0":
+      - dst: "HeaderOnlyFunction|c:func:0|h:no-code:1"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:no-code:1":
+      - dst: "HeaderOnlyFunction|c:func:0|h:only-documentation:2"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:no-expressions:4":
+      - dst: "HeaderOnlyFunction|c:func:0|h:until-the-end:5"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:only-documentation:2":
+      - dst: "HeaderOnlyFunction|c:func:0|h:pure-annotation:3"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:pure-annotation:3":
+      - dst: "HeaderOnlyFunction|c:func:0|h:no-expressions:4"
+        label: ""
+    "HeaderOnlyFunction|c:func:0|h:until-the-end:5":
+      - dst: "HeaderOnlyFunction|c:func:0|s:1"
+        label: ""
+"expr::HeadersAndComments":
+  nodes:
+    "HeadersAndComments|c:func:0":
+      label: HeadersAndComments
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 729
+        end: 993
+    "HeadersAndComments|c:func:0|h:header-after-comment:0":
+      label: Header After Comment
+      node_type: expr
+      parent: "HeadersAndComments|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAndComments|c:func:0|h:header-after-doc-comment:1":
+      label: Header After Doc Comment
+      node_type: expr
+      parent: "HeadersAndComments|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAndComments|c:func:0|h:header-before-comment:0":
+      label: Header Before Comment
+      node_type: expr
+      parent: "HeadersAndComments|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAndComments|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "HeadersAndComments|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 839
+        end: 855
+    "HeadersAndComments|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "HeadersAndComments|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 990
+        end: 991
+  edges:
+    "HeadersAndComments|c:func:0":
+      - dst: "HeadersAndComments|c:func:0|h:header-before-comment:0"
+        label: ""
+    "HeadersAndComments|c:func:0|h:header-after-comment:0":
+      - dst: "HeadersAndComments|c:func:0|h:header-after-doc-comment:1"
+        label: ""
+    "HeadersAndComments|c:func:0|h:header-after-doc-comment:1":
+      - dst: "HeadersAndComments|c:func:0|s:2"
+        label: ""
+    "HeadersAndComments|c:func:0|h:header-before-comment:0":
+      - dst: "HeadersAndComments|c:func:0|s:0"
+        label: ""
+    "HeadersAndComments|c:func:0|s:0":
+      - dst: "HeadersAndComments|c:func:0|h:header-after-comment:0"
+        label: ""
+"expr::HeadersAroundExpressions":
+  nodes:
+    "HeadersAroundExpressions|c:func:0":
+      label: HeadersAroundExpressions
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2001
+        end: 2392
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2173
+        end: 2174
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|h:inside-if:0":
+      label: Inside If
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2173
+        end: 2174
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:1"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2223
+        end: 2224
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|h:inside-else:0":
+      label: Inside Else
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2223
+        end: 2224
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "HeadersAroundExpressions|c:func:0|c:loop:2"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2335
+        end: 2336
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|h:inside-for:0":
+      label: Inside For
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2335
+        end: 2336
+    "HeadersAroundExpressions|c:func:0|h:after-for:0":
+      label: After For
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:after-if:0":
+      label: After If
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:after-let:0":
+      label: After Let
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:before-for:1":
+      label: Before For
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:before-if:1":
+      label: Before If
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:before-let:0":
+      label: Before Let
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|h:final-section:1":
+      label: Final Section
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersAroundExpressions|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2072
+        end: 2083
+    "HeadersAroundExpressions|c:func:0|s:1":
+      label: if
+      node_type: branch
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2127
+        end: 2230
+    "HeadersAroundExpressions|c:func:0|s:2":
+      label: for
+      node_type: loop
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2275
+        end: 2342
+    "HeadersAroundExpressions|c:func:0|s:4":
+      label: expr
+      node_type: expr
+      parent: "HeadersAroundExpressions|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2389
+        end: 2390
+  edges:
+    "HeadersAroundExpressions|c:func:0":
+      - dst: "HeadersAroundExpressions|c:func:0|h:before-let:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|h:inside-if:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|h:inside-if:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|s:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0|s:1":
+      - dst: "HeadersAroundExpressions|c:func:0|h:after-if:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|h:inside-else:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|h:inside-else:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|s:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0|s:1":
+      - dst: "HeadersAroundExpressions|c:func:0|h:after-if:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|h:inside-for:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|h:inside-for:0":
+      - dst: "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|s:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0|s:1":
+      - dst: "HeadersAroundExpressions|c:func:0|s:2"
+        label: repeat
+    "HeadersAroundExpressions|c:func:0|h:after-for:0":
+      - dst: "HeadersAroundExpressions|c:func:0|h:final-section:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:after-if:0":
+      - dst: "HeadersAroundExpressions|c:func:0|h:before-for:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:after-let:0":
+      - dst: "HeadersAroundExpressions|c:func:0|h:before-if:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:before-for:1":
+      - dst: "HeadersAroundExpressions|c:func:0|s:2"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:before-if:1":
+      - dst: "HeadersAroundExpressions|c:func:0|s:1"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:before-let:0":
+      - dst: "HeadersAroundExpressions|c:func:0|s:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|h:final-section:1":
+      - dst: "HeadersAroundExpressions|c:func:0|s:4"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|s:0":
+      - dst: "HeadersAroundExpressions|c:func:0|h:after-let:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|s:1":
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:0|c:block:0"
+        label: ""
+      - dst: "HeadersAroundExpressions|c:func:0|c:arm:1|c:block:0"
+        label: ""
+    "HeadersAroundExpressions|c:func:0|s:2":
+      - dst: "HeadersAroundExpressions|c:func:0|c:loop:2|c:block:0"
+        label: ""
+      - dst: "HeadersAroundExpressions|c:func:0|h:after-for:0"
+        label: ""
+"expr::HeadersInComplexNesting":
+  nodes:
+    "HeadersInComplexNesting|c:func:0":
+      label: HeadersInComplexNesting
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 995
+        end: 1531
+    "HeadersInComplexNesting|c:func:0|h:back-to-function-level:0":
+      label: Back to Function Level
+      node_type: expr
+      parent: "HeadersInComplexNesting|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersInComplexNesting|c:func:0|h:main-function:0":
+      label: Main Function
+      node_type: expr
+      parent: "HeadersInComplexNesting|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersInComplexNesting|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "HeadersInComplexNesting|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1069
+        end: 1487
+    "HeadersInComplexNesting|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "HeadersInComplexNesting|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1523
+        end: 1529
+  edges:
+    "HeadersInComplexNesting|c:func:0":
+      - dst: "HeadersInComplexNesting|c:func:0|h:main-function:0"
+        label: ""
+    "HeadersInComplexNesting|c:func:0|h:back-to-function-level:0":
+      - dst: "HeadersInComplexNesting|c:func:0|s:2"
+        label: ""
+    "HeadersInComplexNesting|c:func:0|h:main-function:0":
+      - dst: "HeadersInComplexNesting|c:func:0|s:0"
+        label: ""
+    "HeadersInComplexNesting|c:func:0|s:0":
+      - dst: "HeadersInComplexNesting|c:func:0|h:back-to-function-level:0"
+        label: ""
+"expr::HeadersWithSpecialChars":
+  nodes:
+    "HeadersWithSpecialChars|c:func:0":
+      label: HeadersWithSpecialChars
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1533
+        end: 1787
+    "HeadersWithSpecialChars|c:func:0|h:header-with-backslashes:4":
+      label: "Header\\With\\Backslashes"
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|h:header-with-dashes:0":
+      label: Header-With-Dashes
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|h:header-with-dots:2":
+      label: Header.With.Dots
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|h:header-with-pipes:5":
+      label: Header|With|Pipes
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|h:header-with-slashes:3":
+      label: Header/With/Slashes
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|h:header-with-underscores:1":
+      label: Header_With_Underscores
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithSpecialChars|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "HeadersWithSpecialChars|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 1770
+        end: 1785
+  edges:
+    "HeadersWithSpecialChars|c:func:0":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-dashes:0"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-backslashes:4":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-pipes:5"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-dashes:0":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-underscores:1"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-dots:2":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-slashes:3"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-pipes:5":
+      - dst: "HeadersWithSpecialChars|c:func:0|s:1"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-slashes:3":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-backslashes:4"
+        label: ""
+    "HeadersWithSpecialChars|c:func:0|h:header-with-underscores:1":
+      - dst: "HeadersWithSpecialChars|c:func:0|h:header-with-dots:2"
+        label: ""
+"expr::HeadersWithWhitespace":
+  nodes:
+    "HeadersWithWhitespace|c:func:0":
+      label: HeadersWithWhitespace
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 484
+        end: 727
+    "HeadersWithWhitespace|c:func:0|h:all-tabs:2":
+      label: All Tabs
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithWhitespace|c:func:0|h:extra-spaces-before-title:0":
+      label: Extra Spaces Before Title
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithWhitespace|c:func:0|h:mixed-tabs-and-spaces:1":
+      label: Mixed Tabs And Spaces
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithWhitespace|c:func:0|h:multiple-spaces-between-words:1":
+      label: Multiple  Spaces  Between  Words
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithWhitespace|c:func:0|h:trailing-spaces:0":
+      label: Trailing Spaces
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "HeadersWithWhitespace|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 625
+        end: 652
+    "HeadersWithWhitespace|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "HeadersWithWhitespace|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 724
+        end: 725
+  edges:
+    "HeadersWithWhitespace|c:func:0":
+      - dst: "HeadersWithWhitespace|c:func:0|h:extra-spaces-before-title:0"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|h:all-tabs:2":
+      - dst: "HeadersWithWhitespace|c:func:0|s:0"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|h:extra-spaces-before-title:0":
+      - dst: "HeadersWithWhitespace|c:func:0|h:mixed-tabs-and-spaces:1"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|h:mixed-tabs-and-spaces:1":
+      - dst: "HeadersWithWhitespace|c:func:0|h:all-tabs:2"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|h:multiple-spaces-between-words:1":
+      - dst: "HeadersWithWhitespace|c:func:0|s:2"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|h:trailing-spaces:0":
+      - dst: "HeadersWithWhitespace|c:func:0|h:multiple-spaces-between-words:1"
+        label: ""
+    "HeadersWithWhitespace|c:func:0|s:0":
+      - dst: "HeadersWithWhitespace|c:func:0|h:trailing-spaces:0"
+        label: ""
+"expr::UnicodeHeaders":
+  nodes:
+    "UnicodeHeaders|c:func:0":
+      label: UnicodeHeaders
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 31
+        end: 222
+    "UnicodeHeaders|c:func:0|h::0":
+      label: 你好世界
+      node_type: expr
+      parent: "UnicodeHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "UnicodeHeaders|c:func:0|h:mojis:1":
+      label: Émojis 🎉🎊
+      node_type: expr
+      parent: "UnicodeHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "UnicodeHeaders|c:func:0|h:special-characters:2":
+      label: Special «Characters» ™
+      node_type: expr
+      parent: "UnicodeHeaders|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "UnicodeHeaders|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "UnicodeHeaders|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 214
+        end: 220
+  edges:
+    "UnicodeHeaders|c:func:0":
+      - dst: "UnicodeHeaders|c:func:0|h::0"
+        label: ""
+    "UnicodeHeaders|c:func:0|h::0":
+      - dst: "UnicodeHeaders|c:func:0|h:mojis:1"
+        label: ""
+    "UnicodeHeaders|c:func:0|h:mojis:1":
+      - dst: "UnicodeHeaders|c:func:0|h:special-characters:2"
+        label: ""
+    "UnicodeHeaders|c:func:0|h:special-characters:2":
+      - dst: "UnicodeHeaders|c:func:0|s:1"
+        label: ""
+"expr::VeryLongHeaderTitle":
+  nodes:
+    "VeryLongHeaderTitle|c:func:0":
+      label: VeryLongHeaderTitle
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2394
+        end: 2810
+    "VeryLongHeaderTitle|c:func:0|h:another-long-title-with-special-characters-and-numbers-1234567890:1":
+      label: "Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':\",./<>? And Numbers 1234567890"
+      node_type: expr
+      parent: "VeryLongHeaderTitle|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "VeryLongHeaderTitle|c:func:0|h:this-is-an-extremely-long-header-title-that-goes-on-and-on-and-on-and-contains-many-words-to-test-how-the-parser-handles-very-long-header-titles-that-might-span-multiple-lines-in-some-editors-but-should-still-be-parsed-as-a-single-header:0":
+      label: This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header
+      node_type: expr
+      parent: "VeryLongHeaderTitle|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "VeryLongHeaderTitle|c:func:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "VeryLongHeaderTitle|c:func:0"
+      span:
+        file: src/control_flow/headers/edge_cases.baml
+        start: 2794
+        end: 2808
+  edges:
+    "VeryLongHeaderTitle|c:func:0":
+      - dst: "VeryLongHeaderTitle|c:func:0|h:this-is-an-extremely-long-header-title-that-goes-on-and-on-and-on-and-contains-many-words-to-test-how-the-parser-handles-very-long-header-titles-that-might-span-multiple-lines-in-some-editors-but-should-still-be-parsed-as-a-single-header:0"
+        label: ""
+    "VeryLongHeaderTitle|c:func:0|h:another-long-title-with-special-characters-and-numbers-1234567890:1":
+      - dst: "VeryLongHeaderTitle|c:func:0|s:1"
+        label: ""
+    "VeryLongHeaderTitle|c:func:0|h:this-is-an-extremely-long-header-title-that-goes-on-and-on-and-on-and-contains-many-words-to-test-how-the-parser-handles-very-long-header-titles-that-might-span-multiple-lines-in-some-editors-but-should-still-be-parsed-as-a-single-header:0":
+      - dst: "VeryLongHeaderTitle|c:func:0|h:another-long-title-with-special-characters-and-numbers-1234567890:1"
+        label: ""

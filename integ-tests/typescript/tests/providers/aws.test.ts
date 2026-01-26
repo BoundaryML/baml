@@ -28,7 +28,7 @@ describe("AWS Provider", () => {
     );
 
     await expect(response).rejects.toMatchObject({
-      code: "GenericFailure",
+      name: "BamlClientHttpError",
     });
   });
 
@@ -152,9 +152,7 @@ describe("AWS Provider", () => {
 
         await expect(async () => {
           await b.TestAws("Dr. Pepper", { clientRegistry: crEmptyRegion });
-        }).rejects.toMatchObject({
-          code: "GenericFailure",
-        });
+        }).rejects.toThrow("region cannot be empty");
 
         const crNoEnvRegion = new ClientRegistry();
         crNoEnvRegion.addLlmClient("DynamicAWSClient", "aws-bedrock", {
@@ -298,7 +296,9 @@ describe("AWS Provider", () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
       }).rejects.toMatchObject({
         name: "BamlClientHttpError",
-        status_code: 401,
+        // Note: status_code varies depending on whether AWS credentials are available:
+        // - Without credentials: code 2 (DispatchFailure/CredentialsNotLoaded)
+        // - With credentials but non-existent model: code 401 or 404
         client_name: "DynamicAWSClient",
         message: expect.stringContaining(
           "BamlError: BamlClientError: BamlClientHttpError:",
@@ -363,9 +363,7 @@ describe("AWS Provider", () => {
 
       await expect(async () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
-      }).rejects.toMatchObject({
-        code: "GenericFailure",
-      });
+      }).rejects.toThrow("region must be a string");
     });
 
     it("should throw error when using invalid profile", async () => {
@@ -382,9 +380,7 @@ describe("AWS Provider", () => {
 
       await expect(async () => {
         await b.TestAws("Dr. Pepper", { clientRegistry: cr });
-      }).rejects.toMatchObject({
-        code: "GenericFailure",
-      });
+      }).rejects.toThrow("access_key_id must be a string");
     });
 
     it("should support both AWS_REGION and AWS_DEFAULT_REGION environment variables", async () => {

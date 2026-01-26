@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+
+# WASM output (built by wasm-pack)
+pkg-playground/wasm/
+
+# IDE
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Logs
+*.log

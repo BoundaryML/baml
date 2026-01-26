@@ -51,6 +51,10 @@ func (*parse_stream) ConsumeSimpleClass(text string, opts ...CallOptionFunc) (st
 		args.TypeBuilder = callOpts.typeBuilder
 	}
 
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
+	}
+
 	encoded, err := args.Encode()
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -92,6 +96,10 @@ func (*parse_stream) MakeSimpleClass(text string, opts ...CallOptionFunc) (strea
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

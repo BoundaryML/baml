@@ -1,0 +1,253 @@
+[workspace]
+members = [ "crates/*", "rig_tests/crates/*" ]
+resolver = "2"
+
+[workspace.package]
+# Please update rustfmt.toml when bumping the Rust edition
+edition = "2024"
+# This is the MSRV (Minimum Supported Rust Version) for the workspace
+rust-version = "1.89"
+authors = [ "Vaibhav Gupta <vbv@boundaryml.com>" ]
+homepage = "https://github.com/BoundaryML/baml"
+documentation = "https://docs.boundaryml.com"
+repository = "https://github.com/BoundaryML/baml"
+license = "Apache-2.0"
+# This needs to be updated manually when bumping the version
+version = "0.0.0"
+
+[workspace.dependencies]
+#  Internal dependencies (baml_*)
+baml_base = { path = "crates/baml_base" }
+baml_builtins = { path = "crates/baml_builtins" }
+baml_builtins_macros = { path = "crates/baml_builtins_macros" }
+baml_codegen_python = { path = "crates/baml_codegen_python" }
+baml_codegen_tests = { path = "crates/baml_codegen_tests" }
+baml_codegen_types = { path = "crates/baml_codegen_types" }
+baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
+baml_compiler_emit = { path = "crates/baml_compiler_emit" }
+baml_compiler_hir = { path = "crates/baml_compiler_hir" }
+baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
+baml_compiler_mir = { path = "crates/baml_compiler_mir" }
+baml_compiler_parser = { path = "crates/baml_compiler_parser" }
+baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
+baml_compiler_tir = { path = "crates/baml_compiler_tir" }
+baml_compiler_vir = { path = "crates/baml_compiler_vir" }
+bex_program = { path = "crates/bex_program" }
+bex_engine = { path = "crates/bex_engine" }
+sys_types = { path = "crates/sys_types" }
+sys_native = { path = "crates/sys_native" }
+baml_db = { path = "crates/baml_db" }
+baml_ide = { path = "crates/baml_ide" }
+baml_lsp = { path = "crates/baml_lsp" }
+baml_lsp_types = { path = "crates/baml_lsp_types" }
+baml_project = { path = "crates/baml_project" }
+baml_tests = { path = "crates/baml_tests" }
+tools_onionskin = { path = "crates/tools_onionskin" }
+bex_vm = { path = "crates/bex_vm" }
+bex_vm_types = { path = "crates/bex_vm_types" }
+bex_external_types = { path = "crates/bex_external_types" }
+bex_heap = { path = "crates/bex_heap" }
+sys_resource_types = { path = "crates/sys_resource_types" }
+baml_workspace = { path = "crates/baml_workspace" }
+
+#  External dependencies
+anyhow = { version = "1" }
+arboard = "3.4"
+ariadne = { version = "0.6" }
+askama = { version = "0.14.0" }
+axum = { version = "0.8.4", features = [ "ws" ] }
+cargo_metadata = { version = "0.23.1" }
+cfg-if = "1.0.0"
+clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
+clap-cargo = "0.14.1"
+colored = { version = "2.1.0" }
+console-subscriber = { version = "0.4.1", features = [ "grpc-web" ] }
+console_error_panic_hook = "0.1"
+crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
+crossbeam-queue = "0.3"
+crossterm = "0.28"
+ctrlc = "3.4"
+divan = { package = "codspeed-divan-compat", version = "*" }
+filetime = "0.2.25"
+futures = { version = "0.3.30", features = [ "executor" ] }
+glob = { version = "0.3" }
+graphviz-rust = { version = "0.9" }
+ignore = { version = "0.4.22" }
+indexmap = { version = "2.1.0", features = [ "serde" ] }
+insta = { version = "1.34", features = [ "yaml", "redactions" ] }
+is-macro = { version = "0.3.5" }
+itertools = "0.14.0"
+jod-thread = { version = "0.1.2" }
+la-arena = { version = "0.3" }
+libc = "0.2.169"
+log = "0.4.20"
+logos = { version = "0.15" }
+lsp-server = "0.7.6"
+lsp-types = "0.95.0"
+memchr = { version = "2.7.1" }
+mime_guess = "2.0.5"
+notify = "7.0"
+parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
+paste = "1.0"
+path-absolutize = { version = "3.1.1", features = [
+  "once_cell_cache",
+  "use_unix_paths_on_wasm",
+] }
+pathdiff = { version = "0.2.1" }
+pretty_assertions = { version = "1.4" }
+prettyplease = { version = "0.2" }
+proc-macro2 = { version = "1" }
+quote = { version = "1" }
+ratatui = "0.29"
+regex = { version = "1.10.2" }
+reqwest = { version = "0.12.12", features = [
+  "json",
+  "native-tls-alpn",
+  "native-tls-vendored",
+  "stream",
+] }
+rowan = { version = "0.16" }
+rustc-hash = { version = "2.1" }
+salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "cdd0b85516a52c18b8a6d17a2279a96ed6c3e198", default-features = false, features = [
+  "compact_str",
+  "macros",
+  "salsa_unstable",
+  "inventory",
+] }
+schemars = { version = "0.8.16" }
+semver = "1.0.20"
+serde = { version = "1.0.197", features = [ "derive" ] }
+serde-wasm-bindgen = "0.4"
+serde_json = { version = "1.0.113" }
+sharded-slab = "0.1"
+shellexpand = { version = "3.0.0" }
+similar = { version = "2.4.0", features = [ "inline" ] }
+simple-logging = "2.0.2"
+smol_str = { version = "0.3" }
+syn = { version = "2", features = [ "full" ] }
+taplo = { version = "0.13" }
+tempfile = { version = "3" }
+text-size = { version = "1.1" }
+thiserror = { version = "2.0.0" }
+toml = { version = "0.8" }
+toml_edit = { version = "0.22" }
+tokio = { version = "1.36" }
+tower = "0.5"
+tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
+tracing = { version = "0.1.40" }
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+  "env-filter",
+  "fmt",
+] }
+url = "2.5.2"
+walkdir = { version = "2.4" }
+wasm-bindgen = "0.2"
+wasm-bindgen-test = "0.3"
+webbrowser = "1.0.5"
+wee_alloc = "0.4"
+[workspace.lints.rust]
+unsafe_code = "warn"
+unreachable_pub = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = [
+  "cfg(fuzzing)",
+  "cfg(codspeed)",
+] }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -2 }
+# Enabled at the crate level
+disallowed_methods = "allow"
+# Allowed pedantic lints
+char_lit_as_u8 = "allow"
+collapsible_else_if = "allow"
+collapsible_if = "allow"
+implicit_hasher = "allow"
+map_unwrap_or = "allow"
+match_same_arms = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+single_match_else = "allow"
+too_many_lines = "allow"
+needless_continue = "allow"            # An explicit continue can be more readable, especially if the alternative is an empty block.
+unnecessary_debug_formatting = "allow" # too many instances, the display also doesn't quote the path which is often desired in logs where we use them the most often.
+# Without the hashes we run into a `rustfmt` bug in some snapshot tests, see #13250
+needless_raw_string_hashes = "allow"
+# Disallowed restriction lints
+ignore_without_reason = "allow"          # Too many exsisting instances, and there's no auto fix.
+print_stdout = "deny"                    # deny print! and println! (LSP requires stdout/stderr for communication)
+print_stderr = "deny"
+dbg_macro = "deny"                       # deny dbg! macro (LSP requires stdout/stderr for communication)
+empty_drop = "warn"
+empty_structs_with_brackets = "warn"
+exit = "warn"
+get_unwrap = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+# nursery rules
+redundant_clone = "warn"
+debug_assert_with_mut_call = "warn"
+unused_peekable = "warn"
+# This lint sometimes flags code whose `if` and `else`
+# bodies could be flipped when a `!` operator is removed.
+# While perhaps sometimes a good idea, it is also often
+# not a good idea due to other factors impacting
+# readability. For example, if flipping the bodies results
+# in the `if` being an order of magnitude bigger than the
+# `else`, then some might consider that harder to read.
+if_not_else = "allow"
+
+# Diagnostics are not actionable: Enable once https://github.com/rust-lang/rust-clippy/issues/13774 is resolved.
+large_stack_arrays = "allow"
+
+[profile.release]
+lto = "fat"
+codegen-units = 16
+
+# Some crates don't change as much but benefit more from
+# more expensive optimization passes, so we selectively
+# decrease codegen-units in some cases.
+[profile.release.package.salsa]
+codegen-units = 1
+
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
+
+[profile.dev.package.salsa]
+opt-level = 3
+
+# This profile is meant to mimic the `release` profile as closely as
+# possible, but using settings that are more beneficial for iterative
+# development. That is, the `release` profile is intended for actually
+# building the release, where as `profiling` is meant for building ty/ruff
+# for running benchmarks.
+#
+# The main differences here are to avoid stripping debug information
+# and disabling fat lto. This does result in a mismatch between our release
+# configuration and our benchmarking configuration, which is unfortunate.
+# But compile times with `lto = fat` are completely untenable.
+#
+# This setup does risk that we are measuring something in benchmarks
+# that we aren't shipping, but in order to make those two the same, we'd
+# either need to make compile times way worse for development, or take
+# a hit to binary size and a slight hit to runtime performance in our
+# release builds.
+#
+# Use the `--profile profiling` flag to show symbols in release mode.
+# e.g. `cargo build --profile profiling`
+[profile.profiling]
+inherits = "release"
+strip = false
+debug = "full"
+lto = false
+
+# The profile that 'cargo dist' will build with.
+[profile.dist]
+inherits = "release"

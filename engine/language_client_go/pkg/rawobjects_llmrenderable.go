@@ -66,7 +66,6 @@ func (eb *llmRenderableObject) Alias() (*string, error) {
 	return &alias, nil
 }
 
-
 func (eb *llmRenderableObject) From() (ASTNodeSource, error) {
 	result, err := raw_objects.CallMethod(eb, "is_from_ast", nil)
 	if err != nil {
@@ -84,8 +83,6 @@ func (eb *llmRenderableObject) From() (ASTNodeSource, error) {
 
 	return ASTNodeSource_TypeBuilder, nil
 }
-
-
 
 func (eb *llmRenderableObject) Name() (string, error) {
 	result, err := raw_objects.CallMethod(eb, "name", nil)

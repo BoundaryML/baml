@@ -1,0 +1,23 @@
+[package]
+name = "baml-cli"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "BAML CLI for Rust"
+readme = "README.md"
+keywords = ["baml", "boundaryml", "boundary", "llm", "programming-language"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "baml-cli"
+
+[dependencies]
+baml = { workspace = true }
+
+[lints]
+workspace = true

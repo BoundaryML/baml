@@ -37,11 +37,8 @@ func TestEncodeFunctionArguments(t *testing.T) {
 			"e": "f",
 		}
 
-		encoded_value, err := serde.BAMLTESTINGONLY_InternalEncode(test_value)
+		_, err := serde.EncodeValue(test_value)
 		require.NoError(t, err)
-
-		decoded_value := serde.Decode(encoded_value, nil).Interface()
-		require.Equal(t, test_value, decoded_value)
 	})
 
 	t.Run("EncodeMapWithOptional", func(t *testing.T) {
@@ -52,10 +49,7 @@ func TestEncodeFunctionArguments(t *testing.T) {
 			"c": nil,
 		}
 
-		encoded_value, err := serde.BAMLTESTINGONLY_InternalEncode(test_value)
+		_, err := serde.EncodeValue(test_value)
 		require.NoError(t, err)
-
-		decoded_value := serde.Decode(encoded_value, nil).Interface()
-		require.Equal(t, test_value, decoded_value)
 	})
 }

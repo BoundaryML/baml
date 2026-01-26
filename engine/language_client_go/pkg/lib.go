@@ -8,39 +8,44 @@ import (
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
-func EncodeClass(name func() *cffi.CFFITypeName, fields map[string]any, dynamicFields *map[string]any) (*cffi.CFFIValueHolder, error) {
+func EncodeClass(name string, fields map[string]any, dynamicFields *map[string]any) (*cffi.HostValue, error) {
 	return serde.EncodeClass(name, fields, dynamicFields)
 }
 
-func EncodeEnum(name func() *cffi.CFFITypeName, value string, is_dynamic bool) (*cffi.CFFIValueHolder, error) {
+func EncodeEnum(name string, value string, is_dynamic bool) (*cffi.HostValue, error) {
 	return serde.EncodeEnum(name, value, is_dynamic)
 }
 
-func EncodeUnion(name func() *cffi.CFFITypeName, variant string, value any) (*cffi.CFFIValueHolder, error) {
-	return serde.EncodeUnion(name, variant, value)
+func EncodeValue(value any) (*cffi.HostValue, error) {
+	return serde.EncodeValue(value)
 }
 
 func Decode(holder *cffi.CFFIValueHolder) reflect.Value {
-	return serde.Decode(holder, typeMap)
+	raw_decoded_data, _ := serde.Decode(holder, typeMap)
+	return raw_decoded_data
 }
 
-func DecodeStreamingState[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.StreamState[T] {
-	return serde.DecodeStreamingState(holder, decodeFunc)
+func DecodeToValue(holder *cffi.CFFIValueHolder) any {
+	raw_decoded_data, goType := serde.Decode(holder, typeMap)
+
+	if !raw_decoded_data.IsValid() {
+		return nil
+	}
+
+	// If int, bool, float, string, return the value directly
+	if goType == reflect.TypeOf(int64(0)) {
+		return raw_decoded_data.Int()
+	}
+	if goType == reflect.TypeOf(float64(0)) {
+		return raw_decoded_data.Float()
+	}
+	if goType == reflect.TypeOf(false) {
+		return raw_decoded_data.Bool()
+	}
+	return raw_decoded_data.Interface()
 }
 
-func DecodeChecked[T any](holder *cffi.CFFIValueHolder, decodeFunc func(inner *cffi.CFFIValueHolder) T) shared.Checked[T] {
-	return serde.DecodeChecked(holder, decodeFunc)
-}
-
-func CastChecked[T any](value any, castFunc func(inner any) T) shared.Checked[T] {
-	return serde.CastChecked(value, castFunc)
-}
-
-func CastStreamState[T any](value any, castFunc func(inner any) T) shared.StreamState[T] {
-	return serde.CastStreamState(value, castFunc)
-}
-
-func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.CFFIValueHolder, error) {
+func BAMLTESTINGONLY_InternalEncode(value any) (*cffi.HostValue, error) {
 	return serde.EncodeValue(value)
 }
 
@@ -48,6 +53,9 @@ type TypeMap = serde.TypeMap
 type Checked[T any] = shared.Checked[T]
 type StreamState[T any] = shared.StreamState[T]
 type StreamingStateType = shared.StreamStateType
+type DynamicUnion = serde.DynamicUnion
+type DynamicClass = serde.DynamicClass
+type DynamicEnum = serde.DynamicEnum
 
 const (
 	StreamStatePending    = shared.StreamStatePending

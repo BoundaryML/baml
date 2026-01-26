@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use baml_types::{EvaluationContext, StringOr};
-pub use helpers::PropertyHandler;
+pub use helpers::{HttpConfig, PropertyHandler};
 
 use crate::ClientSpec;
 
@@ -186,6 +186,9 @@ impl crate::OpenAIClientProviderVariant {
             }
             crate::OpenAIClientProviderVariant::Responses => {
                 openai::UnresolvedOpenAI::create_responses(properties)
+            }
+            crate::OpenAIClientProviderVariant::OpenRouter => {
+                openai::UnresolvedOpenAI::create_openrouter(properties)
             }
         }
     }

@@ -1,7 +1,6 @@
 'use client';
 import { Button } from '@baml/ui/button';
 // import Link from "next/link";
-import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web';
 /* eslint-disable @typescript-eslint/require-await */
 import { useAtom, useAtomValue } from 'jotai';
 import {
@@ -17,18 +16,32 @@ import {
   Video,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { wasmAtom } from '../../atoms';
 import { vscode } from '../../vscode';
 import { imageStatsMapAtom } from './image-stats-atom';
 import { mediaCollapsedMapAtom } from './media-collapsed-atom';
-import { PdfViewer } from './pdf-viewer';
 import { showTokensAtom } from './render-text';
+
+// Import react-pdf CSS here (not in pdf-viewer.tsx) to avoid Vite modulepreload issues.
+// VSCode webviews can't resolve relative CSS paths like "/assets/pdf-viewer.css" that
+// Vite generates for lazy-loaded chunks. By importing CSS in the main bundle, it loads
+// normally without preloading.
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Lazy load PdfViewer to reduce initial bundle size (react-pdf is ~1MB+)
+const PdfViewer = lazy(() => import('./pdf-viewer').then(m => ({ default: m.PdfViewer })));
+
+export interface MediaInfo {
+  content: string;
+  type?: number; // Optional: WASM media type (File/Url/Error)
+}
 
 interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio' | 'pdf' | 'video';
-  media: WasmChatMessagePartMedia;
+  media: MediaInfo;
 }
 
 // Helper function to convert base64 data URL to blob URL for better performance
@@ -171,6 +184,11 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
         throw new Error('wasm not loaded');
       }
 
+      // If type is undefined, assume it's a file path (from unified types)
+      if (media.type === undefined) {
+        return `${media.content}`;
+      }
+
       switch (media.type) {
         case wasm.WasmChatMessagePartMediaType.File:
           return `${media.content}`;
@@ -215,18 +233,20 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
       setOptimizedMediaUrl(mediaUrl);
     }
 
-    // Restore image stats from stored map if available
-    if (bamlMediaType === 'image' && imageStatsMap.has(mediaUrl)) {
-      const storedStats = imageStatsMap.get(mediaUrl);
-      if (storedStats) {
-        setImageStats({
-          width: storedStats.width,
-          height: storedStats.height,
-          size: storedStats.size,
-        });
-      }
-    }
-  }, [mediaUrl, bamlMediaType, imageStatsMap]);
+    // triggers infinite loop to refresh mediaUrl
+    // // Restore image stats from stored map if available
+    // if (bamlMediaType === 'image' && imageStatsMap.has(mediaUrl)) {
+    //   const storedStats = imageStatsMap.get(mediaUrl);
+    //   if (storedStats) {
+    //     setImageStats({
+    //       width: storedStats.width,
+    //       height: storedStats.height,
+    //       size: storedStats.size,
+    //     });
+    //   }
+    // }
+    // }, [mediaUrl, bamlMediaType, imageStatsMap]);
+  }, [mediaUrl, bamlMediaType]);
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
@@ -240,7 +260,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   if (error) {
     return (
       <div className="w-full flex justify-center">
-        <div className="max-w-4xl w-full border-6 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
+        <div className="max-w-2xl w-full border-6 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] p-4">
           <div className="flex h-[30vh] items-center justify-center">
             <div className="text-center space-y-3 text-[var(--vscode-charts-red)]">
               <div className="flex items-center justify-center gap-2 mb-2">
@@ -574,7 +594,7 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
 
       // For VSCode, try normal video element with error handling
       return (
-        <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden bg-black">
+        <div className="w-full max-w-3xl mx-auto border-2 border-[var(--vscode-panel-border)] rounded overflow-hidden">
           {/* biome-ignore lint/a11y/useMediaCaption: not correct */}
           <video
             controls
@@ -630,7 +650,18 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   };
 
   const renderPdfContent = (url: string) => {
-    return <PdfViewer url={url} />;
+    return (
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-[30vh]">
+          <div className="text-center space-y-2">
+            <div className="w-6 h-6 border-2 border-[var(--vscode-panel-border)] border-t-[var(--vscode-foreground)] rounded-full animate-spin mx-auto"></div>
+            <p className="text-sm text-[var(--vscode-description-foreground)]">Loading PDF viewer...</p>
+          </div>
+        </div>
+      }>
+        <PdfViewer url={url} />
+      </Suspense>
+    );
   };
 
   const handleCopyToClipboard = async () => {
@@ -655,13 +686,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
   const fileSize = isBase64 ? getDataUriSize(mediaUrl || '') : '';
 
   return (
-      <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
+    <div className="w-full flex justify-center p-4 bg-[var(--vscode-sideBar-background)]">
       <div
-          className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${
-          bamlMediaType === 'image'
-            ? 'w-fit max-w-[90vw] min-w-80'
-            : 'max-w-lg w-full'
-        }`}
+        className={`border-2 border-[var(--vscode-panel-border)] rounded bg-[var(--vscode-editor-background)] space-y-3 ${bamlMediaType === 'image'
+          ? ' max-w-[64vw] min-w-[200px]'
+          : 'max-w-lg w-full'
+          }`}
       >
         {/* Header with file type icon and link/copy */}
         {mediaUrl && (
@@ -731,13 +761,12 @@ export const WebviewMedia: React.FC<WebviewMediaProps> = ({
                   variant="outline"
                   size="xs"
                   className={`flex gap-1 items-center text-xs px-2 py-0 rounded flex-shrink-0 h-7 transition-all duration-200
-                  ${
-                    copyStatus === 'success'
+                  ${copyStatus === 'success'
                       ? 'border-[var(--vscode-charts-green)] text-[var(--vscode-charts-green)] bg-[var(--vscode-editor-background)]'
                       : copyStatus === 'error'
                         ? 'border-[var(--vscode-charts-red)] text-[var(--vscode-charts-red)] bg-[var(--vscode-editor-background)]'
                         : ''
-                  }`}
+                    }`}
                   style={{ minWidth: 0, maxWidth: 140 }}
                 >
                   {copyStatus === 'copying' && (

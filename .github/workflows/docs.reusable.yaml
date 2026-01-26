@@ -1,0 +1,240 @@
+name: Docs Publishing (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      docs_changed:
+        required: true
+        type: string
+      is_canary:
+        required: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-docs
+  cancel-in-progress: true
+
+jobs:
+  publish-docs:
+    name: "publish docs"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
+    permissions: write-all
+    environment:
+      name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: docs-${{ inputs.is_canary && 'prod' || 'dev' }}
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          install-dependencies: false
+
+      - name: Install Fern
+        run: npm install -g fern-api
+
+      - name: Install dependencies and build custom.js
+        working-directory: ./typescript/apps/ask-baml-client
+        run: pnpm install && pnpm run build
+
+      - name: Generate preview URL
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: |
+          fern check --strict-broken-links
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            OUTPUT=$(fern generate --docs 2>&1) || true
+          else
+            OUTPUT=$(fern generate --docs --preview 2>&1) || true
+          fi
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'Published docs to \K.*(?= \()')
+          echo "🌿 Preview your docs: $URL" | tee preview_url.txt
+
+      - name: Comment URL in PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: preview_url.txt
+
+      - name: Extract docs URL
+        id: docs_url
+        run: |
+          if [ -f preview_url.txt ]; then
+            URL=$(cat preview_url.txt | grep -oP '🌿 Preview your docs: \K.*' || echo "")
+            echo "url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "url=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: ${{ steps.docs_url.outputs.url }}
+
+  deploy-backend:
+    name: "deploy backend"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
+    permissions: write-all
+    environment:
+      name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
+    defaults:
+      run:
+        working-directory: ../sage-backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Start deployment
+        uses: bobheadxi/deployments@v1
+        id: deployment
+        with:
+          step: start
+          token: ${{ secrets.GITHUB_TOKEN }}
+          env: backend-${{ inputs.is_canary && 'prod' || 'dev' }}
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          install-dependencies: false
+
+      - name: Install Fern
+        working-directory: .
+        run: npm install -g fern-api
+
+      # We need to do this `deploy` step because we're relying on a pnpm workspace and Vercel doesn't play nice with this:
+      #   
+      #   - doing normal `vercel deploy` is confusing, because the monorepo can be either promptfiddle or ask-baml-backend
+      #   - doing `vercel build` in the monorepo and then `deploy --prebuilt` results in this error:
+      #
+      #       Using prebuilt build artifacts...
+      #       [Error: ENOENT: no such file or directory, lstat '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'] {
+      #         errno: -2,
+      #         code: 'ENOENT',
+      #         syscall: 'lstat',
+      #         path: '/node_modules/.pnpm/next@15.4.3_@opentelemetry+api@1.9.0_react-dom@19.1.0_react@19.1.0__react@19.1.0/node_modules/next/dist/compiled/jest-worker/processChild.js'
+      #       }}
+      #
+      # So our current solution is to do this mechanism.
+      - name: Pull sage-backend out of monorepo
+        working-directory: ./typescript
+        run: |
+          pnpm --filter=sage-backend install
+          pnpm --filter=sage-backend deploy ../sage-backend
+
+      - name: Install dependencies and build
+        run: |
+          pnpm baml-cli generate
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            echo TARGET_ENV=production >>$GITHUB_ENV
+          else
+            echo TARGET_ENV=preview >>$GITHUB_ENV
+          fi
+
+      - name: Build Vercel project
+        env:
+          NOTION_ASK_BAML_LOGS_DATABASE_ID: ${{ secrets.NOTION_ASK_BAML_LOGS_DATABASE_ID }}
+          NOTION_BOUNDARY_BOT_TOKEN: ${{ secrets.NOTION_BOUNDARY_BOT_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          SLACK_BOUNDARY_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_SAM }}
+        run: |
+          pnpm vercel pull --environment $TARGET_ENV --yes --token=${{ secrets.VERCEL_TOKEN_SAM }}
+          pnpm vercel build --target $TARGET_ENV --token=${{ secrets.VERCEL_TOKEN_SAM }}
+
+      - name: Deploy preview backend
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_SAGE_PROJECT_ID }}
+        run: |
+          pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
+
+      - name: Comment URL in PR
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: ../sage-backend/preview_url.txt
+
+      - name: Extract backend URL
+        id: backend_url
+        run: |
+          if [ -f preview_url.txt ]; then
+            URL=$(cat preview_url.txt | tr -d '\n' || echo "")
+            echo "url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "url=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update deployment status
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ job.status }}
+          env: ${{ steps.deployment.outputs.env }}
+          deployment_id: ${{ steps.deployment.outputs.deployment_id }}
+          env_url: ${{ steps.backend_url.outputs.url }}
+
+  update-pinecone:
+    name: "update pinecone"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.docs_changed == 'true' || inputs.is_canary }}
+    environment:
+      name: ${{ inputs.is_canary && 'boundary-tools-prod' || 'boundary-tools-dev' }}
+    defaults:
+      run:
+        working-directory: typescript/apps/sage-backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-action-version: 'v6'
+          install-dependencies: false
+
+      - name: Set environment variables
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/canary" ]; then
+            echo PINECONE_ENV=prod >>$GITHUB_ENV
+          else
+            echo PINECONE_ENV=dev >>$GITHUB_ENV
+          fi
+
+      - name: Update pinecone
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        run: |
+          pnpm --filter=sage-backend install
+          pnpm tsx tools/update-pinecone.ts ../../../fern/docs.yml
+

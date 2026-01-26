@@ -2,6 +2,9 @@ name: BAML Release - Build Typescript
 
 on:
   workflow_call: {}
+  push:
+    branches:
+      - sam/win-arm64-ts
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -22,18 +25,21 @@ jobs:
       fail-fast: false
       matrix:
         _:
+          - target: aarch64-unknown-linux-gnu
+            host: ubuntu-24.04-arm
+            # Target glibc 2.17. This is the oldest glibc we can practically support.
+            # Note that ubuntu-22.04-arm has glibc 2.35, but our users need older glibc.
+            # See https://github.com/BoundaryML/baml/issues/2736
+            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
+            before: |
+              echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
+            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+            skip_protoc: true
+
           - target: aarch64-apple-darwin
             host: macos-14
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
-
-          - target: aarch64-unknown-linux-gnu
-            # Do not use -latest, since it uses a different glibc version!
-            host: ubuntu-22.04
-            # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
-            # need a new version of manylinux to build crates on arm64-linux
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            node_build: pnpm build:napi-release --target aarch64-unknown-linux-gnu --use-napi-cross
-            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-apple-darwin
             host: macos-14
@@ -42,6 +48,12 @@ jobs:
           - target: x86_64-pc-windows-msvc
             host: windows-latest
             node_build: pnpm build:napi-release --target x86_64-pc-windows-msvc
+            cargo_args: -p baml-typescript-ffi -p baml-python-ffi
+
+          - target: aarch64-pc-windows-msvc
+            host: windows-11-arm
+            architecture: arm64
+            node_build: pnpm build:napi-release --target aarch64-pc-windows-msvc
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-unknown-linux-gnu
@@ -63,7 +75,8 @@ jobs:
               AR_x86_64_unknown_linux_musl=x86_64-linux-musl-ar
               RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
               EOF
-            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl --use-napi-cross
+            node_build: pnpm build:napi-release --target x86_64-unknown-linux-musl -x
+            setup_zig: true
 
           - target: aarch64-unknown-linux-musl
             host: ubuntu-22.04
@@ -95,6 +108,8 @@ jobs:
       # Setup using standardized actions
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          node-action-version: v6
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -102,9 +117,12 @@ jobs:
           targets: ${{ matrix._.target }}
           prefix-key: v5-rust-${{ matrix._.target }}
           cache-on-failure: true
+          skip-protoc: ${{ matrix._.skip_protoc || 'false' }}
 
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
+      # Setup Zig for targets that need it (e.g. musl cross-compilation)
+      - name: Setup Zig
+        if: matrix._.setup_zig
+        uses: mlugg/setup-zig@v2
 
       # per-matrix-entry dependency setup
       - name: Build tools setup

@@ -42,6 +42,9 @@ generator target {
 
     // Version of runtime to generate code for (should match installed baml-py version)
     version "0.76.2"
+
+    // Optional: run formatters or other tools after generating the client code
+    on_generate "black . && isort ."
 }
 ```
 
@@ -83,9 +86,12 @@ generator target {
     version "0.76.2"
 
     // The format of the generated module.
-    // "esm" - Use ES modules 
+    // "esm" - Use ES modules
     // "cjs" - Use CommonJS modules (default)
     module_format "cjs"
+
+    // Optional: run formatters or other tools after generating the client code
+    on_generate "prettier . --write"
 }
 ```
 

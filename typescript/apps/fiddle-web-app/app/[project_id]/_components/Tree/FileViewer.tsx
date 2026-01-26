@@ -1,9 +1,10 @@
 // 1: Uncontrolled Tree
+import type React from 'react';
 import { useRef, useState } from 'react';
 
 import { type NodeApi, Tree, type TreeApi } from 'react-arborist';
 
-import { filesAtom } from '@baml/playground-common';
+import { bamlFilesTrackedAtom, filesAtom } from '@baml/playground-common';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { FilePlus, FolderPlus } from 'lucide-react';
 import useResizeObserver from 'use-resize-observer';
@@ -112,7 +113,7 @@ function createTree(filePaths: string[]): TreeNode[] {
 const FileViewer = () => {
   const { width, height, ref } = useResizeObserver();
   const editorFiles = useAtomValue(currentEditorFilesAtom);
-  const setFiles = useSetAtom(filesAtom);
+  const setFiles = useSetAtom(bamlFilesTrackedAtom);
   const treeRef = useRef<TreeApi<any> | null>(null);
   const activeFile = useAtomValue(activeFileNameAtom);
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom);
@@ -152,7 +153,7 @@ const FileViewer = () => {
         value={term}
         onChange={(e) => setTerm(e.target.value)}
       /> */}
-      <div ref={ref} className="flex flex-col h-full min-h-0">
+      <div ref={ref as React.RefCallback<HTMLDivElement>} className="flex flex-col h-full min-h-0">
         <Tree
           className="truncate"
           ref={treeRef}

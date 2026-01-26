@@ -31,5 +31,5 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.OptionalMediaAnalysisResult":        reflect.TypeOf(types.OptionalMediaAnalysisResult{}),
 	"STREAM_TYPES.OptionalMediaAnalysisResult": reflect.TypeOf(stream_types.OptionalMediaAnalysisResult{}),
 
-	"TYPES.Union__audio__image__pdf__video": reflect.TypeOf(types.Union4AudioOrImageOrPDFOrVideo{}),
+	"TYPES.audio__image__pdf__video": reflect.TypeOf(types.Union4AudioOrImageOrPDFOrVideo{}),
 }

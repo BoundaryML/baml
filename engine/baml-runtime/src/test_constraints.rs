@@ -336,6 +336,7 @@ mod tests {
                 prompt_tokens: None,
                 output_tokens: None,
                 total_tokens: None,
+                cached_input_tokens: None,
             },
         }
     }

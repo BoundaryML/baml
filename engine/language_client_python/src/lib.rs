@@ -104,6 +104,6 @@ fn init_debug_logger() {
     if let Err(e) =
         env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"))
     {
-        println!("Failed to initialize BAML DEBUG logger: {e:#}");
+        eprintln!("Failed to initialize BAML DEBUG logger: {e:#}");
     }
 }

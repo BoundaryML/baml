@@ -23,7 +23,7 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
    c.DynamicProperties = make(map[string]any)
    {% endif %}
 
-	{% if fields.len() > 0 %}
+	{% if !fields.is_empty() || dynamic %}
 	for _, field := range holder.Fields {
 		key := field.Key
 		valueHolder := field.Value
@@ -34,7 +34,7 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 				{% endfor %}
 		default:
 			{% if dynamic %}
-			c.DynamicProperties[key] = baml.Decode(valueHolder)
+			c.DynamicProperties[key] = baml.DecodeToValue(valueHolder)
 			{% else %}
 			panic(fmt.Sprintf("unexpected field: %s in class {{ name }}", key))
 			{% endif %}
@@ -43,21 +43,14 @@ func (c *{{ name }}) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 {% endif %}
 }
 
-func (c {{ name }}) Encode() (*cffi.CFFIValueHolder, error) {
+func (c {{ name }}) Encode() (*cffi.HostValue, error) {
     fields := map[string]any{}
     {% for field in fields %}
     fields["{{ field.name }}"] = c.{{ field.name|exported_name }}
     {% endfor %}
-    return baml.EncodeClass(c.BamlEncodeName, fields, {% if dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
+    return baml.EncodeClass("{{ name }}", fields, {% if dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
 }
 
 func (c {{ name }}) BamlTypeName() string {
     return "{{ name }}"
-}
-
-func (u {{ name }}) BamlEncodeName() *cffi.CFFITypeName {
-    return &cffi.CFFITypeName{
-        Namespace: {{ pkg.namespace() }},
-        Name:      "{{ name }}",
-    }
 }

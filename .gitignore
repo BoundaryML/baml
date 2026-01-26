@@ -116,7 +116,6 @@ $RECYCLE.BIN/
 /out/
 engine/language_client_ruby/**/*.bundle
 engine/target/
-Cargo.lock
 Icon
 Network Trash Folder
 Temporary Items
@@ -171,3 +170,16 @@ jj-workflow.mdc
 third_party
 
 baml_repl_history.txt
+trace_events_debug.json
+
+result
+
+target/
+
+baml-graph/_site/
+
+# beps
+_site/
+
+# claude
+.claude/

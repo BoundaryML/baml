@@ -1,7 +1,9 @@
 [package]
 name = "zed_baml"
 edition = "2024"
-version = "0.0.1"
+# Both Cargo.toml and extension.toml's version strings
+# are consumed by the Zed extension publishing logic
+version = "0.218.0"
 description = "BAML language support for Zed"
 
 [lib]
@@ -15,7 +17,8 @@ default = []
 debug = []
 
 [dependencies]
-zed_extension_api = "0.1.0"
+zed_extension_api = "0.7.0"
+log = "0.4"
 
 [workspace]
 # Empty workspace table to make this package standalone

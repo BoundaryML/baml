@@ -38,8 +38,9 @@ use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
-    BamlRuntime, FunctionResult, RuntimeContextManager, TripWire,
+    cli::dotenv::DotenvArgs, client_registry::ClientRegistry, errors::ExposedError,
+    internal::llm_client::LLMResponse, BamlRuntime, FunctionResult, RuntimeContextManager,
+    TripWire,
 };
 
 #[derive(clap::Args, Clone, Debug)]
@@ -54,6 +55,8 @@ pub struct ServeArgs {
         default_value_t = false
     )]
     no_version_check: bool,
+    #[command(flatten)]
+    dotenv: DotenvArgs,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -84,6 +87,8 @@ impl ServeArgs {
         &self,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
     ) -> Result<()> {
+        self.dotenv.load()?;
+
         let t: Arc<tokio::runtime::Runtime> = BamlRuntime::get_tokio_singleton()?;
 
         let (server, tcp_listener) =
@@ -358,6 +363,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 client_registry.as_ref(),
                 None,
                 env_vars,
+                None, // tags
                 TripWire::new(None),
             )
             .await;
@@ -375,6 +381,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                                 prompt,
                                 raw_output: raw_response,
                                 message,
+                                ..
                             }) = e.downcast_ref::<ExposedError>()
                             {
                                 BamlError::ValidationFailure {
@@ -460,6 +467,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                 Some(vec![]),
                 env_vars,
                 TripWire::new(None),
+                None, // tags
             );
 
             match result_stream {
@@ -500,6 +508,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
                                             prompt,
                                             raw_output: raw_response,
                                             message,
+                                            ..
                                         }) = e.downcast_ref::<ExposedError>()
                                         {
                                             BamlError::ValidationFailure {
@@ -636,7 +645,7 @@ Streaming is available via http://localhost:{port}/stream/{{FunctionName}}, but 
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
         })?;
-        let schema: OpenApiSchema = OpenApiSchema::from_ir(locked.inner.ir.as_ref());
+        let schema: OpenApiSchema = OpenApiSchema::from_ir(locked.ir.as_ref());
         serde_json::to_string(&schema).map_err(|e| {
             log::warn!("Failed to serialize openapi schema: {e}");
             BamlError::InternalError {

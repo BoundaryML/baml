@@ -17,9 +17,7 @@ import type {
 } from 'vscode-languageclient';
 import { LanguageClient, type ServerOptions } from 'vscode-languageclient/node';
 
-export function isDebugOrTestSession(): boolean {
-  return env.sessionId === 'someValue.sessionId';
-}
+
 
 export function checkForOtherPrismaExtension(): void {
   const files = readdirSync(path.join(homedir(), '.vscode/extensions')).filter(

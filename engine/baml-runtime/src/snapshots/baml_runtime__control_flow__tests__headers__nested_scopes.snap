@@ -1,0 +1,70 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::NestedScopes":
+  nodes:
+    "NestedScopes|c:func:0":
+      label: NestedScopes
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/nested_scopes.baml
+        start: 0
+        end: 284
+    "NestedScopes|c:func:0|h:first-section:0":
+      label: First Section
+      node_type: expr
+      parent: "NestedScopes|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "NestedScopes|c:func:0|h:top-level:0":
+      label: Top Level
+      node_type: expr
+      parent: "NestedScopes|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "NestedScopes|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "NestedScopes|c:func:0"
+      span:
+        file: src/control_flow/headers/nested_scopes.baml
+        start: 58
+        end: 75
+    "NestedScopes|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "NestedScopes|c:func:0"
+      span:
+        file: src/control_flow/headers/nested_scopes.baml
+        start: 103
+        end: 276
+    "NestedScopes|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "NestedScopes|c:func:0"
+      span:
+        file: src/control_flow/headers/nested_scopes.baml
+        start: 281
+        end: 282
+  edges:
+    "NestedScopes|c:func:0":
+      - dst: "NestedScopes|c:func:0|h:top-level:0"
+        label: ""
+    "NestedScopes|c:func:0|h:first-section:0":
+      - dst: "NestedScopes|c:func:0|s:1"
+        label: ""
+    "NestedScopes|c:func:0|h:top-level:0":
+      - dst: "NestedScopes|c:func:0|s:0"
+        label: ""
+    "NestedScopes|c:func:0|s:0":
+      - dst: "NestedScopes|c:func:0|h:first-section:0"
+        label: ""
+    "NestedScopes|c:func:0|s:1":
+      - dst: "NestedScopes|c:func:0|s:2"
+        label: ""

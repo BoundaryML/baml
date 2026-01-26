@@ -1,0 +1,51 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function Foo() -> <unknown> {
+  client GPT4
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+class Another {
+  field: int
+}
+
+class User {
+  name: string
+}
+
+function Incomplete(param1: string) -> <unknown> {
+    // missing body
+}
+
+function NextFunction() -> string {
+      return "parsed";
+}
+
+class Partial {
+  field1: str
+  field2: <unknown>
+  field3: string
+  string: <unknown>
+  alias: field5
+}
+
+enum ValidEnum {
+  OPTION1
+  OPTION2
+}
+
+class Test {
+  field1: string
+  field2: string
+  another: closed
+  string: ")  // Should still parse this
+}"
+}

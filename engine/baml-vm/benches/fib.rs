@@ -1,5 +1,8 @@
-use baml_vm::{BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm};
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+//! VM execution benchmarks.
+//!
+//! Do not measure compilation here, only VM execution time.
+
+use baml_vm::{watch::Watch, BamlVmProgram, EvalStack, Frame, ObjectIndex, StackIndex, Value, Vm};
 
 struct Program {
     source: &'static str,
@@ -9,10 +12,12 @@ struct Program {
 
 fn bootstrap_vm(input: Program) -> Vm {
     let ast = baml_compiler::test::ast(input.source).unwrap();
+
     let BamlVmProgram {
         objects,
         globals,
         resolved_function_names,
+        ..
     } = baml_compiler::compile(&ast).unwrap();
 
     // Find the target function index by name
@@ -32,70 +37,65 @@ fn bootstrap_vm(input: Program) -> Vm {
         runtime_allocs_offset: ObjectIndex::from_raw(objects.len()),
         objects,
         globals,
+        env_vars: Default::default(),
+        watch: Watch::new(),
+        watched_vars: Default::default(),
+        interrupt_frame: None,
     }
 }
 
-pub fn bench_recursive_fib(c: &mut Criterion) {
-    c.bench_function("recursive fib 25", |b| {
-        b.iter_batched(
-            || {
-                bootstrap_vm(Program {
-                    source: r#"
-                        function fib(n: int) -> int {
-                            if (n <= 1) {
-                                n
-                            } else {
-                                fib(n - 1) + fib(n - 2)
-                            }
+#[divan::bench(consts = [5, 10, 15])]
+pub fn recursive_fib<const N: i64>(bencher: divan::Bencher) {
+    bencher
+        .with_inputs(|| {
+            bootstrap_vm(Program {
+                source: r#"
+                    function fib(n: int) -> int {
+                        if (n <= 1) {
+                            n
+                        } else {
+                            fib(n - 1) + fib(n - 2)
                         }
-                    "#,
-                    function: "fib",
-                    args: vec![Value::Int(25)],
-                })
-            },
-            |mut vm| {
-                vm.exec().unwrap();
-            },
-            BatchSize::PerIteration,
-        )
-    });
+                    }
+                "#,
+                function: "fib",
+                args: vec![Value::Int(N)],
+            })
+        })
+        .bench_refs(|vm| vm.exec().unwrap());
 }
 
-pub fn bench_iterative_fib(c: &mut Criterion) {
-    c.bench_function("iterative fib 3000", |b| {
-        b.iter_batched(
-            || {
-                bootstrap_vm(Program {
-                    source: r#"
-                        function fib(n: int) -> int {
-                            let mut a = 0;
-                            let mut b = 1;
+#[divan::bench(consts = [1000, 2000, 3000])]
+pub fn iterative_fib<const N: i64>(bencher: divan::Bencher) {
+    bencher
+        .with_inputs(|| {
+            bootstrap_vm(Program {
+                source: r#"
+                    function fib(n: int) -> int {
+                        let a = 0;
+                        let b = 1;
 
-                            if (n == 0) {
-                                b
-                            } else {
-                                let mut i = 1;
-                                while (i <= n) {
-                                    let c = a + b;
-                                    a = b;
-                                    b = c;
-                                    i += 1;
-                                }
-                                b
+                        if (n == 0) {
+                            b
+                        } else {
+                            let i = 1;
+                            while (i <= n) {
+                                let c = a + b;
+                                a = b;
+                                b = c;
+                                i += 1;
                             }
+                            b
                         }
-                    "#,
-                    function: "fib",
-                    args: vec![Value::Int(3000)],
-                })
-            },
-            |mut vm| {
-                vm.exec().unwrap();
-            },
-            BatchSize::PerIteration,
-        )
-    });
+                    }
+                "#,
+                function: "fib",
+                args: vec![Value::Int(N)],
+            })
+        })
+        .bench_refs(|vm| vm.exec().unwrap());
 }
 
-criterion_group!(benches, bench_recursive_fib, bench_iterative_fib);
-criterion_main!(benches);
+fn main() {
+    divan::main();
+}

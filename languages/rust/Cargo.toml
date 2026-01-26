@@ -1,0 +1,90 @@
+[workspace]
+members = ["baml", "baml-cli", "baml-macros", "baml-sys"]
+resolver = "2"
+
+[workspace.package]
+# Please update rustfmt.toml when bumping the Rust edition
+edition = "2021"
+# This is the MSRV (Minimum Supported Rust Version) for the workspace
+rust-version = "1.70"
+authors = ["Boundary <contact@boundaryml.com>"]
+homepage = "https://github.com/BoundaryML/baml"
+documentation = "https://docs.boundaryml.com"
+repository = "https://github.com/BoundaryML/baml"
+license = "Apache-2.0"
+version = "0.218.0"
+
+[workspace.dependencies]
+# external dependencies
+async-channel = "2"
+libc = "0.2"
+prost = "0.13"
+prost-build = "0.13"
+proc-macro2 = "1"
+quote = "1"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+syn = { version = "2", features = ["full", "extra-traits"] }
+thiserror = "2"
+once_cell = "1"
+futures-util = "0.3"
+
+# dependencies for baml-sys
+libloading = "0.8"
+sha2 = "0.10"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+hex = "0.4"
+
+# internal dependencies
+# Versions are managed by cargo-release (see release.toml)
+baml-macros = { version = "0.218.0", path = "baml-macros" }
+baml = { version = "0.218.0", path = "baml" }
+baml-sys = { version = "0.218.0", path = "baml-sys" }
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -2 }
+# Allowed pedantic lints
+char_lit_as_u8 = "allow"
+collapsible_else_if = "allow"
+collapsible_if = "allow"
+implicit_hasher = "allow"
+map_unwrap_or = "allow"
+match_same_arms = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+single_match_else = "allow"
+too_many_lines = "allow"
+needless_continue = "allow"
+unnecessary_debug_formatting = "allow"
+needless_raw_string_hashes = "allow"
+# Disallowed restriction lints
+print_stdout = "deny"
+print_stderr = "deny"
+dbg_macro = "deny"
+empty_drop = "warn"
+empty_structs_with_brackets = "warn"
+exit = "warn"
+get_unwrap = "warn"
+rc_buffer = "warn"
+rc_mutex = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+# nursery rules
+redundant_clone = "warn"
+debug_assert_with_mut_call = "warn"
+unused_peekable = "warn"
+if_not_else = "allow"
+large_stack_arrays = "allow"
+
+[profile.release]
+lto = "fat"
+codegen-units = 16
+
+[profile.dev]
+lto = false

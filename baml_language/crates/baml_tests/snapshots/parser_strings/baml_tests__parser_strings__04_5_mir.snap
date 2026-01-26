@@ -1,0 +1,30 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn FormatMessage:
+  (LLM function - no MIR)
+
+fn ProcessText:
+  (LLM function - no MIR)
+
+fn GetRole() -> Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) {
+    // Locals:
+    let _0: Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))]) // return
+    let _1: Void
+
+    bb0: {
+        _0 = const "user";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}

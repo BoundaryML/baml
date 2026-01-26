@@ -49,7 +49,7 @@ describe("Logger tests", () => {
     expect(getLogLevel()).toBe("INFO");
 
     let { result, output } = await captureStdout(() =>
-      b.TestOllama("banks using the word 'fiscal'"),
+      b.TestOpenAI("banks using the word 'fiscal'"),
     );
     expect(result?.toLowerCase()).toContain("fiscal");
     expect(output).toBe("");
@@ -58,7 +58,7 @@ describe("Logger tests", () => {
     setLogLevel("WARN");
     expect(getLogLevel()).toBe("WARN");
     ({ result, output } = await captureStdout(() =>
-      b.TestOllama("banks using the word 'fiscal'"),
+      b.TestOpenAI("banks using the word 'fiscal'"),
     ));
     expect(result?.toLowerCase()).toContain("fiscal");
     expect(output).toBe("");
@@ -67,7 +67,7 @@ describe("Logger tests", () => {
     setLogLevel("INFO");
     expect(getLogLevel()).toBe("INFO");
     ({ result, output } = await captureStdout(() =>
-      b.TestOllama("banks using the word 'fiscal'"),
+      b.TestOpenAI("banks using the word 'fiscal'"),
     ));
     expect(result?.toLowerCase()).toContain("fiscal");
     expect(output).toBe("");
@@ -76,7 +76,7 @@ describe("Logger tests", () => {
     setLogLevel("OFF");
     expect(getLogLevel()).toBe("OFF");
     ({ result, output } = await captureStdout(() =>
-      b.TestOllama("banks using the word 'fiscal'"),
+      b.TestOpenAI("banks using the word 'fiscal'"),
     ));
     expect(result?.toLowerCase()).toContain("fiscal");
     expect(output).toBe("");
@@ -85,7 +85,7 @@ describe("Logger tests", () => {
     setLogLevel("INFO");
     expect(getLogLevel()).toBe("INFO");
     ({ result, output } = await captureStdout(() =>
-      b.TestOllama("banks using the word 'fiscal'"),
+      b.TestOpenAI("banks using the word 'fiscal'"),
     ));
     expect(result?.toLowerCase()).toContain("fiscal");
     expect(output).toBe("");

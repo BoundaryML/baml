@@ -1,7 +1,7 @@
 use std::{
     collections::VecDeque,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{mpsc, Arc, Mutex},
     time::{Duration, SystemTime},
@@ -21,7 +21,6 @@ use tokio::{
 use tracing::{info, warn};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-const BINARY_PATH: &str = "/Users/sam/baml4/engine/target/debug/baml-cli";
 const MAX_STDIN_BUFFER_SIZE: usize = 1000;
 
 #[derive(Clone, Debug)]
@@ -31,7 +30,7 @@ struct StdinMessage {
 }
 
 struct HotReloader {
-    binary_path: String,
+    binary_path: PathBuf,
     current_process: Option<TokioChild>,
     shutdown_tx: watch::Sender<bool>,
     stdin_buffer: Arc<Mutex<VecDeque<StdinMessage>>>,
@@ -41,7 +40,10 @@ impl HotReloader {
     fn new() -> Self {
         let (shutdown_tx, _) = watch::channel(false);
         Self {
-            binary_path: BINARY_PATH.to_string(),
+            binary_path: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .unwrap()
+                .join("target/debug/baml-cli"),
             current_process: None,
             shutdown_tx,
             stdin_buffer: Arc::new(Mutex::new(VecDeque::new())),
@@ -65,11 +67,14 @@ impl HotReloader {
 
     async fn replay_stdin(&self, process: &mut TokioChild) -> Result<()> {
         if let Some(stdin) = process.stdin.as_mut() {
-            let buffer = self.stdin_buffer.lock().unwrap();
+            // Clone messages to avoid holding lock across await
+            let messages: Vec<StdinMessage> = {
+                let buffer = self.stdin_buffer.lock().unwrap();
+                info!("Replaying {} stdin messages", buffer.len());
+                buffer.iter().cloned().collect()
+            };
 
-            info!("Replaying {} stdin messages", buffer.len());
-
-            for message in buffer.iter() {
+            for message in messages.iter() {
                 if let Err(e) = stdin.write_all(&message.data).await {
                     warn!("Failed to replay stdin message: {}", e);
                     break;
@@ -179,14 +184,17 @@ impl HotReloader {
 
         let binary_path = Path::new(&self.binary_path);
         let parent_dir = binary_path.parent().ok_or_else(|| {
-            anyhow::anyhow!("Binary path {} has no parent directory", self.binary_path)
+            anyhow::anyhow!(
+                "Binary path {} has no parent directory",
+                self.binary_path.display()
+            )
         })?;
 
         debouncer
             .watcher()
             .watch(parent_dir, RecursiveMode::NonRecursive)?;
 
-        info!("Starting hot-reload for {}", self.binary_path);
+        info!("Starting hot-reload for {}", self.binary_path.display());
         self.start_process(args.clone()).await?;
 
         loop {
@@ -216,15 +224,12 @@ impl HotReloader {
             }
 
             if let Some(ref mut child) = self.current_process {
-                match child.try_wait()? {
-                    Some(status) => {
-                        info!("Process exited with status: {}", status);
-                        if !status.success() {
-                            info!("Process failed, waiting for binary update...");
-                            self.current_process = None;
-                        }
+                if let Some(status) = child.try_wait()? {
+                    info!("Process exited with status: {}", status);
+                    if !status.success() {
+                        info!("Process failed, waiting for binary update...");
+                        self.current_process = None;
                     }
-                    None => {}
                 }
             }
         }

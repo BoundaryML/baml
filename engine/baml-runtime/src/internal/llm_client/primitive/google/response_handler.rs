@@ -40,7 +40,8 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -59,6 +60,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
                 response.candidates.len()
             ),
             code: ErrorCode::Other(200),
+            raw_response: Some(response_body.to_string()),
         });
     }
 
@@ -74,6 +76,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: "No content returned".to_string(),
             code: ErrorCode::Other(200),
+            raw_response: Some(response_body.to_string()),
         });
     };
 
@@ -97,6 +100,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             prompt_tokens: response.usage_metadata.prompt_token_count,
             output_tokens: response.usage_metadata.candidates_token_count,
             total_tokens: response.usage_metadata.total_token_count,
+            cached_input_tokens: response.usage_metadata.cached_content_token_count,
         },
     })
 }
@@ -145,7 +149,8 @@ pub fn scan_google_response_stream(
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(event_body.to_string()),
         })?;
 
     if let Some(choice) = event.candidates.first() {
@@ -171,6 +176,7 @@ pub fn scan_google_response_stream(
     inner.metadata.prompt_tokens = event.usage_metadata.prompt_token_count;
     inner.metadata.output_tokens = event.usage_metadata.candidates_token_count;
     inner.metadata.total_tokens = event.usage_metadata.total_token_count;
+    inner.metadata.cached_input_tokens = event.usage_metadata.cached_content_token_count;
 
     inner.latency = instant_now.elapsed();
     Ok(())
@@ -285,6 +291,7 @@ mod tests {
                 prompt_token_count: Some(166),
                 candidates_token_count: Some(39),
                 total_token_count: Some(205),
+                cached_content_token_count: None,
             },
         };
 
@@ -331,6 +338,7 @@ mod tests {
                 prompt_tokens: Some(166),
                 output_tokens: Some(39),
                 total_tokens: Some(205),
+                cached_input_tokens: None,
             },
         };
 

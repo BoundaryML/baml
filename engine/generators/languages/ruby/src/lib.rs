@@ -195,6 +195,42 @@ impl LanguageFeatures for RbLanguageFeatures {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn templates_do_not_shadow_common_user_arg_names() {
+        // The Ruby client template renders method signatures that include user-defined
+        // argument names (as keyword args). Avoid locals like `options`, `result`, `parsed`,
+        // or `ctx` inside those methods, since a BAML arg with the same name would be
+        // shadowed/overwritten.
+
+        let client = include_str!("./_templates/client.rb.j2");
+        assert!(!client.contains("\n        options = @options.merge_options"));
+        assert!(client.contains("\n        __options__ = @options.merge_options"));
+        assert!(!client.contains("\n        result = options.call_function_sync"));
+        assert!(client.contains("\n        __result__ = __options__.call_function_sync"));
+        assert!(!client.contains("\n        parsed = result.parsed_using_types"));
+        assert!(client.contains("\n        __parsed__ = __result__.parsed_using_types"));
+        assert!(!client.contains("\n        ctx, result = options.create_sync_stream"));
+        assert!(client.contains("\n        __ctx__, __result__ = __options__.create_sync_stream"));
+
+        // These templates live in the ruby generator template directory as well; keep them safe
+        // to avoid future regressions if/when they are wired in.
+        let parser = include_str!("./_templates/parser.rb.j2");
+        assert!(!parser.contains("\n        result = "));
+        assert!(parser.contains("\n        __result__ = "));
+
+        let function_stream = include_str!("./_templates/function.stream.py.j2");
+        assert!(!function_stream.contains("\n        options: BamlCallOptions ="));
+        assert!(function_stream.contains("\n        __options__: BamlCallOptions ="));
+        assert!(!function_stream.contains("\n        collector = "));
+        assert!(function_stream.contains("\n        __collector__ = "));
+        assert!(!function_stream.contains("\n        collectors = "));
+        assert!(function_stream.contains("\n        __collectors__ = "));
+        assert!(!function_stream.contains("\n        env = "));
+        assert!(function_stream.contains("\n        __env__ = "));
+        assert!(!function_stream.contains("\n        raw = "));
+        assert!(function_stream.contains("\n        __raw__ = "));
+    }
+
+    #[test]
     fn test_name() {
         use std::str::FromStr;
 

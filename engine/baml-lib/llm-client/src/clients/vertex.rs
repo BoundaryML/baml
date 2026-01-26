@@ -8,8 +8,9 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlHandler, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -146,6 +147,8 @@ pub struct UnresolvedVertex<Meta> {
     model: StringOr,
     #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
+    #[baml_safe_hash]
+    query_params: IndexMap<String, StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -153,6 +156,8 @@ pub struct UnresolvedVertex<Meta> {
     #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     anthropic_version: Option<StringOr>,
+    media_url_handler: UnresolvedMediaUrlHandler,
+    http_config: super::helpers::HttpConfig,
 }
 
 pub enum BaseUrlOrLocation {
@@ -166,6 +171,7 @@ pub struct ResolvedVertex {
     pub auth_strategy: ResolvedGcpAuthStrategy,
     pub model: String,
     pub headers: IndexMap<String, String>,
+    pub query_params: IndexMap<String, String>,
     /// This is usually not pub, but we need it so that we can pass it through to the Anthropic client.
     pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
@@ -174,6 +180,8 @@ pub struct ResolvedVertex {
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
     pub anthropic_version: Option<String>,
+    pub media_url_handler: MediaUrlHandler,
+    pub http_config: super::helpers::HttpConfig,
 }
 
 impl ResolvedVertex {
@@ -219,6 +227,11 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
         env_vars.extend(self.auth_strategy.required_env_vars());
         env_vars.extend(self.model.required_env_vars());
         env_vars.extend(self.headers.values().flat_map(StringOr::required_env_vars));
+        env_vars.extend(
+            self.query_params
+                .values()
+                .flat_map(StringOr::required_env_vars),
+        );
         env_vars.extend(self.role_selection.required_env_vars());
         env_vars.extend(self.allowed_role_metadata.required_env_vars());
         env_vars.extend(self.supported_request_modes.required_env_vars());
@@ -238,6 +251,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             auth_strategy: self.auth_strategy.without_meta(),
             model: self.model.clone(),
             headers: self.headers.clone(),
+            query_params: self.query_params.clone(),
             role_selection: self.role_selection.clone(),
             allowed_role_metadata: self.allowed_role_metadata.clone(),
             supported_request_modes: self.supported_request_modes.clone(),
@@ -248,6 +262,8 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
             anthropic_version: self.anthropic_version.clone(),
+            media_url_handler: self.media_url_handler.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 
@@ -268,15 +284,32 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             .map(|(k, v)| Ok((k.clone(), v.resolve(ctx)?)))
             .collect::<Result<IndexMap<_, _>>>()?;
 
+        let query_params = self
+            .query_params
+            .iter()
+            .map(|(k, v)| Ok((k.clone(), v.resolve(ctx)?)))
+            .collect::<Result<IndexMap<_, _>>>()?;
+
+        // HACK: for some reason .resolve returns the env var name with $ if it's not found. So we need to check for that.
+        let project_id = match self.project_id {
+            Some(ref project_id) => {
+                let resolved = project_id.resolve(ctx)?;
+                if resolved.starts_with("$") || resolved.is_empty() {
+                    None
+                } else {
+                    Some(resolved)
+                }
+            }
+            None => None,
+        };
+
         Ok(ResolvedVertex {
             base_url_or_location,
-            project_id: match self.project_id {
-                Some(ref project_id) => Some(project_id.resolve(ctx)?),
-                None => None,
-            },
+            project_id,
             auth_strategy: self.auth_strategy.resolve(ctx)?,
             model,
             headers,
+            query_params,
             role_selection,
             allowed_metadata: self.allowed_role_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),
@@ -291,6 +324,8 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 Some(ref anthropic_version) => Some(anthropic_version.resolve(ctx)?),
                 None => None,
             },
+            media_url_handler: self.media_url_handler.resolve(ctx)?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -362,17 +397,22 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
 
         let project_id = properties
             .ensure_string("project_id", false)
-            .map(|(_, v, _)| v);
+            .map(|(_, v, _)| v)
+            .or_else(|| Some(StringOr::EnvVar("GOOGLE_CLOUD_PROJECT".to_string())));
 
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = properties.ensure_allowed_metadata();
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
+        let query_params = properties.ensure_query_params().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
 
         let anthropic_version = properties
             .ensure_string("anthropic_version", false)
             .map(|(_, v, _)| v);
+
+        let media_url_handler = properties.ensure_media_url_handler();
+        let http_config = properties.ensure_http_config("vertex");
 
         let (properties, errors) = properties.finalize();
         if !errors.is_empty() {
@@ -389,12 +429,15 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             auth_strategy,
             model,
             headers,
+            query_params,
             role_selection,
             allowed_role_metadata: allowed_metadata,
             supported_request_modes,
             properties,
             finish_reason_filter,
             anthropic_version,
+            media_url_handler,
+            http_config,
         })
     }
 }

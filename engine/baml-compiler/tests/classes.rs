@@ -1,6 +1,9 @@
 //! Compiler tests for class construction and field operations.
 
-use baml_vm::{BinOp, GlobalIndex, Instruction, ObjectIndex};
+use baml_vm::{
+    test::{Instruction, Object, Value},
+    BinOp,
+};
 
 mod common;
 use common::{assert_compiles, Program};
@@ -14,7 +17,7 @@ fn class_constructor() -> anyhow::Result<()> {
                 y int
             }
 
-            fn main() -> Point {
+            function main() -> Point {
                 let p = Point { x: 1, y: 2 };
                 p
             }
@@ -22,14 +25,14 @@ fn class_constructor() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(ObjectIndex::from_raw(2)),
+                Instruction::AllocInstance(Value::class("Point")),
                 Instruction::Copy(0),
-                Instruction::LoadConst(0),
+                Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreField(0),
                 Instruction::Copy(0),
-                Instruction::LoadConst(1),
+                Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreField(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -47,40 +50,228 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
                 w int
             }
 
-            fn default_point() -> Point {
+            function default_point() -> Point {
                 Point { x: 0, y: 0, z: 0, w: 0 }
             }
 
-            fn main() -> Point {
-                let p = Point { x: 1, y: 2, ..default_point() };
+            function main() -> Point {
+                let p = Point { x: 1, y: 2, ...default_point() };
                 p
             }
         "#,
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                Instruction::Copy(0),
-                Instruction::LoadConst(0),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadConst(1),
-                Instruction::StoreField(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
-                Instruction::LoadVar(1),
+                Instruction::LoadVar("p".to_string()),
                 Instruction::Return,
             ],
         )],
+    })
+}
+
+#[test]
+fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function main() -> Point {
+                let p = Point { ...default_point(), x: 1, y: 2 };
+                p
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
+                Instruction::Call(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(2),
+                Instruction::StoreField(2),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(3),
+                Instruction::StoreField(3),
+                Instruction::Pop(1),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::StoreField(0),
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreField(1),
+                Instruction::LoadVar("p".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function default_point() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function main() -> Point {
+                let p = Point { x: 1, y: 2, ...default_point() };
+                p
+            }
+        "#,
+        expected: vec![(
+            "main",
+            vec![
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
+                Instruction::Call(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(2),
+                Instruction::StoreField(2),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(3),
+                Instruction::StoreField(3),
+                Instruction::Pop(1),
+                Instruction::LoadVar("p".to_string()),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+#[test]
+fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Point {
+                x int
+                y int
+                z int
+                w int
+            }
+
+            function x_one() -> Point {
+                Point { x: 0, y: 0, z: 0, w: 0 }
+            }
+
+            function xy_one() -> Point {
+                Point { x: 1, y: 1, z: 0, w: 0 }
+            }
+
+            function xy_one_last() -> Point {
+                let p = Point { ...x_one(), ...xy_one() };
+                p
+            }
+
+            function x_one_last() -> Point {
+                let p = Point { ...xy_one(), ...x_one() };
+                p
+            }
+        "#,
+        expected: vec![
+            (
+                "xy_one_last",
+                vec![
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadGlobal(Value::function("xy_one")),
+                    Instruction::Call(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(0),
+                    Instruction::StoreField(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(1),
+                    Instruction::StoreField(1),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar("p".to_string()),
+                    Instruction::Return,
+                ],
+            ),
+            (
+                "x_one_last",
+                vec![
+                    Instruction::AllocInstance(Value::class("Point")),
+                    Instruction::LoadGlobal(Value::function("x_one")),
+                    Instruction::Call(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(0),
+                    Instruction::StoreField(0),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(1),
+                    Instruction::StoreField(1),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(2),
+                    Instruction::StoreField(2),
+                    Instruction::Copy(1),
+                    Instruction::Copy(1),
+                    Instruction::LoadField(3),
+                    Instruction::StoreField(3),
+                    Instruction::Pop(1),
+                    Instruction::LoadVar("p".to_string()),
+                    Instruction::Return,
+                ],
+            ),
+        ],
     })
 }
 
@@ -95,12 +286,12 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
                 w int
             }
 
-            fn default_point() -> Point {
+            function default_point() -> Point {
                 Point { x: 0, y: 0, z: 0, w: 0 }
             }
 
-            fn main() -> int {
-                let p = Point { x: 1, y: 2, ..default_point() };
+            function main() -> int {
+                let p = Point { x: 1, y: 2, ...default_point() };
                 let x = 0;
                 x
             }
@@ -108,26 +299,28 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
         expected: vec![(
             "main",
             vec![
-                Instruction::AllocInstance(ObjectIndex::from_raw(3)),
-                Instruction::Copy(0),
-                Instruction::LoadConst(0),
-                Instruction::StoreField(0),
-                Instruction::Copy(0),
-                Instruction::LoadConst(1),
-                Instruction::StoreField(1),
-                Instruction::LoadGlobal(GlobalIndex::from_raw(0)),
+                Instruction::AllocInstance(Value::class("Point")),
+                Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(0),
+                Instruction::StoreField(0),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
+                Instruction::LoadField(1),
+                Instruction::StoreField(1),
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(2),
                 Instruction::StoreField(2),
-                Instruction::Copy(1), // Copy instance from under spread
-                Instruction::Copy(1), // Copy spread from under instance
+                Instruction::Copy(1),
+                Instruction::Copy(1),
                 Instruction::LoadField(3),
                 Instruction::StoreField(3),
                 Instruction::Pop(1),
-                Instruction::LoadConst(2),
-                Instruction::LoadVar(2),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::LoadVar("x".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -151,15 +344,15 @@ fn field_assignment_compound_add_bytecode() -> anyhow::Result<()> {
             "incrementCounter",
             vec![
                 // c.value += 10
-                Instruction::LoadVar(1),        // Load c
-                Instruction::Copy(0),           // Duplicate c reference
-                Instruction::LoadField(0),      // Load c.value
-                Instruction::LoadConst(0),      // Load 10
-                Instruction::BinOp(BinOp::Add), // Add
-                Instruction::StoreField(0),     // Store back to c.value
+                Instruction::LoadVar("c".to_string()), // Load c
+                Instruction::Copy(0),                  // Duplicate c reference
+                Instruction::LoadField(0),             // Load c.value
+                Instruction::LoadConst(Value::Int(10)), // Load 10
+                Instruction::BinOp(BinOp::Add),        // Add
+                Instruction::StoreField(0),            // Store back to c.value
                 // c.value
-                Instruction::LoadVar(1),   // Load c
-                Instruction::LoadField(0), // Load c.value
+                Instruction::LoadVar("c".to_string()), // Load c
+                Instruction::LoadField(0),             // Load c.value
                 Instruction::Return,
             ],
         )],
@@ -186,18 +379,18 @@ fn nested_field_read_bytecode() -> anyhow::Result<()> {
             "main",
             vec![
                 // Create Outer { inner: Inner { value: 42 } }
-                Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer class
-                Instruction::Copy(0),                                 // Copy Outer instance
+                Instruction::AllocInstance(Value::class("Outer")), // Outer class
+                Instruction::Copy(0),                              // Copy Outer instance
                 // Create Inner inline
-                Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner class
-                Instruction::Copy(0),                                 // Copy Inner instance
-                Instruction::LoadConst(0),                            // 42
-                Instruction::StoreField(0),                           // Inner.value = 42
-                Instruction::StoreField(0), // Outer.inner = Inner instance
+                Instruction::AllocInstance(Value::class("Inner")), // Inner class
+                Instruction::Copy(0),                              // Copy Inner instance
+                Instruction::LoadConst(Value::Int(42)),            // 42
+                Instruction::StoreField(0),                        // Inner.value = 42
+                Instruction::StoreField(0),                        // Outer.inner = Inner instance
                 // o.inner.value
-                Instruction::LoadVar(1),   // Load o
-                Instruction::LoadField(0), // Load o.inner (returns Inner)
-                Instruction::LoadField(0), // Load inner.value (returns 42)
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner)
+                Instruction::LoadField(0),             // Load inner.value (returns 42)
                 Instruction::Return,
             ],
         )],
@@ -229,23 +422,23 @@ fn nested_object_construction_bytecode() -> anyhow::Result<()> {
             "main",
             vec![
                 // Outer constructor
-                Instruction::AllocInstance(ObjectIndex::from_raw(3)), // Outer
-                Instruction::Copy(0),                                 // Copy Outer instance
+                Instruction::AllocInstance(Value::class("Outer")), // Outer
+                Instruction::Copy(0),                              // Copy Outer instance
                 // Nested Inner construction
-                Instruction::AllocInstance(ObjectIndex::from_raw(2)), // Inner
-                Instruction::Copy(0),                                 // Copy Inner instance
-                Instruction::LoadConst(0),                            // 10
-                Instruction::StoreField(0),                           // x = 10
-                Instruction::Copy(0),                                 // Copy Inner instance again
-                Instruction::LoadConst(1),                            // 20
-                Instruction::StoreField(1),                           // y = 20
-                Instruction::StoreField(0),                           // Outer.inner = Inner
-                Instruction::Copy(0),                                 // Copy Outer instance
-                Instruction::LoadConst(2),                            // 30
-                Instruction::StoreField(1),                           // Outer.value = 30
+                Instruction::AllocInstance(Value::class("Inner")), // Inner
+                Instruction::Copy(0),                              // Copy Inner instance
+                Instruction::LoadConst(Value::Int(10)),            // 10
+                Instruction::StoreField(0),                        // x = 10
+                Instruction::Copy(0),                              // Copy Inner instance again
+                Instruction::LoadConst(Value::Int(20)),            // 20
+                Instruction::StoreField(1),                        // y = 20
+                Instruction::StoreField(0),                        // Outer.inner = Inner
+                Instruction::Copy(0),                              // Copy Outer instance
+                Instruction::LoadConst(Value::Int(30)),            // 30
+                Instruction::StoreField(1),                        // Outer.value = 30
                 // o.value
-                Instruction::LoadVar(1),   // o
-                Instruction::LoadField(1), // value
+                Instruction::LoadVar("o".to_string()), // o
+                Instruction::LoadField(1),             // value
                 Instruction::Return,
             ],
         )],
@@ -272,14 +465,14 @@ fn nested_field_assignment_bytecode() -> anyhow::Result<()> {
             "setNestedValue",
             vec![
                 // o.inner.value = 99
-                Instruction::LoadVar(2),    // Load o
-                Instruction::LoadField(0),  // Load o.inner (returns Inner object)
-                Instruction::LoadConst(0),  // Load 99
-                Instruction::StoreField(0), // Store to inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner object)
+                Instruction::LoadConst(Value::Int(99)), // Load 99
+                Instruction::StoreField(0),            // Store to inner.value
                 // o.inner.value
-                Instruction::LoadVar(2),   // Load o
-                Instruction::LoadField(0), // Load o.inner
-                Instruction::LoadField(0), // Load inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner
+                Instruction::LoadField(0),             // Load inner.value
                 Instruction::Return,
             ],
         )],
@@ -306,17 +499,17 @@ fn nested_field_assignment_compound_bytecode() -> anyhow::Result<()> {
             "incrementNestedValue",
             vec![
                 // o.inner.value += 10
-                Instruction::LoadVar(1),        // Load o
-                Instruction::LoadField(0),      // Load o.inner (returns Inner object)
-                Instruction::Copy(0),           // Duplicate inner reference
-                Instruction::LoadField(0),      // Load inner.value
-                Instruction::LoadConst(0),      // Load 10
-                Instruction::BinOp(BinOp::Add), // Add
-                Instruction::StoreField(0),     // Store back to inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner (returns Inner object)
+                Instruction::Copy(0),                  // Duplicate inner reference
+                Instruction::LoadField(0),             // Load inner.value
+                Instruction::LoadConst(Value::Int(10)), // Load 10
+                Instruction::BinOp(BinOp::Add),        // Add
+                Instruction::StoreField(0),            // Store back to inner.value
                 // o.inner.value
-                Instruction::LoadVar(1),   // Load o
-                Instruction::LoadField(0), // Load o.inner
-                Instruction::LoadField(0), // Load inner.value
+                Instruction::LoadVar("o".to_string()), // Load o
+                Instruction::LoadField(0),             // Load o.inner
+                Instruction::LoadField(0),             // Load inner.value
                 Instruction::Return,
             ],
         )],
@@ -340,12 +533,12 @@ fn field_assignment_simple_bytecode() -> anyhow::Result<()> {
             "setDataValue",
             vec![
                 // d.value = 42
-                Instruction::LoadVar(1),    // Load d
-                Instruction::LoadConst(0),  // Load 42
-                Instruction::StoreField(0), // Store to d.value
+                Instruction::LoadVar("d".to_string()), // Load d
+                Instruction::LoadConst(Value::Int(42)), // Load 42
+                Instruction::StoreField(0),            // Store to d.value
                 // d.value
-                Instruction::LoadVar(1),   // Load d
-                Instruction::LoadField(0), // Load d.value
+                Instruction::LoadVar("d".to_string()), // Load d
+                Instruction::LoadField(0),             // Load d.value
                 Instruction::Return,
             ],
         )],

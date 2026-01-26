@@ -83,7 +83,9 @@ pub async fn orchestrate(
                     cancel_scope,
                     LLMResponse::Cancelled("Operation cancelled".to_string()),
                     Some(Err(anyhow::anyhow!(
-                        crate::errors::ExposedError::AbortError
+                        crate::errors::ExposedError::AbortError {
+                            detailed_message: String::new()
+                        }
                     ))),
                 ));
                 break;
@@ -108,11 +110,13 @@ pub async fn orchestrate(
                             .finish_reason_filter()
                             .is_allowed(s.metadata.finish_reason.as_ref())
                         {
+                            let message = "Finish reason not allowed".to_string();
                             Some(Err(anyhow::anyhow!(
                                 crate::errors::ExposedError::FinishReasonError {
                                     prompt: prompt.to_string(),
                                     raw_output: s.content.clone(),
-                                    message: "Finish reason not allowed".to_string(),
+                                    detailed_message: message.clone(),
+                                    message,
                                     finish_reason: s.metadata.finish_reason.clone(),
                                 }
                             )))
@@ -124,9 +128,19 @@ pub async fn orchestrate(
                         code,
                         client,
                         message,
+                        raw_response,
                         ..
                     }) => {
                         match code {
+                            // Timeout error
+                            crate::internal::llm_client::ErrorCode::Timeout => {
+                                Some(Err(anyhow::anyhow!(
+                                    crate::errors::ExposedError::TimeoutError {
+                                        client_name: client.clone(),
+                                        message: message.clone(),
+                                    }
+                                )))
+                            }
                             // This is some internal BAML error, so handle it like any other error
                             crate::internal::llm_client::ErrorCode::Other(2) => {
                                 Some(Err(anyhow::anyhow!(message.clone())))
@@ -136,6 +150,8 @@ pub async fn orchestrate(
                                     client_name: client.clone(),
                                     message: message.clone(),
                                     status_code: code.clone(),
+                                    detailed_message: message.clone(),
+                                    raw_response: raw_response.clone(),
                                 }
                             ))),
                         }

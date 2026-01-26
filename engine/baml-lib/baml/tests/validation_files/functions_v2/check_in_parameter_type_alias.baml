@@ -4,7 +4,7 @@ type MultipleAttrs = int @assert({{ this > 0 }}) @check(gt_ten, {{ this > 10 }})
 // That alias is used as a parameter.
 function AliasWithMultipleAttrs(money: MultipleAttrs) -> MultipleAttrs {
     client "openai/gpt-4o"
-    prompt r#"
+    prompt #"
       Return the given integer without additional context:
 
       {{ money }}

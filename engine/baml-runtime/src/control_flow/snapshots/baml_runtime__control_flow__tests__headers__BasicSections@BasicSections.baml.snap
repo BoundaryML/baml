@@ -1,0 +1,444 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/BasicSections.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Main Processing\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 41,\n                        end: 60,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"title\",\n                value: StringValue(\n                    \"hello\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 77,\n                        end: 84,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                    start: 65,\n                    end: 86,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Generate Summary\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 91,\n                        end: 112,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"summary\",\n                value: StringValue(\n                    \"world\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 131,\n                        end: 138,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                    start: 117,\n                    end: 140,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Make Space\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 145,\n                        end: 160,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"space\",\n                value: StringValue(\n                    \" \",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 177,\n                        end: 180,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                    start: 165,\n                    end: 182,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 3,\n                    title: \"Prepare Final Output\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 187,\n                        end: 213,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"something\",\n                value: StringValue(\n                    \"something\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 234,\n                        end: 245,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                    start: 218,\n                    end: 247,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 3,\n                    title: \"Final Output\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 252,\n                        end: 270,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            BinaryOperation {\n                left: BinaryOperation {\n                    left: Identifier(\n                        \"title\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                            start: 275,\n                            end: 280,\n                        },\n                    ),\n                    operator: Add,\n                    right: Identifier(\n                        \"space\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                            start: 283,\n                            end: 288,\n                        },\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 275,\n                        end: 298,\n                    },\n                },\n                operator: Add,\n                right: Identifier(\n                    \"summary\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                        start: 291,\n                        end: 298,\n                    },\n                ),\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/BasicSections.baml\", contents: ... },\n                    start: 275,\n                    end: 298,\n                },\n            },\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: BasicSections
+      log_filter_key: "BasicSections|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 0
+        end: 300
+    "1":
+      label: Main Processing
+      log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 41
+        end: 60
+    "2":
+      label: Generate Summary
+      log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 91
+        end: 112
+    "3":
+      label: Make Space
+      log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+      node_type: header
+      parent: "1"
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 145
+        end: 160
+    "4":
+      label: Prepare Final Output
+      log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+      node_type: header
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 187
+        end: 213
+    "5":
+      label: Final Output
+      log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+      node_type: header
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/BasicSections.baml
+        start: 252
+        end: 270
+  edges:
+    "2":
+      - "3"
+    "4":
+      - "5"
+mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: BasicSections
+          log_filter_key: "BasicSections|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 0
+            end: 300
+        "1":
+          label: Main Processing
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 41
+            end: 60
+        "2":
+          label: Generate Summary
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:generate-summary:0"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 91
+            end: 112
+        "3":
+          label: Make Space
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1"
+          node_type: header
+          parent: "1"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 145
+            end: 160
+        "4":
+          label: Prepare Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:prepare-final-output:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 187
+            end: 213
+        "5":
+          label: Final Output
+          log_filter_key: "BasicSections|root:0|hdr:main-processing:0|hdr:make-space:1|hdr:final-output:1"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/BasicSections.baml
+            start: 252
+            end: 270
+      edges:
+        "2":
+          - "3"
+        "4":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: BasicSections\"]\n  direction TB\n  subgraph n1[\"1: Main Processing\"]\n    direction TB\n    n2[\"2: Generate Summary\"]\n    subgraph n3[\"3: Make Space\"]\n      direction TB\n      n4[\"4: Prepare Final Output\"]\n      n5[\"5: Final Output\"]\n      n4 --> n5\n    end\n    n2 --> n3\n  end\nend\n"

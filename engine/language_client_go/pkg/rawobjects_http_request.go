@@ -16,8 +16,8 @@ func newHttpRequest(ptr int64, rt unsafe.Pointer) HTTPRequest {
 	return &httpRequest{raw_objects.FromPointer(ptr, rt)}
 }
 
-func (h *httpRequest) ObjectType() cffi.CFFIObjectType {
-	return cffi.CFFIObjectType_OBJECT_HTTP_REQUEST
+func (h *httpRequest) ObjectType() cffi.BamlObjectType {
+	return cffi.BamlObjectType_OBJECT_HTTP_REQUEST
 }
 
 func (h *httpRequest) pointer() int64 {

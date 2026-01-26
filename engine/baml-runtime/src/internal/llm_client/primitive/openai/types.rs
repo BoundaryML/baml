@@ -1,7 +1,4 @@
-use serde::{
-    de::{self, Deserializer},
-    Deserialize, Serialize,
-};
+use serde::{de::Deserializer, Deserialize, Serialize};
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
 pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
@@ -11,6 +8,7 @@ pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
 pub struct ResponsesApiResponse {
     pub id: String,
     pub object: String,
+    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
     pub created_at: Option<u32>,
     pub status: String,
     pub model: String,
@@ -29,6 +27,10 @@ pub enum ResponseOutputType {
     FunctionCall,
     Reasoning,
     ComputerCall,
+    McpListTools,
+    McpCall,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -38,7 +40,7 @@ pub struct ResponseOutput {
     pub id: Option<String>,
     pub status: Option<String>,
     pub role: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_maybe_list_to_vec")]
     pub content: Vec<ResponseContent>,
     // For web search calls
     pub action: Option<WebSearchAction>,
@@ -51,6 +53,20 @@ pub struct ResponseOutput {
     pub arguments: Option<String>,
     // For reasoning outputs
     pub summary: Option<Vec<serde_json::Value>>,
+    // For MCP outputs
+    pub server_label: Option<String>,
+    pub tools: Option<Vec<McpToolDescriptor>>, // mcp_list_tools
+    pub approval_request_id: Option<String>,   // mcp_call
+    pub output: Option<String>,                // mcp_call output text
+    pub error: Option<serde_json::Value>,      // mcp_call error
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct McpToolDescriptor {
+    pub annotations: Option<serde_json::Value>,
+    pub description: Option<String>,
+    pub input_schema: Option<serde_json::Value>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -134,6 +150,8 @@ pub enum ResponsesApiStreamEvent {
         part: ContentPart,
         sequence_number: u32,
     },
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -148,7 +166,8 @@ pub struct ContentPart {
 pub struct ResponsesApiStreamResponse {
     pub id: String,
     pub object: String,
-    pub created_at: u32,
+    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
+    pub created_at: Option<u32>,
     pub status: String,
     pub model: String,
     pub output: Vec<ResponseOutput>,
@@ -204,6 +223,17 @@ pub struct ChatCompletionGeneric<C> {
     pub usage: Option<CompletionUsage>,
 }
 
+fn deserialize_maybe_list_to_vec<'de, D, I>(deserializer: D) -> Result<Vec<I>, D::Error>
+where
+    D: Deserializer<'de>,
+    I: Deserialize<'de>,
+{
+    match Option::<Vec<I>>::deserialize(deserializer)? {
+        Some(inner) => Ok(inner),
+        None => Ok(vec![]),
+    }
+}
+
 fn deserialize_float_to_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
 where
     D: Deserializer<'de>,
@@ -255,7 +285,9 @@ pub struct CompletionUsage {
     /// Total number of tokens used in the request (prompt + completion).
     pub total_tokens: u64,
     /// Additional fields that may be present in responses API
+    #[serde(alias = "prompt_tokens_details")]
     pub input_tokens_details: Option<serde_json::Value>,
+    #[serde(alias = "completion_tokens_details")]
     pub output_tokens_details: Option<serde_json::Value>,
 }
 

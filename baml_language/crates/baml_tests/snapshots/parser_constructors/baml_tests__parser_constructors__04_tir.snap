@@ -1,0 +1,29 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function floatArray:
+    Return: List(Float)
+  Function stringArray:
+    Return: List(String)
+  Function pointArray:
+    Return: List(Class(FullyQualifiedName { namespace: Local, name: "Point" }))
+  Function boolArray:
+    Return: List(Bool)
+  Function mixedArray:
+    Return: List(Union([Int, String]))
+  Function intArray:
+    Return: List(Int)
+  Function point:
+    Return: Class(FullyQualifiedName { namespace: Local, name: "Point" })
+  Function vec2d:
+    Return: Class(FullyQualifiedName { namespace: Local, name: "Vec2D" })
+  Function boolValues:
+    Return: Map { key: String, value: Bool }
+  Function intValues:
+    Return: Map { key: String, value: Int }
+  Function stringValues:
+    Return: Map { key: String, value: String }
+  Function floatValues:
+    Return: Map { key: String, value: Float }

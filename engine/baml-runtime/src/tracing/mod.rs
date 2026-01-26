@@ -14,7 +14,7 @@ use baml_types::{
 };
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
-use internal_baml_core::ir::ir_helpers::infer_type;
+use internal_baml_core::ir::ir_helpers::{infer_type, infer_value_with_type};
 use internal_baml_jinja::RenderedPrompt;
 use jsonish::ResponseBamlValue;
 use serde::Serialize;
@@ -59,6 +59,7 @@ pub struct TracingCall {
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
     tags: HashMap<String, BamlValue>,
+    pub function_type: FunctionType,
 }
 
 impl TracingCall {
@@ -408,9 +409,23 @@ impl BamlTracer {
         is_stream: bool,
         // baml_src_hash: Option<String>,
         collectors: Option<Vec<Arc<Collector>>>,
+        tags: Option<&HashMap<String, String>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
-        let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
+        let (call_id, call_stack, mut ctx_tags, global_tags) = ctx.enter(function_name);
+
+        if let Some(tag_map) = tags {
+            if !tag_map.is_empty() {
+                log::debug!("start_call: incoming tags: {tag_map:#?}");
+                let tag_values: HashMap<String, BamlValue> = tag_map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), BamlValue::String(v.clone())))
+                    .collect();
+                ctx.upsert_tags(tag_values.clone());
+                ctx_tags.extend(tag_values);
+                log::debug!("start_call: ctx_tags after extend: {ctx_tags:#?}");
+            }
+        }
 
         log::trace!(
             "\n{}------------------- Entering {:?}, ctx chain {:#?}",
@@ -418,6 +433,12 @@ impl BamlTracer {
             function_name,
             ctx
         );
+
+        let function_type = if is_baml_function {
+            FunctionType::BamlLlm
+        } else {
+            FunctionType::Native
+        };
 
         let call = TracingCall {
             call_id,
@@ -427,7 +448,8 @@ impl BamlTracer {
             start_time: web_time::SystemTime::now(),
             // Note these tags are the ones currently on the stack. While the function runs we may register
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
-            tags: last_tags.clone(),
+            tags: ctx_tags.clone(),
+            function_type: function_type.clone(),
         };
         // println!("---- {} ctx {:#?}", function_name, ctx);
         // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
@@ -441,34 +463,22 @@ impl BamlTracer {
         }
 
         // Add function start trace event
+        // log::info!("Creating trace event for {}", function_name);
         let trace_event = TraceEvent::new_function_start(
             call_stack,
             function_name.to_string(),
             params
                 .iter()
-                .map(|(k, v)| {
-                    let field_type = infer_type(v).unwrap_or_else(|| {
-                        log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
-                        baml_types::ir_type::TypeNonStreaming::Primitive(baml_types::TypeValue::Null, Default::default())
-                    });
-                    (
-                        k.clone(),
-                        BamlValueWithMeta::with_const_meta(v, field_type),
-                    )
-                })
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
                 .collect(),
             EvaluationContext {
                 tags: global_tags
                     .into_iter()
-                    .chain(last_tags)
+                    .chain(ctx_tags)
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
-            if is_baml_function {
-                FunctionType::BamlLlm
-            } else {
-                FunctionType::Native
-            },
+            function_type,
             is_stream,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
@@ -552,38 +562,64 @@ impl BamlTracer {
         }
 
         // Tracerv2 event publishing here
-        let field_type_for_meta = match &response {
-            Some(val) => infer_type(val).unwrap_or_else(|| {
-                log::warn!(
-                    "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
-                );
-                baml_types::ir_type::TypeNonStreaming::Primitive(
+        // Check if this is a Python exception (marked with special __PythonException__ class)
+        let is_python_exception =
+            matches!(&response, Some(BamlValue::Class(name, _)) if name == "__PythonException__");
+
+        let event = if is_python_exception {
+            // Extract error message from the exception
+            let error_message = match &response {
+                Some(BamlValue::Class(_, fields)) => {
+                    let msg = fields
+                        .get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Unknown Python exception");
+                    let exc_type = fields
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Exception");
+                    format!("{exc_type}: {msg}")
+                }
+                _ => "Unknown Python exception".to_string(),
+            };
+
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Err(baml_types::tracing::events::BamlError::External {
+                    message: std::borrow::Cow::Owned(error_message),
+                }),
+                call.function_type.clone(),
+            )
+        } else {
+            // Normal success case
+            let field_type_for_meta = match &response {
+                Some(val) => infer_type(val).unwrap_or_else(|| {
+                    log::warn!(
+                        "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
+                    );
+                    baml_types::ir_type::TypeNonStreaming::Primitive(
+                        baml_types::TypeValue::Null,
+                        Default::default(),
+                    )
+                }),
+                None => baml_types::ir_type::TypeNonStreaming::Primitive(
                     baml_types::TypeValue::Null,
                     Default::default(),
-                )
-            }),
-            None => baml_types::ir_type::TypeNonStreaming::Primitive(
-                baml_types::TypeValue::Null,
-                Default::default(),
-            ),
+                ),
+            };
+            let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
+                BamlValueWithMeta::with_same_meta_at_all_nodes(
+                    response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
+                    field_type_for_meta,
+                );
+
+            TraceEvent::new_function_end(
+                call.new_call_id_stack.clone(),
+                Ok(baml_value_with_meta),
+                call.function_type,
+            )
         };
-        let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
-            BamlValueWithMeta::with_const_meta(
-                response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
-                field_type_for_meta,
-            );
 
-        // let tags = global_and_user_tags
-        //     .clone()
-        //     .into_iter()
-        //     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
-        //     .collect();
-        let event_chain = call.new_call_id_stack.clone();
-        // let tag_event = TraceEvent::new_set_tags(event_chain, tags);
-        // BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
-
-        let event =
-            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
 
         Ok(call_id)
@@ -979,8 +1015,41 @@ impl ToLogSchema for TestResponse {
         tags: HashMap<String, BamlValue>,
         call: TracingCall,
     ) -> LogSchema {
-        self.function_response
-            .to_log_schema(api, event_chain, tags, call)
+        if let Some(func_response) = &self.function_response {
+            func_response.to_log_schema(api, event_chain, tags, call)
+        } else {
+            // For expr functions, create a simpler log schema
+            LogSchema {
+                project_id: api.project_id().map(str::to_string),
+                event_type: api_wrapper::core_types::EventType::FuncCode,
+                root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
+                event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
+                parent_event_id: None,
+                context: (api, event_chain, tags, &call).into(),
+                io: IO {
+                    input: Some((&call.params).into()),
+                    output: self
+                        .expr_function_response
+                        .as_ref()
+                        .and_then(|r| r.as_ref().ok())
+                        .map(|r| {
+                            let v: BamlValue = r.0.clone().into();
+                            IOValue::from(&v)
+                        }),
+                },
+                error: self
+                    .expr_function_response
+                    .as_ref()
+                    .and_then(|r| r.as_ref().err())
+                    .map(|e| api_wrapper::core_types::Error {
+                        code: 2,
+                        message: e.to_string(),
+                        traceback: None,
+                        r#override: None,
+                    }),
+                metadata: None,
+            }
+        }
     }
 }
 

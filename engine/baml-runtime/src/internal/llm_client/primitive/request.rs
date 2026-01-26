@@ -68,6 +68,7 @@ pub trait RequestBuilder {
 
     fn request_options(&self) -> &BamlMap<String, serde_json::Value>;
     fn http_client(&self) -> &reqwest::Client;
+    fn http_config(&self) -> &internal_llm_client::HttpConfig;
 }
 
 pub(crate) fn to_prompt(
@@ -168,6 +169,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 latency: instant_now.elapsed(),
                 message: format!("Failed to create request builder: {e:#?}"),
                 code: ErrorCode::Other(2),
+                raw_response: None,
             })
         })?;
 
@@ -183,6 +185,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 latency: instant_now.elapsed(),
                 message: format!("Failed to build request: {e:#?}"),
                 code: ErrorCode::Other(2),
+                raw_response: None,
             }));
         }
     };
@@ -227,13 +230,36 @@ pub async fn execute_request(
     let response = match client.http_client().execute(built_req).await {
         Ok(resp) => resp,
         Err(e) => {
+            // Detect timeout errors
+            let (message, code) = if e.is_timeout() {
+                ("Request timed out".to_string(), ErrorCode::Timeout)
+            } else {
+                (
+                    {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            format!("{e:?}")
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
+                            format!(
+                                "{e}\n\nIf you haven't yet, try enabling the proxy (open Settings menu in the top right)"
+                            )
+                        }
+                    },
+                    e.status()
+                        .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                )
+            };
+
             log_http_response(
                 runtime_context,
                 e.status()
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 None,
-                HTTPBody::new(format!("No response. Error: {e:?}").into_bytes()),
+                HTTPBody::new(format!("No response. Error: {message}").into_bytes()),
                 client.context(),
             )
             .await;
@@ -245,22 +271,9 @@ pub async fn execute_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        format!("{e:?}")
-                    }
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
-                        format!(
-                            "{e}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)"
-                        )
-                    }
-                },
-                code: e
-                    .status()
-                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                message,
+                code,
+                raw_response: None,
             }));
         }
     };
@@ -288,6 +301,7 @@ pub async fn execute_request(
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                    raw_response: None,
                 }));
             }
         };
@@ -318,6 +332,7 @@ pub async fn execute_request(
                 logged_res.status, resp_body
             ),
             code: ErrorCode::from_status(logged_res.status),
+            raw_response: Some(resp_body),
         }));
     }
 
@@ -344,6 +359,7 @@ pub async fn execute_request(
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                    raw_response: None,
                 }));
             }
         };
@@ -415,6 +431,11 @@ pub async fn make_parsed_request(
             Err(e) => return e,
         };
 
+    // Capture raw response body as string before parsing
+    let raw_body_str = std::str::from_utf8(&response.body)
+        .ok()
+        .map(|s| s.to_string());
+
     let response_body = serde_json::from_slice::<serde_json::Value>(&response.body).map_err(|e| {
         LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
@@ -425,6 +446,7 @@ pub async fn make_parsed_request(
             latency: instant_now.elapsed(),
             message: format!("Failed to parse JSON: {e}"),
             code: ErrorCode::from_status(response.status),
+            raw_response: raw_body_str.clone(),
         })
     });
 
@@ -440,6 +462,7 @@ pub async fn make_parsed_request(
                 latency: instant_now.elapsed(),
                 message: e.to_string(),
                 code: ErrorCode::from_status(response.status),
+                raw_response: raw_body_str,
             })
         }
     };
@@ -457,6 +480,7 @@ pub async fn make_parsed_request(
                 response.status, response_body
             ),
             code: ErrorCode::from_status(response.status),
+            raw_response: Some(response_body.to_string()),
         });
     }
 

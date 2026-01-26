@@ -68,7 +68,7 @@ func (c *ComplexMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) 
 
 }
 
-func (c ComplexMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c ComplexMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["userMap"] = c.UserMap
@@ -81,18 +81,11 @@ func (c ComplexMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["mapArray"] = c.MapArray
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("ComplexMaps", fields, nil)
 }
 
 func (c ComplexMaps) BamlTypeName() string {
 	return "ComplexMaps"
-}
-
-func (u ComplexMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "ComplexMaps",
-	}
 }
 
 type Config struct {
@@ -133,7 +126,7 @@ func (c *Config) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Config) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Config) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["url"] = c.Url
@@ -142,18 +135,11 @@ func (c Config) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["debug"] = c.Debug
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Config", fields, nil)
 }
 
 func (c Config) BamlTypeName() string {
 	return "Config"
-}
-
-func (u Config) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Config",
-	}
 }
 
 type EdgeCaseMaps struct {
@@ -198,7 +184,7 @@ func (c *EdgeCaseMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c EdgeCaseMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c EdgeCaseMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["emptyMap"] = c.EmptyMap
@@ -209,18 +195,11 @@ func (c EdgeCaseMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["unionValues"] = c.UnionValues
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("EdgeCaseMaps", fields, nil)
 }
 
 func (c EdgeCaseMaps) BamlTypeName() string {
 	return "EdgeCaseMaps"
-}
-
-func (u EdgeCaseMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "EdgeCaseMaps",
-	}
 }
 
 type MixedKeyMaps struct {
@@ -265,7 +244,7 @@ func (c *MixedKeyMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap)
 
 }
 
-func (c MixedKeyMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c MixedKeyMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["stringIntMap"] = c.StringIntMap
@@ -276,18 +255,11 @@ func (c MixedKeyMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["literalMap"] = c.LiteralMap
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("MixedKeyMaps", fields, nil)
 }
 
 func (c MixedKeyMaps) BamlTypeName() string {
 	return "MixedKeyMaps"
-}
-
-func (u MixedKeyMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "MixedKeyMaps",
-	}
 }
 
 type NestedMaps struct {
@@ -336,7 +308,7 @@ func (c *NestedMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c NestedMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c NestedMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["simple"] = c.Simple
@@ -349,18 +321,11 @@ func (c NestedMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["mapOfMaps"] = c.MapOfMaps
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("NestedMaps", fields, nil)
 }
 
 func (c NestedMaps) BamlTypeName() string {
 	return "NestedMaps"
-}
-
-func (u NestedMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "NestedMaps",
-	}
 }
 
 type Product struct {
@@ -405,7 +370,7 @@ func (c *Product) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Product) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Product) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -416,18 +381,11 @@ func (c Product) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["tags"] = c.Tags
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Product", fields, nil)
 }
 
 func (c Product) BamlTypeName() string {
 	return "Product"
-}
-
-func (u Product) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Product",
-	}
 }
 
 type SimpleMaps struct {
@@ -476,7 +434,7 @@ func (c *SimpleMaps) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c SimpleMaps) Encode() (*cffi.CFFIValueHolder, error) {
+func (c SimpleMaps) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["stringToString"] = c.StringToString
@@ -489,18 +447,11 @@ func (c SimpleMaps) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["intToString"] = c.IntToString
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("SimpleMaps", fields, nil)
 }
 
 func (c SimpleMaps) BamlTypeName() string {
 	return "SimpleMaps"
-}
-
-func (u SimpleMaps) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "SimpleMaps",
-	}
 }
 
 type User struct {
@@ -545,7 +496,7 @@ func (c *User) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c User) Encode() (*cffi.CFFIValueHolder, error) {
+func (c User) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["id"] = c.Id
@@ -556,16 +507,9 @@ func (c User) Encode() (*cffi.CFFIValueHolder, error) {
 
 	fields["active"] = c.Active
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("User", fields, nil)
 }
 
 func (c User) BamlTypeName() string {
 	return "User"
-}
-
-func (u User) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "User",
-	}
 }

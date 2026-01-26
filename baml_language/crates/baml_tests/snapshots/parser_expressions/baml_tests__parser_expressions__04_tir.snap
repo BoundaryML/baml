@@ -1,0 +1,13 @@
+---
+source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function Calculate:
+    Return: Int
+  Function FieldAccess:
+    Return: String
+  Function IndexAccess:
+    Return: String
+  Function TestPrecedence:
+    Return: Bool

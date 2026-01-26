@@ -1,0 +1,15 @@
+//! Generated streaming type aliases.
+//!
+//! Full implementation coming in Phase 6.
+
+use std::collections::HashMap;
+use crate::baml_client::types;
+use crate::baml_client::types::*;
+
+{% for alias in type_aliases %}
+{% if alias.docstring.is_some() %}
+/// {{ alias.docstring.as_ref().unwrap() }}
+{% endif %}
+pub type {{ alias.name }} = {{ alias.type_str }};
+
+{% endfor %}

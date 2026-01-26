@@ -79,3 +79,16 @@ def test_return_category():
     assert b.ReturnCategory(Category.TechnicalSupport) == Category.TechnicalSupport
     assert b.ReturnCategory(Category.AccountIssue) == Category.AccountIssue
     assert b.ReturnCategory(Category.Question) == Category.Question
+
+
+def test_return_image_from_url():
+    url = "https://i.imgur.com/93fWs5R.png"
+
+    # Image created within BAML.
+    img = b.ReturnImageFromUrl(url)
+
+    assert img.is_url()
+    assert img.as_url() == url
+
+def test_home_env_var_length():
+    assert not b.HomeEnvVarIsEmpty()

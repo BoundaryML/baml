@@ -29,6 +29,14 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"item": item},
 		Env:    getEnvVars(callOpts.env),
@@ -44,6 +52,10 @@ func ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...Cal
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -91,6 +103,14 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
 		Env:    getEnvVars(callOpts.env),
@@ -106,6 +126,10 @@ func MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (types.SimpleC
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

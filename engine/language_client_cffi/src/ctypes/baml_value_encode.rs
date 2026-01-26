@@ -1,5 +1,5 @@
 use baml_runtime::TypeIR;
-use baml_types::{ir_type::UnionConstructor, BamlMediaType, BamlValue};
+use baml_types::{ir_type::UnionConstructor, type_meta, BamlMediaType, BamlValue};
 
 use crate::{
     baml::cffi::{
@@ -7,21 +7,17 @@ use crate::{
         CffiFieldTypeMap, CffiMapEntry, CffiTypeName, CffiTypeNamespace, CffiValueClass,
         CffiValueEnum, CffiValueHolder, CffiValueList, CffiValueMap, CffiValueNull,
     },
-    ctypes::{
-        baml_type_encode::UnionAllowance,
-        utils::{Encode, WithIr},
-    },
+    ctypes::utils::{Encode, UnionAllowance, WithIr},
     raw_ptr_wrapper::RawPtrWrapper,
 };
 
-impl<'a, TypeLookups> Encode<CffiValueHolder> for WithIr<'a, BamlValue, TypeLookups>
+impl<'a, TypeLookups> Encode<CffiValueHolder> for WithIr<'a, BamlValue, TypeLookups, type_meta::IR>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
     fn encode(self) -> CffiValueHolder {
         use cffi_value_holder::Value as cValue;
 
-        let type_ir = self.value.to_type_ir();
         let value = match self.value {
             BamlValue::Null => cValue::NullValue(CffiValueNull::default()),
             BamlValue::Bool(b) => cValue::BoolValue(*b),
@@ -29,6 +25,9 @@ where
             BamlValue::Float(f) => cValue::FloatValue(*f),
             BamlValue::String(s) => cValue::StringValue(s.clone()),
             BamlValue::Map(map) => {
+                let TypeIR::Map(key_type, value_type, _) = self.value.to_type_ir() else {
+                    panic!("Expected map type ir");
+                };
                 let entries = map
                     .iter()
                     .map(|(key, value)| CffiMapEntry {
@@ -38,24 +37,24 @@ where
                                 value,
                                 lookup: self.lookup,
                                 mode: self.mode,
+                                curr_type: value_type.as_ref().clone(),
                             }
                             .encode(),
                         ),
                     })
                     .collect();
-                let TypeIR::Map(key_type, value_type, _) = self.value.to_type_ir() else {
-                    panic!("Expected map type ir");
-                };
                 let key_type = WithIr {
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *key_type.clone(),
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 cValue::MapValue(CffiValueMap {
@@ -65,6 +64,9 @@ where
                 })
             }
             BamlValue::List(list) => {
+                let TypeIR::List(value_type, _) = self.value.to_type_ir() else {
+                    panic!("Expected list type ir");
+                };
                 let mut values = Vec::new();
                 for value in list {
                     values.push(
@@ -72,22 +74,21 @@ where
                             value,
                             lookup: self.lookup,
                             mode: self.mode,
+                            curr_type: value_type.as_ref().clone(),
                         }
                         .encode(),
                     );
                 }
-                let TypeIR::List(value_type, _) = self.value.to_type_ir() else {
-                    panic!("Expected list type ir");
-                };
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 cValue::ListValue(CffiValueList {
-                    value_type: Some(value_type),
-                    values,
+                    item_type: Some(value_type),
+                    items: values,
                 })
             }
             BamlValue::Media(media) => {
@@ -124,6 +125,7 @@ where
                                 value,
                                 lookup: self.lookup,
                                 mode: self.mode,
+                                curr_type: value.to_type_ir(),
                             }
                             .encode(),
                         ),
@@ -132,16 +134,32 @@ where
             }),
         };
 
-        CffiValueHolder {
-            r#type: Some(
-                WithIr {
-                    value: &(&type_ir, UnionAllowance::Disallow),
-                    lookup: self.lookup,
-                    mode: self.mode,
-                }
-                .encode(),
-            ),
-            value: Some(value),
+        let value = CffiValueHolder { value: Some(value) };
+
+        // if type is optional, wrap in optional
+        if self.curr_type.is_optional() && !self.curr_type.is_null() {
+            CffiValueHolder {
+                value: Some(cValue::UnionVariantValue(Box::new(
+                    crate::baml::cffi::CffiValueUnionVariant {
+                        name: None,
+                        is_optional: true,
+                        is_single_pattern: true,
+                        self_type: Some(
+                            WithIr {
+                                value: &(&self.curr_type, UnionAllowance::Allow),
+                                lookup: self.lookup,
+                                mode: self.mode,
+                                curr_type: self.curr_type.clone(),
+                            }
+                            .encode(),
+                        ),
+                        value_option_name: "null".to_string(),
+                        value: Some(Box::new(value)),
+                    },
+                ))),
+            }
+        } else {
+            value
         }
     }
 }
@@ -177,7 +195,8 @@ impl ToTypeIR for BamlValue {
     }
 }
 
-impl<'a, TypeLookups> Encode<CffiFieldTypeHolder> for WithIr<'a, BamlValue, TypeLookups>
+impl<'a, TypeLookups> Encode<CffiFieldTypeHolder>
+    for WithIr<'a, BamlValue, TypeLookups, type_meta::IR>
 where
     TypeLookups: baml_types::baml_value::TypeLookups + 'a,
 {
@@ -191,19 +210,21 @@ where
                     value: &(key_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *key_type.clone(),
                 }
                 .encode();
                 let value_type = WithIr {
                     value: &(value_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *value_type.clone(),
                 }
                 .encode();
                 CffiFieldTypeHolder {
                     r#type: Some(cffi_field_type_holder::Type::MapType(Box::new(
                         CffiFieldTypeMap {
-                            key: Some(Box::new(key_type)),
-                            value: Some(Box::new(value_type)),
+                            key_type: Some(Box::new(key_type)),
+                            value_type: Some(Box::new(value_type)),
                         },
                     ))),
                 }
@@ -216,12 +237,13 @@ where
                     value: &(item_type.as_ref(), UnionAllowance::Disallow),
                     lookup: self.lookup,
                     mode: self.mode,
+                    curr_type: *item_type.clone(),
                 }
                 .encode();
                 CffiFieldTypeHolder {
                     r#type: Some(cffi_field_type_holder::Type::ListType(Box::new(
                         CffiFieldTypeList {
-                            element: Some(Box::new(item_type)),
+                            item_type: Some(Box::new(item_type)),
                         },
                     ))),
                 }
@@ -230,6 +252,7 @@ where
                 value: &(&other.to_type_ir(), UnionAllowance::Disallow),
                 lookup: self.lookup,
                 mode: self.mode,
+                curr_type: other.to_type_ir(),
             }
             .encode(),
         }

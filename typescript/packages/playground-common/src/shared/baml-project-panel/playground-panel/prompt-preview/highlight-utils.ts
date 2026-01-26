@@ -1,7 +1,7 @@
 import type {
-  WasmChatMessagePart,
-  WasmParam,
-} from '@gloo-ai/baml-schema-wasm-web';
+  ChatMessagePart,
+  ParameterInfo,
+} from '../../../../sdk/interface';
 import he from 'he';
 
 /**
@@ -12,10 +12,10 @@ const cleanWhitespace = (str: string): string => {
 };
 
 /**
- * Extracts string values from WasmParam inputs, handling JSON and plain strings.
+ * Extracts string values from ParameterInfo inputs, handling JSON and plain strings.
  * Returns raw strings without HTML encoding for proper highlighting matching.
  */
-export const extractStringValues = (inputs: WasmParam[]): string[] => {
+export const extractStringValues = (inputs: ParameterInfo[]): string[] => {
   if (!inputs || !Array.isArray(inputs)) return [];
 
   return inputs.flatMap((input) => {
@@ -85,10 +85,10 @@ export const getHighlightChunks = (
 /**
  * Returns the first non-empty line from the first text part in the array.
  */
-export function getFirstLine(parts: WasmChatMessagePart[]): string {
+export function getFirstLine(parts: ChatMessagePart[]): string {
   for (const part of parts) {
-    if (part.is_text?.()) {
-      const text = part.as_text();
+    if (part.type === 'text') {
+      const text = part.content;
       if (text) {
         const decodedText = he.decode(text);
         const lines = decodedText.split('\n');

@@ -1,0 +1,133 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "RunCommand"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "baml.sys.shell"
+            WORD "baml"
+            DOT "."
+            WORD "sys"
+            DOT "."
+            WORD "shell"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "echo hello"
+              QUOTE """
+              WORD "echo"
+              WORD "hello"
+              QUOTE """
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "RunCommandWithVar"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "cmd"
+          EQUALS "="
+          STRING_LITERAL "ls -la"
+            QUOTE """
+            WORD "ls"
+            MINUS "-"
+            WORD "la"
+            QUOTE """
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "baml.sys.shell"
+            WORD "baml"
+            DOT "."
+            WORD "sys"
+            DOT "."
+            WORD "shell"
+          CALL_ARGS "(cmd)"
+            L_PAREN "("
+            WORD "cmd"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ChainCommands"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "result1"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.sys.shell"
+              WORD "baml"
+              DOT "."
+              WORD "sys"
+              DOT "."
+              WORD "shell"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "pwd"
+                QUOTE """
+                WORD "pwd"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "result2"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.sys.shell"
+              WORD "baml"
+              DOT "."
+              WORD "sys"
+              DOT "."
+              WORD "shell"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "whoami"
+                QUOTE """
+                WORD "whoami"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        BINARY_EXPR
+          BINARY_EXPR
+            WORD "result1"
+            PLUS "+"
+            STRING_LITERAL " - "
+              QUOTE """
+              MINUS "-"
+              QUOTE """
+          PLUS "+"
+          WORD "result2"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

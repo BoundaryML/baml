@@ -1,0 +1,94 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::MixedChildrenNotFlattened":
+  nodes:
+    "MixedChildrenNotFlattened|c:func:0":
+      label: MixedChildrenNotFlattened
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 11
+        end: 184
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0":
+      label: scope
+      node_type: scope
+      parent: "MixedChildrenNotFlattened|c:func:0|c:loop:0"
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 161
+        end: 165
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|h:loop-child:0":
+      label: Loop Child
+      node_type: expr
+      parent: "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|s:1":
+      label: expr
+      node_type: expr
+      parent: "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0"
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 161
+        end: 165
+    "MixedChildrenNotFlattened|c:func:0|h:md-child:0":
+      label: MD Child
+      node_type: expr
+      parent: "MixedChildrenNotFlattened|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "MixedChildrenNotFlattened|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "MixedChildrenNotFlattened|c:func:0"
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 82
+        end: 100
+    "MixedChildrenNotFlattened|c:func:0|s:1":
+      label: for
+      node_type: loop
+      parent: "MixedChildrenNotFlattened|c:func:0"
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 104
+        end: 171
+    "MixedChildrenNotFlattened|c:func:0|s:2":
+      label: expr
+      node_type: expr
+      parent: "MixedChildrenNotFlattened|c:func:0"
+      span:
+        file: src/control_flow/headers/mixed_children_not_flattened.baml
+        start: 176
+        end: 182
+  edges:
+    "MixedChildrenNotFlattened|c:func:0":
+      - dst: "MixedChildrenNotFlattened|c:func:0|h:md-child:0"
+        label: ""
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0":
+      - dst: "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|h:loop-child:0"
+        label: ""
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|h:loop-child:0":
+      - dst: "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|s:1"
+        label: ""
+    "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0|s:1":
+      - dst: "MixedChildrenNotFlattened|c:func:0|s:1"
+        label: repeat
+    "MixedChildrenNotFlattened|c:func:0|h:md-child:0":
+      - dst: "MixedChildrenNotFlattened|c:func:0|s:0"
+        label: ""
+    "MixedChildrenNotFlattened|c:func:0|s:0":
+      - dst: "MixedChildrenNotFlattened|c:func:0|s:1"
+        label: ""
+    "MixedChildrenNotFlattened|c:func:0|s:1":
+      - dst: "MixedChildrenNotFlattened|c:func:0|c:loop:0|c:block:0"
+        label: ""
+      - dst: "MixedChildrenNotFlattened|c:func:0|s:2"
+        label: ""

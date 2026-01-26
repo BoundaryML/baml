@@ -16,6 +16,12 @@ from . import stream_types
 
 type_map = {
 
+    "types.AddTodoItem": types.AddTodoItem,
+    "stream_types.AddTodoItem": stream_types.AddTodoItem,
+
+    "types.AddressWithMeta": types.AddressWithMeta,
+    "stream_types.AddressWithMeta": stream_types.AddressWithMeta,
+
     "types.AnotherObject": types.AnotherObject,
     "stream_types.AnotherObject": stream_types.AnotherObject,
 
@@ -78,6 +84,12 @@ type_map = {
 
     "types.Document1559": types.Document1559,
     "stream_types.Document1559": stream_types.Document1559,
+
+    "types.DummyJsonTodo": types.DummyJsonTodo,
+    "stream_types.DummyJsonTodo": stream_types.DummyJsonTodo,
+
+    "types.DummyJsonTodoUpdate": types.DummyJsonTodoUpdate,
+    "stream_types.DummyJsonTodoUpdate": stream_types.DummyJsonTodoUpdate,
 
     "types.DummyOutput": types.DummyOutput,
     "stream_types.DummyOutput": stream_types.DummyOutput,
@@ -232,6 +244,9 @@ type_map = {
     "types.Person": types.Person,
     "stream_types.Person": stream_types.Person,
 
+    "types.PersonWithMeta": types.PersonWithMeta,
+    "stream_types.PersonWithMeta": stream_types.PersonWithMeta,
+
     "types.PhoneNumber": types.PhoneNumber,
     "stream_types.PhoneNumber": stream_types.PhoneNumber,
 
@@ -274,6 +289,12 @@ type_map = {
     "types.SimpleTag": types.SimpleTag,
     "stream_types.SimpleTag": stream_types.SimpleTag,
 
+    "types.SkipDynamicClass": types.SkipDynamicClass,
+    "stream_types.SkipDynamicClass": stream_types.SkipDynamicClass,
+
+    "types.SkipNonDynamicClass": types.SkipNonDynamicClass,
+    "stream_types.SkipNonDynamicClass": stream_types.SkipNonDynamicClass,
+
     "types.SmallThing": types.SmallThing,
     "stream_types.SmallThing": stream_types.SmallThing,
 
@@ -297,6 +318,9 @@ type_map = {
 
     "types.TestOutputClass": types.TestOutputClass,
     "stream_types.TestOutputClass": stream_types.TestOutputClass,
+
+    "types.TodoMessageToUser": types.TodoMessageToUser,
+    "stream_types.TodoMessageToUser": stream_types.TodoMessageToUser,
 
     "types.Tree": types.Tree,
     "stream_types.Tree": stream_types.Tree,

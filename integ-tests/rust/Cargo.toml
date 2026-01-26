@@ -1,0 +1,13 @@
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+baml = { path = "../../languages/rust/baml" }
+serde_json = "1.0"
+
+[build-dependencies]
+baml-sys = { path = "../../languages/rust/baml-sys" }

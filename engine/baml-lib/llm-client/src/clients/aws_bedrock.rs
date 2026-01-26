@@ -8,10 +8,11 @@ use secrecy::SecretString;
 use serde::Serialize;
 use serde_json::Value;
 
-use super::helpers::{Error, PropertyHandler};
+use super::helpers::{Error, HttpConfig, PropertyHandler};
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, MediaUrlHandler, RolesSelection,
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedMediaUrlHandler, UnresolvedRolesSelection,
 };
 
 #[derive(Debug, Clone, BamlHash)]
@@ -22,6 +23,7 @@ pub struct UnresolvedAwsBedrock<Meta> {
     secret_access_key: Option<StringOr>,
     session_token: Option<StringOr>,
     profile: Option<StringOr>,
+    endpoint_url: Option<StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -29,6 +31,8 @@ pub struct UnresolvedAwsBedrock<Meta> {
     finish_reason_filter: UnresolvedFinishReasonFilter,
     #[baml_safe_hash]
     additional_model_request_fields: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    media_url_handler: UnresolvedMediaUrlHandler,
+    http_config: HttpConfig,
 }
 
 #[derive(Debug, Clone, BamlHash)]
@@ -78,12 +82,15 @@ pub struct ResolvedAwsBedrock {
     pub secret_access_key: Option<ApiKeyWithProvenance>,
     pub session_token: Option<String>,
     pub profile: Option<String>,
+    pub endpoint_url: Option<String>,
     pub inference_config: Option<InferenceConfiguration>,
     role_selection: RolesSelection,
     pub allowed_role_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub finish_reason_filter: FinishReasonFilter,
     pub additional_model_request_fields: IndexMap<String, Value>,
+    pub media_url_handler: MediaUrlHandler,
+    pub http_config: HttpConfig,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {
@@ -95,6 +102,7 @@ impl std::fmt::Debug for ResolvedAwsBedrock {
             .field("secret_access_key", &"<no-repr-available>")
             .field("session_token", &self.session_token)
             .field("profile", &self.profile)
+            .field("endpoint_url", &self.endpoint_url)
             .field("inference_config", &"<no-repr-available>")
             .field("role_selection", &self.role_selection)
             .field("allowed_role_metadata", &self.allowed_role_metadata)
@@ -119,6 +127,12 @@ impl ResolvedAwsBedrock {
             options.insert(
                 "region".to_string(),
                 serde_json::Value::String(region.clone()),
+            );
+        }
+        if let Some(endpoint_url) = &self.endpoint_url {
+            options.insert(
+                "endpoint_url".to_string(),
+                serde_json::Value::String(endpoint_url.clone()),
             );
         }
         options
@@ -162,6 +176,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key: self.secret_access_key.clone(),
             session_token: self.session_token.clone(),
             profile: self.profile.clone(),
+            endpoint_url: self.endpoint_url.clone(),
             role_selection: self.role_selection.clone(),
             allowed_role_metadata: self.allowed_role_metadata.clone(),
             supported_request_modes: self.supported_request_modes.clone(),
@@ -172,6 +187,8 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 .iter()
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect::<IndexMap<_, _>>(),
+            media_url_handler: self.media_url_handler.clone(),
+            http_config: self.http_config.clone(),
         }
     }
 }
@@ -213,6 +230,11 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 #[cfg(target_arch = "wasm32")]
                 env_vars.insert("AWS_PROFILE".into());
             }
+        }
+
+        match self.endpoint_url.as_ref() {
+            Some(endpoint_url) => env_vars.extend(endpoint_url.required_env_vars()),
+            None => {}
         }
 
         env_vars.extend(self.role_selection.required_env_vars());
@@ -357,6 +379,18 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             },
         };
 
+        let endpoint_url = match self.endpoint_url.as_ref() {
+            Some(endpoint_url) => {
+                let url = endpoint_url.resolve(ctx)?;
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url)
+                }
+            }
+            None => None,
+        };
+
         #[cfg(target_arch = "wasm32")]
         {
             if region.is_none() {
@@ -377,6 +411,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key,
             session_token,
             profile,
+            endpoint_url,
             role_selection,
             allowed_role_metadata: self.allowed_role_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),
@@ -387,6 +422,8 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
                 .transpose()?,
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
             additional_model_request_fields,
+            media_url_handler: self.media_url_handler.resolve(ctx)?,
+            http_config: self.http_config.clone(),
         })
     }
 
@@ -429,6 +466,9 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             .map(|(_, v, _)| v.clone());
         let profile = properties
             .ensure_string("profile", false)
+            .map(|(_, v, _)| v.clone());
+        let endpoint_url = properties
+            .ensure_string("endpoint_url", false)
             .map(|(_, v, _)| v.clone());
 
         let role_selection = properties.ensure_roles_selection();
@@ -497,6 +537,8 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             Some(inference_config)
         };
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let media_url_handler = properties.ensure_media_url_handler();
+        let http_config = properties.ensure_http_config("aws");
 
         // TODO: Handle inference_configuration
         let errors = properties.finalize_empty();
@@ -511,12 +553,15 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             secret_access_key,
             session_token,
             profile,
+            endpoint_url,
             role_selection,
             allowed_role_metadata: allowed_metadata,
             supported_request_modes,
             inference_config,
             finish_reason_filter,
             additional_model_request_fields,
+            media_url_handler,
+            http_config,
         })
     }
 }

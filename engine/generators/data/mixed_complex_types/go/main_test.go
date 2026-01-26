@@ -114,7 +114,7 @@ func TestUltraComplex(t *testing.T) {
 				t.Errorf("Text widget %d has invalid format", i)
 			}
 		}
-		if widget.Type.IsKimage() && widget.Image == nil {
+		if widget.Type.IsKimage() && widget.Img == nil {
 			t.Errorf("Image widget %d missing image data", i)
 		}
 		if widget.Type.IsKcontainer() && widget.Container == nil {

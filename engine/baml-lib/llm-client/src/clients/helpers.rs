@@ -1,12 +1,24 @@
 use std::{borrow::Cow, collections::HashSet};
 
+use baml_derive::BamlHash;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use crate::{
     SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
-    UnresolvedResponseType, UnresolvedRolesSelection,
+    UnresolvedMediaUrlHandler, UnresolvedResolveMediaUrls, UnresolvedResponseType,
+    UnresolvedRolesSelection,
 };
+
+/// Configuration for HTTP timeouts
+#[derive(Debug, Clone, Default, BamlHash)]
+pub struct HttpConfig {
+    pub connect_timeout_ms: Option<u64>,
+    pub request_timeout_ms: Option<u64>,
+    pub time_to_first_token_timeout_ms: Option<u64>,
+    pub idle_timeout_ms: Option<u64>,
+    pub total_timeout_ms: Option<u64>,
+}
 
 #[derive(Debug, Clone, Hash)]
 pub struct UnresolvedUrl(StringOr);
@@ -57,6 +69,16 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             span,
             errors: Vec::new(),
         }
+    }
+
+    pub fn print_options(&self) {
+        eprintln!(
+            "options: {:#?}",
+            self.options
+                .iter()
+                .map(|(k, (_, v))| (k, v.as_str()))
+                .collect::<IndexMap<_, _>>()
+        );
     }
 
     pub fn push_option_error(&mut self, message: impl Into<Cow<'static, str>>) {
@@ -399,6 +421,68 @@ impl<Meta: Clone> PropertyHandler<Meta> {
             })
     }
 
+    pub fn ensure_media_url_handler(&mut self) -> UnresolvedMediaUrlHandler {
+        let mut result = UnresolvedMediaUrlHandler::default();
+
+        if let Some((_span, map, _)) = self.ensure_map("media_url_handler", false) {
+            for (key, (key_span, value)) in map {
+                let resolve_mode = self.parse_resolve_media_urls(&value, &key_span);
+
+                match key.as_str() {
+                    "image" => result.images = resolve_mode,
+                    "audio" => result.audio = resolve_mode,
+                    "pdf" => result.pdf = resolve_mode,
+                    "video" => result.video = resolve_mode,
+                    other => {
+                        self.push_error(
+                            format!("Unknown media type in media_url_handler: {other}. Expected one of: image, audio, pdf, video"),
+                            key_span
+                        );
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    fn parse_resolve_media_urls(
+        &mut self,
+        value: &UnresolvedValue<Meta>,
+        span: &Meta,
+    ) -> Option<UnresolvedResolveMediaUrls> {
+        match value.as_str() {
+            Some(StringOr::Value(s)) => match s.as_str() {
+                "send_base64" => Some(UnresolvedResolveMediaUrls::SendBase64),
+                "send_url" => Some(UnresolvedResolveMediaUrls::SendUrl),
+                "send_url_add_mime_type" => Some(UnresolvedResolveMediaUrls::SendUrlAddMimeType),
+                "send_base64_unless_google_url" => {
+                    Some(UnresolvedResolveMediaUrls::SendBase64UnlessGoogleUrl)
+                }
+                other => {
+                    self.push_error(
+                        format!(
+                            "Invalid media URL handling mode: {other}. Expected one of: send_base64, send_url, send_url_add_mime_type, send_base64_unless_google_url"
+                        ),
+                        span.clone()
+                    );
+                    None
+                }
+            },
+            Some(StringOr::EnvVar(_)) => {
+                self.push_error(
+                    "media_url_handler values cannot be environment variables",
+                    span.clone(),
+                );
+                None
+            }
+            _ => {
+                self.push_error("media_url_handler values must be strings", span.clone());
+                None
+            }
+        }
+    }
+
     pub fn ensure_query_params(&mut self) -> Option<IndexMap<String, StringOr>> {
         self.ensure_map("query_params", false).map(|(_, value, _)| {
             value
@@ -419,6 +503,266 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                 })
                 .collect()
         })
+    }
+
+    pub fn ensure_http_config(&mut self, provider_type: &str) -> HttpConfig {
+        if let Some((_, http_value)) = self.ensure_any("http") {
+            match http_value {
+                UnresolvedValue::Map(config_map, value_span) => {
+                    let mut http_config = HttpConfig::default();
+                    let mut unrecognized_fields = Vec::new();
+
+                    // Define allowed fields based on provider type
+                    let is_composite =
+                        provider_type == "fallback" || provider_type == "round-robin";
+                    let allowed_fields: HashSet<&str> = if is_composite {
+                        // Composite clients only support total_timeout_ms
+                        vec!["total_timeout_ms"].into_iter().collect()
+                    } else {
+                        // Regular clients support all timeout types except total_timeout_ms
+                        vec![
+                            "connect_timeout_ms",
+                            "request_timeout_ms",
+                            "time_to_first_token_timeout_ms",
+                            "idle_timeout_ms",
+                        ]
+                        .into_iter()
+                        .collect()
+                    };
+
+                    for (key, (_, value)) in config_map {
+                        match key.as_str() {
+                            "connect_timeout_ms" if !is_composite => {
+                                let value_meta = value.meta().clone();
+                                match value.into_numeric() {
+                                    Ok((val_str, _)) => {
+                                        let val = val_str.parse::<i64>().unwrap_or(-1);
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "connect_timeout_ms")
+                                        {
+                                            self.push_error(e, value_meta);
+                                        } else {
+                                            http_config.connect_timeout_ms = Some(val as u64);
+                                        }
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!(
+                                                "connect_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
+                            "request_timeout_ms" if !is_composite => {
+                                let value_meta = value.meta().clone();
+                                match value.into_numeric() {
+                                    Ok((val_str, _)) => {
+                                        let val = val_str.parse::<i64>().unwrap_or(-1);
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "request_timeout_ms")
+                                        {
+                                            self.push_error(e, value_meta);
+                                        } else {
+                                            http_config.request_timeout_ms = Some(val as u64);
+                                        }
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!(
+                                                "request_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
+                            "time_to_first_token_timeout_ms" if !is_composite => {
+                                let value_meta = value.meta().clone();
+                                match value.into_numeric() {
+                                    Ok((val_str, _)) => {
+                                        let val = val_str.parse::<i64>().unwrap_or(-1);
+                                        if let Err(e) = validate_timeout_value(
+                                            val,
+                                            "time_to_first_token_timeout_ms",
+                                        ) {
+                                            self.push_error(e, value_meta);
+                                        } else {
+                                            http_config.time_to_first_token_timeout_ms =
+                                                Some(val as u64);
+                                        }
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!("time_to_first_token_timeout_ms must be an integer. Got: {}", other.r#type()),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
+                            "idle_timeout_ms" if !is_composite => {
+                                let value_meta = value.meta().clone();
+                                match value.into_numeric() {
+                                    Ok((val_str, _)) => {
+                                        let val = val_str.parse::<i64>().unwrap_or(-1);
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "idle_timeout_ms")
+                                        {
+                                            self.push_error(e, value_meta);
+                                        } else {
+                                            http_config.idle_timeout_ms = Some(val as u64);
+                                        }
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!(
+                                                "idle_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
+                            "total_timeout_ms" if is_composite => {
+                                let value_meta = value.meta().clone();
+                                match value.into_numeric() {
+                                    Ok((val_str, _)) => {
+                                        let val = val_str.parse::<i64>().unwrap_or(-1);
+                                        if let Err(e) =
+                                            validate_timeout_value(val, "total_timeout_ms")
+                                        {
+                                            self.push_error(e, value_meta);
+                                        } else {
+                                            http_config.total_timeout_ms = Some(val as u64);
+                                        }
+                                    }
+                                    Err(other) => {
+                                        self.push_error(
+                                            format!(
+                                                "total_timeout_ms must be an integer. Got: {}",
+                                                other.r#type()
+                                            ),
+                                            other.meta().clone(),
+                                        );
+                                    }
+                                }
+                            }
+                            field => {
+                                // Track unrecognized or invalid fields
+                                if !allowed_fields.contains(field) {
+                                    unrecognized_fields.push(field.to_string());
+                                }
+                            }
+                        }
+                    }
+
+                    // Report all unrecognized fields with helpful error message
+                    if !unrecognized_fields.is_empty() {
+                        // Build error messages with suggestions
+                        for unrecognized_field in &unrecognized_fields {
+                            let error_msg = if is_composite {
+                                // For composite clients
+                                if unrecognized_field == "total_timeout_ms" {
+                                    // This shouldn't happen as it's in the allowed list for composites
+                                    continue;
+                                } else if let Some(suggestion) =
+                                    find_best_match(unrecognized_field, &["total_timeout_ms"])
+                                {
+                                    format!(
+                                        "Unrecognized field '{unrecognized_field}' in http configuration block. Did you mean '{suggestion}'? \
+                                        Composite clients (fallback/round-robin) only support: total_timeout_ms"
+                                    )
+                                } else {
+                                    format!(
+                                        "Unrecognized field '{unrecognized_field}' in http configuration block. \
+                                        Composite clients (fallback/round-robin) only support: total_timeout_ms"
+                                    )
+                                }
+                            } else {
+                                // For regular clients
+                                let all_timeout_fields = vec![
+                                    "connect_timeout_ms",
+                                    "request_timeout_ms",
+                                    "time_to_first_token_timeout_ms",
+                                    "idle_timeout_ms",
+                                    "total_timeout_ms", // Include for suggestions
+                                ];
+
+                                if unrecognized_field == "total_timeout_ms" {
+                                    // Special case for total_timeout_ms in regular clients
+                                    "Unrecognized field 'total_timeout_ms' in http configuration block. \
+                                        'total_timeout_ms' is only available for composite clients (fallback/round-robin). \
+                                        For regular clients, use: connect_timeout_ms, request_timeout_ms, \
+                                        time_to_first_token_timeout_ms, idle_timeout_ms".to_string()
+                                } else if let Some(suggestion) =
+                                    find_best_match(unrecognized_field, &all_timeout_fields)
+                                {
+                                    if suggestion == "total_timeout_ms" {
+                                        format!(
+                                            "Unrecognized field '{unrecognized_field}' in http configuration block. \
+                                            Did you mean 'total_timeout_ms'? Note: 'total_timeout_ms' is only \
+                                            available for composite clients (fallback/round-robin)"
+                                        )
+                                    } else {
+                                        format!(
+                                            "Unrecognized field '{unrecognized_field}' in http configuration block. Did you mean '{suggestion}'?"
+                                        )
+                                    }
+                                } else {
+                                    format!(
+                                        "Unrecognized field '{unrecognized_field}' in http configuration block. \
+                                        Supported timeout fields are: connect_timeout_ms, request_timeout_ms, \
+                                        time_to_first_token_timeout_ms, idle_timeout_ms"
+                                    )
+                                }
+                            };
+
+                            self.push_error(error_msg, value_span.clone());
+                        }
+                    }
+
+                    // Apply defaults for regular (non-composite) clients
+                    // Note: 0 means infinite timeout, so we don't override explicit 0 values
+                    if !is_composite {
+                        if http_config.connect_timeout_ms.is_none() {
+                            http_config.connect_timeout_ms = Some(10_000); // 10s default
+                        }
+                        if http_config.request_timeout_ms.is_none() {
+                            http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes default
+                        }
+                        // Streaming timeouts have no defaults - they're opt-in
+                    }
+                    // Composite clients have no defaults for total_timeout_ms
+
+                    http_config
+                }
+                _ => {
+                    self.push_error(
+                        "http must be a configuration block with timeout settings",
+                        http_value.meta().clone(),
+                    );
+                    // Apply defaults anyway for regular clients
+                    let mut http_config = HttpConfig::default();
+                    if provider_type != "fallback" && provider_type != "round-robin" {
+                        http_config.connect_timeout_ms = Some(10_000);
+                        http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes
+                    }
+                    http_config
+                }
+            }
+        } else {
+            // No http block - apply defaults for regular clients
+            let mut http_config = HttpConfig::default();
+            if provider_type != "fallback" && provider_type != "round-robin" {
+                http_config.connect_timeout_ms = Some(10_000);
+                http_config.request_timeout_ms = Some(60_000 * 5); // 5 minutes
+            }
+            http_config
+        }
     }
 
     pub fn ensure_headers(&mut self) -> Option<IndexMap<String, StringOr>> {
@@ -594,6 +938,73 @@ fn ensure_int<Meta: Clone>(
     } else {
         Ok(None)
     }
+}
+
+// Helper function to validate timeout values
+fn validate_timeout_value(value: i64, field_name: &str) -> Result<(), String> {
+    if value < 0 {
+        return Err(format!("{field_name} must be non-negative, got: {value}ms"));
+    }
+    // 0 means infinite timeout (no timeout) - explicitly allowed
+    // Any non-negative value is valid according to the updated spec
+    Ok(())
+}
+
+// Helper function to find the best match for a typo using edit distance
+fn find_best_match<'a>(typo: &str, candidates: &[&'a str]) -> Option<&'a str> {
+    let typo_lower = typo.to_lowercase();
+    let mut best_match = None;
+    let mut best_distance = usize::MAX;
+
+    for candidate in candidates {
+        let candidate_lower = candidate.to_lowercase();
+        let distance = levenshtein_distance(&typo_lower, &candidate_lower);
+
+        // Only suggest if the distance is reasonable (less than half the length)
+        if distance < best_distance && distance <= typo_lower.len() / 2 + 1 {
+            best_distance = distance;
+            best_match = Some(*candidate);
+        }
+    }
+
+    best_match
+}
+
+// Simple Levenshtein distance implementation
+fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+    let len1 = s1.len();
+    let len2 = s2.len();
+
+    if len1 == 0 {
+        return len2;
+    }
+    if len2 == 0 {
+        return len1;
+    }
+
+    let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
+
+    for (i, item) in matrix.iter_mut().enumerate().take(len1 + 1) {
+        item[0] = i;
+    }
+    for (j, item) in matrix[0].iter_mut().enumerate().take(len2 + 1) {
+        *item = j;
+    }
+
+    for (i, c1) in s1.chars().enumerate() {
+        for (j, c2) in s2.chars().enumerate() {
+            let cost = if c1 == c2 { 0 } else { 1 };
+            matrix[i + 1][j + 1] = std::cmp::min(
+                matrix[i][j + 1] + 1, // deletion
+                std::cmp::min(
+                    matrix[i + 1][j] + 1, // insertion
+                    matrix[i][j] + cost,  // substitution
+                ),
+            );
+        }
+    }
+
+    matrix[len1][len2]
 }
 
 pub(crate) fn get_proxy_url(ctx: &impl GetEnvVar) -> Option<String> {

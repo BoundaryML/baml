@@ -1,0 +1,20 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+Class "class"
+Word "A"
+LBrace "{"
+Word "field"
+Word "string"
+RBrace "}"
+Class "class"
+Word "A"
+LBrace "{"
+Word "field"
+Word "string"
+RBrace "}"
+Word "type"
+Word "A"
+Equals "="
+Word "int"

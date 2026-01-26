@@ -7,28 +7,28 @@ class KitchenSink {
   score float
   active bool
   nothing null
-  
+
   // Literals
   status "draft" | "published" | "archived"
   priority 1 | 2 | 3 | 4 | 5
-  
+
   // Arrays
   tags string[]
   numbers int[]
   matrix int[][]
-  
+
   // Maps
   metadata map<string, string>
   scores map<string, float>
-  
+
   // Optional/Nullable
   description string?
   notes string | null
-  
+
   // Unions
   data string | int | DataObject
   result Success | Error
-  
+
   // Complex nested
   user User
   items Item[]
@@ -135,16 +135,16 @@ class Action {
 class UltraComplex {
   // Recursive union with arrays and maps
   tree Node
-  
+
   // Discriminated union with nested complexity
   widgets Widget[]
-  
+
   // Multi-level optional/nullable
   data ComplexData?
-  
+
   // Response structure
   response UserResponse
-  
+
   // Mixed media
   assets Asset[]
 }
@@ -167,7 +167,7 @@ class Widget {
   type "button" | "text" | "image" | "container"
   button ButtonWidget?
   text TextWidget?
-  image ImageWidget?
+  img ImageWidget?
   container ContainerWidget?
 }
 
@@ -273,9 +273,9 @@ function TestKitchenSink(input: string) -> KitchenSink {
   prompt #"
     Create a KitchenSink object with all fields populated with realistic test data.
     Mix different types appropriately in unions and complex fields.
-    
+
     {{ ctx.output_format }}
-    
+
     Input: {{ input }}
   "#
 }
@@ -289,9 +289,9 @@ function TestUltraComplex(input: string) -> UltraComplex {
     - Complex nested data structures
     - A successful response with user data
     - Mixed media assets
-    
+
     {{ ctx.output_format }}
-    
+
     Input: {{ input }}
   "#
 }
@@ -304,9 +304,9 @@ function TestRecursiveComplexity(input: string) -> Node {
     - Branch nodes with array children
     - Nodes with map values containing other nodes
     - At least 3 levels of nesting
-    
+
     {{ ctx.output_format }}
-    
+
     Input: {{ input }}
   "#
 }

@@ -6,8 +6,8 @@ use std::{
 
 use baml_rpc::runtime_api::baml_value::{BamlValue, MediaValue, ValueContent};
 use base64::{engine::general_purpose, Engine as _};
+use blake3;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 
 use crate::tracingv2::publisher::publisher::BlobUploaderMessage;
@@ -35,8 +35,8 @@ pub struct BlobRefCache {
     blobs: Arc<Mutex<HashMap<String, (Vec<u8>, HashSet<String>)>>>,
     // Tracks which function_call_ids are active
     active_calls: Arc<Mutex<HashSet<String>>>,
-    // Channel to queue blobs for immediate upload
-    blob_upload_tx: Option<mpsc::UnboundedSender<BlobUploaderMessage>>,
+    // Channel to queue blobs for immediate upload (bounded to prevent unbounded memory growth)
+    blob_upload_tx: Option<mpsc::Sender<BlobUploaderMessage>>,
 }
 
 impl Default for BlobRefCache {
@@ -74,7 +74,7 @@ impl BlobRefCache {
         }
     }
 
-    pub fn with_upload_channel(blob_upload_tx: mpsc::UnboundedSender<BlobUploaderMessage>) -> Self {
+    pub fn with_upload_channel(blob_upload_tx: mpsc::Sender<BlobUploaderMessage>) -> Self {
         Self {
             blobs: Arc::new(Mutex::new(HashMap::new())),
             active_calls: Arc::new(Mutex::new(HashSet::new())),
@@ -82,11 +82,10 @@ impl BlobRefCache {
         }
     }
 
-    /// Generate a hash for a blob
+    /// Generate a hash for a blob using BLAKE3
     pub fn hash_blob(content: &[u8]) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(content);
-        format!("{:x}", hasher.finalize())
+        let hash = blake3::hash(content);
+        hash.to_hex().to_string()
     }
 
     /// Store a blob (as base64 string) and associate it with a function_call_id
@@ -121,13 +120,18 @@ impl BlobRefCache {
                     content: base64_content.as_bytes().to_vec(),
                 };
 
-                // Create the message using a different approach to avoid circular imports
-                match upload_tx.send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
+                // Try to queue the blob; if the channel is full, log a warning
+                match upload_tx.try_send(BlobUploaderMessage::QueueBlob(blob_with_content)) {
                     Ok(_) => {
-                        log::info!("Queued blob {blob_hash} for immediate upload");
+                        log::info!("Queued blob {blob_hash} for upload");
                     }
-                    Err(e) => {
-                        log::warn!("Failed to queue blob for upload: {e}");
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        log::warn!("Blob upload queue is full (max 4 batches). Dropping blob {blob_hash}. Consider increasing BAML_BLOB_BATCH_SIZE.");
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        log::warn!(
+                            "Blob uploader channel is closed. Cannot queue blob {blob_hash}."
+                        );
                     }
                 }
             }
@@ -167,7 +171,7 @@ impl BlobRefCache {
 
         // Actually perform the removals
         for hash in to_remove {
-            log::info!("Removing blob {hash} from cache (no active references)");
+            // log::info!("Removing blob {hash} from cache (no active references)");
             blobs.remove(&hash);
         }
     }

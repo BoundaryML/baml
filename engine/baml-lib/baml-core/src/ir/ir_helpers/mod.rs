@@ -6,9 +6,9 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use baml_types::{
-    ir_type::{TypeGeneric, UnionConstructor},
+    ir_type::{TypeGeneric, TypeNonStreaming, UnionConstructor},
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel,
-    LiteralValue, TypeIR, TypeValue, UnionType,
+    LiteralValue, TemplateStringRenderer, TypeIR, TypeValue, UnionType,
 };
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{WithIdentifier, WithSpan};
@@ -216,7 +216,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
         value: BamlValue,
         field_type: TypeIR,
     ) -> anyhow::Result<BamlValueWithMeta<TypeIR>> {
-        let value_with_empty_meta = BamlValueWithMeta::with_const_meta(&value, ());
+        let value_with_empty_meta = BamlValueWithMeta::with_same_meta_at_all_nodes(&value, ());
         let res = self
             .distribute_type_with_meta(value_with_empty_meta, field_type)?
             .map_meta_owned(|(_, meta)| meta);
@@ -450,7 +450,7 @@ fn get_dummy_value(
             }
         }
         TypeIR::Literal(literal_value, _) => match literal_value {
-            LiteralValue::String(s) => format!("\"{}\"", s),
+            LiteralValue::String(s) => format!("\"{s}\""),
             LiteralValue::Int(i) => i.to_string(),
             LiteralValue::Bool(b) => b.to_string(),
         },
@@ -601,7 +601,6 @@ impl IRHelper for IntermediateRepr {
                 // Get best match.
                 let tests = function
                     .walk_tests()
-                    .inspect(|t| log::info!("walking test: {:?}", t.item.1.elem.name))
                     .map(|t| t.item.1.elem.name.as_str())
                     .collect::<Vec<_>>();
                 error_not_found!("test", test_name, &tests)
@@ -668,8 +667,9 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                // Get best match from both LLM functions and expr functions
+                let mut functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
+                functions.extend(self.walk_expr_fns().map(|f| f.item.elem.name.as_str()));
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -687,11 +687,12 @@ impl IRHelper for IntermediateRepr {
             Some(f) => Ok(f),
 
             None => {
-                // Get best match.
-                let functions = self
+                // Get best match from both expr functions and LLM functions
+                let mut functions = self
                     .walk_expr_fns()
                     .map(|f| f.item.elem.name.clone())
                     .collect::<Vec<_>>();
+                functions.extend(self.walk_functions().map(|f| f.name().to_string()));
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -1201,62 +1202,100 @@ fn distribute_infer_class<T: Clone + std::fmt::Debug>(
     ))
 }
 
-pub fn infer_type<Meta: Default + std::cmp::PartialEq + std::fmt::Debug>(
-    value: &BamlValue,
-) -> Option<TypeGeneric<Meta>>
+pub fn infer_type<Meta>(value: &BamlValue) -> Option<TypeGeneric<Meta>>
 where
+    Meta: Clone + Default + PartialEq,
     TypeGeneric<Meta>: UnionConstructor<Meta>,
 {
-    let ret = match value {
-        BamlValue::Int(_) => Some(TypeGeneric::Primitive(TypeValue::Int, Default::default())),
-        BamlValue::Bool(_) => Some(TypeGeneric::Primitive(TypeValue::Bool, Default::default())),
-        BamlValue::Float(_) => Some(TypeGeneric::Primitive(TypeValue::Float, Default::default())),
-        BamlValue::String(_) => Some(TypeGeneric::Primitive(
-            TypeValue::String,
-            Default::default(),
-        )),
-        BamlValue::Null => Some(TypeGeneric::Primitive(TypeValue::Null, Default::default())),
+    let baml_value_with_meta = infer_value_with_type(value);
+    Some(baml_value_with_meta.meta().clone())
+}
+
+pub fn infer_value_with_type<Meta>(value: &BamlValue) -> BamlValueWithMeta<TypeGeneric<Meta>>
+where
+    Meta: Clone + Default + PartialEq,
+    TypeGeneric<Meta>: UnionConstructor<Meta>,
+{
+    match value {
+        BamlValue::Int(i) => BamlValueWithMeta::Int(
+            *i,
+            TypeGeneric::Primitive(TypeValue::Int, Default::default()),
+        ),
+        BamlValue::Bool(b) => BamlValueWithMeta::Bool(
+            *b,
+            TypeGeneric::Primitive(TypeValue::Bool, Default::default()),
+        ),
+        BamlValue::Float(f) => BamlValueWithMeta::Float(
+            *f,
+            TypeGeneric::Primitive(TypeValue::Float, Default::default()),
+        ),
+        BamlValue::String(s) => BamlValueWithMeta::String(
+            s.clone(),
+            TypeGeneric::Primitive(TypeValue::String, Default::default()),
+        ),
+        BamlValue::Null => {
+            BamlValueWithMeta::Null(TypeGeneric::Primitive(TypeValue::Null, Default::default()))
+        }
         BamlValue::Map(pairs) => {
-            let v_tys = pairs
+            let pairs: BamlMap<String, BamlValueWithMeta<TypeGeneric<Meta>>> = pairs
                 .iter()
-                .filter_map(|(_, v)| infer_type::<Meta>(v))
-                .collect::<Vec<_>>();
-            let k_ty = TypeGeneric::Primitive(TypeValue::String, Meta::default());
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
+                .collect();
+            let v_tys = pairs.values().map(|v| v.meta().clone()).collect::<Vec<_>>();
+            let k_ty = TypeGeneric::Primitive(TypeValue::String, Default::default());
             let v_ty = match v_tys.len() {
-                0 => None,
-                _ => Some(TypeGeneric::union(v_tys)),
-            }?;
-            Some(TypeGeneric::map(k_ty, v_ty))
+                0 => TypeGeneric::Primitive(TypeValue::Null, Default::default()),
+                _ => TypeGeneric::union(v_tys.to_vec()),
+            };
+            BamlValueWithMeta::Map(pairs, TypeGeneric::map(k_ty, v_ty))
         }
         BamlValue::List(items) => {
+            let items: Vec<BamlValueWithMeta<TypeGeneric<Meta>>> =
+                items.iter().map(infer_value_with_type).collect();
             let item_tys = items
                 .iter()
-                .filter_map(infer_type)
+                .map(|v| v.meta().clone())
                 .dedup()
                 .collect::<Vec<_>>();
             let item_ty = match item_tys.len() {
-                0 => None,
-                _ => Some(TypeGeneric::union(item_tys)),
-            }?;
-            Some(TypeGeneric::List(Box::new(item_ty), Default::default()))
+                0 => TypeGeneric::Primitive(TypeValue::Null, Default::default()),
+                _ => TypeGeneric::union(item_tys),
+            };
+            BamlValueWithMeta::List(
+                items,
+                TypeGeneric::List(Box::new(item_ty), Default::default()),
+            )
         }
-        BamlValue::Media(m) => Some(TypeGeneric::Primitive(
-            TypeValue::Media(m.media_type),
-            Default::default(),
-        )),
-        BamlValue::Enum(enum_name, _) => Some(TypeGeneric::Enum {
-            name: enum_name.clone(),
-            dynamic: false,
-            meta: Default::default(),
-        }),
-        BamlValue::Class(class_name, _) => Some(TypeGeneric::Class {
-            name: class_name.clone(),
-            mode: baml_types::ir_type::StreamingMode::NonStreaming,
-            dynamic: false,
-            meta: Default::default(),
-        }),
-    };
-    ret
+        BamlValue::Media(m) => BamlValueWithMeta::Media(
+            m.clone(),
+            TypeGeneric::Primitive(TypeValue::Media(m.media_type), Default::default()),
+        ),
+        BamlValue::Enum(enum_name, v) => BamlValueWithMeta::Enum(
+            enum_name.clone(),
+            v.clone(),
+            TypeGeneric::Enum {
+                name: enum_name.clone(),
+                dynamic: false,
+                meta: Default::default(),
+            },
+        ),
+        BamlValue::Class(class_name, fields) => {
+            let fields: BamlMap<String, BamlValueWithMeta<TypeGeneric<Meta>>> = fields
+                .iter()
+                .map(|(k, v)| (k.clone(), infer_value_with_type(v)))
+                .collect();
+            BamlValueWithMeta::Class(
+                class_name.clone(),
+                fields,
+                TypeGeneric::Class {
+                    name: class_name.clone(),
+                    mode: baml_types::ir_type::StreamingMode::NonStreaming,
+                    dynamic: false,
+                    meta: Default::default(),
+                },
+            )
+        }
+    }
 }
 
 /// Derive the simplest type that can categorize a given value. This is meant to be used
@@ -1909,7 +1948,7 @@ mod subtype_tests {
         assert!(result.contains("0.5")); // float value
         assert!(result.contains("name") && result.contains("age")); // Person class fields
 
-        println!("Generated dummy args:\n{}", result);
+        println!("Generated dummy args:\n{result}");
     }
 
     #[test]
@@ -1982,5 +2021,72 @@ mod subtype_tests {
         let mut expected = TypeIR::recursive_type_alias("JsonValue");
         expected.meta_mut().streaming_behavior.needed = true;
         assert_eq!(ret, expected, "{ret} != {expected}");
+    }
+}
+
+/// Implementation of TemplateStringRenderer for IntermediateRepr.
+/// This allows template_string calls to be resolved during test argument evaluation.
+impl TemplateStringRenderer for IntermediateRepr {
+    fn render_template(&self, name: &str, args: &[serde_json::Value]) -> Result<String> {
+        // Find the template string definition
+        let template = self.find_template_string(name)?;
+        let template_content = template.template();
+        let template_params = template.inputs();
+
+        // Validate argument count
+        if args.len() != template_params.len() {
+            anyhow::bail!(
+                "Template string '{}' expects {} arguments, but {} were provided",
+                name,
+                template_params.len(),
+                args.len()
+            );
+        }
+
+        // Build the arguments map for minijinja
+        let mut args_map = serde_json::Map::new();
+        for (param, arg) in template_params.iter().zip(args.iter()) {
+            args_map.insert(param.name.clone(), arg.clone());
+        }
+
+        // Collect all template_strings as Jinja macro definitions.
+        // This allows nested template_string calls to work (e.g., Outer() calling Inner()).
+        // This matches how the prompt renderer handles template_strings.
+        let macro_defs: String = self
+            .walk_template_strings()
+            .map(|t| {
+                let args_str = t
+                    .inputs()
+                    .iter()
+                    .map(|i| i.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "{{% macro {}({}) %}}{}{{% endmacro %}}\n",
+                    t.name(),
+                    args_str,
+                    t.template()
+                )
+            })
+            .collect();
+
+        // Prepend macro definitions to the template content
+        let full_template = format!("{}{}", macro_defs, template_content);
+
+        // Create a minijinja environment and render the template
+        let mut env = minijinja::Environment::new();
+        env.add_template("__template__", &full_template)
+            .map_err(|e| anyhow::anyhow!("Failed to parse template '{}': {}", name, e))?;
+
+        let tmpl = env
+            .get_template("__template__")
+            .map_err(|e| anyhow::anyhow!("Failed to get template '{}': {}", name, e))?;
+
+        let context = minijinja::Value::from_serialize(&args_map);
+        let rendered = tmpl
+            .render(context)
+            .map_err(|e| anyhow::anyhow!("Failed to render template '{}': {}", name, e))?;
+
+        Ok(rendered)
     }
 }

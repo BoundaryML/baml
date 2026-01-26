@@ -124,71 +124,61 @@ export const TestMenu = () => {
                 size='icon'
                 className='w-6 h-6'
                 onClick={() => {
-                  const allTests = currentRun.tests.map((test) => ({
-                    functionName: test.functionName,
-                    testName: test.testName,
-                  }))
-                  runBamlTests(allTests)
-                }}
-              >
-                <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Re-run all tests</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-
-        <TooltipProvider >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant='ghost'
-                size='icon'
-                className='w-6 h-6'
-                onClick={() => {
-                  const failedTests = currentRun.tests
-                    .filter((test) => {
-                      const status = (test.response as any).response_status
-                      return (
-                        status &&
-                        ['parse_failed', 'llm_failed', 'assert_failed', 'error', 'constraints_failed'].includes(status)
-                      )
-                    })
-                    .map((test) => ({
+                  if (areTestsRunning) {
+                    cancelTests()
+                  } else {
+                    const allTests = currentRun.tests.map((test) => ({
                       functionName: test.functionName,
                       testName: test.testName,
                     }))
-                  if (failedTests.length > 0) {
-                    runBamlTests(failedTests)
+                    runBamlTests(allTests)
                   }
                 }}
               >
-                <RefreshCw className='w-4 h-4' />
+                {areTestsRunning ? (
+                  <Square className='w-4 h-4 fill-red-500 stroke-red-500' />
+                ) : (
+                  <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Re-run failed tests</p>
+              <p>{areTestsRunning ? 'Stop tests' : 'Re-run all tests'}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
-        {areTestsRunning && (
-          <TooltipProvider>
+        {!areTestsRunning && (
+          <TooltipProvider >
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant='ghost'
                   size='icon'
                   className='w-6 h-6'
-                  onClick={cancelTests}
+                  onClick={() => {
+                    const failedTests = currentRun.tests
+                      .filter((test) => {
+                        const status = (test.response as any).response_status
+                        return (
+                          status &&
+                          ['parse_failed', 'llm_failed', 'assert_failed', 'error', 'constraints_failed'].includes(status)
+                        )
+                      })
+                      .map((test) => ({
+                        functionName: test.functionName,
+                        testName: test.testName,
+                      }))
+                    if (failedTests.length > 0) {
+                      runBamlTests(failedTests)
+                    }
+                  }}
                 >
-                  <Square className='h-3.5 w-3.5' />
+                  <RefreshCw className='w-4 h-4' />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Cancel running tests</p>
+                <p>Re-run failed tests</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

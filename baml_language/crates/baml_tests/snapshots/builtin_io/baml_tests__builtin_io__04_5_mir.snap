@@ -1,0 +1,511 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn ReadAndClose() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.fs.File") // f
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: String // content
+    let _6: Builtin("baml.fs.File")
+    let _7: Unknown
+    let _8: Null
+    let _9: Builtin("baml.fs.File")
+    let _10: Unknown
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "example.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = copy _1;
+        _7 = dispatch_future const fn baml.fs.File.read(copy _6) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _7 -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _1;
+        _10 = dispatch_future const fn baml.fs.File.close(copy _9) -> bb6;
+    }
+
+    bb6: {
+        _8 = await _10 -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _5;
+        goto -> bb1;
+    }
+
+}
+
+fn ReadMultipleFiles() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.fs.File") // f1
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Builtin("baml.fs.File") // f2
+    let _6: Unknown
+    let _7: String
+    let _8: Unknown
+    let _9: String // content1
+    let _10: Builtin("baml.fs.File")
+    let _11: Unknown
+    let _12: String // content2
+    let _13: Builtin("baml.fs.File")
+    let _14: Unknown
+    let _15: String
+    let _16: String
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "file1.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = const fn baml.fs.open;
+        _7 = const "file2.txt";
+        _8 = dispatch_future copy _6(copy _7) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _8 -> [bb5];
+    }
+
+    bb5: {
+        _10 = copy _1;
+        _11 = dispatch_future const fn baml.fs.File.read(copy _10) -> bb6;
+    }
+
+    bb6: {
+        _9 = await _11 -> [bb7];
+    }
+
+    bb7: {
+        _13 = copy _5;
+        _14 = dispatch_future const fn baml.fs.File.read(copy _13) -> bb8;
+    }
+
+    bb8: {
+        _12 = await _14 -> [bb9];
+    }
+
+    bb9: {
+        _15 = copy _9;
+        _16 = copy _12;
+        _0 = copy _15 + copy _16;
+        goto -> bb1;
+    }
+
+}
+
+fn ReadFile() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.fs.File") // f
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Builtin("baml.fs.File")
+    let _6: Unknown
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "example.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _5 = copy _1;
+        _6 = dispatch_future const fn baml.fs.File.read(copy _5) -> bb4;
+    }
+
+    bb4: {
+        _0 = await _6 -> [bb5];
+    }
+
+    bb5: {
+        goto -> bb1;
+    }
+
+}
+
+fn ReadFileInline() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.fs.File")
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Unknown
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "data.json";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _5 = dispatch_future const fn baml.fs.File.read(copy _1) -> bb4;
+    }
+
+    bb4: {
+        _0 = await _5 -> [bb5];
+    }
+
+    bb5: {
+        goto -> bb1;
+    }
+
+}
+
+fn MultipleConnections() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.net.Socket") // s1
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Builtin("baml.net.Socket") // s2
+    let _6: Unknown
+    let _7: String
+    let _8: Unknown
+    let _9: String // data1
+    let _10: Builtin("baml.net.Socket")
+    let _11: Unknown
+    let _12: String // data2
+    let _13: Builtin("baml.net.Socket")
+    let _14: Unknown
+    let _15: String
+    let _16: String
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "server1:80";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = const fn baml.net.connect;
+        _7 = const "server2:80";
+        _8 = dispatch_future copy _6(copy _7) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _8 -> [bb5];
+    }
+
+    bb5: {
+        _10 = copy _1;
+        _11 = dispatch_future const fn baml.net.Socket.read(copy _10) -> bb6;
+    }
+
+    bb6: {
+        _9 = await _11 -> [bb7];
+    }
+
+    bb7: {
+        _13 = copy _5;
+        _14 = dispatch_future const fn baml.net.Socket.read(copy _13) -> bb8;
+    }
+
+    bb8: {
+        _12 = await _14 -> [bb9];
+    }
+
+    bb9: {
+        _15 = copy _9;
+        _16 = copy _12;
+        _0 = copy _15 + copy _16;
+        goto -> bb1;
+    }
+
+}
+
+fn ConnectAndReadInline() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.net.Socket")
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Unknown
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "localhost:3000";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _5 = dispatch_future const fn baml.net.Socket.read(copy _1) -> bb4;
+    }
+
+    bb4: {
+        _0 = await _5 -> [bb5];
+    }
+
+    bb5: {
+        goto -> bb1;
+    }
+
+}
+
+fn ConnectAndRead() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.net.Socket") // sock
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: Builtin("baml.net.Socket")
+    let _6: Unknown
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "127.0.0.1:8080";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _5 = copy _1;
+        _6 = dispatch_future const fn baml.net.Socket.read(copy _5) -> bb4;
+    }
+
+    bb4: {
+        _0 = await _6 -> [bb5];
+    }
+
+    bb5: {
+        goto -> bb1;
+    }
+
+}
+
+fn ConnectReadAndClose() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Builtin("baml.net.Socket") // sock
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: String // data
+    let _6: Builtin("baml.net.Socket")
+    let _7: Unknown
+    let _8: Null
+    let _9: Builtin("baml.net.Socket")
+    let _10: Unknown
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "127.0.0.1:8080";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = copy _1;
+        _7 = dispatch_future const fn baml.net.Socket.read(copy _6) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _7 -> [bb5];
+    }
+
+    bb5: {
+        _9 = copy _1;
+        _10 = dispatch_future const fn baml.net.Socket.close(copy _9) -> bb6;
+    }
+
+    bb6: {
+        _8 = await _10 -> [bb7];
+    }
+
+    bb7: {
+        _0 = copy _5;
+        goto -> bb1;
+    }
+
+}
+
+fn ChainCommands() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // result1
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+    let _5: String // result2
+    let _6: Unknown
+    let _7: String
+    let _8: Unknown
+    let _9: String
+    let _10: String
+    let _11: String
+    let _12: String
+
+    bb0: {
+        _2 = const fn baml.sys.shell;
+        _3 = const "pwd";
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        _6 = const fn baml.sys.shell;
+        _7 = const "whoami";
+        _8 = dispatch_future copy _6(copy _7) -> bb4;
+    }
+
+    bb4: {
+        _5 = await _8 -> [bb5];
+    }
+
+    bb5: {
+        _10 = copy _1;
+        _11 = const " - ";
+        _9 = copy _10 + copy _11;
+        _12 = copy _5;
+        _0 = copy _9 + copy _12;
+        goto -> bb1;
+    }
+
+}
+
+fn RunCommandWithVar() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: String // cmd
+    let _2: Unknown
+    let _3: String
+    let _4: Unknown
+
+    bb0: {
+        _1 = const "ls -la";
+        _2 = const fn baml.sys.shell;
+        _3 = copy _1;
+        _4 = dispatch_future copy _2(copy _3) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _4 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+}
+
+fn RunCommand() -> String {
+    // Locals:
+    let _0: String // return
+    let _1: Unknown
+    let _2: String
+    let _3: Unknown
+
+    bb0: {
+        _1 = const fn baml.sys.shell;
+        _2 = const "echo hello";
+        _3 = dispatch_future copy _1(copy _2) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _3 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+}

@@ -1,0 +1,14 @@
+---
+source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [type] Error: Expected `string`, found `int`
+     ╭─[ edge_cases.baml:135:15 ]
+     │
+ 135 │ function VeryLongHeaderTitle() -> string {
+     │               ┬  
+     │               ╰── Expected `string`, found `int`
+     │ 
+     │ Note: Error code: E0001
+─────╯

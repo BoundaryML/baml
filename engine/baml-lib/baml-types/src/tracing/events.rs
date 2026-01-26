@@ -79,12 +79,19 @@ impl<'a, T: HasType<type_meta::NonStreaming>> TraceEvent<'a, T> {
     pub fn new_function_end(
         call_stack: Vec<FunctionCallId>,
         result: Result<BamlValueWithMeta<T>, BamlError<'a>>,
+        function_type: FunctionType,
     ) -> Self {
         Self::from_existing_call(
             call_stack,
             TraceData::FunctionEnd(match result {
-                Ok(value) => FunctionEnd::Success(value),
-                Err(e) => FunctionEnd::Error(e),
+                Ok(value) => FunctionEnd::Success {
+                    value,
+                    function_type,
+                },
+                Err(error) => FunctionEnd::Error {
+                    error,
+                    function_type,
+                },
             }),
         )
         .expect("Failed to create function end event")
@@ -203,8 +210,14 @@ pub struct FunctionStart<T: HasType<type_meta::NonStreaming>> {
 
 #[derive(Debug)]
 pub enum FunctionEnd<'a, T: HasType<type_meta::NonStreaming>> {
-    Success(BamlValueWithMeta<T>),
-    Error(BamlError<'a>),
+    Success {
+        value: BamlValueWithMeta<T>,
+        function_type: FunctionType,
+    },
+    Error {
+        error: BamlError<'a>,
+        function_type: FunctionType,
+    },
 }
 
 // LLM specific events
@@ -239,7 +252,7 @@ pub struct LoggedLLMRequest {
     pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
@@ -297,6 +310,28 @@ impl HTTPBody {
                         .collect(),
                 )
             })
+    }
+}
+
+// Custom serialization: always serialize as text; if invalid UTF-8, serialize as base64
+impl serde::Serialize for HTTPBody {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Serialize as text to avoid exploding arrays of bytes; use lossy UTF-8 if needed
+        let s = String::from_utf8_lossy(&self.raw);
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for HTTPBody {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(HTTPBody::new(s.into_bytes()))
     }
 }
 
@@ -593,6 +628,7 @@ pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
 }
 
 #[cfg(test)]

@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import { useAtomValue, useSetAtom } from 'jotai'
-import { Play } from 'lucide-react'
+import { useAtomValue } from 'jotai'
+import { Play, Square } from 'lucide-react'
 import { useEffect, useRef, useCallback } from 'react'
 import { Button } from '@baml/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@baml/ui/tooltip'
 import { cn } from '@baml/ui/lib/utils'
-import { selectedItemAtom, testCaseResponseAtom, type TestState } from '../../../atoms'
+import { testCaseResponseAtom, type TestState, testcaseObjectAtom } from '../../../atoms'
 import { FunctionTestName } from '../../../function-test-name'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
@@ -13,6 +13,8 @@ import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
 import { EnhancedErrorRenderer } from './EnhancedErrorRenderer'
+import { useNavigation } from '../../../../../../sdk/hooks'
+import { unifiedSelectionStateAtom } from '../../../../../../sdk/atoms/core.atoms'
 
 export const CardView = ({ currentRun }: { currentRun?: TestHistoryRun }) => {
   return (
@@ -43,12 +45,15 @@ interface TestResultProps {
 const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
-  const { runTests: runBamlTests } = useRunBamlTests()
-  const setSelectedItem = useSetAtom(selectedItemAtom)
-  const selectedItem = useAtomValue(selectedItemAtom)
+  const { runTests: runBamlTests, cancelTests } = useRunBamlTests()
+  const navigate = useNavigation()
+  const selection = useAtomValue(unifiedSelectionStateAtom)
   const cardRef = useRef<HTMLDivElement>(null)
 
-  const isSelected = selectedItem?.[0] === testId.functionName && selectedItem?.[1] === testId.testName
+  const functionName = selection.mode === 'function' ? selection.functionName : selection.mode === 'workflow' ? selection.selectedNodeId : null;
+  const testName = selection.mode === 'function' || selection.mode === 'workflow' ? selection.testName : selection.mode === 'loading' ? selection.intent.testName ?? null : null;
+  const isSelected = functionName === testId.functionName && testName === testId.testName
+  const isThisTestRunning = displayResponse?.status === 'running'
 
   useEffect(() => {
     if (isSelected && cardRef.current) {
@@ -57,7 +62,7 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         block: 'nearest',
       })
     }
-  }, [isSelected])
+  }, [isSelected, displayResponse?.status])
 
   if (!displayResponse) {
     console.log('no display response')
@@ -76,7 +81,15 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         'flex cursor-pointer flex-col gap-2 rounded-lg border p-3 transition-colors hover:bg-muted/70 dark:bg-muted/20',
         isSelected && 'border-purple-500/20 shadow-sm dark:border-purple-900/30 dark:bg-muted/90',
       )}
-      onClick={() => setSelectedItem(testId.functionName, testId.testName)}
+      onClick={() => {
+        navigate({
+          kind: 'test',
+          functionName: testId.functionName,
+          testName: testId.testName,
+          source: 'test-panel',
+          timestamp: Date.now(),
+        });
+      }}
     >
       <div className='flex gap-2 justify-between items-center'>
         <div className='flex gap-2 items-center'>
@@ -87,15 +100,30 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
                   variant='ghost'
                   size='icon'
                   className='w-6 h-6 shrink-0'
-                  onClick={() => {
-                    runBamlTests([testId])
+                  onClick={(e) => {
+
+                    e.stopPropagation()
+                    try {
+                      if (isThisTestRunning) {
+                        cancelTests()
+                      } else {
+                        runBamlTests([testId])
+                      }
+                    } catch (error) {
+                      console.error('Error running test', error);
+                      throw error;
+                    }
                   }}
                 >
-                  <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+                  {isThisTestRunning ? (
+                    <Square className='w-4 h-4 fill-red-500 stroke-red-500' />
+                  ) : (
+                    <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Re-run test</p>
+                <p>{isThisTestRunning ? 'Stop test' : 'Re-run test'}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -104,10 +132,10 @@ const TestResult = ({ testId, historicalResponse }: TestResultProps) => {
         <TestStatus status={displayResponse.status} finalState={getStatus(displayResponse)} />
       </div>
 
-      {displayResponse.status === 'running' && <ResponseRenderer response={displayResponse.response} />}
+      {displayResponse.status === 'running' && typeof displayResponse.response === 'object' && <ResponseRenderer response={displayResponse.response} test={displayResponse} />}
 
       {displayResponse.status === 'done' && (
-        <ResponseRenderer response={displayResponse.response} status={displayResponse.response_status} />
+        <ResponseRenderer response={displayResponse.response} status={displayResponse.response_status} test={displayResponse} />
       )}
 
       {displayResponse.status === 'error' && (

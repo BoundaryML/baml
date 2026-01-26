@@ -15,17 +15,17 @@ import {
 import { cn } from '@baml/ui/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@baml/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@baml/ui/tooltip';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { atom } from 'jotai';
 import { Check, ChevronDown, FlaskConical, FunctionSquare } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { vscode } from '../vscode';
 import {
   functionObjectAtom,
-  runtimeStateAtom,
-  selectedItemAtom,
   testcaseObjectAtom,
 } from './atoms';
+import { functionsAtom as sdkFunctionsAtom } from '../../../sdk/atoms/core.atoms';
+import { useNavigation } from '../../../sdk/hooks';
 
 interface FunctionTestNameProps {
   functionName: string;
@@ -34,13 +34,10 @@ interface FunctionTestNameProps {
 }
 
 const functionsAtom = atom((get) => {
-  const runtimeState = get(runtimeStateAtom);
-  if (!runtimeState) {
-    return [];
-  }
-  return runtimeState.functions.map((f) => ({
+  const functions = get(sdkFunctionsAtom);
+  return functions.map((f) => ({
     name: f.name,
-    tests: f.test_cases.map((t) => t.name),
+    tests: f.testCases.map((t) => t.name),
   }));
 });
 
@@ -62,55 +59,144 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
   const fn = useAtomValue(functionAtom);
   const tc = useAtomValue(testcaseAtom);
   const functions = useAtomValue(functionsAtom);
-  const setSelectedItem = useSetAtom(selectedItemAtom);
-
-  const createSpan = (span: {
-    start: number;
-    end: number;
-    file_path: string;
-    start_line: number;
-  }) => ({
-    start: span.start,
-    end: span.end,
-    source_file: span.file_path,
-    value: `${span.file_path.split('/').pop() ?? '<file>.baml'}:${span.start_line + 1}`,
-  });
+  const navigate = useNavigation();
 
   const currentFunction = functions.find((f) => f.name === functionName);
   const availableTests = currentFunction?.tests || [];
+
+
+
+  // Component for function dropdown items with jumpToFile
+  const FunctionDropdownItem = ({ func }: { func: { name: string; tests: string[] } }) => {
+    const fnAtom = useMemo(() => functionObjectAtom(func.name), [func.name]);
+    const fn = useAtomValue(fnAtom);
+
+    return (
+      <CommandItem
+        key={func.name}
+        value={func.name}
+        onSelect={() => {
+          const firstTest = func.tests[0];
+
+          // Determine function type
+          const functionType = fn?.type === 'workflow' ? 'workflow'
+            : fn?.type === 'llm_function' ? 'llm_function'
+              : fn?.functionFlavor === 'llm' ? 'llm_function'
+                : 'function';
+
+          if (firstTest) {
+            // Navigate to test
+            navigate({
+              kind: 'test',
+              functionName: func.name,
+              testName: firstTest,
+              source: 'sidebar',
+              timestamp: Date.now(),
+            });
+          } else {
+            // Navigate to function
+            navigate({
+              kind: 'function',
+              functionName: func.name,
+              functionType,
+              source: 'sidebar',
+              timestamp: Date.now(),
+            });
+          }
+
+          setFunctionOpen(false);
+          if (fn?.span) {
+            vscode.jumpToFile(fn.span);
+          }
+        }}
+      >
+        <Check
+          className={cn(
+            'mr-2 h-4 w-4',
+            functionName === func.name ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <span
+          className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
+        >
+          {func.name}
+        </span>
+      </CommandItem>
+    );
+  };
+
+  // Component for test dropdown items with jumpToFile
+  const TestDropdownItem = ({ test, functionName }: { test: string; functionName: string }) => {
+    const tcAtom = useMemo(
+      () => testcaseObjectAtom({ functionName, testcaseName: test }),
+      [functionName, test]
+    );
+    const tc = useAtomValue(tcAtom);
+
+    return (
+      <CommandItem
+        key={test}
+        value={test}
+        onSelect={() => {
+          // Navigate to test
+          navigate({
+            kind: 'test',
+            functionName,
+            testName: test,
+            source: 'sidebar',
+            timestamp: Date.now(),
+          });
+
+          setTestOpen(false);
+          if (tc?.span) {
+            vscode.jumpToFile(tc.span);
+          }
+        }}
+      >
+        <Check
+          className={cn(
+            'mr-2 h-4 w-4',
+            testName === test ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <span
+          className="text-sm truncate cursor-pointer hover:text-primary hover:underline"
+        >
+          {test}
+        </span>
+      </CommandItem>
+    );
+  };
 
   return (
     <Breadcrumb>
       <BreadcrumbList className="flex flex-nowrap overflow-hidden min-w-0">
         <BreadcrumbItem className="flex items-center gap-1 min-w-0">
-          <div className="flex items-center gap-1 min-w-0 flex-1">
-            <FunctionSquare className="size-4 mr-2 shrink-0" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
-                  onClick={() => {
-                    if (fn?.span) {
-                      vscode.postMessage({
-                        command: 'jumpToFile',
-                        span: createSpan(fn.span),
-                      });
-                    }
-                  }}
-                >
-                  {functionName}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{functionName}</TooltipContent>
-            </Tooltip>
-            <Popover open={functionOpen} onOpenChange={setFunctionOpen}>
+          <Popover open={functionOpen} onOpenChange={setFunctionOpen}>
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <FunctionSquare className="size-4 mr-2 shrink-0" />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
+                    onClick={() => {
+                      if (fn?.span) {
+                        vscode.jumpToFile(fn.span);
+                      }
+                    }}
+                  >
+                    {functionName}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{functionName}</TooltipContent>
+              </Tooltip>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="sm" className="shrink-0">
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="min-w-fit p-0">
+              <PopoverContent className="min-w-fit p-0" align="end">
                 <Command>
                   <CommandInput
                     placeholder="Search functions..."
@@ -120,34 +206,14 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                     <CommandEmpty>No function found.</CommandEmpty>
                     <CommandGroup>
                       {functions.map((func) => (
-                        <CommandItem
-                          key={func.name}
-                          value={func.name}
-                          onSelect={() => {
-                            const firstTest = func.tests[0];
-                            if (firstTest) {
-                              setSelectedItem(func.name, firstTest);
-                            }
-                            setFunctionOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              functionName === func.name
-                                ? 'opacity-100'
-                                : 'opacity-0',
-                            )}
-                          />
-                          <span className="text-sm truncate">{func.name}</span>
-                        </CommandItem>
+                        <FunctionDropdownItem key={func.name} func={func} />
                       ))}
                     </CommandGroup>
                   </CommandList>
                 </Command>
               </PopoverContent>
-            </Popover>
-          </div>
+            </div>
+          </Popover>
         </BreadcrumbItem>
         {testName && (
           <BreadcrumbItem className="flex items-center gap-1 min-w-0">
@@ -160,10 +226,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                     className="truncate min-w-0 whitespace-nowrap cursor-pointer hover:text-primary bg-transparent border-none p-0 text-left flex-1"
                     onClick={() => {
                       if (tc?.span) {
-                        vscode.postMessage({
-                          command: 'jumpToFile',
-                          span: createSpan(tc.span),
-                        });
+                        vscode.jumpToFile(tc.span);
                       }
                     }}
                   >
@@ -188,22 +251,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({
                       <CommandEmpty>No test found.</CommandEmpty>
                       <CommandGroup>
                         {availableTests.map((test) => (
-                          <CommandItem
-                            key={test}
-                            value={test}
-                            onSelect={() => {
-                              setSelectedItem(functionName, test);
-                              setTestOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                'mr-2 h-4 w-4',
-                                testName === test ? 'opacity-100' : 'opacity-0',
-                              )}
-                            />
-                            <span className="text-sm truncate">{test}</span>
-                          </CommandItem>
+                          <TestDropdownItem key={test} test={test} functionName={functionName} />
                         ))}
                       </CommandGroup>
                     </CommandList>

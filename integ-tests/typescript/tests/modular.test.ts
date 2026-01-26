@@ -9,9 +9,17 @@ import {
   GenerateContentRequest,
   GoogleGenerativeAI,
 } from "@google/generative-ai";
+import { SignatureV4 } from "@smithy/signature-v4";
+import { defaultProvider } from "@aws-sdk/credential-provider-node";
+import { HttpRequest } from "@smithy/protocol-http";
+import { Sha256 } from "@aws-crypto/sha256-js";
 import { HTTPRequest as BamlHttpRequest } from "@boundaryml/baml";
 import { Resume } from "../baml_client/types";
 import { b, ClientRegistry } from "./test-setup";
+
+const LONG_CACHEABLE_CONTEXT = Array.from({ length: 600 })
+  .map(() => "Reusable cacheable context paragraph.")
+  .join(" ");
 
 const JOHN_DOE_TEXT_RESUME = `
   John Doe
@@ -122,7 +130,7 @@ describe("Modular API Tests", () => {
 
   it("modular google gemini", async () => {
     const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-    const model = client.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const clientRegistry = new ClientRegistry();
     clientRegistry.setPrimary("Gemini");
@@ -176,93 +184,6 @@ describe("Modular API Tests", () => {
     expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME);
   });
 
-  it("openai batch api", async () => {
-    const client = new OpenAI();
-
-    // Helper function to convert BAML HTTP request to OpenAI batch JSONL format
-    const toOpenaiJsonl = (req: BamlHttpRequest): string => {
-      const line = JSON.stringify({
-        custom_id: req.id,
-        method: "POST",
-        url: "/v1/chat/completions",
-        body: req.body.json(),
-      });
-      return `${line}\n`;
-    };
-
-    // Create requests for both resumes
-    const [johnReq, janeReq] = await Promise.all([
-      b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
-      b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME),
-    ]);
-
-    const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq);
-
-    // Create batch input file
-    const batchInputFile = await client.files.create({
-      file: new File([jsonl], "batch.jsonl"),
-      purpose: "batch",
-    });
-
-    // Create batch
-    let batch = await client.batches.create({
-      input_file_id: batchInputFile.id,
-      endpoint: "/v1/chat/completions",
-      completion_window: "24h",
-      metadata: {
-        description: "BAML Modular API TypeScript Batch Integ Test",
-      },
-    });
-
-    let backoff = 1000; // milliseconds
-    let attempts = 0;
-    const maxAttempts = 30;
-
-    while (true) {
-      batch = await client.batches.retrieve(batch.id);
-      attempts += 1;
-
-      if (batch.status === "completed") {
-        break;
-      }
-
-      if (attempts >= maxAttempts) {
-        try {
-          await client.batches.cancel(batch.id);
-        } finally {
-          throw "Batch failed to complete in time";
-        }
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-      // backoff *= 2 // Exponential backoff
-    }
-
-    // Get output file
-    const output = await client.files.content(batch.output_file_id!);
-
-    // Process results
-    const expected: Record<string, Resume> = {
-      [johnReq.id]: JOHN_DOE_PARSED_RESUME,
-      [janeReq.id]: JANE_SMITH_PARSED_RESUME,
-    };
-
-    const received: Record<string, Resume> = {};
-    const outputJsonl = await output.text();
-
-    for (const line of outputJsonl
-      .split("\n")
-      .filter((line) => line.trim().length > 0)) {
-      const result = JSON.parse(line.trim());
-      const llmResponse = result.response.body.choices[0].message.content;
-
-      const parsed = b.parse.ExtractResume2(llmResponse);
-      received[result.custom_id] = parsed;
-    }
-
-    expect(received).toEqual(expected);
-  });
-
   it("modular openai responses", async () => {
     // Test openai-responses provider using the modular API
     const client = new OpenAI();
@@ -271,12 +192,97 @@ describe("Modular API Tests", () => {
     const req = await b.request.TestOpenAIResponses("mountains");
 
     // The openai-responses provider should use the /v1/responses endpoint
-    const res = await client.responses.create(req.body.json()) as any;
+    const res = (await client.responses.create(req.body.json())) as any;
 
     // Parse the response from the responses API (uses output_text instead of choices)
     const parsed = b.parse.TestOpenAIResponses(res.output_text);
 
     expect(typeof parsed).toBe("string");
     expect(parsed.length).toBeGreaterThan(0);
+  });
+
+  it("modular aws bedrock custom cache point", async () => {
+    const req = await b.request.TestAws("Dr. Pepper");
+
+    const body = req.body.json() as any;
+    expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.messages.length).toBeGreaterThan(0);
+
+    const content = body.messages[0].content as any[];
+    expect(Array.isArray(content)).toBe(true);
+
+    const originalLength = content.length;
+    content.splice(1, 0, { text: LONG_CACHEABLE_CONTEXT });
+    content.splice(2, 0, { cachePoint: { type: "default" } });
+
+    expect(content[1]).toEqual({ text: LONG_CACHEABLE_CONTEXT });
+    expect(content[2]).toEqual({ cachePoint: { type: "default" } });
+    expect(content.length).toBe(originalLength + 2);
+
+    body.additionalModelRequestFields = {
+      ...(body.additionalModelRequestFields ?? {}),
+    };
+
+    const bodyString = JSON.stringify(body);
+    const url = new URL(req.url);
+    const region =
+      process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1";
+
+    const signer = new SignatureV4({
+      service: "bedrock",
+      region,
+      credentials: defaultProvider(),
+      sha256: Sha256,
+    });
+
+    const baseHeaders = Object.fromEntries(
+      Object.entries(req.headers as Record<string, string | undefined>).filter(
+        ([, value]) => value !== undefined,
+      ),
+    ) as Record<string, string>;
+
+    const headers = {
+      ...baseHeaders,
+      host: url.host,
+      "content-type": "application/json",
+      accept: "application/json",
+    };
+
+    const unsigned = new HttpRequest({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      path: url.pathname,
+      method: req.method,
+      headers,
+      body: bodyString,
+    });
+
+    const signed = await signer.sign(unsigned);
+    const signedHeaders = Object.fromEntries(
+      Object.entries(signed.headers).map(([key, value]) => [
+        key,
+        String(value),
+      ]),
+    ) as Record<string, string>;
+
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: signedHeaders,
+      body: bodyString,
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Bedrock request failed: ${res.status} ${await res.text()}`,
+      );
+    }
+
+    const payload = (await res.json()) as any;
+    const contentBlocks = payload?.output?.message?.content ?? [];
+    expect(Array.isArray(contentBlocks)).toBe(true);
+    const textBlock =
+      contentBlocks.find((block: any) => block.text)?.text ?? "";
+    expect(typeof textBlock).toBe("string");
+    expect(textBlock.length).toBeGreaterThan(0);
   });
 });

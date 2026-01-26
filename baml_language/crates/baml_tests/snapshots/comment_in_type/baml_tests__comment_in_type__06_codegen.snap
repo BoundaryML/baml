@@ -1,0 +1,14 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== BYTECODE ===
+Functions: 2
+Objects: 33
+Globals: 33
+
+Function CommentAfterArrow (arity: 0, kind: External(Llm)):
+  (no bytecode)
+
+Function FunctionWithComments (arity: 2, kind: External(Llm)):
+  (no bytecode)

@@ -4,18 +4,20 @@ use anyhow::Result;
 use baml_derive::BamlHash;
 use baml_types::{EvaluationContext, StringOr};
 
-use super::helpers::{Error, PropertyHandler};
+use super::helpers::{Error, HttpConfig, PropertyHandler};
 use crate::ClientSpec;
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedRoundRobin<Meta> {
     pub strategy: Vec<(either::Either<StringOr, ClientSpec>, Meta)>,
     start_index: Option<i32>,
+    http_config: HttpConfig,
 }
 
 pub struct ResolvedRoundRobin {
     pub strategy: Vec<ClientSpec>,
     pub start_index: Option<i32>,
+    pub http_config: HttpConfig,
 }
 
 impl<Meta: Clone> UnresolvedRoundRobin<Meta> {
@@ -23,6 +25,7 @@ impl<Meta: Clone> UnresolvedRoundRobin<Meta> {
         UnresolvedRoundRobin {
             strategy: self.strategy.iter().map(|(s, _)| (s.clone(), ())).collect(),
             start_index: self.start_index,
+            http_config: self.http_config.clone(),
         }
     }
 
@@ -32,7 +35,9 @@ impl<Meta: Clone> UnresolvedRoundRobin<Meta> {
             .flat_map(|(s, _)| match s {
                 either::Either::Left(s) => match s {
                     StringOr::Value(s) => HashSet::from([s.clone()]),
-                    StringOr::EnvVar(_) | StringOr::JinjaExpression(_) => Default::default(),
+                    StringOr::EnvVar(_)
+                    | StringOr::JinjaExpression(_)
+                    | StringOr::TemplateStringCall { .. } => Default::default(),
                 },
                 either::Either::Right(s) => s.dependencies(),
             })
@@ -61,12 +66,14 @@ impl<Meta: Clone> UnresolvedRoundRobin<Meta> {
         Ok(ResolvedRoundRobin {
             strategy,
             start_index: self.start_index,
+            http_config: self.http_config.clone(),
         })
     }
 
     pub fn create_from(mut properties: PropertyHandler<Meta>) -> Result<Self, Vec<Error<Meta>>> {
         let strategy = properties.ensure_strategy();
         let start_index = properties.ensure_int("start", false).map(|(_, v, _)| v);
+        let http_config = properties.ensure_http_config("round-robin");
         let errors = properties.finalize_empty();
 
         if !errors.is_empty() {
@@ -78,6 +85,7 @@ impl<Meta: Clone> UnresolvedRoundRobin<Meta> {
         Ok(Self {
             strategy,
             start_index,
+            http_config,
         })
     }
 }

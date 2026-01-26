@@ -28,6 +28,9 @@ function TestOpenAIShorthand(input: string) -> string {
   "#
 }
 
+
+
+
 // Test standard GPT-4 (should add default max_tokens)
 function TestOpenAI(input: string) -> string {
   client GPT4
@@ -107,6 +110,7 @@ function TestOpenAIGPT4oMini(input: string) -> string {
   prompt #"
     {{ _.role("user") }}
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+    {{ input }}
   "#
 }
 function TestOpenAIGPT4oMini2(input: string) -> string {
@@ -119,6 +123,14 @@ function TestOpenAIGPT4oMini2(input: string) -> string {
 
 function TestOpenAIGPT4oMini3(input: string) -> string {
   client GPT4oMini
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+  "#
+}
+
+function OpenAIGPT4oMissingBaseUrlEnvVar(input: string) -> string {
+  client GPT4oBaseUrlNotSet
   prompt #"
     {{ _.role("user") }}
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.

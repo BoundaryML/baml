@@ -1,8 +1,9 @@
 import { b } from "../test-setup";
+import { ClientRegistry } from "../test-setup";
 
 describe("Azure Provider", () => {
   it("should support azure with default max_tokens", async () => {
-    const res = await b.TestAzure("Donkey Kong");
+    const res = await b.TestAzure("Donkey Kong (must use donkey)");
     expect(res.toLowerCase()).toContain("donkey");
   });
 
@@ -20,12 +21,12 @@ describe("Azure Provider", () => {
   });
 
   it("should support non-o1 model with explicit max_tokens", async () => {
-    const res = await b.TestAzureWithMaxTokens("Donkey Kong");
+    const res = await b.TestAzureWithMaxTokens("Donkey Kong (must use donkey)");
     expect(res.toLowerCase()).toContain("donkey");
   });
 
   it("should support o1 model with explicit max_completion_tokens", async () => {
-    const res = await b.TestAzureO1WithMaxCompletionTokens("Donkey Kong");
+    const res = await b.TestAzureO1WithMaxCompletionTokens("Donkey Kong (must use donkey)");
     expect(res.toLowerCase()).toContain("donkey");
   });
 
@@ -44,6 +45,8 @@ describe("Azure Provider", () => {
     const final = await stream.getFinalResponse();
     expect(final.length).toBeGreaterThan(0);
   });
+
+
 
   // it('should fail if azure is not configured streaming', async () => {
   //   const stream = b.stream.TestAzureFailure('Donkey Kong')

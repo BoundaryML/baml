@@ -1,0 +1,444 @@
+---
+source: baml-runtime/src/control_flow/tests.rs
+expression: snapshot_value
+input_file: baml-runtime/src/control_flow/testdata/MultipleHeaderLevels.baml
+---
+hir: "Some(\n    Block {\n        statements: [\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Section One\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 48,\n                        end: 63,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"a\",\n                value: StringValue(\n                    \"one\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 76,\n                        end: 81,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                    start: 68,\n                    end: 83,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Section Two\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 88,\n                        end: 103,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"b\",\n                value: StringValue(\n                    \"two\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 116,\n                        end: 121,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                    start: 108,\n                    end: 123,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 2,\n                    title: \"Subsection 2.1\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 128,\n                        end: 147,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"c\",\n                value: StringValue(\n                    \"three\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 160,\n                        end: 167,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                    start: 152,\n                    end: 169,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 3,\n                    title: \"Subsubsection 2.1.1\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 174,\n                        end: 199,\n                    },\n                },\n            ),\n            DeclareAndAssign {\n                name: \"d\",\n                value: StringValue(\n                    \"four\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 212,\n                        end: 218,\n                    },\n                ),\n                annotated_type: None,\n                watch: None,\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                    start: 204,\n                    end: 220,\n                },\n            },\n            HeaderContextEnter(\n                HeaderContext {\n                    level: 1,\n                    title: \"Section Three\",\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 225,\n                        end: 242,\n                    },\n                },\n            ),\n        ],\n        trailing_expr: Some(\n            BinaryOperation {\n                left: BinaryOperation {\n                    left: BinaryOperation {\n                        left: Identifier(\n                            \"a\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                                start: 247,\n                                end: 248,\n                            },\n                        ),\n                        operator: Add,\n                        right: Identifier(\n                            \"b\",\n                            Span {\n                                file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                                start: 251,\n                                end: 252,\n                            },\n                        ),\n                        span: Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                            start: 247,\n                            end: 260,\n                        },\n                    },\n                    operator: Add,\n                    right: Identifier(\n                        \"c\",\n                        Span {\n                            file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                            start: 255,\n                            end: 256,\n                        },\n                    ),\n                    span: Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 247,\n                        end: 260,\n                    },\n                },\n                operator: Add,\n                right: Identifier(\n                    \"d\",\n                    Span {\n                        file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                        start: 259,\n                        end: 260,\n                    },\n                ),\n                span: Span {\n                    file: SourceFile { path: \"src/control_flow/testdata/MultipleHeaderLevels.baml\", contents: ... },\n                    start: 247,\n                    end: 260,\n                },\n            },\n        ),\n    },\n)"
+expr:
+  nodes:
+    "0":
+      label: MultipleHeaderLevels
+      log_filter_key: "MultipleHeaderLevels|root:0"
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 0
+        end: 262
+    "1":
+      label: Section One
+      log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 48
+        end: 63
+    "2":
+      label: Section Two
+      log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 88
+        end: 103
+    "3":
+      label: Subsection 2.1
+      log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+      node_type: header
+      parent: "2"
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 128
+        end: 147
+    "4":
+      label: Subsubsection 2.1.1
+      log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+      node_type: header
+      parent: "3"
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 174
+        end: 199
+    "5":
+      label: Section Three
+      log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+      node_type: header
+      parent: "0"
+      span:
+        file: src/control_flow/testdata/MultipleHeaderLevels.baml
+        start: 225
+        end: 242
+  edges:
+    "1":
+      - "2"
+    "2":
+      - "5"
+mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+flattening:
+  pass1_remove_implicit:
+    label: Remove implicit nodes
+    expr:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+  pass2_hoist_branch_arms:
+    label: Hoist branch arms
+    expr:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"
+  pass3_flatten_scopes:
+    label: Flatten branch arms & scopes
+    expr:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    json:
+      nodes:
+        "0":
+          label: MultipleHeaderLevels
+          log_filter_key: "MultipleHeaderLevels|root:0"
+          node_type: function
+          parent: ~
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 0
+            end: 262
+        "1":
+          label: Section One
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-one:0"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 48
+            end: 63
+        "2":
+          label: Section Two
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 88
+            end: 103
+        "3":
+          label: Subsection 2.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0"
+          node_type: header
+          parent: "2"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 128
+            end: 147
+        "4":
+          label: Subsubsection 2.1.1
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-two:1|hdr:subsection-2-1:0|hdr:subsubsection-2-1-1:0"
+          node_type: header
+          parent: "3"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 174
+            end: 199
+        "5":
+          label: Section Three
+          log_filter_key: "MultipleHeaderLevels|root:0|hdr:section-three:2"
+          node_type: header
+          parent: "0"
+          span:
+            file: src/control_flow/testdata/MultipleHeaderLevels.baml
+            start: 225
+            end: 242
+      edges:
+        "1":
+          - "2"
+        "2":
+          - "5"
+    mermaid: "flowchart TD\nsubgraph n0[\"0: MultipleHeaderLevels\"]\n  direction TB\n  n1[\"1: Section One\"]\n  subgraph n2[\"2: Section Two\"]\n    direction TB\n    subgraph n3[\"3: Subsection 2.1\"]\n      direction TB\n      n4[\"4: Subsubsection 2.1.1\"]\n    end\n  end\n  n5[\"5: Section Three\"]\n  n1 --> n2\n  n2 --> n5\nend\n"

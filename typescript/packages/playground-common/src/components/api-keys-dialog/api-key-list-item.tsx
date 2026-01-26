@@ -19,7 +19,7 @@ import {
   AlertDialogTrigger,
 } from '@baml/ui/alert-dialog';
 import { AlertTriangle, Eye, EyeOff, Trash2, Loader2 } from 'lucide-react';
-import { escapeValue, unescapeValue, REQUIRED_ENV_VAR_UNSET_WARNING } from './utils';
+import { escapeValue, unescapeValue, REQUIRED_ENV_VAR_UNSET_WARNING, isPlaceholderApiKey, PLACEHOLDER_ENV_VAR_MESSAGE } from './utils';
 import type { ApiKeyEntry } from './atoms';
 import { useSetAtom } from 'jotai';
 import { updateApiKeyAtom, deleteApiKeyAtom, apiKeyVisibilityAtom, saveApiKeyChangesAtom } from './atoms';
@@ -55,9 +55,9 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
       // Auto-save after updating the API key
       await saveApiKeyChanges();
       setIsSaving(false);
-          },
-      200, // 200ms delay - optimized for copy-paste
-      false // don't call on leading edge
+    },
+    200, // 200ms delay - optimized for copy-paste
+    false // don't call on leading edge
   );
 
   // Update local value when apiKey.value changes (e.g., from external updates)
@@ -65,7 +65,7 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
     setLocalValue(escapeValue(apiKey.value || ''));
   }, [apiKey.value]);
 
-    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     // Update local state immediately for responsive UI
     setLocalValue(newValue);
@@ -84,7 +84,6 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
     deleteApiKey(apiKey.key);
   }, [apiKey.key, deleteApiKey]);
 
-  console.log('ApiKeyListItem: apiKey:', apiKey);
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-background/70 px-4 py-3">
@@ -104,15 +103,16 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Input
-              type={apiKey.hidden ? 'password' : 'text'}
+              type={apiKey.hidden && !isPlaceholderApiKey(localValue) ? 'password' : 'text'}
               value={localValue}
               onChange={handleChange}
-              className="h-8 text-sm font-mono placeholder:font-sans"
-              placeholder=""
+              className={`h-8 text-sm font-mono placeholder:font-sans ${isPlaceholderApiKey(localValue) ? 'text-muted-foreground italic' : ''
+                }`}
+              placeholder={isPlaceholderApiKey(localValue) ? "Replace with your API key" : ""}
               autoComplete="off"
               data-1p-ignore
             />
-            {apiKey.required && (!apiKey.value || apiKey.value === '') && (
+            {apiKey.required && (!apiKey.value || apiKey.value === '' || isPlaceholderApiKey(apiKey.value)) && (
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
@@ -120,7 +120,9 @@ export const ApiKeyListItem: React.FC<ApiKeyListItemProps> = ({
                       <AlertTriangle className="h-4 w-4 text-yellow-500" />
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
-                      {REQUIRED_ENV_VAR_UNSET_WARNING}
+                      {isPlaceholderApiKey(apiKey.value)
+                        ? PLACEHOLDER_ENV_VAR_MESSAGE
+                        : REQUIRED_ENV_VAR_UNSET_WARNING}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

@@ -15,7 +15,7 @@ import typing_extensions
 from enum import Enum
 
 
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, Field
 from pydantic.generics import GenericModel
 
 
@@ -154,8 +154,23 @@ class TestEnum(str, Enum):
     G = "G"
 
 # #########################################################################
-# Generated classes (101)
+# Generated classes (109)
 # #########################################################################
+
+class AddTodoItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['add_todo_item']
+    item: str
+    time: str
+    description: str = Field(description='20 word description of the item')
+
+class AddressWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    street: str = Field(description='The street name')
+    city: str = Field(description='The city')
+    zipcode: str = Field(description='5-digit zip code')
 
 class AnotherObject(BaseModel):
     class Config:
@@ -197,10 +212,10 @@ class BlockConstraintForParam(BaseModel):
 class BookOrder(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    orderId: str
-    title: str
-    quantity: int
-    price: float
+    orderId: str = Field(description='The ID of the book order')
+    title: str = Field(description='The title of the ordered book')
+    quantity: int = Field(description='The quantity of books ordered')
+    price: float = Field(description='The price of the book')
 
 class ClassForNullLiteral(BaseModel):
     class Config:
@@ -242,7 +257,7 @@ class ClassWithoutDone(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     i_16_digits: int
-    s_20_words: str
+    s_20_words: str = Field(description='A string with 20 words in it')
 
 class ClientDetails1559(BaseModel):
     class Config:
@@ -261,7 +276,7 @@ class ComplexMemoryObject(BaseModel):
     id: str
     name: str
     description: str
-    metadata: typing.List[typing.Union[str, int, float]]
+    metadata: typing.List[typing.Union[str, int, float]] = Field(description='Additional metadata about the memory object, which can be a mix of types.')
 
 class CompoundBigNumbers(BaseModel):
     class Config:
@@ -295,6 +310,21 @@ class Document1559(BaseModel):
         arbitrary_types_allowed = True
     client_details: "ClientDetails1559"
     notes: typing.List["Note1599"]
+
+class DummyJsonTodo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    id: int
+    todo: str
+    completed: bool
+    userId: int
+
+class DummyJsonTodoUpdate(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    todo: str
+    completed: bool
+    userId: int
 
 class DummyOutput(BaseModel):
     class Config:
@@ -374,11 +404,11 @@ class FakeImage(BaseModel):
 class FlightConfirmation(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    confirmationNumber: str
-    flightNumber: str
-    departureTime: str
-    arrivalTime: str
-    seatNumber: str
+    confirmationNumber: str = Field(description='The flight confirmation number')
+    flightNumber: str = Field(description='The flight number')
+    departureTime: str = Field(description='The scheduled departure time of the flight')
+    arrivalTime: str = Field(description='The scheduled arrival time of the flight')
+    seatNumber: str = Field(description='The seat number assigned on the flight')
 
 class FooAny(BaseModel):
     class Config:
@@ -419,10 +449,10 @@ class FormatterTest3(BaseModel):
 class GroceryReceipt(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    receiptId: str
-    storeName: str
-    items: typing.List[typing.Union[str, int, float]]
-    totalAmount: float
+    receiptId: str = Field(description='The ID of the grocery receipt')
+    storeName: str = Field(description='The name of the grocery store')
+    items: typing.List[typing.Union[str, int, float]] = Field(description='A list of items purchased. Each item consists of a name, quantity, and price.')
+    totalAmount: float = Field(description='The total amount spent on groceries')
 
 class Haiku(BaseModel):
     class Config:
@@ -520,7 +550,7 @@ class MemoryObject(BaseModel):
 class MergeAttrs(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    amount: Checked[int, typing_extensions.Literal['gt_ten']]
+    amount: Checked[int, typing_extensions.Literal['gt_ten']] = Field(description='In USD')
 
 class NamedArgsSingleClass(BaseModel):
     class Config:
@@ -532,15 +562,15 @@ class NamedArgsSingleClass(BaseModel):
 class Nested(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop3: typing.Optional[str] = None
-    prop4: typing.Optional[str] = None
+    prop3: typing.Optional[str] = Field(default=None, description='write "three"')
+    prop4: typing.Optional[str] = Field(default=None, description='write "four"')
     prop20: "Nested2"
 
 class Nested2(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop11: typing.Optional[str] = None
-    prop12: typing.Optional[str] = None
+    prop11: typing.Optional[str] = Field(default=None, description='write "three"')
+    prop12: typing.Optional[str] = Field(default=None, description='write "four"')
 
 class NestedBlockConstraint(BaseModel):
     class Config:
@@ -569,7 +599,7 @@ class Note1599(BaseModel):
         arbitrary_types_allowed = True
     note_title: str
     note_description: typing.Optional[str] = None
-    note_amount: typing.Optional[str] = None
+    note_amount: typing.Optional[str] = Field(default=None, description='If there is a quantity, specify it here')
 
 class OptionalListAndMap(BaseModel):
     class Config:
@@ -614,6 +644,14 @@ class Person(BaseModel):
         arbitrary_types_allowed = True
     name: typing.Optional[str] = None
     hair_color: typing.Optional[typing.Union[Color, str]] = None
+
+class PersonWithMeta(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: str = Field(description='Person\'s full legal name')
+    age: int = Field(description='Age in years')
+    address: "AddressWithMeta" = Field(description='Home address')
+    tags: typing.List[str] = Field(description='User tags')
 
 class PhoneNumber(BaseModel):
     class Config:
@@ -684,22 +722,22 @@ class Resume(BaseModel):
 class Schema(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop1: typing.Optional[str] = None
-    prop2: typing.Union["Nested", str]
-    prop5: typing.List[typing.Optional[str]]
-    prop6: typing.Union[str, typing.List["Nested"]]
-    nested_attrs: typing.List[typing.Optional[typing.Union[str, "Nested"]]]
-    parens: typing.Optional[str] = None
-    other_group: typing.Union[str, int]
+    prop1: typing.Optional[str] = Field(default=None, description='write "one"')
+    prop2: typing.Union["Nested", str] = Field(description='write "two"')
+    prop5: typing.List[typing.Optional[str]] = Field(description='write "hi"')
+    prop6: typing.Union[str, typing.List["Nested"]] = Field(description='write the string "blah" regardless of the other types here')
+    nested_attrs: typing.List[typing.Optional[typing.Union[str, "Nested"]]] = Field(description='write the string "nested" regardless of other types')
+    parens: typing.Optional[str] = Field(default=None, description='write "parens1"')
+    other_group: typing.Union[str, int] = Field(description='write "other"')
 
 class SearchParams(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    dateRange: typing.Optional[int] = None
+    dateRange: typing.Optional[int] = Field(default=None, description='In ISO duration format, e.g. P1Y2M10D.')
     location: typing.List[str]
-    jobTitle: typing.Optional["WithReasoning"] = None
-    company: typing.Optional["WithReasoning"] = None
-    description: typing.List["WithReasoning"]
+    jobTitle: typing.Optional["WithReasoning"] = Field(default=None, description='An exact job title, not a general category.')
+    company: typing.Optional["WithReasoning"] = Field(default=None, description='The exact name of the company, not a product or service.')
+    description: typing.List["WithReasoning"] = Field(description='Any specific projects or features the user is looking for.')
     tags: typing.List[typing.Union[Tag, str]]
 
 class SemanticContainer(BaseModel):
@@ -711,13 +749,27 @@ class SemanticContainer(BaseModel):
     class_2: "ClassWithBlockDone"
     class_done_needed: "ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.List["SmallThing"]
+    three_small_things: typing.List["SmallThing"] = Field(description='Should have three items.')
     final_string: str
 
 class SimpleTag(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     field: str
+
+class SkipDynamicClass(BaseModel):
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
+    value: str
+    internal_id: typing.Optional[str] = None
+
+class SkipNonDynamicClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    name: str
+    description: typing.Optional[str] = None
+    metadata: typing.Optional[str] = None
 
 class SmallThing(BaseModel):
     class Config:
@@ -739,7 +791,7 @@ class StringToClassEntry(BaseModel):
 class TestClassAlias(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    key: str
+    key: str = Field(description='This is a description for key\naf asdf')
     key2: str
     key3: str
     key4: str
@@ -760,14 +812,20 @@ class TestClassWithEnum(BaseModel):
 class TestMemoryOutput(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
-    more_items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
+    items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]] = Field(description='Add 10 items, which can be either simple MemoryObjects or more complex MemoryObjects with metadata.')
+    more_items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]] = Field(description='Add 3 more items, which can be either simple MemoryObjects or more complex MemoryObjects with metadata.')
 
 class TestOutputClass(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    prop1: str
+    prop1: str = Field(description='A long string with about 200 words')
     prop2: int
+
+class TodoMessageToUser(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+    type: typing_extensions.Literal['todo_message_to_user']
+    message: str = Field(description='A message to the user, about 50 words long')
 
 class Tree(BaseModel):
     class Config:
@@ -812,10 +870,10 @@ class WithReasoning(BaseModel):
     class Config:
         arbitrary_types_allowed = True
     value: str
-    reasoning: str
+    reasoning: str = Field(description='Why the value is a good fit.')
 
 # #########################################################################
-# Generated type aliases (20)
+# Generated type aliases (21)
 # #########################################################################
 
 
@@ -877,3 +935,6 @@ RecursiveMapAlias: typing_extensions.TypeAlias = typing.Dict[str, "RecursiveMapA
 
 
 RecursiveUnion: typing_extensions.TypeAlias = typing.Union[str, typing.Dict[str, "RecursiveUnion"]]
+
+
+TodoTool: typing_extensions.TypeAlias = typing.Union["AddTodoItem", "TodoMessageToUser"]

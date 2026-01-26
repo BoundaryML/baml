@@ -1,9 +1,6 @@
 //! Instruction set and bytecode representation.
 
-use crate::{
-    vm::{indexable::GlobalIndex, Value},
-    ObjectIndex,
-};
+use crate::{types::Value, GlobalIndex, ObjectIndex};
 
 /// Individual bytecode instruction.
 ///
@@ -33,6 +30,7 @@ use crate::{
 ///
 /// Instead store the state or complex structure in the [`crate::Vm`] struct and
 /// find a way to reference it with very simple instructions.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Instruction {
     /// Loads a constant from the bytecode's constant pool.
@@ -43,14 +41,14 @@ pub enum Instruction {
 
     /// Loads a variable from the frame's local variable slots.
     ///
-    /// Format: `LOAD_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `LOAD_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     LoadVar(usize),
 
     /// Stores a value in the frame's local variable slots.
     ///
-    /// Format: `STORE_VAR i` where `i` is the index of the variable in the
-    /// [`crate::Frame::locals`] array.
+    /// Format: `STORE_VAR i` where `i` is the relative index of the variable in
+    /// [`crate::Vm::stack`] array.
     StoreVar(usize),
 
     /// Load a global variable from the [`crate::Vm::globals`] array.
@@ -210,6 +208,27 @@ pub enum Instruction {
     /// control flow to the embedder and doesn't care about anything else.
     Await,
 
+    /// Creates a watched var and tracks its state.
+    ///
+    /// Format: `WATCH i` where `i` is the relative index of the variable in the
+    /// [`crate::Vm::stack`] array.
+    Watch(usize),
+
+    /// Manually triggers notifications for a watched variable.
+    Notify(usize),
+
+    /// Enter a visualization node.
+    ///
+    /// Format: `VIZ_ENTER i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizEnter(usize),
+
+    /// Exit a visualization node.
+    ///
+    /// Format: `VIZ_EXIT i` where `i` is the index into the current
+    /// function's `viz_nodes` array.
+    VizExit(usize),
+
     /// Call a function.
     ///
     /// Format: `CALL n` where `n` is the number of arguments passed to the
@@ -254,6 +273,7 @@ pub enum CmpOp {
     LtEq,
     Gt,
     GtEq,
+    InstanceOf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -288,6 +308,7 @@ impl std::fmt::Display for CmpOp {
             CmpOp::LtEq => "<=",
             CmpOp::Gt => ">",
             CmpOp::GtEq => ">=",
+            CmpOp::InstanceOf => "instanceof",
         })
     }
 }
@@ -332,6 +353,10 @@ impl std::fmt::Display for Instruction {
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
+            Instruction::Watch(i) => write!(f, "WATCH {i}"),
+            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
+            Instruction::VizEnter(i) => write!(f, "VIZ_ENTER {i}"),
+            Instruction::VizExit(i) => write!(f, "VIZ_EXIT {i}"),
         }
     }
 }

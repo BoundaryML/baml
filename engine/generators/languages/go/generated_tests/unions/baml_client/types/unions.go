@@ -31,11 +31,11 @@ type Union2IntOrListRecursive1 struct {
 
 func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
@@ -47,14 +47,14 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant, t
 	}
 }
 
-func (u Union2IntOrListRecursive1) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2IntOrListRecursive1) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "ListRecursive1":
-		return baml.EncodeUnion(u.BamlEncodeName, "List__Recursive1", *u.variant_ListRecursive1)
+		return baml.EncodeValue(*u.variant_ListRecursive1)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -65,13 +65,6 @@ func (u Union2IntOrListRecursive1) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2IntOrListRecursive1) BamlTypeName() string {
 	return "Union2IntOrListRecursive1"
-}
-
-func (u Union2IntOrListRecursive1) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__List__Recursive1__int",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2IntOrListRecursive1) MarshalJSON() ([]byte, error) {
@@ -176,7 +169,7 @@ type Union2KresourceOrKservice struct {
 
 func (u *Union2KresourceOrKservice) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "string_service":
 		u.variant = "Kservice"
@@ -192,14 +185,14 @@ func (u *Union2KresourceOrKservice) Decode(holder *cffi.CFFIValueUnionVariant, t
 	}
 }
 
-func (u Union2KresourceOrKservice) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union2KresourceOrKservice) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Kservice":
-		return baml.EncodeUnion(u.BamlEncodeName, "string_service", *u.variant_Kservice)
+		return baml.EncodeValue(*u.variant_Kservice)
 
 	case "Kresource":
-		return baml.EncodeUnion(u.BamlEncodeName, "string_resource", *u.variant_Kresource)
+		return baml.EncodeValue(*u.variant_Kresource)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -210,13 +203,6 @@ func (u Union2KresourceOrKservice) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union2KresourceOrKservice) BamlTypeName() string {
 	return "Union2KresourceOrKservice"
-}
-
-func (u Union2KresourceOrKservice) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__string_resource__string_service",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union2KresourceOrKservice) MarshalJSON() ([]byte, error) {
@@ -331,7 +317,7 @@ type Union3IntOrRecursive1OrString struct {
 
 func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
 	valueHolder := holder.Value
-	variantName := holder.VariantName
+	variantName := holder.ValueOptionName
 	switch variantName {
 	case "Recursive1":
 		u.variant = "Recursive1"
@@ -339,7 +325,7 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 		u.variant_Recursive1 = &value
 	case "int":
 		u.variant = "Int"
-		value := baml.Decode(valueHolder).Interface().(int64)
+		value := baml.Decode(valueHolder).Int()
 		u.variant_Int = &value
 	case "string":
 		u.variant = "String"
@@ -351,17 +337,17 @@ func (u *Union3IntOrRecursive1OrString) Decode(holder *cffi.CFFIValueUnionVarian
 	}
 }
 
-func (u Union3IntOrRecursive1OrString) Encode() (*cffi.CFFIValueHolder, error) {
+func (u Union3IntOrRecursive1OrString) Encode() (*cffi.HostValue, error) {
 	switch u.variant {
 
 	case "Recursive1":
-		return baml.EncodeUnion(u.BamlEncodeName, "Recursive1", *u.variant_Recursive1)
+		return baml.EncodeValue(*u.variant_Recursive1)
 
 	case "Int":
-		return baml.EncodeUnion(u.BamlEncodeName, "int", *u.variant_Int)
+		return baml.EncodeValue(*u.variant_Int)
 
 	case "String":
-		return baml.EncodeUnion(u.BamlEncodeName, "string", *u.variant_String)
+		return baml.EncodeValue(*u.variant_String)
 
 	case "":
 		return nil, fmt.Errorf("invalid union variant: [unset]")
@@ -372,13 +358,6 @@ func (u Union3IntOrRecursive1OrString) Encode() (*cffi.CFFIValueHolder, error) {
 
 func (u Union3IntOrRecursive1OrString) BamlTypeName() string {
 	return "Union3IntOrRecursive1OrString"
-}
-
-func (u Union3IntOrRecursive1OrString) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Name:      "Union__Recursive1__int__string",
-		Namespace: cffi.CFFITypeNamespace_TYPES,
-	}
 }
 
 func (u Union3IntOrRecursive1OrString) MarshalJSON() ([]byte, error) {

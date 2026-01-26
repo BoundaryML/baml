@@ -2,17 +2,21 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_types::{ir_type::TypeIR, BamlMap, BamlValueWithMeta};
+use baml_types::{ir_type::TypeIR, BamlMap, BamlMediaType, BamlValueWithMeta, TypeValue};
 use baml_vm::{
     BamlVmProgram, BinOp, Bytecode, Class, CmpOp, Enum, Function, FunctionKind, GlobalIndex,
     GlobalPool, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp, Value,
 };
+use internal_baml_ast::ast::WithName;
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::ParserDatabase;
 
 use crate::{
     hir::{self},
-    thir,
+    thir::{self, ClassConstructorField},
+    viz::VizNodes,
+    viz_builder::build_viz_nodes,
+    watch::WatchWhen,
 };
 
 /// Compile a Baml AST into bytecode.
@@ -108,6 +112,10 @@ fn compile_thir_to_bytecode(
     for name in native_fns.keys() {
         resolved_globals.insert(name.clone(), GlobalIndex::from_raw(resolved_globals.len()));
     }
+    resolved_globals.insert(
+        "baml.fetch_as".to_string(),
+        GlobalIndex::from_raw(resolved_globals.len()),
+    );
 
     let mut objects = ObjectPool::from_vec(Vec::with_capacity(resolved_globals.len()));
     let mut globals = GlobalPool::from_vec(Vec::with_capacity(resolved_globals.len()));
@@ -144,6 +152,8 @@ fn compile_thir_to_bytecode(
             bytecode: Bytecode::new(),
             kind: FunctionKind::Llm,
             locals_in_scope: vec![func.parameters.iter().map(|p| p.name.clone()).collect()],
+            span: func.span.clone(),
+            viz_nodes: Vec::new(),
         });
 
         let object_index = objects.insert(bytecode_llm_function);
@@ -226,11 +236,22 @@ fn compile_thir_to_bytecode(
             bytecode: Bytecode::new(),
             kind: FunctionKind::Native(func),
             locals_in_scope: vec![], // TODO.
+            span: Span::fake_builtin_baml(),
+            viz_nodes: Vec::new(),
         });
 
         let object_index = objects.insert(native_function);
         globals.push(Value::Object(object_index));
     }
+    globals.push(Value::Object(objects.insert(Object::Function(Function {
+        name: "baml.fetch_as".to_string(),
+        arity: 2,
+        bytecode: Bytecode::new(),
+        kind: FunctionKind::Future,
+        locals_in_scope: vec![],
+        span: Span::fake_builtin_baml(),
+        viz_nodes: Vec::new(),
+    }))));
 
     let mut resolved_class_names = HashMap::new();
     let mut resolved_function_names = HashMap::new();
@@ -321,6 +342,7 @@ fn compile_thir_function(
         objects,
         class_alloc_patch_list,
     );
+    compiler.viz_nodes = build_viz_nodes(func);
     compiler.compile_function(func)
 }
 
@@ -414,6 +436,15 @@ struct HirCompiler<'g> {
     /// `AllocInstance` instructions that have a placeholder, which must be resolved when location
     /// of the class object is resolved.
     class_alloc_patch_list: &'g mut Vec<AllocInstancePatch>,
+
+    /// Control-flow visualization nodes for the current function.
+    viz_nodes: VizNodes,
+
+    /// Sequential viz node index allocation while emitting instructions.
+    viz_next_index: usize,
+
+    /// Stack of open viz scope indices that need exits.
+    viz_open_stack: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -427,6 +458,8 @@ struct LoopInfo {
     /// List of jump instruction locations to be patched when loop construction is done.
     /// They will point to the end of the loop scope. Used for admitting arbitrary `continue`s.
     pub continue_patch_list: Vec<usize>,
+    /// Visualization stack depth before entering the loop iteration.
+    pub viz_depth: usize,
 }
 
 impl<'g> HirCompiler<'g> {
@@ -453,6 +486,9 @@ impl<'g> HirCompiler<'g> {
             scopes: Vec::new(),
             current_source_line: 0,
             locals_in_scope: Vec::new(),
+            viz_nodes: VizNodes::new(),
+            viz_next_index: 0,
+            viz_open_stack: Vec::new(),
         }
     }
 
@@ -489,6 +525,9 @@ impl<'g> HirCompiler<'g> {
 
                 names
             })),
+
+            span: func.span.clone(),
+            viz_nodes: std::mem::take(&mut self.viz_nodes).into_vm_meta(),
         })
     }
 
@@ -500,7 +539,11 @@ impl<'g> HirCompiler<'g> {
         block: &thir::Block<(Span, Option<TypeIR>)>,
         parameters: &[thir::Parameter],
     ) {
+        let is_root = self.scopes.is_empty();
         self.enter_scope();
+        if is_root {
+            self.viz_enter_scope();
+        }
 
         for param in parameters {
             self.track_local(&param.name);
@@ -530,8 +573,11 @@ impl<'g> HirCompiler<'g> {
     /// A statement is anything that does not produce a value by itself.
     fn compile_statement(&mut self, statement: &thir::Statement<(Span, Option<TypeIR>)>) {
         match statement {
+            thir::Statement::HeaderContextEnter(_header) => {
+                self.viz_emit_enter(false);
+            }
             thir::Statement::Let { name, value, .. } => {
-                self.compile_expression(value);
+                self.compile_expression_with_block_behavior(value, true);
                 self.track_local(name);
             }
             thir::Statement::Declare { name, .. } => {
@@ -540,7 +586,7 @@ impl<'g> HirCompiler<'g> {
             thir::Statement::Assign { left, value, .. } => {
                 match left {
                     thir::Expr::Var(name, _) => {
-                        self.compile_expression(value);
+                        self.compile_expression_with_block_behavior(value, true);
                         self.emit(Instruction::StoreVar(self.locals[name]));
                     }
                     thir::Expr::FieldAccess { base, field, meta: _ } => {
@@ -560,14 +606,14 @@ impl<'g> HirCompiler<'g> {
 
                         // Generate bytecode: load base, load value, store field
                         self.compile_expression(base);
-                        self.compile_expression(value);
+                        self.compile_expression_with_block_behavior(value, true);
                         self.emit(Instruction::StoreField(field_index));
                     }
                     thir::Expr::ArrayAccess {base, index, meta: _} => {
 
                         self.compile_expression(base);
                         self.compile_expression(index);
-                        self.compile_expression(value);
+                        self.compile_expression_with_block_behavior(value, true);
 
                         self.emit(match base.meta().1.as_ref().expect("must have a resolved type") {
                             TypeIR::List(_, _) => Instruction::StoreArrayElement,
@@ -690,19 +736,47 @@ impl<'g> HirCompiler<'g> {
                     _ => panic!("Invalid left hand of assignment, only variables, instance fields and array elements can be assigned"),
                 }
             }
-            thir::Statement::DeclareAndAssign { name, value, .. } => {
-                self.compile_expression(value);
-                self.track_local(name);
+            thir::Statement::DeclareAndAssign {
+                name, value, watch, ..
+            } => {
+                self.compile_expression_with_block_behavior(value, true);
+                let local_index = self.track_local(name);
+                if let Some(spec) = watch {
+                    self.emit_string_literal(&spec.name); // This adds LoadConst
+
+                    match &spec.when {
+                        WatchWhen::FunctionName(fn_name) => {
+                            if let Some(&index) = self.globals.get(fn_name.name()) {
+                                self.emit(Instruction::LoadGlobal(index));
+                            } else {
+                                panic!("undefined function: {name}");
+                            }
+                        }
+                        WatchWhen::Never => {}
+
+                        WatchWhen::Manual => {
+                            self.emit_string_literal("manual");
+                        }
+
+                        WatchWhen::Auto => {
+                            let index = self.add_constant(Value::Null);
+                            self.emit(Instruction::LoadConst(index));
+                        }
+                    }
+
+                    self.emit(Instruction::Watch(local_index));
+                }
             }
             thir::Statement::Return { expr, .. } => {
                 self.compile_expression(expr);
+                self.viz_exit_to_depth(0);
                 self.emit(Instruction::Return);
             }
             thir::Statement::Expression { expr, .. } => {
-                self.compile_expression(expr);
+                self.compile_expression_with_block_behavior(expr, true);
             }
             thir::Statement::SemicolonExpression { expr, .. } => {
-                self.compile_expression(expr);
+                self.compile_expression_with_block_behavior(expr, true);
                 // This could be a function call or any other random expression
                 // like:
                 //
@@ -731,8 +805,8 @@ impl<'g> HirCompiler<'g> {
 
                 let len_method = *self
                     .globals
-                    .get("std.Array.len")
-                    .expect("native std.Array.len() for array length is not in globals?");
+                    .get("baml.Array.length")
+                    .expect("native baml.Array.length() for array length is not in globals?");
 
                 // {
 
@@ -813,12 +887,13 @@ impl<'g> HirCompiler<'g> {
                 );
             }
             thir::Statement::Break(_) => {
-                let cur_loop = self.assert_loop("break");
+                let viz_depth = self.assert_loop("break").viz_depth;
 
                 // since we are exiting the loop context, make sure we drop everything before
                 // breaking!
-                let pop_until = cur_loop.scope_depth;
+                let pop_until = self.assert_loop("break").scope_depth;
                 self.emit_scope_drops(pop_until);
+                self.viz_exit_to_depth(viz_depth);
 
                 let exit_jump = self.next_insn_index() as usize;
                 self.assert_loop("break").break_patch_list.push(exit_jump);
@@ -829,10 +904,11 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Jump(0));
             }
             thir::Statement::Continue(_) => {
-                let cur_loop = self.assert_loop("continue");
+                let viz_depth = self.assert_loop("continue").viz_depth;
 
-                let pop_until = cur_loop.scope_depth;
+                let pop_until = self.assert_loop("continue").scope_depth;
                 self.emit_scope_drops(pop_until);
+                self.viz_exit_to_depth(viz_depth);
 
                 let exit_jump = self.next_insn_index() as usize;
                 self.assert_loop("continue")
@@ -880,6 +956,54 @@ impl<'g> HirCompiler<'g> {
             thir::Statement::Assert { condition, .. } => {
                 self.compile_expression(condition);
                 self.emit(Instruction::Assert);
+            }
+            thir::Statement::WatchOptions {
+                variable,
+                channel,
+                when,
+                ..
+            } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit_string_literal(channel.as_ref().unwrap_or(variable).as_str()); // This adds LoadConst
+
+                match when.as_ref() {
+                    Some(WatchWhen::Manual) => {
+                        self.emit_string_literal("manual");
+                    }
+
+                    Some(WatchWhen::Never) => {
+                        self.emit_string_literal("never");
+                    }
+
+                    Some(WatchWhen::Auto) => {
+                        // No action needed.
+                    }
+
+                    Some(WatchWhen::FunctionName(fn_name)) => {
+                        if let Some(&index) = self.globals.get(fn_name.name()) {
+                            self.emit(Instruction::LoadGlobal(index));
+                        } else {
+                            panic!("watch options codegen: undefined function: {fn_name}");
+                        }
+                    }
+
+                    None => {
+                        let index = self.add_constant(Value::Null);
+                        self.emit(Instruction::LoadConst(index));
+                    }
+                }
+
+                self.emit(Instruction::Watch(local_index));
+            }
+            thir::Statement::WatchNotify { variable, .. } => {
+                let Some(local_index) = self.locals.get(variable).copied() else {
+                    panic!("watch codegen error: undefined variable: {variable}");
+                };
+
+                self.emit(Instruction::Notify(local_index));
             }
         }
     }
@@ -987,9 +1111,7 @@ impl<'g> HirCompiler<'g> {
                 _ => panic!("unsupported atom: {value:#?}"),
             },
 
-            thir::Expr::Block(block, _) => {
-                self.compile_block(block);
-            }
+            thir::Expr::Block(block, _) => self.compile_block(block),
 
             thir::Expr::ArrayAccess {
                 base,
@@ -1085,6 +1207,8 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::Var(name, _) => {
                 if let Some(&index) = self.locals.get(name) {
                     self.emit(Instruction::LoadVar(index));
+                } else if let Some(class) = self.globals.get(name) {
+                    self.emit(Instruction::LoadGlobal(*class));
                 } else {
                     panic!("undefined variable: {name}");
                 }
@@ -1113,7 +1237,12 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::AllocMap(pairs.len()));
             }
 
-            thir::Expr::Call { func, args, .. } => {
+            thir::Expr::Call {
+                func,
+                args,
+                type_args,
+                ..
+            } => {
                 let name = match func.as_ref() {
                     thir::Expr::Var(name, _) => name,
                     _ => panic!("expressions that evaluate to functions are not supported yet"),
@@ -1131,9 +1260,22 @@ impl<'g> HirCompiler<'g> {
                     self.compile_expression(arg);
                 }
 
+                // Type parameter. TODO: Generic way of handling this?
+                if name == "baml.fetch_as" {
+                    let type_index = self.objects.insert(Object::BamlType(type_args[0].clone()));
+                    let const_index = self.add_constant(Value::Object(type_index));
+                    self.emit(Instruction::LoadConst(const_index));
+                }
+
                 // Either async LLM call or regular function call.
-                if self.llm_functions.contains(name) {
-                    self.emit(Instruction::DispatchFuture(args.len()));
+                if self.llm_functions.contains(name) || name == "baml.fetch_as" {
+                    let count = if name == "baml.fetch_as" {
+                        2
+                    } else {
+                        args.len()
+                    };
+
+                    self.emit(Instruction::DispatchFuture(count));
                     self.emit(Instruction::Await);
                 } else {
                     self.emit(Instruction::Call(args.len()));
@@ -1155,9 +1297,24 @@ impl<'g> HirCompiler<'g> {
                         name: class_name, ..
                     }) => format!("{class_name}.{method}"),
 
-                    Some(TypeIR::List(_, _)) => format!("std.Array.{method}"),
+                    Some(TypeIR::List(_, _)) => format!("baml.Array.{method}"),
 
-                    Some(TypeIR::Map(_, _, _)) => format!("std.Map.{method}"),
+                    Some(TypeIR::Map(_, _, _)) => format!("baml.Map.{method}"),
+
+                    Some(TypeIR::Primitive(TypeValue::String, _)) => {
+                        format!("baml.String.{method}")
+                    }
+
+                    Some(TypeIR::Primitive(TypeValue::Media(media_type), _)) => {
+                        let subtype = match media_type {
+                            BamlMediaType::Image => "baml.media.image",
+                            BamlMediaType::Video => "baml.media.video",
+                            BamlMediaType::Audio => "baml.media.audio",
+                            BamlMediaType::Pdf => "baml.media.pdf",
+                        };
+
+                        format!("{subtype}.{method}")
+                    }
 
                     other => panic!("method calls must be on classes, got: {other:#?}"),
                 };
@@ -1182,7 +1339,6 @@ impl<'g> HirCompiler<'g> {
             thir::Expr::ClassConstructor {
                 name: class_name,
                 fields,
-                spread,
                 meta: _,
             } => {
                 // TODO: Long-term solution - Refactor AllocInstance to consume fields from stack
@@ -1196,6 +1352,10 @@ impl<'g> HirCompiler<'g> {
                     panic!("undefined class: {class_name}");
                 };
 
+                let Some(resolved_fields) = self.classes.get(class_name) else {
+                    panic!("undefined class: {class_name}");
+                };
+
                 // Emit allocation with bogus index. It will be patched later.
                 let allocation_loc = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
                     usize::MAX,
@@ -1205,87 +1365,109 @@ impl<'g> HirCompiler<'g> {
                     global: class_index,
                 });
 
-                // All constructors now use Copy to access the instance
-                // The instance is always on the stack after AllocInstance
+                // Evaluate only needed expressions. For example:
+                //
+                // let object = Obj {
+                //     ...spread_one(),
+                //     ...spread_two(),
+                //     x: 1,
+                // }
+                //
+                // Would only really need to evaluate spread_two() because it
+                // would override all the values in spread_one().
+                let mut evaluate_fields = Vec::new();
+                let mut defined_named_fields = HashSet::new();
 
-                let mut defined_named_fields = std::collections::HashSet::new();
+                for field in fields.iter().rev() {
+                    match field {
+                        ClassConstructorField::Named { name, .. } => {
+                            // Dedup named fields.
+                            if defined_named_fields.insert(name.clone()) {
+                                evaluate_fields.push(field);
+                            }
+                        }
+                        ClassConstructorField::Spread { .. } => {
+                            // Eval spread only if we're missing some field.
+                            if resolved_fields
+                                .keys()
+                                .any(|name| !defined_named_fields.contains(name))
+                            {
+                                evaluate_fields.push(field);
+                            }
 
-                // Process fields in order
-                for (field_name, value) in fields {
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
-
-                    let Some(&field_index) = resolved_fields.get(field_name) else {
-                        panic!("undefined field: {class_name}.{field_name}");
-                    };
-
-                    // Instance is always on top of stack after AllocInstance
-                    // Copy it to work with it
-                    self.emit(Instruction::Copy(0));
-                    self.compile_expression(value);
-                    self.emit(Instruction::StoreField(field_index));
-
-                    defined_named_fields.insert(field_name.as_str());
-                }
-
-                if let Some(spread) = spread {
-                    let Some(resolved_fields) = self.classes.get(class_name) else {
-                        panic!("undefined class: {class_name}");
-                    };
-
-                    self.compile_expression(spread);
-
-                    // Stack state after compiling spread:
-                    // [locals..., allocated_instance, spread_value]
-                    //                                       ^-- position 0 from top (Copy(0))
-                    //                    ^-- position 1 from top (Copy(1))
-                    //
-                    // We'll use Copy to access both values regardless of nesting level
-                    // This is simpler than calculating pseudo-local indices
-
-                    let mut pop_tmp_spread_value = false;
-
-                    // Not sorted cause of hashmap, tried using sorted map and
-                    // it didn't work either, figure out what's going on.
-                    let mut sorted_fields = resolved_fields
-                        .iter()
-                        .map(|(name, index)| (name, *index))
-                        .collect::<Vec<_>>();
-                    sorted_fields.sort_by_key(|(_, index)| *index);
-
-                    for (field_name, field_index) in sorted_fields {
-                        if !defined_named_fields.contains(field_name.as_str()) {
-                            // Current stack: [locals..., allocated_instance, spread_value]
-
-                            // Copy instance from position 1 (under spread)
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
-                            self.emit(Instruction::Copy(1));
-
-                            // Copy spread from position 1 (now under instance copy)
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
-                            self.emit(Instruction::Copy(1));
-
-                            // Load field from spread
-                            // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
-                            self.emit(Instruction::LoadField(field_index));
-
-                            // Store field to instance
-                            // Stack becomes: [locals..., allocated_instance, spread_value]
-                            self.emit(Instruction::StoreField(field_index));
-
-                            pop_tmp_spread_value = true;
+                            // Short circuit on spreads.
+                            break;
                         }
                     }
+                }
 
-                    // Get rid of spread local, won't be used anymore.
-                    if pop_tmp_spread_value {
-                        self.emit(Instruction::Pop(1));
+                // Not sorted cause of hashmap, tried using sorted map and
+                // it didn't work either, figure out what's going on.
+                let mut sorted_fields = resolved_fields
+                    .iter()
+                    .map(|(name, index)| (name, *index))
+                    .collect::<Vec<_>>();
+                sorted_fields.sort_by_key(|(_, index)| *index);
+
+                for field in evaluate_fields.iter().rev() {
+                    match field {
+                        ClassConstructorField::Named {
+                            name: field_name,
+                            value,
+                        } => {
+                            let Some(&field_index) = resolved_fields.get(field_name) else {
+                                panic!("undefined field: {class_name}.{field_name}");
+                            };
+
+                            // Instance is always on top of stack after AllocInstance
+                            // Copy it to work with it
+                            self.emit(Instruction::Copy(0));
+                            self.compile_expression(value);
+                            self.emit(Instruction::StoreField(field_index));
+                        }
+
+                        ClassConstructorField::Spread { value } => {
+                            self.compile_expression(value);
+
+                            // Stack state after compiling spread:
+                            // [locals..., allocated_instance, spread_value]
+                            //                                       ^-- position 0 from top (Copy(0))
+                            //                    ^-- position 1 from top (Copy(1))
+                            //
+                            // We'll use Copy to access both values regardless of nesting level
+                            for (field_name, field_index) in &sorted_fields {
+                                if !defined_named_fields.contains(*field_name) {
+                                    // Current stack: [locals..., allocated_instance, spread_value]
+
+                                    // Copy instance from position 1 (under spread)
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance]
+                                    self.emit(Instruction::Copy(1));
+
+                                    // Copy spread from position 1 (now under instance copy)
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, spread_value]
+                                    self.emit(Instruction::Copy(1));
+
+                                    // Load field from spread
+                                    // Stack becomes: [locals..., allocated_instance, spread_value, allocated_instance, field_value]
+                                    self.emit(Instruction::LoadField(*field_index));
+
+                                    // Store field to instance
+                                    // Stack becomes: [locals..., allocated_instance, spread_value]
+                                    self.emit(Instruction::StoreField(*field_index));
+                                }
+                            }
+
+                            // Get rid of spread local, won't be used anymore.
+                            self.emit(Instruction::Pop(1));
+                        }
                     }
                 }
             }
 
             thir::Expr::If(condition, if_branch, else_branch, _) => {
+                let group_depth = self.viz_open_stack.len();
+                self.viz_enter_scope();
+
                 // First, compile the condition. This will leave the end result
                 // of the condition on top of the stack.
                 self.compile_expression(condition);
@@ -1301,7 +1483,10 @@ impl<'g> HirCompiler<'g> {
                 self.emit(Instruction::Pop(1));
 
                 // Compile the `if { ... }` branch.
+                let arm_depth = self.viz_open_stack.len();
+                self.viz_enter_scope();
                 self.compile_expression(if_branch);
+                self.viz_exit_to_depth(arm_depth);
 
                 // Now skip the potential `else { ... }` branch. We'll patch the
                 // jump later.
@@ -1319,7 +1504,10 @@ impl<'g> HirCompiler<'g> {
 
                 // Compile the `else { ... }` branch if it exists.
                 if let Some(else_branch) = else_branch {
+                    let arm_depth = self.viz_open_stack.len();
+                    self.viz_enter_scope();
                     self.compile_expression(else_branch);
+                    self.viz_exit_to_depth(arm_depth);
                 }
 
                 // Patch the skip else jump. If there's no else, this will
@@ -1328,6 +1516,10 @@ impl<'g> HirCompiler<'g> {
                 // POP_JUMP instruction like Python does, but for now I want
                 // the simplest possible VM (very limited instructions).
                 self.patch_jump(skip_else);
+
+                // Close the branch group scope after both arms have been handled.
+                // This ensures the branch group exits on both true and false paths.
+                self.viz_exit_to_depth(group_depth);
             }
 
             thir::Expr::BinaryOperation {
@@ -1387,6 +1579,9 @@ impl<'g> HirCompiler<'g> {
                             hir::BinaryOperator::Gt => Instruction::CmpOp(CmpOp::Gt),
                             hir::BinaryOperator::GtEq => Instruction::CmpOp(CmpOp::GtEq),
 
+                            // Instanceof operator.
+                            hir::BinaryOperator::InstanceOf => Instruction::CmpOp(CmpOp::InstanceOf),
+
                             // Logical operators.
                             hir::BinaryOperator::And | hir::BinaryOperator::Or => unreachable!(
                                 "compiler bug: logical binary operators must be handled before arithmetic and comparison operators"
@@ -1413,6 +1608,28 @@ impl<'g> HirCompiler<'g> {
                 todo!("unsupported expression: {:#?}", expr)
             }
         }
+    }
+
+    /// Compiles an expression while mirroring viz block behavior from the viz builder.
+    /// When `wrap_block_in_viz` is true and the expression is a block, we emit a viz scope
+    /// around the block to keep bytecode visualization instructions aligned with the
+    /// precomputed viz node order.
+    fn compile_expression_with_block_behavior(
+        &mut self,
+        expr: &thir::Expr<(Span, Option<TypeIR>)>,
+        wrap_block_in_viz: bool,
+    ) {
+        if wrap_block_in_viz {
+            if let thir::Expr::Block(block, _) = expr {
+                let depth = self.viz_open_stack.len();
+                self.viz_enter_scope();
+                self.compile_block(block);
+                self.viz_exit_to_depth(depth);
+                return;
+            }
+        }
+
+        self.compile_expression(expr);
     }
 
     fn emit_string_literal(&mut self, v: &str) {
@@ -1447,6 +1664,31 @@ impl<'g> HirCompiler<'g> {
     fn add_constant(&mut self, value: Value) -> usize {
         self.bytecode.constants.push(value);
         self.bytecode.constants.len() - 1
+    }
+
+    fn viz_emit_enter(&mut self, push_on_stack: bool) -> Option<usize> {
+        if self.viz_next_index >= self.viz_nodes.len() {
+            return None;
+        }
+        let idx = self.viz_next_index;
+        self.viz_next_index += 1;
+        self.emit(Instruction::VizEnter(idx));
+        if push_on_stack {
+            self.viz_open_stack.push(idx);
+        }
+        Some(idx)
+    }
+
+    fn viz_enter_scope(&mut self) -> Option<usize> {
+        self.viz_emit_enter(true)
+    }
+
+    fn viz_exit_to_depth(&mut self, target_depth: usize) {
+        while self.viz_open_stack.len() > target_depth {
+            if let Some(idx) = self.viz_open_stack.pop() {
+                self.emit(Instruction::VizExit(idx));
+            }
+        }
     }
 
     /// Patches a jump instruction to point to the correct destination.
@@ -1488,7 +1730,12 @@ impl<'g> HirCompiler<'g> {
     /// Keeps track of a new local and returns its index in the eval stack.
     fn track_local(&mut self, name: &str) -> usize {
         let index = self.locals.len() + 1;
-        debug_assert!(self.locals.insert(name.to_string(), index).is_none());
+        let old = self.locals.insert(name.to_string(), index);
+
+        debug_assert!(
+            old.is_none(),
+            "tracking local var {name} but it already exists"
+        );
 
         self.scopes
             .last_mut()
@@ -1538,6 +1785,7 @@ impl<'g> HirCompiler<'g> {
         // Emitting an instruction requires an existing scope, so if we need to
         // emit a return we will do so before popping the current scope.
         if self.scopes.len() == 1 {
+            self.viz_exit_to_depth(0);
             self.emit(Instruction::Return);
         }
 
@@ -1576,10 +1824,14 @@ impl<'g> HirCompiler<'g> {
     fn wrap_loop_body(&mut self, codegen_body: impl FnOnce(&mut Self)) -> Vec<usize> {
         self.enter_scope();
 
+        let viz_depth = self.viz_open_stack.len();
+        self.viz_enter_scope();
+
         let old_loop_status = self.current_loop.replace(LoopInfo {
             scope_depth: self.scopes.len(),
             break_patch_list: Vec::new(),
             continue_patch_list: Vec::new(),
+            viz_depth,
         });
 
         codegen_body(self);
@@ -1587,6 +1839,7 @@ impl<'g> HirCompiler<'g> {
         let loop_info = std::mem::replace(&mut self.current_loop, old_loop_status)
             .expect("should have been pushed before when grabbing old_status");
 
+        self.viz_exit_to_depth(viz_depth);
         self.exit_scope(false);
 
         for continue_jmp in loop_info.continue_patch_list {

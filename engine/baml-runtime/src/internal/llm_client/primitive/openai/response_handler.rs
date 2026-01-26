@@ -43,7 +43,8 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -62,6 +63,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
                 response.choices.len()
             ),
             code: ErrorCode::Other(200),
+            raw_response: Some(response_body.to_string()),
         });
     }
 
@@ -92,6 +94,13 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
+            cached_input_tokens: usage.and_then(|u| {
+                // Extract cached tokens from input_tokens_details if available
+                u.input_tokens_details
+                    .as_ref()
+                    .and_then(|details| details.get("cached_tokens"))
+                    .and_then(|cached| cached.as_u64())
+            }),
         },
     })
 }
@@ -126,7 +135,8 @@ pub fn scan_openai_chat_completion_stream(
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(event_body.to_string()),
         })?;
 
     if let Some(choice) = event.choices.first() {
@@ -143,6 +153,12 @@ pub fn scan_openai_chat_completion_stream(
         inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
         inner.metadata.output_tokens = Some(usage.completion_tokens);
         inner.metadata.total_tokens = Some(usage.total_tokens);
+        inner.metadata.cached_input_tokens =
+            usage.input_tokens_details.as_ref().and_then(|details| {
+                details
+                    .get("cached_tokens")
+                    .and_then(|cached| cached.as_u64())
+            })
     }
 
     Ok(())
@@ -226,6 +242,7 @@ mod tests {
                 prompt_tokens: Some(128),
                 output_tokens: Some(71),
                 total_tokens: Some(199),
+                cached_input_tokens: Some(0),
             },
         };
 
@@ -259,6 +276,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
             code: ErrorCode::Other(2),
+            raw_response: Some(response_body.to_string()),
         }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
@@ -298,7 +316,10 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
                 ResponseOutputType::WebSearchCall
                 | ResponseOutputType::FileSearchCall
                 | ResponseOutputType::ComputerCall
-                | ResponseOutputType::Reasoning => {
+                | ResponseOutputType::Reasoning
+                | ResponseOutputType::McpListTools
+                | ResponseOutputType::McpCall
+                | ResponseOutputType::Unknown => {
                     // Tool calls and reasoning outputs don't have text content, skip them
                     None
                 }
@@ -322,6 +343,13 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
+            cached_input_tokens: usage.and_then(|u| {
+                // Extract cached tokens from input_tokens_details if available
+                u.input_tokens_details
+                    .as_ref()
+                    .and_then(|details| details.get("cached_tokens"))
+                    .and_then(|cached| cached.as_u64())
+            }),
         },
     })
 }
@@ -355,6 +383,7 @@ pub fn scan_openai_responses_stream(
             latency: instant_now.elapsed(),
             message: format!("{e:?}"),
             code: ErrorCode::Other(2),
+            raw_response: Some(event_body.to_string()),
         })?;
 
     use super::types::ResponsesApiStreamEvent::*;
@@ -390,6 +419,12 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
+                inner.metadata.cached_input_tokens =
+                    usage.input_tokens_details.as_ref().and_then(|details| {
+                        details
+                            .get("cached_tokens")
+                            .and_then(|cached| cached.as_u64())
+                    })
             }
         }
         ResponseFailed { response, .. } => {
@@ -411,6 +446,7 @@ pub fn scan_openai_responses_stream(
                     latency: instant_now.elapsed(),
                     message: format!("Response failed with error: {error}"),
                     code: ErrorCode::Other(2),
+                    raw_response: Some(event_body.to_string()),
                 });
             }
         }
@@ -441,6 +477,12 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
+                inner.metadata.cached_input_tokens =
+                    usage.input_tokens_details.as_ref().and_then(|details| {
+                        details
+                            .get("cached_tokens")
+                            .and_then(|cached| cached.as_u64())
+                    })
             }
         }
         OutputTextDelta { delta, .. } => {
@@ -461,6 +503,9 @@ pub fn scan_openai_responses_stream(
             if inner.content.is_empty() && part.part_type == "output_text" {
                 inner.content = part.text;
             }
+        }
+        Unknown => {
+            // We don't need to do anything for unknown events
         }
     }
 
@@ -507,6 +552,7 @@ mod responses_tests {
                 prompt_tokens: Some(36),
                 output_tokens: Some(87),
                 total_tokens: Some(123),
+                cached_input_tokens: Some(0),
             },
         };
 
@@ -653,4 +699,291 @@ mod responses_tests {
   "metadata": {}
 }
     "#;
+
+    const RESPONSES_API_RESPONSE_MCP: &str = r#"
+{
+  "id": "resp_68d21b0cb6908190a158e3c0e30a0b4c08c9448688b650fd",
+  "object": "response",
+  "created_at": 1758599948,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "openai"
+  },
+  "error": null,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": null,
+  "max_tool_calls": null,
+  "model": "gpt-5-2025-08-07",
+  "output": [
+    {
+      "id": "mcpl_68d21b0cf4d481909eb46c32be22366c08c9448688b650fd",
+      "type": "mcp_list_tools",
+      "server_label": "dmcp",
+      "tools": [
+        {
+          "annotations": {
+            "read_only": false
+          },
+          "description": "\n  Given a string of text describing a dice roll in \n  Dungeons and Dragons, provide a result of the roll.\n\n  Example input: 2d6 + 1d4\n  Example output: 14\n",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "diceRollExpression": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "diceRollExpression"
+            ],
+            "additionalProperties": false
+          },
+          "name": "roll"
+        }
+      ]
+    },
+    {
+      "id": "rs_68d21b0f30b8819096dbfa580d1b67c108c9448688b650fd",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "mcp_68d21b104b288190b5bd03dd7a40686508c9448688b650fd",
+      "type": "mcp_call",
+      "approval_request_id": null,
+      "arguments": "{\"diceRollExpression\":\"2d4+1\"}",
+      "error": null,
+      "name": "roll",
+      "output": "5",
+      "server_label": "dmcp"
+    },
+    {
+      "id": "msg_68d21b11c3e8819094fd64757eee9c4608c9448688b650fd",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "You rolled 5."
+        }
+      ],
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "reasoning": {
+    "effort": "medium",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1.0,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "type": "mcp",
+      "allowed_tools": null,
+      "headers": null,
+      "require_approval": "never",
+      "server_description": "A Dungeons and Dragons MCP server to assist with dice rolling.",
+      "server_label": "dmcp",
+      "server_url": "https://dmcp-server.deno.dev/<redacted>"
+    }
+  ],
+  "top_logprobs": 0,
+  "top_p": 1.0,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 480,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 100,
+    "output_tokens_details": {
+      "reasoning_tokens": 64
+    },
+    "total_tokens": 580
+  },
+  "user": null,
+  "metadata": {}
+}
+    "#;
+
+    #[test]
+    fn test_parse_openai_responses_with_mcp_payload() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::from_str(RESPONSES_API_RESPONSE_MCP.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_responses_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-5-2025-08-07".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "You rolled 5.".to_string(),
+            start_time: system_now,
+            latency: std::time::Duration::ZERO,
+            model: "gpt-5-2025-08-07".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("completed".to_string()),
+                prompt_tokens: Some(480),
+                output_tokens: Some(100),
+                total_tokens: Some(580),
+                cached_input_tokens: Some(0),
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = std::time::Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
+
+    const RESPONSES_API_RESPONSE_NULL_REASONING: &str = r#"{
+  "id": "resp_0zcvUwjYtvOrllY9du6zPhINkdB0vdIjoT6WWeGBoXgGrdxRoKtv0I",
+  "created_at": 1758599948,
+  "error": null,
+  "incomplete_details": null,
+  "instructions": null,
+  "metadata": {},
+  "model": "gpt-5-mini-2025-08-07",
+  "object": "response",
+  "output": [
+    {
+      "id": "rs_03aaf9cb8f23bd5400693c50176178819ab5f740d33a036887",
+      "summary": [],
+      "type": "reasoning",
+      "content": null,
+      "encrypted_content": null,
+      "status": null
+    },
+    {
+      "id": "msg_03aaf9cb8f23bd5400693c502ff2ec819ab1095b20e53a5287",
+      "content": [
+        {
+          "annotations": [],
+          "text": "You rolled 5.",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "temperature": 1,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": 1,
+  "max_output_tokens": null,
+  "previous_response_id": null,
+  "reasoning": {
+    "effort": "medium",
+    "summary": null
+  },
+  "status": "completed",
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 480,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 100,
+    "output_tokens_details": {
+      "reasoning_tokens": 64
+    },
+    "total_tokens": 580
+  },
+  "user": null,
+  "store": true,
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "max_tool_calls": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": null,
+  "safety_identifier": null,
+  "service_tier": "default",
+  "top_logprobs": 0
+}
+"#;
+
+    #[test]
+    fn test_parse_openai_responses_with_null_reasoning() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body =
+            serde_json::from_str(RESPONSES_API_RESPONSE_NULL_REASONING.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_responses_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-5-mini-2025-08-07".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "You rolled 5.".to_string(),
+            start_time: system_now,
+            latency: std::time::Duration::ZERO,
+            model: "gpt-5-mini-2025-08-07".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("completed".to_string()),
+                prompt_tokens: Some(480),
+                output_tokens: Some(100),
+                total_tokens: Some(580),
+                cached_input_tokens: Some(0),
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = std::time::Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
 }

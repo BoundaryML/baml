@@ -371,3 +371,29 @@ func TestClientRegistryErrors(t *testing.T) {
 		assert.Error(t, err, "Expected error for response type mismatch")
 	})
 }
+
+// TestFallbackErrors tests that fallback error chains include all failure details
+// Reference: test_fallbacks.py:test_fallback_errors()
+func TestFallbackErrors(t *testing.T) {
+	ctx := context.Background()
+	
+	// Call function with fallback chain that always fails
+	_, err := b.FnFallbackAlwaysFails(ctx, "lorem ipsum")
+	
+	// Should get an error since all fallback clients will fail
+	assert.Error(t, err, "Expected error from failing fallback chain")
+	
+	errorMsg := err.Error()
+	t.Logf("Fallback error message: %s", errorMsg)
+	
+	// Verify that error message includes information about all failed clients
+	// The fallback client is configured with these non-existent models:
+	// "openai/gpt-0-noexist", "openai/gpt-1-noexist", "openai/gpt-2-noexist"
+	assert.Contains(t, errorMsg, "gpt-0-noexist", "Expected first fallback client in error")
+	assert.Contains(t, errorMsg, "gpt-1-noexist", "Expected second fallback client in error")
+	assert.Contains(t, errorMsg, "gpt-2-noexist", "Expected third fallback client in error")
+	
+	// Verify the error message is comprehensive and informative
+	assert.NotEmpty(t, errorMsg, "Expected non-empty error message")
+	assert.True(t, len(errorMsg) > 50, "Expected detailed error message, got: %s", errorMsg)
+}

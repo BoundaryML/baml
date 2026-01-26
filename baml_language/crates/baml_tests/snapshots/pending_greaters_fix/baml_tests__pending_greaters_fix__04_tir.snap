@@ -1,0 +1,9 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function BadReturnType:
+    Return: Map { key: String, value: Int }
+  Function BadParam:
+    Return: String

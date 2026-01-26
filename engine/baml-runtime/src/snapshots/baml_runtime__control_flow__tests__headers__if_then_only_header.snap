@@ -1,0 +1,169 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::IfThenOnlyHeader":
+  nodes:
+    "IfThenOnlyHeader|c:func:0":
+      label: IfThenOnlyHeader
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 11
+        end: 145
+    "IfThenOnlyHeader|c:func:0|h:after:0":
+      label: After
+      node_type: expr
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader|c:func:0|h:before:0":
+      label: Before
+      node_type: expr
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader|c:func:0|h:if:1":
+      label: If
+      node_type: expr
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 52
+        end: 63
+    "IfThenOnlyHeader|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 96
+        end: 122
+    "IfThenOnlyHeader|c:func:0|s:3":
+      label: expr
+      node_type: expr
+      parent: "IfThenOnlyHeader|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 142
+        end: 143
+  edges:
+    "IfThenOnlyHeader|c:func:0":
+      - dst: "IfThenOnlyHeader|c:func:0|s:0"
+        label: ""
+    "IfThenOnlyHeader|c:func:0|h:after:0":
+      - dst: "IfThenOnlyHeader|c:func:0|s:3"
+        label: ""
+    "IfThenOnlyHeader|c:func:0|h:before:0":
+      - dst: "IfThenOnlyHeader|c:func:0|h:if:1"
+        label: ""
+    "IfThenOnlyHeader|c:func:0|h:if:1":
+      - dst: "IfThenOnlyHeader|c:func:0|s:1"
+        label: ""
+    "IfThenOnlyHeader|c:func:0|s:0":
+      - dst: "IfThenOnlyHeader|c:func:0|h:before:0"
+        label: ""
+    "IfThenOnlyHeader|c:func:0|s:1":
+      - dst: "IfThenOnlyHeader|c:func:0|h:after:0"
+        label: ""
+"expr::IfThenOnlyHeader2":
+  nodes:
+    "IfThenOnlyHeader2|c:func:0":
+      label: IfThenOnlyHeader2
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 158
+        end: 341
+    "IfThenOnlyHeader2|c:func:0|h:after:0":
+      label: After
+      node_type: expr
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader2|c:func:0|h:before:0":
+      label: Before
+      node_type: expr
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader2|c:func:0|h:if:0":
+      label: If
+      node_type: expr
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "IfThenOnlyHeader2|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 200
+        end: 211
+    "IfThenOnlyHeader2|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 232
+        end: 243
+    "IfThenOnlyHeader2|c:func:0|s:2":
+      label: stmt
+      node_type: stmt
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 261
+        end: 318
+    "IfThenOnlyHeader2|c:func:0|s:4":
+      label: expr
+      node_type: expr
+      parent: "IfThenOnlyHeader2|c:func:0"
+      span:
+        file: src/control_flow/headers/if_then_only_header.baml
+        start: 338
+        end: 339
+  edges:
+    "IfThenOnlyHeader2|c:func:0":
+      - dst: "IfThenOnlyHeader2|c:func:0|s:0"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|h:after:0":
+      - dst: "IfThenOnlyHeader2|c:func:0|s:4"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|h:before:0":
+      - dst: "IfThenOnlyHeader2|c:func:0|s:1"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|h:if:0":
+      - dst: "IfThenOnlyHeader2|c:func:0|s:2"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|s:0":
+      - dst: "IfThenOnlyHeader2|c:func:0|h:before:0"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|s:1":
+      - dst: "IfThenOnlyHeader2|c:func:0|h:if:0"
+        label: ""
+    "IfThenOnlyHeader2|c:func:0|s:2":
+      - dst: "IfThenOnlyHeader2|c:func:0|h:after:0"
+        label: ""

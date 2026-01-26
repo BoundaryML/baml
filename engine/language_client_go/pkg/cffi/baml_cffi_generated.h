@@ -30,33 +30,43 @@ void register_callbacks(CallbackFn callback_fn,
 /**
  * Extern "C" function that returns immediately, scheduling the async call.
  * Once the asynchronous function completes, the provided callback is invoked.
+ * Returns Buffer with InvocationResponse (empty on success, error message on failure).
+ * Caller must free with free_buffer().
  */
-const void *call_function_from_c(const void *runtime,
-                                 const char *function_name,
-                                 const char *encoded_args,
-                                 uintptr_t length,
-                                 uint32_t id);
+struct Buffer call_function_from_c(const void *runtime,
+                                   const char *function_name,
+                                   const char *encoded_args,
+                                   uintptr_t length,
+                                   uint32_t id);
 
-const void *call_function_parse_from_c(const void *runtime,
-                                       const char *function_name,
-                                       const char *encoded_args,
-                                       uintptr_t length,
-                                       uint32_t id);
+/**
+ * Returns Buffer with InvocationResponse (empty on success, error message on failure).
+ * Caller must free with free_buffer().
+ */
+struct Buffer call_function_parse_from_c(const void *runtime,
+                                         const char *function_name,
+                                         const char *encoded_args,
+                                         uintptr_t length,
+                                         uint32_t id);
 
 /**
  * Extern "C" function that returns immediately, scheduling the async call.
  * Once the asynchronous function completes, the provided callback is invoked.
+ * Returns Buffer with InvocationResponse (empty on success, error message on failure).
+ * Caller must free with free_buffer().
  */
-const void *call_function_stream_from_c(const void *runtime,
-                                        const char *function_name,
-                                        const char *encoded_args,
-                                        uintptr_t length,
-                                        uint32_t id);
+struct Buffer call_function_stream_from_c(const void *runtime,
+                                          const char *function_name,
+                                          const char *encoded_args,
+                                          uintptr_t length,
+                                          uint32_t id);
 
 /**
  * Cancel a function call by its ID
+ * Returns Buffer with InvocationResponse (empty = success).
+ * Caller must free with free_buffer().
  */
-const void *cancel_function_call(uint32_t id);
+struct Buffer cancel_function_call(uint32_t id);
 
 struct Buffer call_object_constructor(const char *encoded_args, uintptr_t length);
 
@@ -64,7 +74,11 @@ void free_buffer(struct Buffer buf);
 
 struct Buffer call_object_method(const void *runtime, const char *encoded_args, uintptr_t length);
 
-const char *version(void);
+/**
+ * Returns the BAML version as a Buffer containing raw UTF-8 bytes.
+ * Caller must free with free_buffer().
+ */
+struct Buffer version(void);
 
 const void *create_baml_runtime(const char *root_path,
                                 const char *src_files_json,

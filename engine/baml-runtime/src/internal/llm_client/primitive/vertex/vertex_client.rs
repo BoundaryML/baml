@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use baml_types::BamlMediaContent;
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -35,7 +35,7 @@ use crate::{
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
         ModelFeatures, ResolveMediaUrls,
     },
-    request::create_client,
+    request::{create_client, create_http_client},
     RuntimeContext,
 };
 
@@ -132,7 +132,10 @@ impl WithStreamChat for VertexClient {
             self,
             either::Either::Right(prompt),
             Some(self.properties.model.clone()),
-            ResponseType::Vertex,
+            match self.properties.anthropic_version {
+                Some(ref anthropic_version) => ResponseType::Anthropic,
+                None => ResponseType::Vertex,
+            },
             ctx,
         )
         .await
@@ -156,14 +159,30 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::EnsureMime,
-                resolve_image_urls: ResolveMediaUrls::EnsureMime,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrlAddMimeType),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrlAddMimeType),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -185,14 +204,30 @@ impl VertexClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_audio_urls: ResolveMediaUrls::EnsureMime,
-                resolve_image_urls: ResolveMediaUrls::EnsureMime,
-                resolve_pdf_urls: ResolveMediaUrls::Never,
-                resolve_video_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: properties
+                    .media_url_handler
+                    .audio
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrlAddMimeType),
+                resolve_image_urls: properties
+                    .media_url_handler
+                    .images
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrlAddMimeType),
+                resolve_pdf_urls: properties
+                    .media_url_handler
+                    .pdf
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
+                resolve_video_urls: properties
+                    .media_url_handler
+                    .video
+                    .map(Into::into)
+                    .unwrap_or(ResolveMediaUrls::SendUrl),
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
-            client: create_client()?,
+            client: create_http_client(&properties.http_config)?,
             properties,
         })
     }
@@ -212,8 +247,9 @@ impl RequestBuilder for VertexClient {
         // VertexAuth can not be built in the WASM environment.
         _expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let vertex_auth =
-            super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy).await?;
+        // Determine if API key auth is being used (query param 'key')
+        let has_api_key_query = self.properties.query_params.contains_key("key");
+        let mut vertex_auth: Option<std::sync::Arc<super::auth::VertexAuth>> = None;
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
@@ -223,14 +259,32 @@ impl RequestBuilder for VertexClient {
                 } else {
                     format!("{location}-aiplatform.googleapis.com")
                 };
+                let project_id = match self.properties.project_id.as_ref() {
+                    Some(project_id) => project_id.to_string(),
+                    None => {
+                        if has_api_key_query {
+                            anyhow::bail!(
+                                "options.project_id is required when using API key auth with Vertex 'location' URLs;"
+                            );
+                        }
+                        // Fallback to GCP Application Default Credentials only when not using API key
+                        let va = match &vertex_auth {
+                            Some(va) => va,
+                            None => {
+                                vertex_auth = Some(
+                                    super::auth::VertexAuth::get_or_create(
+                                        &self.properties.auth_strategy,
+                                    )
+                                    .await?,
+                                );
+                                vertex_auth.as_ref().unwrap()
+                            }
+                        };
+                        va.project_id().await?.to_string()
+                    }
+                };
                 format!(
                     "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
-                    domain = domain,
-                    location = location,
-                    project_id = match self.properties.project_id.as_ref() {
-                        Some(project_id) => project_id.to_string(),
-                        None => vertex_auth.project_id().await?.to_string(),
-                    }
                 )
             }
         };
@@ -250,18 +304,66 @@ impl RequestBuilder for VertexClient {
             }
         );
 
+        // Build original URL with any configured query params appended (preserving alt=sse)
+        let original_with_query = if self.properties.query_params.is_empty() {
+            baml_original_url.clone()
+        } else {
+            let mut url = baml_original_url.clone();
+            let mut first = !url.contains('?');
+            for (k, v) in &self.properties.query_params {
+                if first {
+                    url.push('?');
+                    first = false;
+                } else {
+                    url.push('&');
+                }
+                // Note: values are appended as-is; expect callers to supply safe values
+                url.push_str(k);
+                url.push('=');
+                url.push_str(v);
+            }
+            url
+        };
+
         let mut req = match (&self.properties.proxy_url, allow_proxy) {
             (Some(proxy_url), true) => {
                 let req = self.client.post(proxy_url.clone());
-                req.header("baml-original-url", baml_original_url)
+                req.header("baml-original-url", original_with_query)
             }
-            _ => self.client.post(baml_original_url),
+            _ => {
+                let mut rb = self.client.post(baml_original_url);
+                if !self.properties.query_params.is_empty() {
+                    rb = rb.query(&self.properties.query_params);
+                }
+                rb
+            }
         };
 
-        // This is currently hardcoded, but we could make it a property if we wanted
+        // Apply request timeout if configured
+        // Defaults were already applied during client creation
+        if let Some(ms) = self.properties.http_config.request_timeout_ms {
+            if ms > 0 {
+                req = req.timeout(std::time::Duration::from_millis(ms));
+            }
+            // If ms == 0, don't set timeout (infinite timeout)
+        }
+
+        // Use OAuth2 bearer auth unless an API key is provided via query params (query_params.key)
         // https://developers.google.com/identity/protocols/oauth2/scopes
         const DEFAULT_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
-        req = req.bearer_auth(vertex_auth.token(&[DEFAULT_SCOPE]).await?.as_str());
+        if !has_api_key_query {
+            let va = match &vertex_auth {
+                Some(va) => va,
+                None => {
+                    vertex_auth = Some(
+                        super::auth::VertexAuth::get_or_create(&self.properties.auth_strategy)
+                            .await?,
+                    );
+                    vertex_auth.as_ref().unwrap()
+                }
+            };
+            req = req.bearer_auth(va.token(&[DEFAULT_SCOPE]).await?.as_str());
+        }
 
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
@@ -289,6 +391,13 @@ impl RequestBuilder for VertexClient {
             }
         }
 
+        // If this is an Anthropic-on-Vertex request and streaming is enabled, add `stream: true`
+        // to the JSON body to mirror Anthropic API behavior.
+        // See docs here: https://console.cloud.google.com/vertex-ai/publishers/anthropic/model-garden/claude-3-5-sonnet?authuser=1&hl=en&project=gloo-ai
+        if stream && self.properties.anthropic_version.is_some() {
+            json_body.insert("stream".into(), json!(true));
+        }
+
         let req = req.json(&json_body);
 
         Ok(req)
@@ -296,6 +405,10 @@ impl RequestBuilder for VertexClient {
 
     fn request_options(&self) -> &indexmap::IndexMap<String, serde_json::Value> {
         &self.properties.properties
+    }
+
+    fn http_config(&self) -> &internal_llm_client::HttpConfig {
+        &self.properties.http_config
     }
 }
 

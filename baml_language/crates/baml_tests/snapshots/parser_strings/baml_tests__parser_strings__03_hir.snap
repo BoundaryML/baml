@@ -1,0 +1,82 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function FormatMessage(name: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Generate a message for "{{ name }}"
+        Include quotes like: "Welcome, '{{ name }}'!"
+      
+  "#
+}
+
+class NestedQuotes {
+  single_in_double: string
+  double_in_single: string
+  She: said
+  hello: "')
+  escaped_in_escaped string @alias("
+  The: <unknown>
+  quote: <unknown>
+  is: here
+  complex_nesting: string
+  really: <unknown>
+  complex: <unknown>
+  json_like: string
+  key: <unknown>
+  value: <unknown>
+}
+
+function ProcessText(input: string) -> string {
+  client GPT4
+  prompt #"
+    
+        Process the following text:
+        {{ input }}
+        
+        Return the processed result.
+      
+  "#
+}
+
+class RawStrings {
+  simple: string
+  with_quotes: string
+  multi_hash: string
+  multiline: string
+}
+
+function GetRole() -> "admin" | "user" | "guest" {
+      return "user";
+}
+
+class Messages {
+  greeting: string
+  empty: string
+  with_spaces: string
+  with_escapes: string
+  with_quotes: string
+  hello: <unknown>
+}
+
+class UnicodeStrings {
+  emoji_basic: string
+  emoji_multiple: string
+  emoji_in_text: string
+  chinese: string
+  arabic: string
+  japanese: string
+  russian: string
+  math_symbols: string
+  currency: string
+  arrows: string
+  zero_width: string
+  rtl_override: string
+}
+
+client GPT4 {
+  provider: unknown
+}

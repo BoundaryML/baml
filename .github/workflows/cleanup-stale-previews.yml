@@ -1,0 +1,112 @@
+name: Cleanup Stale BEPs Previews
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Get all branches
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.BEPS_AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Find and cleanup stale previews
+        run: |
+          echo "🔍 Scanning for stale preview deployments..."
+
+            # Get all "folders" (prefixes) in S3, excluding root files
+            PREFIXES=$(aws s3 ls s3://${{ secrets.BEPS_S3_BUCKET }}/ | grep "PRE" | awk '{print $2}' | sed 's/\///g')
+
+          if [ -z "$PREFIXES" ]; then
+            echo "No preview folders found in S3"
+            exit 0
+          fi
+
+          echo "Found preview folders: $PREFIXES"
+          echo ""
+
+          # Get all current branches (sanitized names)
+          echo "Getting current branches..."
+          CURRENT_BRANCHES=$(git branch -r | grep -v HEAD | sed 's/origin\///' | sed 's/^[[:space:]]*//' | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+
+          echo "Current branches (sanitized):"
+          echo "$CURRENT_BRANCHES"
+          echo ""
+
+          # Also check modification date (14 days ago)
+          CUTOFF_DATE=$(date -u -d '14 days ago' +%s 2>/dev/null || date -u -v-14d +%s)
+
+            # Check each S3 prefix
+            DELETED_COUNT=0
+            for PREFIX in $PREFIXES; do
+              # Skip canary (production) and other non-branch files
+              if [[ "$PREFIX" == "canary" ]] || [[ "$PREFIX" == "index.html" ]] || [[ "$PREFIX" == "404.html" ]] || [[ "$PREFIX" == "assets" ]] || [[ "$PREFIX" == "sitemap.xml" ]]; then
+                echo "⏭️  Skipping protected folder: $PREFIX"
+                continue
+              fi
+            
+            # Check if branch still exists
+            BRANCH_EXISTS=$(echo "$CURRENT_BRANCHES" | grep -x "$PREFIX" || echo "")
+            
+            if [ -z "$BRANCH_EXISTS" ]; then
+              echo "🗑️  Branch '$PREFIX' no longer exists - deleting preview..."
+              aws s3 rm s3://${{ secrets.BEPS_S3_BUCKET }}/$PREFIX/ --recursive
+              
+              # Invalidate CloudFront cache
+              aws cloudfront create-invalidation \
+                --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
+                --paths "/$PREFIX/*" > /dev/null
+              
+              DELETED_COUNT=$((DELETED_COUNT + 1))
+              echo "✓ Deleted preview for '$PREFIX'"
+            else
+              # Check if files are older than 14 days
+              LAST_MODIFIED=$(aws s3api list-objects-v2 \
+                --bucket ${{ secrets.BEPS_S3_BUCKET }} \
+                --prefix "$PREFIX/" \
+                --query 'sort_by(Contents, &LastModified)[-1].LastModified' \
+                --output text)
+              
+              if [ ! -z "$LAST_MODIFIED" ]; then
+                LAST_MODIFIED_EPOCH=$(date -u -d "$LAST_MODIFIED" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${LAST_MODIFIED%.*}" +%s)
+                
+                if [ "$LAST_MODIFIED_EPOCH" -lt "$CUTOFF_DATE" ]; then
+                  echo "🗑️  Preview '$PREFIX' is older than 14 days (last modified: $LAST_MODIFIED) - deleting..."
+                  aws s3 rm s3://${{ secrets.BEPS_S3_BUCKET }}/$PREFIX/ --recursive
+                  
+                  # Invalidate CloudFront cache
+                  aws cloudfront create-invalidation \
+                    --distribution-id ${{ secrets.BEPS_CLOUDFRONT_DISTRIBUTION_ID }} \
+                    --paths "/$PREFIX/*" > /dev/null
+                  
+                  DELETED_COUNT=$((DELETED_COUNT + 1))
+                  echo "✓ Deleted stale preview for '$PREFIX'"
+                else
+                  echo "✓ Preview '$PREFIX' is current (last modified: $LAST_MODIFIED)"
+                fi
+              fi
+            fi
+          done
+
+          echo ""
+          echo "=================================================="
+          if [ $DELETED_COUNT -eq 0 ]; then
+            echo "✅ No stale previews found"
+          else
+            echo "✅ Cleaned up $DELETED_COUNT stale preview(s)"
+          fi
+          echo "=================================================="

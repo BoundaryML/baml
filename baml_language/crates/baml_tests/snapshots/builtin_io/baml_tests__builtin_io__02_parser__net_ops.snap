@@ -1,0 +1,233 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConnectAndRead"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "sock"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.net.connect"
+              WORD "baml"
+              DOT "."
+              WORD "net"
+              DOT "."
+              WORD "connect"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "127.0.0.1:8080"
+                QUOTE """
+                FLOAT_LITERAL "127.0"
+                DOT "."
+                FLOAT_LITERAL "0.1"
+                COLON ":"
+                INTEGER_LITERAL "8080"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "sock.read"
+            WORD "sock"
+            DOT "."
+            WORD "read"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConnectAndReadInline"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              PATH_EXPR "baml.net.connect"
+                WORD "baml"
+                DOT "."
+                WORD "net"
+                DOT "."
+                WORD "connect"
+              CALL_ARGS
+                L_PAREN "("
+                STRING_LITERAL "localhost:3000"
+                  QUOTE """
+                  WORD "localhost"
+                  COLON ":"
+                  INTEGER_LITERAL "3000"
+                  QUOTE """
+                R_PAREN ")"
+            DOT "."
+            WORD "read"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MultipleConnections"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "s1"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.net.connect"
+              WORD "baml"
+              DOT "."
+              WORD "net"
+              DOT "."
+              WORD "connect"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "server1:80"
+                QUOTE """
+                WORD "server1"
+                COLON ":"
+                INTEGER_LITERAL "80"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "s2"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.net.connect"
+              WORD "baml"
+              DOT "."
+              WORD "net"
+              DOT "."
+              WORD "connect"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "server2:80"
+                QUOTE """
+                WORD "server2"
+                COLON ":"
+                INTEGER_LITERAL "80"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "data1"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "s1.read"
+              WORD "s1"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "data2"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "s2.read"
+              WORD "s2"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        BINARY_EXPR "data1 + data2"
+          WORD "data1"
+          PLUS "+"
+          WORD "data2"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConnectReadAndClose"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "sock"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.net.connect"
+              WORD "baml"
+              DOT "."
+              WORD "net"
+              DOT "."
+              WORD "connect"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "127.0.0.1:8080"
+                QUOTE """
+                FLOAT_LITERAL "127.0"
+                DOT "."
+                FLOAT_LITERAL "0.1"
+                COLON ":"
+                INTEGER_LITERAL "8080"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "data"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "sock.read"
+              WORD "sock"
+              DOT "."
+              WORD "read"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "sock.close"
+            WORD "sock"
+            DOT "."
+            WORD "close"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        WORD "data"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

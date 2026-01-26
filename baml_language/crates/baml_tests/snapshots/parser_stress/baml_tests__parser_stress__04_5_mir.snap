@@ -1,0 +1,432 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn ComplexType() -> Map { key: String, value: Map { key: String, value: Map { key: String, value: Optional(List(Int)) } } } {
+    // Locals:
+    let _0: Map { key: String, value: Map { key: String, value: Map { key: String, value: Optional(List(Int)) } } } // return
+    let _1: Void
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn DeepExpression() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Void
+    let _2: Int
+    let _3: Int
+    let _4: Int
+    let _5: Int
+    let _6: Int
+    let _7: Int
+    let _8: Int
+    let _9: Int
+    let _10: Int
+    let _11: Int
+    let _12: Int
+    let _13: Int
+    let _14: Int
+    let _15: Int
+    let _16: Int
+    let _17: Int
+    let _18: Int
+    let _19: Int
+
+    bb0: {
+        _10 = const 1_i64;
+        _11 = const 2_i64;
+        _9 = copy _10 + copy _11;
+        _12 = const 3_i64;
+        _8 = copy _9 * copy _12;
+        _13 = const 4_i64;
+        _7 = copy _8 - copy _13;
+        _14 = const 5_i64;
+        _6 = copy _7 / copy _14;
+        _15 = const 6_i64;
+        _5 = copy _6 + copy _15;
+        _16 = const 7_i64;
+        _4 = copy _5 * copy _16;
+        _17 = const 8_i64;
+        _3 = copy _4 - copy _17;
+        _18 = const 9_i64;
+        _2 = copy _3 / copy _18;
+        _19 = const 10_i64;
+        _0 = copy _2 + copy _19;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+
+}
+
+fn Process22:
+  (LLM function - no MIR)
+
+fn Process54:
+  (LLM function - no MIR)
+
+fn Process95:
+  (LLM function - no MIR)
+
+fn Process60:
+  (LLM function - no MIR)
+
+fn Process68:
+  (LLM function - no MIR)
+
+fn Process14:
+  (LLM function - no MIR)
+
+fn Process79:
+  (LLM function - no MIR)
+
+fn Process84:
+  (LLM function - no MIR)
+
+fn Process33:
+  (LLM function - no MIR)
+
+fn Process12:
+  (LLM function - no MIR)
+
+fn Process74:
+  (LLM function - no MIR)
+
+fn Process99:
+  (LLM function - no MIR)
+
+fn Process64:
+  (LLM function - no MIR)
+
+fn Process52:
+  (LLM function - no MIR)
+
+fn Process7:
+  (LLM function - no MIR)
+
+fn Process80:
+  (LLM function - no MIR)
+
+fn Process58:
+  (LLM function - no MIR)
+
+fn Process97:
+  (LLM function - no MIR)
+
+fn Process36:
+  (LLM function - no MIR)
+
+fn Process63:
+  (LLM function - no MIR)
+
+fn Process19:
+  (LLM function - no MIR)
+
+fn Process83:
+  (LLM function - no MIR)
+
+fn Process18:
+  (LLM function - no MIR)
+
+fn Process26:
+  (LLM function - no MIR)
+
+fn Process43:
+  (LLM function - no MIR)
+
+fn Process46:
+  (LLM function - no MIR)
+
+fn Process62:
+  (LLM function - no MIR)
+
+fn Process87:
+  (LLM function - no MIR)
+
+fn Process44:
+  (LLM function - no MIR)
+
+fn Process47:
+  (LLM function - no MIR)
+
+fn Process35:
+  (LLM function - no MIR)
+
+fn Process38:
+  (LLM function - no MIR)
+
+fn Process41:
+  (LLM function - no MIR)
+
+fn Process28:
+  (LLM function - no MIR)
+
+fn Process65:
+  (LLM function - no MIR)
+
+fn Process6:
+  (LLM function - no MIR)
+
+fn Process32:
+  (LLM function - no MIR)
+
+fn Process92:
+  (LLM function - no MIR)
+
+fn Process55:
+  (LLM function - no MIR)
+
+fn Process66:
+  (LLM function - no MIR)
+
+fn Process56:
+  (LLM function - no MIR)
+
+fn Process67:
+  (LLM function - no MIR)
+
+fn Process3:
+  (LLM function - no MIR)
+
+fn Process75:
+  (LLM function - no MIR)
+
+fn Process48:
+  (LLM function - no MIR)
+
+fn Process49:
+  (LLM function - no MIR)
+
+fn Process61:
+  (LLM function - no MIR)
+
+fn Process96:
+  (LLM function - no MIR)
+
+fn Process34:
+  (LLM function - no MIR)
+
+fn Process59:
+  (LLM function - no MIR)
+
+fn Process89:
+  (LLM function - no MIR)
+
+fn Process45:
+  (LLM function - no MIR)
+
+fn Process86:
+  (LLM function - no MIR)
+
+fn Process16:
+  (LLM function - no MIR)
+
+fn Process39:
+  (LLM function - no MIR)
+
+fn Process82:
+  (LLM function - no MIR)
+
+fn Process2:
+  (LLM function - no MIR)
+
+fn Process27:
+  (LLM function - no MIR)
+
+fn Process53:
+  (LLM function - no MIR)
+
+fn Process23:
+  (LLM function - no MIR)
+
+fn Process9:
+  (LLM function - no MIR)
+
+fn Process72:
+  (LLM function - no MIR)
+
+fn Process77:
+  (LLM function - no MIR)
+
+fn Process40:
+  (LLM function - no MIR)
+
+fn Process30:
+  (LLM function - no MIR)
+
+fn Process8:
+  (LLM function - no MIR)
+
+fn Process11:
+  (LLM function - no MIR)
+
+fn Process37:
+  (LLM function - no MIR)
+
+fn Process4:
+  (LLM function - no MIR)
+
+fn Process91:
+  (LLM function - no MIR)
+
+fn Process31:
+  (LLM function - no MIR)
+
+fn Process50:
+  (LLM function - no MIR)
+
+fn Process20:
+  (LLM function - no MIR)
+
+fn Process98:
+  (LLM function - no MIR)
+
+fn Process85:
+  (LLM function - no MIR)
+
+fn Process78:
+  (LLM function - no MIR)
+
+fn Process1:
+  (LLM function - no MIR)
+
+fn Process90:
+  (LLM function - no MIR)
+
+fn Process17:
+  (LLM function - no MIR)
+
+fn Process81:
+  (LLM function - no MIR)
+
+fn Process71:
+  (LLM function - no MIR)
+
+fn Process15:
+  (LLM function - no MIR)
+
+fn Process42:
+  (LLM function - no MIR)
+
+fn Process51:
+  (LLM function - no MIR)
+
+fn Process5:
+  (LLM function - no MIR)
+
+fn Process13:
+  (LLM function - no MIR)
+
+fn Process29:
+  (LLM function - no MIR)
+
+fn Process93:
+  (LLM function - no MIR)
+
+fn Process70:
+  (LLM function - no MIR)
+
+fn Process76:
+  (LLM function - no MIR)
+
+fn Process10:
+  (LLM function - no MIR)
+
+fn Process21:
+  (LLM function - no MIR)
+
+fn Process100:
+  (LLM function - no MIR)
+
+fn Process94:
+  (LLM function - no MIR)
+
+fn Process25:
+  (LLM function - no MIR)
+
+fn Process69:
+  (LLM function - no MIR)
+
+fn Process24:
+  (LLM function - no MIR)
+
+fn Process88:
+  (LLM function - no MIR)
+
+fn Process73:
+  (LLM function - no MIR)
+
+fn Process57:
+  (LLM function - no MIR)
+
+fn BodyTorture() -> Int {
+    // Locals:
+    let _0: Int // return
+    let _1: Unknown // x
+    let _2: Void
+    let _3: Bool
+    let _4: Void
+    let _5: Unknown
+    let _6: Int
+    let _7: Unknown
+    let _8: Void
+    let _9: Void
+    let _10: Unknown
+    let _11: Int
+    let _12: Unknown
+
+    bb0: {
+        _1 = const null;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = copy _1;
+        _6 = const 1_i64;
+        _7 = copy _5 + copy _6;
+        _1 = copy _7;
+        _4 = const null;
+        _3 = const null;
+        branch copy _3 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _10 = copy _1;
+        _11 = const 1_i64;
+        _12 = copy _10 + copy _11;
+        _1 = copy _12;
+        _9 = const null;
+        _8 = const null;
+        goto -> bb2;
+    }
+
+    bb4: {
+        _2 = const null;
+        _0 = const null;
+        goto -> bb1;
+    }
+
+}

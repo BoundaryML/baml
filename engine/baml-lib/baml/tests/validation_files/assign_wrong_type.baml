@@ -1,4 +1,4 @@
-fn AssignWrongType(x: int) -> int {
+function AssignWrongType(x: int) -> int {
 
 	let y = 3;
 

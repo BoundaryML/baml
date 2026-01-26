@@ -27,8 +27,10 @@ use std::io::IsTerminal;
 use colored::{Color, Colorize};
 
 use crate::{
-    vm::indexable::GlobalPool, EvalStack, Function, Instruction, Object, ObjectIndex, ObjectPool,
-    StackIndex, Value,
+    bytecode::Instruction,
+    indexable::{EvalStack, GlobalPool},
+    types::{Function, Object, Value, VizNodeMeta},
+    ObjectIndex, ObjectPool, StackIndex,
 };
 
 /// Context aware instruction display.
@@ -62,7 +64,10 @@ pub fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             format!("({})", display_value(&globals[*index], objects))
         }
-        Instruction::LoadVar(index) | Instruction::StoreVar(index) => {
+        Instruction::LoadVar(index)
+        | Instruction::StoreVar(index)
+        | Instruction::Watch(index)
+        | Instruction::Notify(index) => {
             format!(
                 "({})",
                 function
@@ -103,9 +108,13 @@ pub fn display_instruction(
         Instruction::Jump(offset) | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)
         }
+        Instruction::VizEnter(index) | Instruction::VizExit(index) => {
+            viz_metadata(*index, &function.viz_nodes)
+        }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             format!("({})", display_object(objects, *index))
         }
+
         Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::PopReplace(_)
@@ -194,6 +203,8 @@ fn instruction_color(instruction: &Instruction) -> Color {
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Color::Cyan,
         Instruction::DispatchFuture(_) | Instruction::Await => Color::BrightGreen,
+        Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::White,
+        Instruction::Watch(_) | Instruction::Notify(_) => Color::BrightRed,
     }
 }
 
@@ -348,6 +359,29 @@ pub fn display_bytecode(
     table
 }
 
+fn viz_metadata(index: usize, nodes: &[VizNodeMeta]) -> String {
+    match nodes.get(index) {
+        Some(node) => {
+            let mut metadata = vec![
+                format!("node_id={}", node.node_id),
+                format!("log_filter_key={}", node.log_filter_key),
+                format!("type={:?}", node.node_type),
+            ];
+            if let Some(parent) = &node.parent_log_filter_key {
+                metadata.push(format!("parent_log_filter_key={parent}"));
+            }
+            if !node.label.is_empty() {
+                metadata.push(format!("label=\"{}\"", node.label));
+            }
+            if let Some(level) = node.header_level {
+                metadata.push(format!("level={level}"));
+            }
+            format!("({})", metadata.join(", "))
+        }
+        None => format!("(invalid viz index: {index})"),
+    }
+}
+
 /// Prints the dissassembly of a function.
 pub fn disassemble(
     function: &Function,
@@ -359,5 +393,5 @@ pub fn disassemble(
 
     let disassembly = display_bytecode(function, stack, objects, globals, use_colors);
 
-    println!("{disassembly}");
+    eprintln!("{disassembly}");
 }

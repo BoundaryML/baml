@@ -193,6 +193,16 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
 }
 
 impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
+    fn attributes(&self, _db: &ParserDatabase) -> NodeAttributes {
+        NodeAttributes {
+            meta: Default::default(),
+            constraints: Vec::new(),
+            span: Some(self.expr_fn().span.clone()),
+            identifier_span: Some(self.expr_fn().name.span().clone()),
+            symbol_spans: HashMap::new(),
+        }
+    }
+
     fn repr(&self, db: &ParserDatabase) -> Result<ExprFunction> {
         let body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
         let args: Vec<(String, TypeIR)> = self
@@ -342,15 +352,22 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 *val,
                 (span.clone(), Some(TypeIR::bool())),
             ))),
-            ast::Expression::NumericValue(val, span) => val
-                .parse::<i64>()
-                .map(|v| {
-                    Expr::Atom(BamlValueWithMeta::Int(
+            ast::Expression::NumericValue(val, span) => {
+                // Prefer int when it parses cleanly; otherwise fall back to float.
+                if let Ok(v) = val.parse::<i64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Int(
                         v,
                         (span.clone(), Some(TypeIR::int())),
-                    ))
-                })
-                .map_err(|_| anyhow!("Invalid numeric value: {}", val)),
+                    )))
+                } else if let Ok(f) = val.parse::<f64>() {
+                    Ok(Expr::Atom(BamlValueWithMeta::Float(
+                        f,
+                        (span.clone(), Some(TypeIR::float())),
+                    )))
+                } else {
+                    Err(anyhow!("Invalid numeric value: {}", val))
+                }
+            }
             ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
                 val.to_string(),
                 (span.clone(), Some(TypeIR::string())),
@@ -551,6 +568,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                         ast::BinaryOperator::Shr => expr::BinaryOperator::Shr,
                         ast::BinaryOperator::And => expr::BinaryOperator::And,
                         ast::BinaryOperator::Or => expr::BinaryOperator::Or,
+                        ast::BinaryOperator::InstanceOf => expr::BinaryOperator::InstanceOf,
                     },
                     right: Arc::new(right_ir),
                     meta: (span.clone(), None),
@@ -677,17 +695,17 @@ impl IntermediateRepr {
         self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_all_non_streaming_unions(&self) -> impl Iterator<Item = TypeNonStreaming> {
-        // finding types used in classes
+    fn walk_all_types_with_filter<F, T>(&self, filter: F) -> Vec<T>
+    where
+        F: Fn(&TypeIR) -> Vec<T>,
+    {
         let class_fields = self
             .classes
             .iter()
             .flat_map(|c| c.elem.static_fields.iter().map(|f| &f.elem.r#type.elem));
 
-        // finding types used in type aliases
         let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
 
-        // finding types used in functions
         let function_fields = self.functions.iter().flat_map(|f| {
             f.elem
                 .inputs
@@ -698,53 +716,74 @@ impl IntermediateRepr {
 
         let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
 
-        // also then flatten the types so any inner types are also included
-        fn is_union(t: &TypeNonStreaming) -> bool {
-            matches!(t, TypeNonStreaming::Union(..))
-        }
+        all_types.flat_map(filter).collect::<Vec<_>>()
+    }
 
-        let mut res = vec![];
-        all_types.for_each(|t| {
-            let found = t.to_non_streaming_type(self);
-            res.extend(found.find_if(&is_union, false).into_iter().cloned());
-        });
+    fn walk_all_non_streaming_types_with_filter<F>(&self, filter: F) -> Vec<TypeNonStreaming>
+    where
+        F: Fn(&TypeNonStreaming) -> bool,
+    {
+        let is_non_streaming = move |t: &TypeIR| -> Vec<TypeNonStreaming> {
+            let t = t.to_non_streaming_type(self);
+            t.find_if(&filter, false)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
 
-        res.into_iter()
+        self.walk_all_types_with_filter(is_non_streaming)
+    }
+
+    fn walk_all_streaming_types_with_filter<F>(&self, filter: F) -> Vec<TypeStreaming>
+    where
+        F: Fn(&TypeStreaming) -> bool,
+    {
+        let is_streaming = move |t: &TypeIR| -> Vec<TypeStreaming> {
+            let t = t.to_streaming_type(self);
+            t.find_if(&filter, false)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        self.walk_all_types_with_filter(is_streaming)
+    }
+
+    pub fn walk_all_types_with_checks(&self) -> impl Iterator<Item = TypeNonStreaming> {
+        self.walk_all_non_streaming_types_with_filter(|t| {
+            t.meta()
+                .constraints
+                .iter()
+                .any(|c| c.level == ConstraintLevel::Check)
+        })
+        .into_iter()
+    }
+
+    pub fn walk_all_streaming_types_with_stream_state(
+        &self,
+    ) -> impl Iterator<Item = TypeStreaming> {
+        self.walk_all_streaming_types_with_filter(|t| t.meta().streaming_behavior.state)
+            .into_iter()
+    }
+
+    pub fn walk_all_non_streaming_unions(&self) -> impl Iterator<Item = TypeNonStreaming> {
+        self.walk_all_non_streaming_types_with_filter(|t| matches!(t, TypeNonStreaming::Union(..)))
+            .into_iter()
+    }
+
+    pub fn walk_all_streaming_types_with_checks(&self) -> impl Iterator<Item = TypeStreaming> {
+        self.walk_all_streaming_types_with_filter(|t| {
+            t.meta()
+                .constraints
+                .iter()
+                .any(|c| c.level == ConstraintLevel::Check)
+        })
+        .into_iter()
     }
 
     pub fn walk_all_streaming_unions(&self) -> impl Iterator<Item = TypeStreaming> {
-        // finding types used in classes
-        let class_fields = self
-            .classes
-            .iter()
-            .flat_map(|c| c.elem.static_fields.iter().map(|f| &f.elem.r#type.elem));
-
-        // finding types used in type aliases
-        let type_alias_fields = self.type_aliases.iter().map(|c| &c.elem.r#type.elem);
-
-        // finding types used in functions
-        let function_fields = self.functions.iter().flat_map(|f| {
-            f.elem
-                .inputs
-                .iter()
-                .map(|(_, t)| t)
-                .chain(std::iter::once(&f.elem.output))
-        });
-
-        let all_types = class_fields.chain(type_alias_fields).chain(function_fields);
-
-        // also then flatten the types so any inner types are also included
-        fn is_union(t: &TypeStreaming) -> bool {
-            matches!(t, TypeStreaming::Union(..))
-        }
-
-        let mut res = vec![];
-        all_types.for_each(|t| {
-            let found = t.to_streaming_type(self);
-            res.extend(found.find_if(&is_union, false).into_iter().cloned());
-        });
-
-        res.into_iter()
+        self.walk_all_streaming_types_with_filter(|t| matches!(t, TypeStreaming::Union(..)))
+            .into_iter()
     }
 
     // TODO: This is a quick workaround in order to make expr_fns compatible
@@ -777,6 +816,17 @@ impl IntermediateRepr {
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {
             f.elem.tests().iter().map(move |t| Walker {
+                ir: self,
+                item: (f, t),
+            })
+        })
+    }
+
+    pub fn walk_expr_fn_test_pairs(
+        &self,
+    ) -> impl Iterator<Item = Walker<'_, (&Node<ExprFunction>, &Node<TestCase>)>> {
+        self.expr_fns.iter().flat_map(move |f| {
+            f.elem.tests.iter().map(move |t| Walker {
                 ir: self,
                 item: (f, t),
             })
@@ -1065,6 +1115,21 @@ impl IntermediateRepr {
 
         // Now for every type every used in the IR, inject block level attributes
         // from the types that have them.
+
+        // Special handling for classes with @@stream.done:
+        // Fields within such classes should get both @done and @not_null
+        for c in self.classes.iter_mut() {
+            let class_streaming_behavior = c.attributes.streaming_behavior();
+
+            // Only process if the class has @stream.done
+            if class_streaming_behavior.done {
+                for f in c.elem.static_fields.iter_mut() {
+                    let field_type = &mut f.elem.r#type.elem;
+                    field_type.meta_mut().streaming_behavior.done = true;
+                    field_type.meta_mut().streaming_behavior.needed = true;
+                }
+            }
+        }
 
         // finding types used in classes
         let class_fields = self.classes.iter_mut().flat_map(|c| {
@@ -3381,7 +3446,7 @@ mod tests {
     fn test_expr_fn_tests() {
         let ir = make_test_ir(
             r##"
-            fn Foo(x: int) -> int {
+            function Foo(x: int) -> int {
                 x
             }
 

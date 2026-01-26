@@ -17,7 +17,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     private partialCoerce: (result: any) => PartialOutputType,
     private finalCoerce: (result: any) => FinalOutputType,
     private ctxManager: RuntimeContextManager,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
   ) {
     this.abortSignal = abortSignal;
 
@@ -35,7 +35,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       if (this.abortSignal?.aborted) {
         throw new BamlAbortError(
           "Operation was aborted",
-          this.abortSignal.reason
+          this.abortSignal.reason,
         );
       }
 
@@ -47,7 +47,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
           }
 
           this.eventQueue.push(data);
-        }
+        },
       );
 
       const retval = await this.ffiStream.done(this.ctxManager);
@@ -104,6 +104,14 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
 
       if (event.isOk()) {
         yield this.partialCoerce(event.parsed(true));
+      } else {
+        // Event contains an error (e.g., timeout, LLM failure)
+        // Try to parse it to get the proper error, which will throw
+        try {
+          event.parsed(true);
+        } catch (error) {
+          throw toBamlError(error);
+        }
       }
     }
   }
@@ -117,10 +125,14 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
   /**
    * Converts the BAML stream to a Next.js compatible stream.
    * This is used for server-side streaming in Next.js API routes and Server Actions.
-   * The stream emits JSON-encoded messages containing either:
+   * The stream emits newline-delimited JSON (NDJSON) messages containing either:
    * - Partial results of type PartialOutputType
    * - Final result of type FinalOutputType
    * - Error information
+   *
+   * Each message is a JSON object followed by a newline character.
+   * This format handles TCP chunking correctly - messages can be split across
+   * chunks or multiple messages can arrive in a single chunk.
    */
   toStreamable(): ReadableStream<Uint8Array> {
     const stream = this;
@@ -129,22 +141,24 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
     return new ReadableStream({
       async start(controller) {
         try {
-          // Stream partials
+          // Stream partials - each message ends with newline for NDJSON format
           for await (const partial of stream) {
-            controller.enqueue(encoder.encode(JSON.stringify({ partial })));
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ partial }) + "\n"),
+            );
           }
 
           try {
             const final = await stream.getFinalResponse();
-            controller.enqueue(encoder.encode(JSON.stringify({ final })));
+            controller.enqueue(encoder.encode(JSON.stringify({ final }) + "\n"));
             controller.close();
             return;
           } catch (err: unknown) {
             const bamlError = toBamlError(
-              err instanceof Error ? err : new Error(String(err))
+              err instanceof Error ? err : new Error(String(err)),
             );
             controller.enqueue(
-              encoder.encode(JSON.stringify({ error: bamlError }))
+              encoder.encode(JSON.stringify({ error: bamlError }) + "\n"),
             );
             controller.close();
             return;
@@ -161,7 +175,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
           };
 
           controller.enqueue(
-            encoder.encode(JSON.stringify({ error: errorPayload }))
+            encoder.encode(JSON.stringify({ error: errorPayload }) + "\n"),
           );
           controller.close();
         }

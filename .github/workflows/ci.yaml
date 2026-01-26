@@ -1,0 +1,432 @@
+name: CI - BAML Language
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+on:
+  push:
+    branches: [main, canary]
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  determine_changes:
+    name: "Determine changes"
+    runs-on: ubuntu-latest
+    outputs:
+      # Flag that is raised when any code in baml_language is changed
+      code: ${{ steps.check_code.outputs.changed }}
+      # Flag for lexer changes
+      lexer: ${{ steps.check_lexer.outputs.changed }}
+      # Flag for parser changes
+      parser: ${{ steps.check_parser.outputs.changed }}
+      # Flag for HIR changes
+      hir: ${{ steps.check_hir.outputs.changed }}
+      # Flag for THIR changes
+      thir: ${{ steps.check_thir.outputs.changed }}
+      # Flag for codegen changes
+      codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Flag for BEP changes
+      beps: ${{ steps.check_beps.outputs.changed }}
+      # Flag for docs/frontend changes
+      docs: ${{ steps.check_docs.outputs.changed }}
+      # Flag for typescript2/webview changes
+      webview: ${{ steps.check_webview.outputs.changed }}
+      # Flag for unsafe code changes (bex_heap) - triggers Miri tests
+      unsafe: ${{ steps.check_unsafe.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Determine merge base
+        id: merge_base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+        run: |
+          sha=$(git merge-base HEAD "origin/${BASE_REF}")
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if code changed
+        id: check_code
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/**' \
+            ':.github/workflows/ci.yaml' \
+            ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/wasm-pack-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if lexer code changed
+        id: check_lexer
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_base/**' \
+            ':baml_language/Cargo.toml' \
+            ':baml_language/Cargo.lock' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if parser code changed
+        id: check_parser
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_compiler_syntax/**' \
+            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if HIR code changed
+        id: check_hir
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_hir/**' \
+            ':baml_language/crates/baml_workspace/**' \
+            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if THIR code changed
+        id: check_thir
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_thir/**' \
+            ':baml_language/crates/baml_compiler_hir/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if codegen code changed
+        id: check_codegen
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/baml_compiler_emit/**' \
+            ':baml_language/crates/baml_thir/**' \
+            ':baml_language/crates/baml_base/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if BEPs changed
+        id: check_beps
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':beps/**' \
+            ':.github/workflows/beps.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if docs changed
+        id: check_docs
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':fern/**' \
+            ':typescript/apps/ask-baml-client/**' \
+            ':typescript/apps/sage-backend/**' \
+            ':.github/workflows/docs.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if webview changed
+        id: check_webview
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-vscode-webview/**' \
+            ':typescript2/pkg-playground/**' \
+            ':baml_language/crates/baml_playground_wasm/**' \
+            ':.github/workflows/webview-tests.reusable.yaml' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if unsafe code changed
+        id: check_unsafe
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+        run: |
+          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':baml_language/crates/bex_heap/**' \
+          ; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Lint checks
+  prek:
+    name: "Pre-commit Checks"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    timeout-minutes: 15
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install clippy and wasm target"
+        run: |
+          rustup component add clippy
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - name: "Install uv"
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Install prek"
+        uses: j178/prek-action@v1
+        with:
+          install-only: true
+
+      - name: "Cache prek"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: "Run prek"
+        run: |
+          echo '```console' > "$GITHUB_STEP_SUMMARY"
+          # Enable color output for prek and remove it for the summary
+          # Use --hook-stage=manual to enable slower hooks that are skipped by default
+          prek run --all-files --show-diff-on-failure --color always --hook-stage manual | \
+            tee >(sed -E 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})*)?[mGK]//g' >> "$GITHUB_STEP_SUMMARY") >&1
+          exit_code="${PIPESTATUS[0]}"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$exit_code"
+
+  # Call reusable workflows
+  cargo-tests:
+    name: "Cargo Tests"
+    needs: determine_changes
+    uses: ./.github/workflows/cargo-tests.reusable.yaml
+    with:
+      code_changed: ${{ needs.determine_changes.outputs.code }}
+      run_all: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+
+  wasm-pack-tests:
+    name: "WASM Pack Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
+    secrets: inherit
+
+  beps:
+    name: "BEPs"
+    needs: determine_changes
+    uses: ./.github/workflows/beps.reusable.yaml
+    with:
+      beps_changed: ${{ needs.determine_changes.outputs.beps }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+      is_pr: ${{ github.event_name == 'pull_request' }}
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      deployments: write
+
+  docs:
+    name: "Docs"
+    needs: determine_changes
+    uses: ./.github/workflows/docs.reusable.yaml
+    with:
+      docs_changed: ${{ needs.determine_changes.outputs.docs }}
+      is_canary: ${{ github.ref == 'refs/heads/canary' }}
+    secrets: inherit
+    permissions: write-all
+
+  webview-tests:
+    name: "Webview Tests"
+    needs: determine_changes
+    if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    uses: ./.github/workflows/webview-tests.reusable.yaml
+    secrets: inherit
+
+  miri-tests:
+    name: "Miri (unsafe code verification)"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.unsafe == 'true'
+    timeout-minutes: 20
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust nightly and Miri"
+        run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+        working-directory: baml_language
+
+      - name: "Run Miri tests on bex_heap"
+        run: cargo miri test -p bex_heap --lib
+        working-directory: baml_language
+
+  benchmarks-instrumented:
+    name: "benchmarks instrumented (baml)"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    # Skip benchmarks in merge_group - they already ran in the PR
+    if: |
+      github.event_name != 'merge_group' &&
+      (
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/canary' ||
+        contains(github.event.pull_request.body, 'RUN_CODSPEED=1') ||
+        needs.determine_changes.outputs.lexer == 'true' ||
+        needs.determine_changes.outputs.parser == 'true' ||
+        needs.determine_changes.outputs.hir == 'true' ||
+        needs.determine_changes.outputs.thir == 'true' ||
+        needs.determine_changes.outputs.codegen == 'true'
+      )
+    timeout-minutes: 20
+    steps:
+      - name: "Checkout Branch"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - name: "Install codspeed"
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed
+
+      - name: "Build benchmarks"
+        run: cargo codspeed build -p baml_tests -m walltime
+        working-directory: baml_language
+
+      - name: "Run benchmarks"
+        uses: CodSpeedHQ/action@v3
+        with:
+          mode: walltime
+          run: cd baml_language && cargo codspeed run
+          token: ${{ secrets.CODSPEED_TOKEN }}
+
+  # CI Failure Alert - Required status check using "skipped = success" pattern
+  # See: https://devopsdirective.com/posts/2025/08/github-actions-required-checks-for-conditional-jobs/
+  #
+  # This job exploits GitHub's behavior where skipped jobs report as "Success".
+  # - When all tests pass (or are intentionally skipped): this job SKIPS → reports SUCCESS
+  # - When any test fails or is cancelled: this job RUNS and FAILS → blocks merge
+  #
+  # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
+  ci-failure-alert:
+    name: "CI-v2 Failure Alert"
+    runs-on: ubuntu-latest
+    needs:
+      - prek
+      - cargo-tests
+      - wasm-pack-tests
+      - beps
+      - docs
+      - webview-tests
+      - miri-tests
+      - benchmarks-instrumented
+    # Only run if something failed or was cancelled (otherwise skip → success)
+    if: ${{ failure() || cancelled() }}
+    steps:
+      - name: Report failure
+        run: |
+          echo "## ❌ CI Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more required jobs failed or were cancelled." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| prek | ${{ needs.prek.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| beps | ${{ needs.beps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| benchmarks-instrumented | ${{ needs.benchmarks-instrumented.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::error::One or more CI jobs failed!"
+          exit 1

@@ -1,0 +1,76 @@
+---
+source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+class FieldAttributes {
+  money: int
+  currency: string
+  name: string
+  summary: string
+  details: string?
+  state: string
+  multiple: string?
+}
+
+class ClassAttributes {
+  name: string
+  @@dynamic
+}
+
+function GetMixedMap() -> Map<string, int | string> {
+  client GPT4
+  prompt #"
+    Get mixed map
+  "#
+}
+
+function GetMixedList() -> (int | string)[] {
+  client GPT4
+  prompt #"
+    Get mixed list
+  "#
+}
+
+function GetStatus() -> Status {
+  client GPT4
+  prompt #"
+    Get status
+  "#
+}
+
+function GetUser(id: int) -> User {
+  client GPT4
+  prompt #"
+    Get user {{id}}
+  "#
+}
+
+class User {
+  id: int
+  name: string
+  email: string
+}
+
+enum Status {
+  Active
+  Inactive
+}
+
+type MixedList = (int | string)[]
+
+type OptionalRoleList = "writer"[]?
+
+type RoleList = "reader"[]
+
+type OptionalRole = "admin"?
+
+type Role = "user" | "assistant" | "system"
+
+type UnionOfArrays = int[] | string[]
+
+type MixedMap = Map<string, int | string>
+
+type OptionalFlag = true?
+
+type OptionalCode = 200?

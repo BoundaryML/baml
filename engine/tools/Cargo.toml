@@ -8,8 +8,8 @@ name = "language-server-hot-reload"
 path = "src/bin/language-server-hot-reload.rs"
 
 [dependencies]
-notify-debouncer-full = "0.3"
-tokio.workspace = true
 anyhow.workspace = true
+notify-debouncer-full = "0.3"
+tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true

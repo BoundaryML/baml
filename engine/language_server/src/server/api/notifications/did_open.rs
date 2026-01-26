@@ -6,7 +6,7 @@ use lsp_types::{
 use crate::{
     server::{
         api::{
-            diagnostics::publish_session_lsp_diagnostics,
+            diagnostics::{not_in_baml_src_diagnostic, publish_session_lsp_diagnostics},
             notifications::{
                 baml_src_version::BamlSrcVersionPayload,
                 did_save_text_document::send_generator_version,
@@ -41,9 +41,18 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
         tracing::info!("DidOpenTextDocumentHandler");
 
         let url = params.text_document.uri;
-        if !url.to_string().contains("baml_src") {
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
+        let Ok(project) = session.get_or_create_project(&path) else {
+            tracing::info!("BAML file not in baml_src directory: {}", url);
+            notifier
+                .notify::<lsp_types::notification::PublishDiagnostics>(not_in_baml_src_diagnostic(
+                    &url,
+                ))
+                .internal_error()?;
             return Ok(());
-        }
+        };
 
         // TODO: do this when server initializes instead of every time a file is opened
         // note this just schedules the task. It will run after the current task is done.
@@ -67,12 +76,16 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             )
             .internal_error()?;
 
-        let file_path = url
-            .to_file_path()
-            .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
+        // session.open_text_document(
+        //    q DocumentKey::from_path(&file_path, &file_path).internal_error()?,
+        //     TextDocument::new(params.text_document.text, params.text_document.version),
+        // );
 
-        tracing::info!("before get_or_create_project");
-        if let Some(project) = session.get_or_create_project(&file_path) {
+        session.reload(Some(notifier.clone())).internal_error()?;
+
+        // We do this after the project reload since we may be loading this baml project with files (and creating a new runtime) in the .reload(), and we only want to send the generator version if we've had a runtime created. Ideally we don't depend on the runtime being created (since our version of the LSP may not be able to read all baml files), and it only reads the generator config blocks.
+        tracing::info!("before send_generator_version");
+        {
             let locked = project.lock();
             let default_flags = vec!["beta".to_string()];
             let effective_flags = session
@@ -83,19 +96,13 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             let client_version = session.baml_settings.get_client_version();
 
             let generator_version = locked.get_common_generator_version();
-            send_generator_version(&notifier, &locked, generator_version.as_ref().ok());
-        } else {
-            tracing::error!("Failed to get or create project for path: {:?}", file_path);
-            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
+            tracing::info!("common generator version {:?}", generator_version);
+            send_generator_version(
+                &notifier,
+                &locked,
+                generator_version.as_ref().ok().and_then(|v| v.as_ref()),
+            );
         }
-        tracing::info!("after get_or_create_project");
-
-        // session.open_text_document(
-        //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
-        //     TextDocument::new(params.text_document.text, params.text_document.version),
-        // );
-
-        session.reload(Some(notifier.clone())).internal_error()?;
 
         publish_session_lsp_diagnostics(&notifier, session, &url)?;
 

@@ -87,7 +87,7 @@ pub mod coerce_opt {
 const fn coerce<'a, T>(
     coercion: impl Fn(&'a ast::Expression) -> Option<T>,
     expected_type: &'static str,
-) -> impl (Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>) {
+) -> impl Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T> {
     move |expr, diagnostics| match coercion(expr) {
         Some(t) => Some(t),
         None => {
@@ -105,7 +105,7 @@ const fn coerce<'a, T>(
 /// Coerce an expression to an array. The coercion function is used to coerce the array elements.
 pub fn coerce_array<'a, T>(
     expr: &'a ast::Expression,
-    coercion: &dyn (Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>),
+    coercion: &dyn Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>,
     diagnostics: &mut Diagnostics,
 ) -> Option<Vec<T>> {
     let mut out = Vec::new();
@@ -129,7 +129,7 @@ pub fn coerce_array<'a, T>(
 /// Coerce an expression to an array. The coercion function is used to coerce the array elements.
 pub fn coerce_map<'a, T>(
     expr: &'a ast::Expression,
-    key_coercion: &dyn (Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>),
+    key_coercion: &dyn Fn(&'a ast::Expression, &mut Diagnostics) -> Option<T>,
     diagnostics: &mut Diagnostics,
 ) -> Option<Vec<(T, &'a ast::Expression)>> {
     let mut out = Vec::new();

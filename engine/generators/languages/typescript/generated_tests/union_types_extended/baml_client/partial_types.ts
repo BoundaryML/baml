@@ -106,9 +106,9 @@ export namespace partial_types {
     export interface PrimitiveUnions {
       stringOrInt?: string | number | null
       stringOrFloat?: string | number | null
-      intOrFloat?: number | number | null
+      intOrFloat?: number | null
       boolOrString?: boolean | string | null
-      anyPrimitive?: string | number | number | boolean | null
+      anyPrimitive?: string | number | boolean | null
     }
     export interface Product {
       id?: number | null
@@ -126,7 +126,7 @@ export namespace partial_types {
       children: (string | RecursiveUnion)[]
     }
     export interface Result {
-      value?: string | number | number | null
+      value?: string | number | null
       metadata: Record<string, string>
     }
     export interface Success {

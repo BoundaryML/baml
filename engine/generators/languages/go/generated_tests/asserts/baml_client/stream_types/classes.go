@@ -54,23 +54,16 @@ func (c *Person) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 }
 
-func (c Person) Encode() (*cffi.CFFIValueHolder, error) {
+func (c Person) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
 	fields["name"] = c.Name
 
 	fields["age"] = c.Age
 
-	return baml.EncodeClass(c.BamlEncodeName, fields, nil)
+	return baml.EncodeClass("Person", fields, nil)
 }
 
 func (c Person) BamlTypeName() string {
 	return "Person"
-}
-
-func (u Person) BamlEncodeName() *cffi.CFFITypeName {
-	return &cffi.CFFITypeName{
-		Namespace: cffi.CFFITypeNamespace_STREAM_TYPES,
-		Name:      "Person",
-	}
 }

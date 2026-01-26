@@ -1,4 +1,4 @@
-use baml_types::ir_type::TypeGeneric;
+use baml_types::{ir_type::TypeGeneric, ToUnionName};
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_functions, render_functions_stream, render_runtime_code, render_source_files,
@@ -13,12 +13,14 @@ use crate::{
         render_go_stream_types_utils, render_go_types_utils, render_type_builder_classes,
         render_type_builder_common, render_type_builder_enums,
     },
+    r#type::SerializeType,
 };
 
 mod functions;
 mod generated_types;
 mod ir_to_go;
 mod package;
+mod test_macros;
 mod r#type;
 mod utils;
 
@@ -95,8 +97,9 @@ impl LanguageFeatures for GoLanguageFeatures {
         let unions = {
             let mut unions = ir
                 .walk_all_non_streaming_unions()
-                .filter_map(|t| ir_to_go::unions::ir_union_to_go(&t, &pkg))
+                .flat_map(|t| ir_to_go::unions::ir_union_to_go(&t, &pkg))
                 .collect::<Vec<_>>();
+
             // dedup by name!
             unions.sort_by_key(|u| u.name.clone());
             unions.dedup_by_key(|u| u.name.clone());
@@ -161,12 +164,40 @@ impl LanguageFeatures for GoLanguageFeatures {
         let stream_unions = {
             let mut unions = ir
                 .walk_all_streaming_unions()
-                .filter_map(|t| ir_to_go::unions::ir_union_to_go_stream(&t, &pkg))
+                .flat_map(|t| ir_to_go::unions::ir_union_to_go_stream(&t, &pkg))
                 .collect::<Vec<_>>();
             // dedup by name!
             unions.sort_by_key(|u| u.name.clone());
             unions.dedup_by_key(|u| u.name.clone());
             unions
+        };
+
+        let checked_types = {
+            let mut checked_types = ir
+                .walk_all_types_with_checks()
+                .map(|mut t| {
+                    let go_type = ir_to_go::type_to_go(&t, pkg.lookup());
+                    t.meta_mut().constraints.clear();
+                    (t.to_union_name(true), go_type)
+                })
+                .collect::<Vec<_>>();
+            checked_types.sort_by_key(|(_, t)| t.serialize_type(&pkg));
+            checked_types.dedup_by_key(|(_, t)| t.serialize_type(&pkg));
+            checked_types
+        };
+
+        let stream_state_types = {
+            let mut stream_state_types = ir
+                .walk_all_streaming_types_with_stream_state()
+                .map(|mut t| {
+                    let go_type = ir_to_go::stream_type_to_go(&t, pkg.lookup());
+                    t.meta_mut().streaming_behavior.state = false;
+                    (t.to_union_name(true), go_type)
+                })
+                .collect::<Vec<_>>();
+            stream_state_types.sort_by_key(|(_, t)| t.serialize_type(&pkg));
+            stream_state_types.dedup_by_key(|(_, t)| t.serialize_type(&pkg));
+            stream_state_types
         };
 
         let _ = collector.add_file(
@@ -178,6 +209,8 @@ impl LanguageFeatures for GoLanguageFeatures {
                 &stream_unions,
                 &go_type_aliases,
                 &stream_type_aliases,
+                &checked_types,
+                &stream_state_types,
                 go_mod_name,
                 &pkg,
             )?,

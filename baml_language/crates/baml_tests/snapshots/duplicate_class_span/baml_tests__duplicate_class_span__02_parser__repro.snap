@@ -1,0 +1,33 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "A"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "A"
+    L_BRACE "{"
+    FIELD
+      WORD "field"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "A"
+    EQUALS "="
+    TYPE_EXPR "int"
+      WORD "int"
+
+=== ERRORS ===
+None

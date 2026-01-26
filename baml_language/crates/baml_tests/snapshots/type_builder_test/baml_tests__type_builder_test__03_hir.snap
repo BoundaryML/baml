@@ -1,0 +1,40 @@
+---
+source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function Fn() -> string {
+  prompt #"
+    Hi
+  "#
+}
+
+class TopLevelClass {
+  a: string
+}
+
+enum TopLevelEnum {
+  A
+  B
+}
+
+test MyTest {
+  functions: ["Fn"]
+  type_builder {
+    class InnerClass {
+      b: int
+    }
+    enum InnerEnum {
+      X
+      Y
+    }
+    dynamic class DynamicInner {
+      c: string
+    }
+    dynamic enum DynamicEnum {
+      P
+      Q
+    }
+    type MyAlias = string | int
+  }
+}

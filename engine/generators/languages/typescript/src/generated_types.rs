@@ -83,7 +83,7 @@ mod class {
     ///{{crate::utils::prefix_lines(docstring, "   * ") }}
     ///    */
     /// {%- endif %}
-    ///   {{name}}{% if type.meta().is_optional() %}?{% endif %}: {{type.serialize_type(pkg)}}
+    ///   {{name}}{% if type.is_optional() %}?{% endif %}: {{type.serialize_type(pkg)}}
     /// ```
     #[derive(askama::Template, Clone)]
     #[template(in_doc = true, escape = "none", ext = "txt")]

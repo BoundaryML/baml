@@ -29,6 +29,14 @@ func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInp
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"imageArray": imageArray, "textInput": textInput},
 		Env:    getEnvVars(callOpts.env),
@@ -44,6 +52,10 @@ func TestMediaArrayInputs(ctx context.Context, imageArray []types.Image, textInp
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()
@@ -91,6 +103,14 @@ func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVi
 		opt(&callOpts)
 	}
 
+	// Resolve client option to clientRegistry (client takes precedence)
+	if callOpts.client != nil {
+		if callOpts.clientRegistry == nil {
+			callOpts.clientRegistry = baml.NewClientRegistry()
+		}
+		callOpts.clientRegistry.SetPrimaryClient(*callOpts.client)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"media": media, "textInput": textInput},
 		Env:    getEnvVars(callOpts.env),
@@ -106,6 +126,10 @@ func TestMediaInput(ctx context.Context, media types.Union4AudioOrImageOrPDFOrVi
 
 	if callOpts.typeBuilder != nil {
 		args.TypeBuilder = callOpts.typeBuilder
+	}
+
+	if callOpts.tags != nil {
+		args.Tags = callOpts.tags
 	}
 
 	encoded, err := args.Encode()

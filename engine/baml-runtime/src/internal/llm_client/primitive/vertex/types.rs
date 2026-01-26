@@ -347,6 +347,7 @@ pub struct UsageMetaData {
     pub prompt_token_count: Option<u64>,
     pub candidates_token_count: Option<u64>,
     pub total_token_count: Option<u64>,
+    pub cached_content_token_count: Option<u64>,
 }
 
 #[cfg(test)]
@@ -469,6 +470,7 @@ mod tests {
                 prompt_token_count: Some(11),
                 candidates_token_count: Some(433),
                 total_token_count: Some(444),
+                cached_content_token_count: None,
             }),
         };
 

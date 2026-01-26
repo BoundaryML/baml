@@ -1,0 +1,10 @@
+---
+source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn BadReturnType:
+  (LLM function - no MIR)
+
+fn BadParam:
+  (LLM function - no MIR)

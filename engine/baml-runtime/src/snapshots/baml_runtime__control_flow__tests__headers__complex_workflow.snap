@@ -1,0 +1,136 @@
+---
+source: baml-runtime/src/control_flow.rs
+expression: snapshots
+---
+"expr::ProcessVideo":
+  nodes:
+    "ProcessVideo|c:func:0":
+      label: ProcessVideo
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 56
+        end: 449
+    "ProcessVideo|c:func:0|h:create-final-output:0":
+      label: Create Final Output
+      node_type: expr
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ProcessVideo|c:func:0|h:generate-summary:0":
+      label: Generate Summary
+      node_type: expr
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ProcessVideo|c:func:0|h:main-processing-pipeline:0":
+      label: Main Processing Pipeline
+      node_type: expr
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ProcessVideo|c:func:0|h:test:1":
+      label: Test
+      node_type: expr
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: fake-file.baml
+        start: 0
+        end: 0
+    "ProcessVideo|c:func:0|s:0":
+      label: stmt
+      node_type: stmt
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 178
+        end: 309
+    "ProcessVideo|c:func:0|s:1":
+      label: stmt
+      node_type: stmt
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 340
+        end: 382
+    "ProcessVideo|c:func:0|s:3":
+      label: expr
+      node_type: expr
+      parent: "ProcessVideo|c:func:0"
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 416
+        end: 447
+  edges:
+    "ProcessVideo|c:func:0":
+      - dst: "ProcessVideo|c:func:0|h:main-processing-pipeline:0"
+        label: ""
+    "ProcessVideo|c:func:0|h:create-final-output:0":
+      - dst: "ProcessVideo|c:func:0|s:3"
+        label: ""
+    "ProcessVideo|c:func:0|h:generate-summary:0":
+      - dst: "ProcessVideo|c:func:0|s:1"
+        label: ""
+    "ProcessVideo|c:func:0|h:main-processing-pipeline:0":
+      - dst: "ProcessVideo|c:func:0|h:test:1"
+        label: ""
+    "ProcessVideo|c:func:0|h:test:1":
+      - dst: "ProcessVideo|c:func:0|s:0"
+        label: ""
+    "ProcessVideo|c:func:0|s:0":
+      - dst: "ProcessVideo|c:func:0|h:generate-summary:0"
+        label: ""
+    "ProcessVideo|c:func:0|s:1":
+      - dst: "ProcessVideo|c:func:0|h:create-final-output:0"
+        label: ""
+"llm::GenerateTitle":
+  nodes:
+    "GenerateTitle|c:func:0":
+      label: GenerateTitle
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 475
+        end: 602
+    "GenerateTitle|c:func:0|s:0":
+      label: "LLM client: GPT4"
+      node_type: llm
+      parent: "GenerateTitle|c:func:0"
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 475
+        end: 602
+  edges:
+    "GenerateTitle|c:func:0":
+      - dst: "GenerateTitle|c:func:0|s:0"
+        label: ""
+"llm::SummarizeVideo":
+  nodes:
+    "SummarizeVideo|c:func:0":
+      label: SummarizeVideo
+      node_type: function
+      parent: ~
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 604
+        end: 720
+    "SummarizeVideo|c:func:0|s:0":
+      label: "LLM client: GPT4"
+      node_type: llm
+      parent: "SummarizeVideo|c:func:0"
+      span:
+        file: src/control_flow/headers/complex_workflow.baml
+        start: 604
+        end: 720
+  edges:
+    "SummarizeVideo|c:func:0":
+      - dst: "SummarizeVideo|c:func:0|s:0"
+        label: ""

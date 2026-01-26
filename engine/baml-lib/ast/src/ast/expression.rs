@@ -18,10 +18,6 @@ pub struct RawString {
     pub raw_value: String,
     pub inner_value: String,
 
-    /// If set indicates the language of the raw string.
-    /// By default it is a text string.
-    pub language: Option<(String, Span)>,
-
     // This is useful for getting the final offset.
     pub indent: usize,
     inner_span_start: usize,
@@ -34,7 +30,7 @@ impl WithSpan for RawString {
 }
 
 impl RawString {
-    pub(crate) fn new(value: String, span: Span, language: Option<(String, Span)>) -> Self {
+    pub(crate) fn new(value: String, span: Span) -> Self {
         let dedented_value = value.trim_start_matches(['\n', '\r']);
         let start_trim_count = value.len() - dedented_value.len();
         let dedented_value = dedented_value.trim_end();
@@ -45,7 +41,6 @@ impl RawString {
             inner_value: dedented.content,
             indent: dedented.indent_size,
             inner_span_start: start_trim_count,
-            language,
         }
     }
 
@@ -86,7 +81,6 @@ impl RawString {
     pub fn assert_eq_up_to_span(&self, other: &RawString) {
         assert_eq!(self.inner_value, other.inner_value);
         assert_eq!(self.raw_value, other.raw_value);
-        assert_eq!(self.language, other.language);
         assert_eq!(self.indent, other.indent);
     }
 }
@@ -134,6 +128,7 @@ pub enum Expression {
         receiver: Box<Expression>,
         method: Identifier,
         args: Vec<Expression>,
+        type_args: Vec<super::FieldType>,
         span: Span,
     },
     /// Any form of binary operation.
@@ -191,6 +186,8 @@ pub enum BinaryOperator {
     And,
     /// The `||` operator (logical or).
     Or,
+    /// The `instanceof` operator (instance of).
+    InstanceOf,
 }
 
 impl fmt::Display for BinaryOperator {
@@ -214,6 +211,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Shr => write!(f, ">>"),
             BinaryOperator::And => write!(f, "&&"),
             BinaryOperator::Or => write!(f, "||"),
+            BinaryOperator::InstanceOf => write!(f, "instanceof"),
         }
     }
 }
@@ -731,7 +729,31 @@ impl Expression {
                 ))
             }
             Expression::Lambda(_arg_names, _body, _span) => todo!(),
-            Expression::App(_) => None,          // Is this right?
+            Expression::App(app) => {
+                // Convert function application to TemplateStringCall
+                // At this stage we don't know if it's a template_string - validation happens later
+                let args: Vec<_> = app
+                    .args
+                    .iter()
+                    .filter_map(|arg| {
+                        arg.to_unresolved_value(_diagnostics)
+                            .map(|v| v.without_meta())
+                    })
+                    .collect();
+
+                // Only convert if all args converted successfully
+                if args.len() == app.args.len() {
+                    Some(UnresolvedValue::String(
+                        StringOr::TemplateStringCall {
+                            name: app.name.name().to_string(),
+                            args,
+                        },
+                        app.span.clone(),
+                    ))
+                } else {
+                    None
+                }
+            }
             Expression::ExprBlock(_, _) => None, // Is this right?
             Expression::If(_, _, _, _) => None,
             Expression::ArrayAccess(_, _, _) => None,

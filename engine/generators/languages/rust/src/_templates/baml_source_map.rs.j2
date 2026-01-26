@@ -1,0 +1,17 @@
+//! Embedded BAML source files.
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+static FILE_MAP: OnceLock<HashMap<String, String>> = OnceLock::new();
+
+/// Get the embedded BAML source files.
+pub fn get_baml_files() -> &'static HashMap<String, String> {
+    FILE_MAP.get_or_init(|| {
+        let mut m = HashMap::new();
+{% for (path, contents) in files %}
+        m.insert({{ path }}.to_string(), {{ contents }}.to_string());
+{% endfor %}
+        m
+    })
+}

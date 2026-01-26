@@ -10,6 +10,7 @@ use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
 use crate::{
+    control_flow::ControlFlowVisualization,
     internal::{
         ir_features::IrFeatures,
         llm_client::{
@@ -18,7 +19,6 @@ use crate::{
             retry_policy::CallablePolicy,
         },
     },
-    runtime::InternalBamlRuntime,
     tracing::{BamlTracer, TracingCall},
     tracingv2::storage::storage::Collector,
     type_builder::TypeBuilder,
@@ -26,18 +26,18 @@ use crate::{
     FunctionResult, RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
 
-pub(crate) trait RuntimeConstructor {
+pub(crate) trait RuntimeConstructor: Sized {
     #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(
         dir: &std::path::Path,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<InternalBamlRuntime>;
+    ) -> Result<Self>;
 
     fn from_file_content<T: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
-    ) -> Result<InternalBamlRuntime>;
+    ) -> Result<Self>;
 }
 
 // These are UNSTABLE, and should be considered as a work in progress
@@ -123,6 +123,13 @@ pub trait InternalRuntimeInterface {
 
     /// send a mermaid graph of the function graph
     fn function_graph(&self, function_name: &str, ctx: &RuntimeContext) -> Result<String>;
+
+    /// build the structured control-flow visualization produced from HIR
+    fn function_graph_v2(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<ControlFlowVisualization>;
 
     fn get_function<'ir>(&'ir self, function_name: &str) -> Result<FunctionWalker<'ir>>;
     fn get_expr_function<'ir>(
