@@ -185,6 +185,7 @@ impl BexExternalValue {
             BexExternalValue::Resource(handle) => match handle.kind() {
                 sys_resource_types::ResourceType::File => "file",
                 sys_resource_types::ResourceType::Socket => "socket",
+                sys_resource_types::ResourceType::HttpResponse => "http-response",
             },
         }
     }

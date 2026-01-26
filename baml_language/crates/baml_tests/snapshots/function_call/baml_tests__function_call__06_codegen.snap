@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-01efb6cd2b70f9e6/out/generated_tests.rs
+source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 6
-Objects: 40
-Globals: 37
+Objects: 46
+Globals: 43
 
 Function Bar (arity: 0, kind: Bytecode):
-     0   LOAD_GLOBAL 35   (<fn Foo>)
+     0   LOAD_GLOBAL 41   (<fn Foo>)
      1   LOAD_CONST 0     (1)
      2   CALL 1           
      3   RETURN           
@@ -20,7 +20,7 @@ Function Foo (arity: 1, kind: Bytecode):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Bytecode):
-     0   LOAD_GLOBAL 32     (<fn Greeting>)
+     0   LOAD_GLOBAL 38     (<fn Greeting>)
      1   ALLOC_INSTANCE 0   (<class Baz>)
      2   COPY 0             
      3   LOAD_VAR 1         (n)

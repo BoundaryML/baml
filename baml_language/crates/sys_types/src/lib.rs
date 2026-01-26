@@ -88,6 +88,14 @@ pub struct SysOps {
 
     // System operations
     pub shell: SysOpFn,
+
+    // HTTP operations
+    pub http_fetch: SysOpFn,
+    pub http_response_text: SysOpFn,
+    pub http_response_status: SysOpFn,
+    pub http_response_ok: SysOpFn,
+    pub http_response_url: SysOpFn,
+    pub http_response_headers: SysOpFn,
 }
 
 impl SysOps {
@@ -144,6 +152,36 @@ impl SysOps {
                     operation: SysOp::Shell,
                 }))
             },
+            SysOp::HttpFetch => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpFetch,
+                }))
+            },
+            SysOp::HttpResponseText => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpResponseText,
+                }))
+            },
+            SysOp::HttpResponseStatus => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpResponseStatus,
+                }))
+            },
+            SysOp::HttpResponseOk => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpResponseOk,
+                }))
+            },
+            SysOp::HttpResponseUrl => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpResponseUrl,
+                }))
+            },
+            SysOp::HttpResponseHeaders => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpResponseHeaders,
+                }))
+            },
         }
     }
 
@@ -159,6 +197,12 @@ impl SysOps {
             net_read: Self::unsupported(SysOp::NetRead),
             net_close: Self::unsupported(SysOp::NetClose),
             shell: Self::unsupported(SysOp::Shell),
+            http_fetch: Self::unsupported(SysOp::HttpFetch),
+            http_response_text: Self::unsupported(SysOp::HttpResponseText),
+            http_response_status: Self::unsupported(SysOp::HttpResponseStatus),
+            http_response_ok: Self::unsupported(SysOp::HttpResponseOk),
+            http_response_url: Self::unsupported(SysOp::HttpResponseUrl),
+            http_response_headers: Self::unsupported(SysOp::HttpResponseHeaders),
         }
     }
 }

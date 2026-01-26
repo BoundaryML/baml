@@ -146,6 +146,7 @@ wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
 webbrowser = "1.0.5"
 wee_alloc = "0.4"
+wiremock = "0.6"
 [workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"

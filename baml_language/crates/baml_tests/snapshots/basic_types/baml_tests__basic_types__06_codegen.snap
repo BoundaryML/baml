@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 39
-Globals: 35
+Objects: 45
+Globals: 41
 
 Function GetMixedList (arity: 0, kind: External(Llm)):
   (no bytecode)

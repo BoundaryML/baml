@@ -198,6 +198,34 @@ macro_rules! with_builtins {
                     #[external]
                     fn connect(addr: String) -> Socket;
                 }
+
+                // =====================================================================
+                // HTTP operations
+                // =====================================================================
+                mod http {
+                    #[builtin]
+                    struct Response {
+                        /// Get response body as text (consumes body).
+                        #[external]
+                        fn text(self: Response) -> String;
+                        /// Get HTTP status code.
+                        #[external]
+                        fn status(self: Response) -> i64;
+                        /// Check if status is 2xx.
+                        #[external]
+                        fn ok(self: Response) -> bool;
+                        /// Get request URL (may differ if redirected).
+                        #[external]
+                        fn url(self: Response) -> String;
+                        /// Get response headers.
+                        #[external]
+                        fn headers(self: Response) -> Map<String, String>;
+                    }
+
+                    /// Fetch a URL via HTTP GET.
+                    #[external]
+                    fn fetch(url: String) -> Response;
+                }
             }
 
             mod env {

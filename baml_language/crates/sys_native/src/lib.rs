@@ -36,6 +36,12 @@ impl SysOpsExt for SysOps {
             net_read: ops::net::read,
             net_close: ops::net::close,
             shell: ops::sys::shell,
+            http_fetch: ops::http::fetch,
+            http_response_text: ops::http::text,
+            http_response_status: ops::http::status,
+            http_response_ok: ops::http::ok,
+            http_response_url: ops::http::url,
+            http_response_headers: ops::http::headers,
         }
     }
 }

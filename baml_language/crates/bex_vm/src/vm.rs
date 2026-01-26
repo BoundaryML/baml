@@ -641,7 +641,12 @@ impl BexVm {
         }
     }
 
-    pub fn fulfil_future(
+    /// Set a future to Ready state without modifying the stack.
+    ///
+    /// Use this for sync operations that complete during `ScheduleFuture` handling,
+    /// before the VM reaches the `Await` instruction. The `Await` instruction will
+    /// extract the value from the Ready future.
+    pub fn set_future_ready(
         &mut self,
         future_ptr: HeapPtr,
         value: Value,
@@ -654,6 +659,20 @@ impl BexVm {
         };
 
         *future = Future::Ready(value);
+        Ok(())
+    }
+
+    /// Fulfill a future and replace the stack top if the VM is awaiting it.
+    ///
+    /// Use this for async operations that complete while the VM is blocked at
+    /// an `Await` instruction. This replaces the future on the stack with the
+    /// ready value so execution can continue.
+    pub fn fulfil_future(
+        &mut self,
+        future_ptr: HeapPtr,
+        value: Value,
+    ) -> Result<(), InternalError> {
+        self.set_future_ready(future_ptr, value)?;
 
         // At any given moment, the VM can only await a single future, because
         // we can only call the AWAIT instruction on a future on top of the
