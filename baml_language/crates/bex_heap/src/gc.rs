@@ -310,6 +310,9 @@ impl BexHeap {
                     }
                 }
             }
+            Object::PromptAst(ast) => {
+                Self::add_prompt_ast_references(ast, worklist);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -319,6 +322,30 @@ impl BexHeap {
             | Object::Function(_)
             | Object::Media(_)
             | Object::Resource(_) => {}
+        }
+    }
+
+    /// Add references from a PromptAst to the worklist.
+    fn add_prompt_ast_references(ast: &bex_vm_types::PromptAst, worklist: &mut Vec<HeapPtr>) {
+        use bex_vm_types::PromptAst;
+        match ast {
+            PromptAst::String(_) | PromptAst::PrintOutputFormat(_) => {}
+            PromptAst::Media(ptr) => {
+                worklist.push(*ptr);
+            }
+            PromptAst::Message {
+                metadata, content, ..
+            } => {
+                if let Value::Object(ptr) = metadata {
+                    worklist.push(*ptr);
+                }
+                Self::add_prompt_ast_references(content, worklist);
+            }
+            PromptAst::Vec(items) => {
+                for item in items {
+                    Self::add_prompt_ast_references(item, worklist);
+                }
+            }
         }
     }
 
@@ -378,6 +405,9 @@ impl BexHeap {
                     }
                 }
             }
+            Object::PromptAst(ast) => {
+                self.fixup_prompt_ast_references(ast, forwarding);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -387,6 +417,34 @@ impl BexHeap {
             | Object::Function(_)
             | Object::Media(_)
             | Object::Resource(_) => {}
+        }
+    }
+
+    /// Fix up references in a PromptAst.
+    fn fixup_prompt_ast_references(
+        &self,
+        ast: &mut bex_vm_types::PromptAst,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+    ) {
+        use bex_vm_types::PromptAst;
+        match ast {
+            PromptAst::String(_) | PromptAst::PrintOutputFormat(_) => {}
+            PromptAst::Media(ptr) => {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+            PromptAst::Message {
+                metadata, content, ..
+            } => {
+                self.fixup_value(metadata, forwarding);
+                self.fixup_prompt_ast_references(content, forwarding);
+            }
+            PromptAst::Vec(items) => {
+                for item in items {
+                    self.fixup_prompt_ast_references(item, forwarding);
+                }
+            }
         }
     }
 

@@ -345,6 +345,9 @@ impl BexHeap {
                     self.debug_assert_valid_value(value);
                 }
             },
+            Object::PromptAst(ast) => {
+                self.debug_assert_valid_prompt_ast(ast);
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)
@@ -353,6 +356,27 @@ impl BexHeap {
             | Object::Resource(_) => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
+        }
+    }
+
+    fn debug_assert_valid_prompt_ast(&self, ast: &bex_vm_types::PromptAst) {
+        use bex_vm_types::PromptAst;
+        match ast {
+            PromptAst::String(_) | PromptAst::PrintOutputFormat(_) => {}
+            PromptAst::Media(ptr) => {
+                self.debug_assert_valid_index(*ptr);
+            }
+            PromptAst::Message {
+                metadata, content, ..
+            } => {
+                self.debug_assert_valid_value(metadata);
+                self.debug_assert_valid_prompt_ast(content);
+            }
+            PromptAst::Vec(items) => {
+                for item in items {
+                    self.debug_assert_valid_prompt_ast(item);
+                }
+            }
         }
     }
 

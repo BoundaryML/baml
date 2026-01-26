@@ -23,5 +23,6 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
     Class, ConstValue, Enum, ExternalOp, Function, FunctionKind, Future, Instance, Object,
-    ObjectType, PendingFuture, Program, SysOp, Value, Variant, type_tags,
+    ObjectType, PendingFuture, PrintOutputFormatOptions, Program, PromptAst, SysOp, Value, Variant,
+    type_tags,
 };

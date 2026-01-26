@@ -60,7 +60,13 @@ impl Parse for BuiltinsInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut modules = Vec::new();
         while !input.is_empty() {
-            modules.push(input.parse()?);
+            // Check for attributes before mod
+            if input.peek(Token![#]) {
+                let attrs = input.call(Attribute::parse_outer)?;
+                modules.push(ModuleItem::parse_with_attrs(input, &attrs)?);
+            } else {
+                modules.push(input.parse()?);
+            }
         }
         Ok(BuiltinsInput { modules })
     }
@@ -70,6 +76,8 @@ impl Parse for BuiltinsInput {
 struct ModuleItem {
     name: Ident,
     items: Vec<ModuleContent>,
+    /// Whether this module is marked with #[hide] (hidden from type checker).
+    is_hidden: bool,
 }
 
 /// Content inside a module.
@@ -106,8 +114,10 @@ struct FunctionItem {
     is_external: bool,
 }
 
-impl Parse for ModuleItem {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl ModuleItem {
+    fn parse_with_attrs(input: ParseStream, attrs: &[Attribute]) -> Result<Self> {
+        let is_hidden = attrs.iter().any(|attr| attr.path().is_ident("hide"));
+
         // Parse: mod name { ... }
         input.parse::<Token![mod]>()?;
         let name: Ident = input.parse()?;
@@ -117,14 +127,17 @@ impl Parse for ModuleItem {
         let mut items = Vec::new();
         while !content.is_empty() {
             // Peek to determine what kind of item this is
-            // Handle attributes first (for #[opaque] struct or #[uses(vm)]/#[external] fn)
+            // Handle attributes first (for #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod)
             let lookahead = content.lookahead1();
             if lookahead.peek(Token![mod]) {
-                items.push(ModuleContent::Module(content.parse()?));
+                items.push(ModuleContent::Module(ModuleItem::parse_with_attrs(
+                    &content,
+                    &[],
+                )?));
             } else if lookahead.peek(Token![struct]) {
                 items.push(ModuleContent::Struct(content.parse()?));
             } else if lookahead.peek(Token![#]) {
-                // Could be #[opaque] struct or #[uses(vm)]/#[external] fn
+                // Could be #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod
                 // Parse attributes first, then peek again
                 let attrs = content.call(Attribute::parse_outer)?;
                 let lookahead2 = content.lookahead1();
@@ -136,6 +149,10 @@ impl Parse for ModuleItem {
                     items.push(ModuleContent::Function(Box::new(
                         FunctionItem::parse_with_attrs(&content, &attrs)?,
                     )));
+                } else if lookahead2.peek(Token![mod]) {
+                    items.push(ModuleContent::Module(ModuleItem::parse_with_attrs(
+                        &content, &attrs,
+                    )?));
                 } else {
                     return Err(lookahead2.error());
                 }
@@ -146,7 +163,17 @@ impl Parse for ModuleItem {
             }
         }
 
-        Ok(ModuleItem { name, items })
+        Ok(ModuleItem {
+            name,
+            items,
+            is_hidden,
+        })
+    }
+}
+
+impl Parse for ModuleItem {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Self::parse_with_attrs(input, &[])
     }
 }
 
@@ -273,6 +300,19 @@ impl Parse for FunctionItem {
 }
 
 use std::collections::HashMap;
+
+/// Context for collecting builtin definitions.
+///
+/// Groups common parameters to reduce argument count in collection functions.
+struct CollectContext<'a> {
+    path_prefix: String,
+    const_prefix: String,
+    fn_name_prefix: String,
+    defs: &'a mut Vec<BuiltinDef>,
+    native_defs: &'a mut Vec<NativeFnDef>,
+    builtin_types: &'a HashMap<String, String>,
+    is_hidden: bool,
+}
 
 /// Collect all builtin struct paths from modules (first pass).
 /// Returns a map from struct name to full path (e.g., "File" -> "baml.fs.File").
@@ -502,87 +542,72 @@ fn unwrap_result_type(ty: &Type) -> (&Type, bool) {
 }
 
 /// Collect all builtin definitions from a module.
-fn collect_builtins(
-    module: &ModuleItem,
-    path_prefix: &str,
-    const_prefix: &str,
-    fn_name_prefix: &str,
-    defs: &mut Vec<BuiltinDef>,
-    native_defs: &mut Vec<NativeFnDef>,
-    builtin_types: &HashMap<String, String>,
-) {
+///
+/// When `is_hidden` is true, items are not added to `defs` (signatures)
+/// but are still added to `native_defs` (native function implementations).
+fn collect_builtins(module: &ModuleItem, ctx: &mut CollectContext) {
     let module_name = module.name.to_string();
-    let new_path_prefix = if path_prefix.is_empty() {
+    let new_path_prefix = if ctx.path_prefix.is_empty() {
         module_name.clone()
     } else {
-        format!("{path_prefix}.{module_name}")
+        format!("{}.{module_name}", ctx.path_prefix)
     };
 
-    let new_const_prefix = if const_prefix.is_empty() {
+    let new_const_prefix = if ctx.const_prefix.is_empty() {
         to_screaming_snake_case(&module_name)
     } else {
-        format!("{const_prefix}_{}", to_screaming_snake_case(&module_name))
+        format!(
+            "{}_{}",
+            ctx.const_prefix,
+            to_screaming_snake_case(&module_name)
+        )
     };
 
-    let new_fn_name_prefix = if fn_name_prefix.is_empty() {
+    let new_fn_name_prefix = if ctx.fn_name_prefix.is_empty() {
         to_snake_case(&module_name)
     } else {
-        format!("{}_{}", fn_name_prefix, to_snake_case(&module_name))
+        format!("{}_{}", ctx.fn_name_prefix, to_snake_case(&module_name))
+    };
+
+    // If this module is hidden, propagate to children
+    let hidden = ctx.is_hidden || module.is_hidden;
+
+    // Create child context with updated prefixes
+    let mut child_ctx = CollectContext {
+        path_prefix: new_path_prefix,
+        const_prefix: new_const_prefix,
+        fn_name_prefix: new_fn_name_prefix,
+        defs: ctx.defs,
+        native_defs: ctx.native_defs,
+        builtin_types: ctx.builtin_types,
+        is_hidden: hidden,
     };
 
     for item in &module.items {
         match item {
             ModuleContent::Struct(s) => {
-                collect_struct_builtins(
-                    s,
-                    &new_path_prefix,
-                    &new_const_prefix,
-                    &new_fn_name_prefix,
-                    defs,
-                    native_defs,
-                    builtin_types,
-                );
+                collect_struct_builtins(s, &mut child_ctx);
             }
             ModuleContent::Function(f) => {
-                collect_function_builtin(
-                    f,
-                    &new_path_prefix,
-                    &new_const_prefix,
-                    &new_fn_name_prefix,
-                    defs,
-                    native_defs,
-                    builtin_types,
-                );
+                collect_function_builtins(f, &mut child_ctx);
             }
             ModuleContent::Module(m) => {
-                collect_builtins(
-                    m,
-                    &new_path_prefix,
-                    &new_const_prefix,
-                    &new_fn_name_prefix,
-                    defs,
-                    native_defs,
-                    builtin_types,
-                );
+                collect_builtins(m, &mut child_ctx);
             }
         }
     }
 }
 
 /// Collect builtin definitions from a struct.
-fn collect_struct_builtins(
-    s: &StructItem,
-    path_prefix: &str,
-    const_prefix: &str,
-    fn_name_prefix: &str,
-    defs: &mut Vec<BuiltinDef>,
-    native_defs: &mut Vec<NativeFnDef>,
-    builtin_types: &HashMap<String, String>,
-) {
+fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
     let struct_name = s.name.to_string();
-    let struct_path = format!("{path_prefix}.{struct_name}");
-    let struct_const_prefix = format!("{const_prefix}_{}", to_screaming_snake_case(&struct_name));
-    let struct_fn_name_prefix = format!("{}_{}", fn_name_prefix, to_snake_case(&struct_name));
+    let struct_path = format!("{}.{struct_name}", ctx.path_prefix);
+    let struct_const_prefix = format!(
+        "{}_{}",
+        ctx.const_prefix,
+        to_screaming_snake_case(&struct_name)
+    );
+    let struct_fn_name_prefix = format!("{}_{}", ctx.fn_name_prefix, to_snake_case(&struct_name));
 
     // Collect generic params from struct
     let struct_generics: Vec<String> = s
@@ -609,7 +634,7 @@ fn collect_struct_builtins(
         let receiver = method
             .receiver
             .as_ref()
-            .map(|(ty, _is_mut)| type_to_pattern(ty, &all_generics, builtin_types));
+            .map(|(ty, _is_mut)| type_to_pattern(ty, &all_generics, ctx.builtin_types));
 
         // Build params
         let params: Vec<(String, TokenStream2)> = method
@@ -618,23 +643,26 @@ fn collect_struct_builtins(
             .map(|(name, ty)| {
                 (
                     name.to_string(),
-                    type_to_pattern(ty, &all_generics, builtin_types),
+                    type_to_pattern(ty, &all_generics, ctx.builtin_types),
                 )
             })
             .collect();
 
         // Build return type (unwrap Result<T> to just T for TypePattern)
         let (inner_return_ty, _) = unwrap_result_type(&method.return_type);
-        let returns = type_to_pattern(inner_return_ty, &all_generics, builtin_types);
+        let returns = type_to_pattern(inner_return_ty, &all_generics, ctx.builtin_types);
 
-        defs.push(BuiltinDef {
-            path: path.clone(),
-            const_name: const_name.clone(),
-            receiver,
-            params,
-            returns,
-            is_external: method.is_external,
-        });
+        // Only add to defs (signatures) if not hidden
+        if !ctx.is_hidden {
+            ctx.defs.push(BuiltinDef {
+                path: path.clone(),
+                const_name: const_name.clone(),
+                receiver,
+                params,
+                returns,
+                is_external: method.is_external,
+            });
+        }
 
         // Build native fn def
         let native_receiver = method.receiver.as_ref().map(|(ty, is_mut)| {
@@ -661,7 +689,7 @@ fn collect_struct_builtins(
             (type_name, is_generic, is_fallible)
         };
 
-        native_defs.push(NativeFnDef {
+        ctx.native_defs.push(NativeFnDef {
             const_name,
             path,
             fn_name,
@@ -674,16 +702,8 @@ fn collect_struct_builtins(
     }
 }
 
-/// Collect a single function builtin.
-fn collect_function_builtin(
-    f: &FunctionItem,
-    path_prefix: &str,
-    const_prefix: &str,
-    fn_name_prefix: &str,
-    defs: &mut Vec<BuiltinDef>,
-    native_defs: &mut Vec<NativeFnDef>,
-    builtin_types: &HashMap<String, String>,
-) {
+/// Collect builtins from a single function.
+fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
     let fn_generics: Vec<String> = f
         .generics
         .type_params()
@@ -691,19 +711,23 @@ fn collect_function_builtin(
         .collect();
 
     let original_fn_name = f.name.to_string();
-    let path = format!("{path_prefix}.{original_fn_name}");
+    let path = format!("{}.{original_fn_name}", ctx.path_prefix);
     let const_name = format_ident!(
         "{}_{}",
-        const_prefix,
+        ctx.const_prefix,
         to_screaming_snake_case(&original_fn_name)
     );
-    let fn_name = format_ident!("{}_{}", fn_name_prefix, to_snake_case(&original_fn_name));
+    let fn_name = format_ident!(
+        "{}_{}",
+        ctx.fn_name_prefix,
+        to_snake_case(&original_fn_name)
+    );
 
     // Free functions shouldn't have receivers (ignoring mutability for type pattern)
     let receiver = f
         .receiver
         .as_ref()
-        .map(|(ty, _is_mut)| type_to_pattern(ty, &fn_generics, builtin_types));
+        .map(|(ty, _is_mut)| type_to_pattern(ty, &fn_generics, ctx.builtin_types));
 
     let params: Vec<(String, TokenStream2)> = f
         .params
@@ -711,23 +735,26 @@ fn collect_function_builtin(
         .map(|(name, ty)| {
             (
                 name.to_string(),
-                type_to_pattern(ty, &fn_generics, builtin_types),
+                type_to_pattern(ty, &fn_generics, ctx.builtin_types),
             )
         })
         .collect();
 
     // Unwrap Result<T> to just T for TypePattern
     let (inner_return_ty, _) = unwrap_result_type(&f.return_type);
-    let returns = type_to_pattern(inner_return_ty, &fn_generics, builtin_types);
+    let returns = type_to_pattern(inner_return_ty, &fn_generics, ctx.builtin_types);
 
-    defs.push(BuiltinDef {
-        path: path.clone(),
-        const_name: const_name.clone(),
-        receiver,
-        params,
-        returns,
-        is_external: f.is_external,
-    });
+    // Only add to defs (signatures) if not hidden
+    if !ctx.is_hidden {
+        ctx.defs.push(BuiltinDef {
+            path: path.clone(),
+            const_name: const_name.clone(),
+            receiver,
+            params,
+            returns,
+            is_external: f.is_external,
+        });
+    }
 
     // Build native fn def
     let native_receiver = f.receiver.as_ref().map(|(ty, is_mut)| {
@@ -753,7 +780,7 @@ fn collect_function_builtin(
         (type_name, is_generic, is_fallible)
     };
 
-    native_defs.push(NativeFnDef {
+    ctx.native_defs.push(NativeFnDef {
         const_name,
         path,
         fn_name,
@@ -777,15 +804,16 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
     let mut defs = Vec::new();
     let mut native_defs = Vec::new();
     for module in &input.modules {
-        collect_builtins(
-            module,
-            "",
-            "",
-            "",
-            &mut defs,
-            &mut native_defs,
-            &builtin_types,
-        );
+        let mut ctx = CollectContext {
+            path_prefix: String::new(),
+            const_prefix: String::new(),
+            fn_name_prefix: String::new(),
+            defs: &mut defs,
+            native_defs: &mut native_defs,
+            builtin_types: &builtin_types,
+            is_hidden: false, // Not hidden at root level; modules handle their own is_hidden flag
+        };
+        collect_builtins(module, &mut ctx);
     }
 
     // Generate path constants
@@ -965,15 +993,16 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     let mut native_defs = Vec::new();
     let mut defs = Vec::new();
     for module in &input.modules {
-        collect_builtins(
-            module,
-            "",
-            "",
-            "",
-            &mut defs,
-            &mut native_defs,
-            &builtin_types,
-        );
+        let mut ctx = CollectContext {
+            path_prefix: String::new(),
+            const_prefix: String::new(),
+            fn_name_prefix: String::new(),
+            defs: &mut defs,
+            native_defs: &mut native_defs,
+            builtin_types: &builtin_types,
+            is_hidden: false, // Not hidden at root level; modules handle their own is_hidden flag
+        };
+        collect_builtins(module, &mut ctx);
     }
 
     // Generate required trait methods (clean signatures)
@@ -1165,6 +1194,13 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
                 quote!(&MediaValue)
             }
         }
+        "PromptAst" => {
+            if is_mut {
+                quote!(&mut PromptAst)
+            } else {
+                quote!(&PromptAst)
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote!(&mut Vec<Value>)
@@ -1208,6 +1244,7 @@ fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
         "bool" => quote!(bool),
         "()" => quote!(()),
         "Media" => quote!(MediaValue),
+        "PromptAst" => quote!(PromptAst),
         t if t.starts_with("Array") => quote!(Vec<Value>),
         t if t.starts_with("Map") => quote!(IndexMap<String, Value>),
         t if t.starts_with("Option<") => {
@@ -1347,6 +1384,18 @@ fn generate_single_extraction(
                 }
             }
         }
+        "PromptAst" => {
+            if is_mut {
+                // TODO: Add as_prompt_ast_mut to vm when needed
+                quote! {
+                    compile_error!("Mutable PromptAst parameters not yet supported");
+                }
+            } else {
+                quote! {
+                    let #var_name = vm.as_prompt_ast(&args[#idx])?.clone();
+                }
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote! {
@@ -1424,7 +1473,7 @@ fn needs_reference(type_name: &str, is_generic: bool) -> bool {
         return false; // Generic types are already passed as &Value
     }
 
-    matches!(type_name, "String" | "Media")
+    matches!(type_name, "String" | "Media" | "PromptAst")
         || type_name.starts_with("Array")
         || type_name.starts_with("Map")
 }
@@ -1457,6 +1506,7 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         },
         t if t.starts_with("Array") => quote!(Ok(vm.alloc_array(result))),
         t if t.starts_with("Map") => quote!(Ok(vm.alloc_map(result))),
+        "PromptAst" => quote!(Ok(vm.alloc_prompt_ast(result))),
         _ => quote!(Ok(result)),
     }
 }

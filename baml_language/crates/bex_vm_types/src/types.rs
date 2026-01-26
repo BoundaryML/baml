@@ -40,6 +40,8 @@ pub mod type_tags {
     pub const MEDIA: i64 = 10;
     /// Resource type tag (file handle, socket, etc.).
     pub const RESOURCE: i64 = 11;
+    /// `PromptAst` type tag.
+    pub const PROMPT_AST: i64 = 12;
     /// Base value for class type tags (classes start at 100).
     pub const CLASS_BASE: i64 = 100;
     /// Unknown/invalid type tag.
@@ -469,6 +471,9 @@ pub enum Object {
     /// External resource (file handle, socket, etc.).
     Resource(ResourceHandle),
 
+    /// Prompt AST tree node.
+    PromptAst(PromptAst),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -489,6 +494,7 @@ impl std::fmt::Display for Object {
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
+            Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -573,6 +579,40 @@ impl std::fmt::Display for MediaContent {
     }
 }
 
+// ============================================================================
+// PromptAst - represents a structured prompt (recursive tree)
+// ============================================================================
+
+/// Options for printing an output format in a prompt.
+#[derive(Debug, Clone)]
+pub struct PrintOutputFormatOptions {
+    /// Separator for union/or types (e.g., " | " or " or ")
+    pub or_splitter: String,
+}
+
+/// A node in the prompt AST tree.
+#[derive(Debug, Clone)]
+pub enum PromptAst {
+    /// A plain string.
+    String(String),
+
+    /// A media value (image, audio, video, etc.) - references heap object.
+    Media(HeapPtr),
+
+    /// A message with a role, content, and optional metadata.
+    Message {
+        role: String,
+        content: Box<PromptAst>,
+        metadata: Value,
+    },
+
+    /// A sequence of prompt nodes.
+    Vec(Vec<PromptAst>),
+
+    /// Output format - prints the expected output format for the LLM.
+    PrintOutputFormat(PrintOutputFormatOptions),
+}
+
 /// Types of values.
 ///
 /// Used for checking type errors at runtime. We can probably use some lib
@@ -633,6 +673,7 @@ pub enum ObjectType {
     Media(baml_base::MediaKind),
     Future(FutureType),
     Resource,
+    PromptAst,
 }
 
 impl ObjectType {
@@ -648,6 +689,7 @@ impl ObjectType {
             Object::Map(_) => Self::Map,
             Object::Media(media) => Self::Media(media.kind),
             Object::Resource(_) => Self::Resource,
+            Object::PromptAst(_) => Self::PromptAst,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -683,6 +725,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::String => write!(f, "string"),
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
+            ObjectType::PromptAst => write!(f, "prompt_ast"),
         }
     }
 }
