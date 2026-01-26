@@ -40,7 +40,7 @@ pub mod to_diagnostic;
 pub use diagnostic::{
     Annotation, Diagnostic, DiagnosticId, DiagnosticPhase, RelatedInfo, Severity, ToDiagnostic,
 };
-pub use errors::{HirDiagnostic, NameError, ParseError, TypeError};
+pub use errors::{ErrorContext, HirDiagnostic, NameError, ParseError, SpanContext, TypeError};
 // Re-export the rendering functions and types
 pub use render::{
     DiagnosticFormat, RenderConfig, SourceCache, render_diagnostic, render_diagnostics,

@@ -3,7 +3,7 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use baml_base::{FileId, Span};
 use baml_compiler_diagnostics::HirDiagnostic;
@@ -11,7 +11,7 @@ use baml_compiler_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
 use rowan::{TextRange, ast::AstNode};
 
-use crate::{Name, type_ref::TypeRef};
+use crate::{Name, source_map::HirSourceMap, type_ref::TypeRef};
 
 /// Strip quote delimiters from a string literal.
 ///
@@ -40,8 +40,9 @@ pub enum FunctionBody {
     /// LLM function: has `LLM_FUNCTION_BODY` in CST
     Llm(LlmBody),
 
-    /// Expression function: has `EXPR_FUNCTION_BODY` in CST
-    Expr(ExprBody),
+    /// Expression function: has `EXPR_FUNCTION_BODY` in CST.
+    /// Contains both the position-independent body and the source map for spans.
+    Expr(ExprBody, HirSourceMap),
 
     /// Function has no body (error recovery)
     Missing,
@@ -78,6 +79,10 @@ pub struct Interpolation {
 }
 
 /// Body of an expression function (turing-complete).
+///
+/// This structure is position-independent - it contains no span information.
+/// Spans are stored separately in `HirSourceMap` to enable incremental compilation
+/// (whitespace changes don't invalidate type checking).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExprBody {
     /// Expression arena
@@ -89,28 +94,12 @@ pub struct ExprBody {
     /// Pattern arena (for let bindings, match arms, etc.)
     pub patterns: Arena<Pattern>,
 
+    /// Match arm arena
+    pub match_arms: Arena<MatchArm>,
+
     /// Root expression of the function body (usually a `BLOCK_EXPR`)
     pub root_expr: Option<ExprId>,
 
-    // ========================================================================
-    // Span tracking (for accurate error messages)
-    // ========================================================================
-    /// Spans for expressions
-    pub expr_spans: HashMap<ExprId, Span>,
-
-    /// Spans for statements
-    pub stmt_spans: HashMap<StmtId, Span>,
-
-    /// Spans for patterns
-    pub pattern_spans: HashMap<PatId, Span>,
-
-    /// Spans for match arms: maps match expression ID to its arm spans.
-    /// Each entry is (`arm_span`, `pattern_span`) for each arm in order.
-    pub match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
-
-    // ========================================================================
-    // Diagnostics
-    // ========================================================================
     /// HIR diagnostics collected during lowering (e.g., missing semicolons).
     pub diagnostics: Vec<HirDiagnostic>,
 }
@@ -124,32 +113,11 @@ pub struct MatchArmSpans {
     pub pattern_span: Span,
 }
 
-impl ExprBody {
-    /// Get the span of an expression, if available.
-    pub fn get_expr_span(&self, expr_id: ExprId) -> Option<Span> {
-        self.expr_spans.get(&expr_id).copied()
-    }
-
-    /// Get the span of a statement, if available.
-    pub fn get_stmt_span(&self, stmt_id: StmtId) -> Option<Span> {
-        self.stmt_spans.get(&stmt_id).copied()
-    }
-
-    /// Get the span of a pattern, if available.
-    pub fn get_pattern_span(&self, pat_id: PatId) -> Option<Span> {
-        self.pattern_spans.get(&pat_id).copied()
-    }
-
-    /// Get the arm spans for a match expression, if available.
-    pub fn get_match_arm_spans(&self, match_expr_id: ExprId) -> Option<&[MatchArmSpans]> {
-        self.match_arm_spans.get(&match_expr_id).map(Vec::as_slice)
-    }
-}
-
 // IDs for arena indices
 pub type ExprId = Idx<Expr>;
 pub type StmtId = Idx<Stmt>;
 pub type PatId = Idx<Pattern>;
+pub type MatchArmId = Idx<MatchArm>;
 
 /// A spread element in an object constructor: `...expr`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -184,7 +152,7 @@ pub enum Expr {
     /// Match expression: `match (scrutinee) { arm1, arm2, ... }`
     Match {
         scrutinee: ExprId,
-        arms: Vec<MatchArm>,
+        arms: Vec<MatchArmId>,
     },
 
     /// Binary operation
@@ -452,11 +420,8 @@ impl FunctionBody {
         if let Some(llm_body) = func_node.llm_body() {
             Arc::new(FunctionBody::Llm(Self::lower_llm_body(&llm_body)))
         } else if let Some(expr_body) = func_node.expr_body() {
-            Arc::new(FunctionBody::Expr(Self::lower_expr_body(
-                &expr_body,
-                file_id,
-                &param_names,
-            )))
+            let (body, source_map) = Self::lower_expr_body(&expr_body, file_id, &param_names);
+            Arc::new(FunctionBody::Expr(body, source_map))
         } else {
             Arc::new(FunctionBody::Missing)
         }
@@ -527,7 +492,7 @@ impl FunctionBody {
         expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
         file_id: FileId,
         param_names: &[String],
-    ) -> ExprBody {
+    ) -> (ExprBody, HirSourceMap) {
         let mut ctx = LoweringContext::new(file_id);
 
         // Add function parameters to scope so gensym avoids them
@@ -551,22 +516,15 @@ struct LoweringContext {
     exprs: Arena<Expr>,
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
+    match_arms: Arena<MatchArm>,
     /// File ID for creating spans
     file_id: FileId,
     /// All names used in this function, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
 
-    // Span tracking
-    /// Span tracking for expressions
-    expr_spans: HashMap<ExprId, Span>,
-    /// Span tracking for statements
-    stmt_spans: HashMap<StmtId, Span>,
-    /// Span tracking for patterns
-    pattern_spans: HashMap<PatId, Span>,
-    /// Span tracking for match arms (maps match expr ID to arm spans)
-    match_arm_spans: HashMap<ExprId, Vec<MatchArmSpans>>,
+    /// Source map for tracking spans (separate from `ExprBody` for incrementality)
+    source_map: HirSourceMap,
 
-    // Diagnostics
     /// HIR diagnostics collected during lowering.
     diagnostics: Vec<HirDiagnostic>,
 }
@@ -588,12 +546,10 @@ impl LoweringContext {
             exprs: Arena::new(),
             stmts: Arena::new(),
             patterns: Arena::new(),
+            match_arms: Arena::new(),
             file_id,
             names_in_scope: std::collections::HashSet::new(),
-            expr_spans: HashMap::new(),
-            stmt_spans: HashMap::new(),
-            pattern_spans: HashMap::new(),
-            match_arm_spans: HashMap::new(),
+            source_map: HirSourceMap::new(),
             diagnostics: Vec::new(),
         }
     }
@@ -633,34 +589,39 @@ impl LoweringContext {
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
-        self.expr_spans.insert(id, self.span_from_range(range));
+        self.source_map.insert_expr(id, self.span_from_range(range));
         id
     }
 
     fn alloc_stmt(&mut self, stmt: Stmt, range: TextRange) -> StmtId {
         let id = self.stmts.alloc(stmt);
-        self.stmt_spans.insert(id, self.span_from_range(range));
+        self.source_map.insert_stmt(id, self.span_from_range(range));
         id
     }
 
     fn alloc_pattern(&mut self, pattern: Pattern, range: TextRange) -> PatId {
         let id = self.patterns.alloc(pattern);
-        self.pattern_spans.insert(id, self.span_from_range(range));
+        self.source_map
+            .insert_pattern(id, self.span_from_range(range));
         id
     }
 
-    fn finish(self, root_expr: Option<ExprId>) -> ExprBody {
-        ExprBody {
+    fn alloc_match_arm(&mut self, arm: MatchArm, spans: MatchArmSpans) -> MatchArmId {
+        let id = self.match_arms.alloc(arm);
+        self.source_map.insert_match_arm(id, spans);
+        id
+    }
+
+    fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, HirSourceMap) {
+        let body = ExprBody {
             exprs: self.exprs,
             stmts: self.stmts,
             patterns: self.patterns,
+            match_arms: self.match_arms,
             root_expr,
-            expr_spans: self.expr_spans,
-            stmt_spans: self.stmt_spans,
-            pattern_spans: self.pattern_spans,
-            match_arm_spans: self.match_arm_spans,
             diagnostics: self.diagnostics,
-        }
+        };
+        (body, self.source_map)
     }
 
     /// Generate a unique variable name for desugaring.
@@ -1190,8 +1151,7 @@ impl LoweringContext {
 
         let match_span = self.span_from_node(node);
         let mut scrutinee = None;
-        let mut arms = Vec::new();
-        let mut arm_spans = Vec::new();
+        let mut arm_ids = Vec::new();
 
         // Use children_with_tokens to handle both node and token children
         for elem in node.children_with_tokens() {
@@ -1200,8 +1160,8 @@ impl LoweringContext {
                     match child.kind() {
                         SyntaxKind::MATCH_ARM => {
                             let (arm, spans) = self.lower_match_arm(&child);
-                            arms.push(arm);
-                            arm_spans.push(spans);
+                            let arm_id = self.alloc_match_arm(arm, spans);
+                            arm_ids.push(arm_id);
                         }
                         _ => {
                             // First non-MATCH_ARM child is the scrutinee (as a node)
@@ -1266,11 +1226,13 @@ impl LoweringContext {
             self.alloc_expr(Expr::Missing, TextRange::default())
         });
 
-        let expr_id = self.exprs.alloc(Expr::Match { scrutinee, arms });
+        let expr_id = self.exprs.alloc(Expr::Match {
+            scrutinee,
+            arms: arm_ids,
+        });
 
         // Store span information for this match expression
-        self.expr_spans.insert(expr_id, match_span);
-        self.match_arm_spans.insert(expr_id, arm_spans);
+        self.source_map.insert_expr(expr_id, match_span);
 
         expr_id
     }
@@ -2129,7 +2091,7 @@ impl LoweringContext {
                                 })
                         })?;
 
-                    let key_span = self.expr_spans.get(&key).copied();
+                    let key_span = self.source_map.expr_span(key);
 
                     // Value - get child expression after the key
                     // Skip STRING_LITERAL if it was the key (compare spans), and get the next expression

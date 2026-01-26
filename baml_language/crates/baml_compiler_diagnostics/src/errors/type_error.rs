@@ -4,154 +4,107 @@
 //
 use baml_base::Span;
 
+/// Context trait that ties together type and location representations.
+///
+/// Different compiler phases use different representations:
+/// - HIR uses `TypeRef` for types and `Span` for locations
+/// - TIR uses `Ty` for types and `ErrorLocation` (with `ExprId` etc.) for locations
+///
+/// By parameterizing `TypeError` over this trait, we can:
+/// 1. Keep errors in a single enum definition
+/// 2. Use position-independent IDs in TIR for Salsa cache stability
+/// 3. Convert to Span-based errors only at diagnostic rendering time
+pub trait ErrorContext {
+    /// The type representation (e.g., `TypeRef` in HIR, `Ty` in TIR).
+    type Ty;
+    /// The location representation (e.g., `Span` in HIR, `ErrorLocation` in TIR).
+    type Location;
+}
+
+/// Default error context using Span for locations.
+///
+/// This is used when we need a simple `TypeError` with spans,
+/// such as in early compiler phases or for diagnostic output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SpanContext;
+
+impl ErrorContext for SpanContext {
+    type Ty = String;
+    type Location = Span;
+}
+
 /// Type errors that can occur during type checking.
+///
+/// Parameterized over an `ErrorContext` that determines both the type
+/// representation and location representation. This enables:
+/// - TIR to use position-independent IDs for Salsa cache stability
+/// - Conversion to Span-based errors only at diagnostic rendering time
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeError<T> {
+pub enum TypeError<C: ErrorContext> {
     /// Type mismatch between expected and found types.
     ///
-    /// - `span`: Location of the expression with the wrong type
-    /// - `info_span`: Optional location of the type constraint source (e.g., return type annotation)
+    /// - `location`: Location of the expression with the wrong type
+    /// - `info_location`: Optional location of the type constraint source (e.g., return type annotation)
     TypeMismatch {
-        expected: T,
-        found: T,
-        span: Span,
-        info_span: Option<Span>,
+        expected: C::Ty,
+        found: C::Ty,
+        location: C::Location,
+        info_location: Option<C::Location>,
     },
     /// Reference to an unknown type name.
-    UnknownType { name: String, span: Span },
+    UnknownType { name: String, location: C::Location },
     /// Reference to an unknown variable.
-    UnknownVariable { name: String, span: Span },
+    UnknownVariable { name: String, location: C::Location },
     /// Invalid binary operation.
     InvalidBinaryOp {
         op: String,
-        lhs: T,
-        rhs: T,
-        span: Span,
+        lhs: C::Ty,
+        rhs: C::Ty,
+        location: C::Location,
     },
     /// Invalid unary operation.
-    InvalidUnaryOp { op: String, operand: T, span: Span },
+    InvalidUnaryOp {
+        op: String,
+        operand: C::Ty,
+        location: C::Location,
+    },
     /// Wrong number of arguments in function call.
     ArgumentCountMismatch {
         expected: usize,
         found: usize,
-        span: Span,
+        location: C::Location,
     },
     /// Calling a non-callable type.
-    NotCallable { ty: T, span: Span },
+    NotCallable { ty: C::Ty, location: C::Location },
     /// Field access on non-class type.
-    NoSuchField { ty: T, field: String, span: Span },
+    NoSuchField {
+        ty: C::Ty,
+        field: String,
+        location: C::Location,
+    },
     /// Index access on non-indexable type.
-    NotIndexable { ty: T, span: Span },
+    NotIndexable { ty: C::Ty, location: C::Location },
     /// Match expression is not exhaustive - some cases are not covered.
     NonExhaustiveMatch {
-        scrutinee_type: T,
+        scrutinee_type: C::Ty,
         missing_cases: Vec<String>,
-        span: Span,
+        location: C::Location,
     },
     /// Match arm is unreachable - it can never match because previous arms cover all cases.
-    UnreachableArm { span: Span },
+    UnreachableArm { location: C::Location },
     /// Reference to an unknown enum variant.
     UnknownEnumVariant {
         enum_name: String,
         variant_name: String,
-        span: Span,
+        location: C::Location,
     },
     /// Using $watch on a non-variable expression (e.g., `arr[0].$watch`).
-    WatchOnNonVariable { span: Span },
+    WatchOnNonVariable { location: C::Location },
     /// Using $watch on a variable not declared with `watch let`.
-    WatchOnUnwatchedVariable { name: String, span: Span },
+    WatchOnUnwatchedVariable { name: String, location: C::Location },
     /// Function body has no return expression but requires a non-void return type.
-    MissingReturnExpression { expected: T, span: Span },
-}
-
-impl<T> TypeError<T> {
-    /// Map a function over the type parameter, transforming `TypeError<T>` to `TypeError<U>`.
-    pub fn fmap<U, F: Fn(&T) -> U>(&self, f: F) -> TypeError<U> {
-        match self {
-            TypeError::TypeMismatch {
-                expected,
-                found,
-                span,
-                info_span,
-            } => TypeError::TypeMismatch {
-                expected: f(expected),
-                found: f(found),
-                span: *span,
-                info_span: *info_span,
-            },
-            TypeError::UnknownType { name, span } => TypeError::UnknownType {
-                name: name.clone(),
-                span: *span,
-            },
-            TypeError::UnknownVariable { name, span } => TypeError::UnknownVariable {
-                name: name.clone(),
-                span: *span,
-            },
-            TypeError::InvalidBinaryOp { op, lhs, rhs, span } => TypeError::InvalidBinaryOp {
-                op: op.clone(),
-                lhs: f(lhs),
-                rhs: f(rhs),
-                span: *span,
-            },
-            TypeError::InvalidUnaryOp { op, operand, span } => TypeError::InvalidUnaryOp {
-                op: op.clone(),
-                operand: f(operand),
-                span: *span,
-            },
-            TypeError::ArgumentCountMismatch {
-                expected,
-                found,
-                span,
-            } => TypeError::ArgumentCountMismatch {
-                expected: *expected,
-                found: *found,
-                span: *span,
-            },
-            TypeError::NotCallable { ty, span } => TypeError::NotCallable {
-                ty: f(ty),
-                span: *span,
-            },
-            TypeError::NoSuchField { ty, field, span } => TypeError::NoSuchField {
-                ty: f(ty),
-                field: field.clone(),
-                span: *span,
-            },
-            TypeError::NotIndexable { ty, span } => TypeError::NotIndexable {
-                ty: f(ty),
-                span: *span,
-            },
-            TypeError::NonExhaustiveMatch {
-                scrutinee_type,
-                missing_cases,
-                span,
-            } => TypeError::NonExhaustiveMatch {
-                scrutinee_type: f(scrutinee_type),
-                missing_cases: missing_cases.clone(),
-                span: *span,
-            },
-            TypeError::UnreachableArm { span } => TypeError::UnreachableArm { span: *span },
-            TypeError::UnknownEnumVariant {
-                enum_name,
-                variant_name,
-                span,
-            } => TypeError::UnknownEnumVariant {
-                enum_name: enum_name.clone(),
-                variant_name: variant_name.clone(),
-                span: *span,
-            },
-            TypeError::WatchOnNonVariable { span } => TypeError::WatchOnNonVariable { span: *span },
-            TypeError::WatchOnUnwatchedVariable { name, span } => {
-                TypeError::WatchOnUnwatchedVariable {
-                    name: name.clone(),
-                    span: *span,
-                }
-            }
-            TypeError::MissingReturnExpression { expected, span } => {
-                TypeError::MissingReturnExpression {
-                    expected: f(expected),
-                    span: *span,
-                }
-            }
-        }
-    }
+    MissingReturnExpression {
+        expected: C::Ty,
+        location: C::Location,
+    },
 }

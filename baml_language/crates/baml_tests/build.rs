@@ -226,7 +226,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_compiler_vir;
             use baml_db::baml_compiler_mir;
             use baml_db::baml_compiler_emit;
-            use baml_compiler_hir::{function_body, function_signature};
+            use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
             use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_compiler_tir::pretty::short_display;
             use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
@@ -434,8 +434,9 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                 for item in items.iter() {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
+                        let sig_source_map = function_signature_source_map(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let result = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
+                        let result = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
                         writeln!(output, "    Return: {:?}", result.return_type).unwrap();
@@ -525,11 +526,12 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                 for item in items.iter() {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
+                        let sig_source_map = function_signature_source_map(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_compiler_tir::infer_function(&db, &signature, &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
+                        let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_compiler_vir::lower_from_hir(&db, &body, &inference, &resolution_ctx) {
+                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx) {
                             Ok(vir) => {
                                 let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
                                 baml_compiler_mir::pretty::display_function(&mir)

@@ -47,7 +47,9 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile, Span};
-use baml_compiler_hir::{self, ItemId, function_body, function_signature};
+use baml_compiler_hir::{
+    self, ItemId, function_body, function_signature, function_signature_source_map,
+};
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
@@ -219,6 +221,7 @@ pub fn compile_files(
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
+                let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Handle different function body types
@@ -263,7 +266,7 @@ pub fn compile_files(
                             viz_nodes: Vec::new(),
                         }
                     }
-                    baml_compiler_hir::FunctionBody::Expr(_) => {
+                    baml_compiler_hir::FunctionBody::Expr(_, _) => {
                         // Run type inference
                         // Note: type_aliases is not passed here, so exhaustiveness
                         // checking for type aliases won't work. This is acceptable
@@ -272,6 +275,7 @@ pub fn compile_files(
                         let inference = baml_compiler_tir::infer_function(
                             db,
                             &signature,
+                            Some(&sig_source_map),
                             &body,
                             Some(typing_context.clone()),
                             Some(class_field_types.clone()),
@@ -282,12 +286,8 @@ pub fn compile_files(
 
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let vir = baml_compiler_vir::lower_from_hir(
-                            db,
-                            &body,
-                            &inference,
-                            &resolution_ctx,
-                        )?;
+                        let vir =
+                            baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx)?;
                         let mir = baml_compiler_mir::lower(
                             &signature,
                             &vir,

@@ -33,7 +33,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
-use baml_compiler_hir::{ExprBody, Literal, MatchArm, Pattern};
+use baml_compiler_hir::{ExprBody, Literal, MatchArmId, Pattern};
 
 use crate::{LiteralValue, Ty, lower_type_ref_validated_resolved};
 
@@ -205,15 +205,15 @@ impl<'a> ExhaustivenessChecker<'a> {
     ///
     /// # Arguments
     /// - `scrutinee_ty`: The type of the value being matched
-    /// - `arms`: The match arms to check
-    /// - `body`: The expression body (for pattern lookup)
+    /// - `arm_ids`: The match arm IDs to check
+    /// - `body`: The expression body (for pattern and arm lookup)
     ///
     /// # Returns
     /// An `ExhaustivenessResult` with coverage info and any issues found.
     pub fn check(
         &self,
         scrutinee_ty: &Ty,
-        arms: &[MatchArm],
+        arm_ids: &[MatchArmId],
         body: &ExprBody,
     ) -> ExhaustivenessResult {
         // Expand the scrutinee type into the value sets that need to be covered
@@ -224,7 +224,8 @@ impl<'a> ExhaustivenessChecker<'a> {
         let mut has_catch_all = false;
         let mut unreachable_arms: Vec<usize> = Vec::new();
 
-        for (arm_idx, arm) in arms.iter().enumerate() {
+        for (arm_idx, arm_id) in arm_ids.iter().enumerate() {
+            let arm = &body.match_arms[*arm_id];
             let pattern = &body.patterns[arm.pattern];
             let has_guard = arm.guard.is_some();
             let value_set = self.pattern_to_value_set(pattern, has_guard, body);

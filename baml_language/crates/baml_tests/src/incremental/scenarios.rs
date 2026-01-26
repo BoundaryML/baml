@@ -3,7 +3,8 @@
 //! These tests verify that editing BAML files only recomputes the necessary
 //! queries, demonstrating Salsa's "early cutoff" optimization.
 
-use baml_compiler_hir::{function_body, function_signature};
+use baml_compiler_hir::{FunctionLoc, function_body, function_signature};
+use baml_compiler_tir::function_type_inference;
 use baml_db::{SourceFile, baml_compiler_hir};
 use salsa::Setter;
 
@@ -25,7 +26,7 @@ fn query_all_function_signatures(db: &baml_project::ProjectDatabase, file: Sourc
     let items = baml_compiler_hir::file_items(db, file);
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::Function(func_id) = item {
-            let _ = function_signature(db, *func_id);
+            let _sig = function_signature(db, *func_id);
         }
     }
 }
@@ -454,5 +455,345 @@ function NewName(x: string) -> string {
             ("file_lowering", 1),
             ("file_items", 1),
         ],
+    );
+}
+
+// ============================================================================
+// Type Inference (TIR) Incrementality Tests
+// ============================================================================
+//
+// These tests verify that type inference caching works correctly.
+// The key goal of the span→ID migration was to make type inference results
+// cacheable even when only whitespace or comments change.
+
+/// Helper to get all function locations from a file.
+fn get_function_locs(db: &baml_project::ProjectDatabase, file: SourceFile) -> Vec<FunctionLoc<'_>> {
+    let items = baml_compiler_hir::file_items(db, file);
+    items
+        .items(db)
+        .iter()
+        .filter_map(|item| {
+            if let baml_compiler_hir::ItemId::Function(func_id) = item {
+                Some(*func_id)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Query type inference for all functions in a file.
+fn query_all_type_inference(db: &baml_project::ProjectDatabase, file: SourceFile) {
+    for func in get_function_locs(db, file) {
+        let _ = function_type_inference(db, func);
+    }
+}
+
+/// Test that type inference is cached when nothing changes.
+#[test]
+fn type_inference_cached_on_no_change() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##,
+    );
+
+    // First run - type inference executes
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Second run without changes - should be fully cached
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 0)],
+    );
+}
+
+/// Test that whitespace-only changes don't invalidate type inference.
+///
+/// This is the KEY test for the span→ID migration. Before the migration,
+/// whitespace changes would invalidate type inference because spans were
+/// stored in the cached InferenceResult. Now that we use position-independent
+/// IDs, whitespace changes should NOT cause re-inference.
+#[test]
+fn type_inference_cached_on_whitespace_change() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}"##,
+    );
+
+    // First run - type inference executes
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Add whitespace (blank lines at end)
+    file.set_text(test_db.db_mut())
+        .to(r##"function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+
+
+"##
+        .to_string());
+
+    // After whitespace change:
+    // - lex/parse must re-run (input changed)
+    // - But type inference should be cached (early cutoff)
+    //   because the FunctionBody content is semantically identical
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[
+            ("lex_file", 1),                // Must re-run
+            ("parse_result", 1),            // Must re-run
+            ("function_type_inference", 0), // Should be cached!
+        ],
+    );
+}
+
+/// Test that comment-only changes don't invalidate type inference.
+///
+/// This test verifies that `function_signature` has been split into two queries:
+/// - `function_signature` returns position-independent signature data
+/// - `function_signature_source_map` returns spans separately
+///
+/// This enables Salsa early cutoff: when comments shift function positions,
+/// `function_signature` returns an equal value, so type inference is cached.
+#[test]
+fn type_inference_cached_on_comment_change() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##,
+    );
+
+    // First run
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Add a comment before the function (shifts function position)
+    file.set_text(test_db.db_mut()).to(r##"
+// This function greets the user
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##
+    .to_string());
+
+    // Comment changes should NOT invalidate type inference!
+    // The function_signature query returns equal values (position-independent),
+    // so function_type_inference benefits from Salsa early cutoff.
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[
+            ("lex_file", 1),                // Must re-run
+            ("parse_result", 1),            // Must re-run
+            ("function_type_inference", 0), // Should be cached!
+        ],
+    );
+}
+
+/// Test that changing a function's body DOES invalidate type inference.
+#[test]
+fn type_inference_invalidated_on_body_change() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##,
+    );
+
+    // First run
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Change the prompt (body change)
+    file.set_text(test_db.db_mut()).to(r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hi there {{name}}!"#
+}
+"##
+    .to_string());
+
+    // Body changes MUST invalidate type inference
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+}
+
+/// Test that changing a function's signature DOES invalidate type inference.
+#[test]
+fn type_inference_invalidated_on_signature_change() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##,
+    );
+
+    // First run
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Change the return type
+    file.set_text(test_db.db_mut()).to(r##"
+function Greet(name: string) -> int {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##
+    .to_string());
+
+    // Signature changes MUST invalidate type inference
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+}
+
+/// Test that editing one function doesn't invalidate type inference for others.
+#[test]
+fn type_inference_isolated_between_functions() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Foo(x: string) -> string {
+    client GPT4
+    prompt #"Foo {{x}}"#
+}
+
+function Bar(y: int) -> int {
+    client GPT4
+    prompt #"Bar {{y}}"#
+}
+"##,
+    );
+
+    // First run - both functions get type-checked
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 2)],
+    );
+
+    // Modify only Foo's body
+    file.set_text(test_db.db_mut()).to(r##"
+function Foo(x: string) -> string {
+    client GPT4
+    prompt #"Modified Foo {{x}}"#
+}
+
+function Bar(y: int) -> int {
+    client GPT4
+    prompt #"Bar {{y}}"#
+}
+"##
+    .to_string());
+
+    // Ideally only Foo's type inference would re-run, but currently
+    // both may re-run due to CST dependency. This test documents
+    // current behavior - improvement would be to achieve (1, 1) or (1, 0).
+    let (_, executed) = test_db.log_executed(|db| query_all_type_inference(db, file));
+    let inference_count = executed
+        .iter()
+        .filter(|s| s.contains("function_type_inference"))
+        .count();
+
+    // At minimum, we expect at least one re-execution (for Foo)
+    assert!(
+        inference_count >= 1,
+        "Expected at least 1 type inference to re-run, got {}",
+        inference_count
+    );
+}
+
+/// Test that adding a new class doesn't invalidate existing function type inference.
+#[test]
+fn type_inference_stable_when_adding_unrelated_class() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r##"
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##,
+    );
+
+    // First run
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
+    );
+
+    // Add an unrelated class
+    file.set_text(test_db.db_mut()).to(r##"
+class Person {
+    name string
+}
+
+function Greet(name: string) -> string {
+    client GPT4
+    prompt #"Hello {{name}}"#
+}
+"##
+    .to_string());
+
+    // Adding a class changes the project-level type context, which may
+    // invalidate type inference. This test documents current behavior.
+    // Ideally we'd achieve early cutoff here too.
+    let (_, executed) = test_db.log_executed(|db| query_all_type_inference(db, file));
+    let inference_count = executed
+        .iter()
+        .filter(|s| s.contains("function_type_inference"))
+        .count();
+
+    // Document behavior - this may be 0 (ideal) or 1 (acceptable)
+    println!(
+        "Type inference re-executions after adding unrelated class: {}",
+        inference_count
     );
 }

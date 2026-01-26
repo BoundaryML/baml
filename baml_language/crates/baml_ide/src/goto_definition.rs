@@ -101,12 +101,14 @@ pub fn goto_definition(
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
 
     // Find the expression at this position
-    let expr_body = match &*body {
-        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) => expr_body,
+    let (expr_body, source_map) = match &*body {
+        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) => {
+            (expr_body, source_map)
+        }
         _other => return None, // Can't find expressions in missing or error bodies
     };
 
-    let expr_id = find_expr_at_position(expr_body, position);
+    let expr_id = find_expr_at_position(expr_body, source_map, position);
 
     // If no expression found at position, fall through to the type name lookup fallback
     let Some(expr_id) = expr_id else {
@@ -153,8 +155,15 @@ pub fn goto_definition(
         if segments.len() > 1 && segments.first().map(smol_str::SmolStr::as_str) == Some(word) {
             // First, check if it's a function parameter
             let signature = baml_db::baml_compiler_hir::function_signature(db, function_loc);
-            if let Some(param) = signature.params.iter().find(|p| p.name == word) {
-                if let Some(param_span) = param.span {
+            let sig_source_map =
+                baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
+            if let Some((index, param)) = signature
+                .params
+                .iter()
+                .enumerate()
+                .find(|(_, p)| p.name == word)
+            {
+                if let Some(param_span) = sig_source_map.param_span(index) {
                     let span = Span::new(file_id, param_span);
                     let file_path = db.file_id_to_path(file_id)?;
                     return Some(NavigationTarget::new(
@@ -177,7 +186,7 @@ pub fn goto_definition(
                         if let Some(target) = resolution_to_navigation_target(
                             db,
                             resolution,
-                            expr_body,
+                            source_map,
                             file_id,
                             function_loc,
                         ) {
@@ -198,7 +207,7 @@ pub fn goto_definition(
     // If we have a resolution, try to navigate to it
     if let Some(resolution) = resolution {
         if let Some(target) =
-            resolution_to_navigation_target(db, resolution, expr_body, file_id, function_loc)
+            resolution_to_navigation_target(db, resolution, source_map, file_id, function_loc)
         {
             return Some(target);
         }
@@ -282,12 +291,18 @@ fn get_function_inference(
 }
 
 /// Find the expression at the given position.
-fn find_expr_at_position(body: &ExprBody, position: TextSize) -> Option<ExprId> {
+fn find_expr_at_position(
+    body: &ExprBody,
+    source_map: &baml_db::baml_compiler_hir::HirSourceMap,
+    position: TextSize,
+) -> Option<ExprId> {
     // Find ALL expressions that contain this position, then select the smallest
     let mut candidates: Vec<(ExprId, text_size::TextRange)> = Vec::new();
-    for (expr_id, span) in &body.expr_spans {
-        if span.range.contains(position) {
-            candidates.push((*expr_id, span.range));
+    for (expr_id, _expr) in body.exprs.iter() {
+        if let Some(span) = source_map.expr_span(expr_id) {
+            if span.range.contains(position) {
+                candidates.push((expr_id, span.range));
+            }
         }
     }
 
@@ -300,7 +315,7 @@ fn find_expr_at_position(body: &ExprBody, position: TextSize) -> Option<ExprId> 
 fn resolution_to_navigation_target(
     db: &ProjectDatabase,
     resolution: &ResolvedValue,
-    body: &ExprBody,
+    source_map: &baml_db::baml_compiler_hir::HirSourceMap,
     file_id: FileId,
     function_loc: FunctionLoc,
 ) -> Option<NavigationTarget> {
@@ -312,8 +327,8 @@ fn resolution_to_navigation_target(
             // Navigate to the local variable's definition
             match definition_site {
                 Some(DefinitionSite::Statement(stmt_id)) => {
-                    // Get the span from the function body's statement spans
-                    let span = body.get_stmt_span(*stmt_id)?;
+                    // Get the span from the source map's statement spans
+                    let span = source_map.stmt_span(*stmt_id)?;
                     let file_path = db.file_id_to_path(file_id)?.clone();
                     Some(NavigationTarget::new(name.clone(), file_path, span))
                 }
@@ -323,8 +338,14 @@ fn resolution_to_navigation_target(
                     // preserve order, so the index may not be accurate
                     let signature =
                         baml_db::baml_compiler_hir::function_signature(db, function_loc);
-                    let param = signature.params.iter().find(|p| p.name == *name)?;
-                    let param_span = param.span?;
+                    let sig_source_map =
+                        baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
+                    let (param_idx, param) = signature
+                        .params
+                        .iter()
+                        .enumerate()
+                        .find(|(_, p)| p.name == *name)?;
+                    let param_span = sig_source_map.param_span(param_idx)?;
 
                     // Create a span using the file_id and text range
                     let span = Span::new(file_id, param_span);

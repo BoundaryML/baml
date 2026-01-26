@@ -203,7 +203,8 @@ impl<'a> CodePrinter<'a> {
                 self.print_expr(*scrutinee);
                 self.output.push_str(") {\n");
                 self.indent += 1;
-                for arm in arms {
+                for arm_id in arms {
+                    let arm = &self.body.match_arms[*arm_id];
                     self.write_indent();
                     self.print_pattern(arm.pattern);
                     if let Some(guard) = arm.guard {

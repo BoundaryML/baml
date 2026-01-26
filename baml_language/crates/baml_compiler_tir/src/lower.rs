@@ -11,9 +11,9 @@ use std::collections::HashSet;
 
 use baml_base::{Name, Span};
 use baml_compiler_diagnostics::TypeError;
-use baml_compiler_hir::TypeRef;
+use baml_compiler_hir::{ErrorLocation, TypeRef};
 
-use crate::{LiteralValue, Ty};
+use crate::{LiteralValue, TirTypeError, Ty};
 
 /// Context for type lowering with validation.
 ///
@@ -26,7 +26,7 @@ pub struct TypeLoweringContext<'a> {
     /// Span to use for error reporting. If None, a default span is used.
     pub span: Option<Span>,
     /// Accumulated errors during lowering.
-    pub errors: Vec<TypeError<Ty>>,
+    pub errors: Vec<TirTypeError>,
 }
 
 impl<'a> TypeLoweringContext<'a> {
@@ -68,7 +68,7 @@ pub fn lower_type_ref_validated_resolved(
     class_names: &HashSet<Name>,
     enum_names: &HashSet<Name>,
     span: Span,
-) -> (Ty, Vec<TypeError<Ty>>) {
+) -> (Ty, Vec<TirTypeError>) {
     let mut ctx = TypeLoweringContextResolved::new(known_types, class_names, enum_names, span);
     let ty = lower_type_ref_resolved_with_ctx(&mut ctx, type_ref);
     (ty, ctx.errors)
@@ -80,7 +80,7 @@ struct TypeLoweringContextResolved<'a> {
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
     span: Span,
-    errors: Vec<TypeError<Ty>>,
+    errors: Vec<TirTypeError>,
 }
 
 impl<'a> TypeLoweringContextResolved<'a> {
@@ -106,7 +106,7 @@ impl<'a> TypeLoweringContextResolved<'a> {
     fn unknown_type_error(&mut self, name: &Name) -> Ty {
         self.errors.push(TypeError::UnknownType {
             name: name.to_string(),
-            span: self.span,
+            location: ErrorLocation::Span(self.span),
         });
         Ty::Error
     }

@@ -5,9 +5,11 @@
 
 use std::fmt::Write;
 
+use baml_base::Span;
+
 use crate::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic},
-    errors::{HirDiagnostic, NameError, ParseError, TypeError},
+    errors::{ErrorContext, HirDiagnostic, NameError, ParseError, TypeError},
 };
 
 // ============================================================================
@@ -46,126 +48,155 @@ impl ToDiagnostic for ParseError {
 // TypeError
 // ============================================================================
 
-impl<T: std::fmt::Display> ToDiagnostic for TypeError<T> {
-    fn to_diagnostic(&self) -> Diagnostic {
+impl<C: ErrorContext> TypeError<C> {
+    /// Convert this type error to a `Diagnostic`.
+    ///
+    /// Takes mapping functions to resolve types and locations from the
+    /// error's context to displayable strings and spans.
+    pub fn to_diagnostic(
+        &self,
+        ty_fn: impl Fn(&C::Ty) -> String,
+        loc_fn: impl Fn(&C::Location) -> Span,
+    ) -> Diagnostic {
         let diag = match self {
             TypeError::TypeMismatch {
                 expected,
                 found,
-                span,
-                info_span,
+                location,
+                info_location,
             } => {
                 let diag = Diagnostic::error(
                     DiagnosticId::TypeMismatch,
-                    format!("Expected `{expected}`, found `{found}`"),
+                    format!("Expected `{}`, found `{}`", ty_fn(expected), ty_fn(found)),
                 )
-                .with_primary_span(*span);
-                if let Some(info_span) = info_span {
-                    diag.with_related(*info_span, "Type defined here")
+                .with_primary_span(loc_fn(location));
+                if let Some(info_location) = info_location {
+                    diag.with_related(loc_fn(info_location), "Type defined here")
                 } else {
                     diag
                 }
             }
-            TypeError::UnknownType { name, span } => {
+            TypeError::UnknownType { name, location } => {
                 Diagnostic::error(DiagnosticId::UnknownType, format!("Unknown type `{name}`"))
-                    .with_primary_span(*span)
+                    .with_primary_span(loc_fn(location))
             }
 
-            TypeError::UnknownVariable { name, span } => Diagnostic::error(
+            TypeError::UnknownVariable { name, location } => Diagnostic::error(
                 DiagnosticId::UnknownVariable,
                 format!("Unknown variable `{name}`"),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::InvalidBinaryOp { op, lhs, rhs, span } => Diagnostic::error(
+            TypeError::InvalidBinaryOp {
+                op,
+                lhs,
+                rhs,
+                location,
+            } => Diagnostic::error(
                 DiagnosticId::InvalidOperator,
-                format!("Cannot apply operator '{op}' to types `{lhs}` and `{rhs}`"),
+                format!(
+                    "Cannot apply operator '{op}' to types `{}` and `{}`",
+                    ty_fn(lhs),
+                    ty_fn(rhs)
+                ),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::InvalidUnaryOp { op, operand, span } => Diagnostic::error(
+            TypeError::InvalidUnaryOp {
+                op,
+                operand,
+                location,
+            } => Diagnostic::error(
                 DiagnosticId::InvalidOperator,
-                format!("Cannot apply operator '{op}' to type `{operand}`"),
+                format!("Cannot apply operator '{op}' to type `{}`", ty_fn(operand)),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
             TypeError::ArgumentCountMismatch {
                 expected,
                 found,
-                span,
+                location,
             } => Diagnostic::error(
                 DiagnosticId::ArgumentCountMismatch,
                 format!("Expected {expected} arguments, found {found}"),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::NotCallable { ty, span } => Diagnostic::error(
+            TypeError::NotCallable { ty, location } => Diagnostic::error(
                 DiagnosticId::NotCallable,
-                format!("Type `{ty}` is not callable"),
+                format!("Type `{}` is not callable", ty_fn(ty)),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::NoSuchField { ty, field, span } => Diagnostic::error(
+            TypeError::NoSuchField {
+                ty,
+                field,
+                location,
+            } => Diagnostic::error(
                 DiagnosticId::NoSuchField,
-                format!("Type `{ty}` has no field `{field}`"),
+                format!("Type `{}` has no field `{field}`", ty_fn(ty)),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::NotIndexable { ty, span } => Diagnostic::error(
+            TypeError::NotIndexable { ty, location } => Diagnostic::error(
                 DiagnosticId::NotIndexable,
-                format!("Type `{ty}` is not indexable"),
+                format!("Type `{}` is not indexable", ty_fn(ty)),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
             TypeError::NonExhaustiveMatch {
                 scrutinee_type,
                 missing_cases,
-                span,
+                location,
             } => {
                 let missing = missing_cases.join(", ");
                 Diagnostic::error(
                     DiagnosticId::NonExhaustiveMatch,
-                    format!("Non-exhaustive match on `{scrutinee_type}`: missing cases {missing}"),
+                    format!(
+                        "Non-exhaustive match on `{}`: missing cases {missing}",
+                        ty_fn(scrutinee_type)
+                    ),
                 )
-                .with_primary_span(*span)
+                .with_primary_span(loc_fn(location))
             }
 
-            TypeError::UnreachableArm { span } => {
+            TypeError::UnreachableArm { location } => {
                 Diagnostic::error(DiagnosticId::UnreachableArm, "Unreachable match arm")
-                    .with_primary_span(*span)
+                    .with_primary_span(loc_fn(location))
             }
 
             TypeError::UnknownEnumVariant {
                 enum_name,
                 variant_name,
-                span,
+                location,
             } => Diagnostic::error(
                 DiagnosticId::UnknownEnumVariant,
                 format!("Unknown variant `{variant_name}` for enum `{enum_name}`"),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::WatchOnNonVariable { span } => Diagnostic::error(
+            TypeError::WatchOnNonVariable { location } => Diagnostic::error(
                 DiagnosticId::WatchOnNonVariable,
                 "$watch can only be used on simple variable expressions",
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::WatchOnUnwatchedVariable { name, span } => Diagnostic::error(
+            TypeError::WatchOnUnwatchedVariable { name, location } => Diagnostic::error(
                 DiagnosticId::WatchOnUnwatchedVariable,
                 format!(
                     "Cannot use $watch on `{name}`: variable must be declared with `watch let`"
                 ),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
 
-            TypeError::MissingReturnExpression { expected, span } => Diagnostic::error(
+            TypeError::MissingReturnExpression { expected, location } => Diagnostic::error(
                 DiagnosticId::MissingReturnExpression,
                 format!(
-                    "Missing return expression. Function expects `{expected}` but body has no final expression."
+                    "Missing return expression. Function expects `{}` but body has no final expression.",
+                    ty_fn(expected)
                 ),
             )
-            .with_primary_span(*span),
+            .with_primary_span(loc_fn(location)),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }
@@ -603,7 +634,7 @@ mod tests {
     use text_size::TextRange;
 
     use super::*;
-    use crate::diagnostic::DiagnosticPhase;
+    use crate::{SpanContext, diagnostic::DiagnosticPhase};
 
     fn test_span() -> Span {
         Span {
@@ -628,14 +659,14 @@ mod tests {
 
     #[test]
     fn test_type_error_to_diagnostic() {
-        let error: TypeError<String> = TypeError::TypeMismatch {
+        let error: TypeError<SpanContext> = TypeError::TypeMismatch {
             expected: "int".to_string(),
             found: "string".to_string(),
-            span: test_span(),
-            info_span: None,
+            location: test_span(),
+            info_location: None,
         };
 
-        let diag = error.to_diagnostic();
+        let diag = error.to_diagnostic(Clone::clone, |s| *s);
         assert_eq!(diag.code(), "E0001");
         assert!(diag.message.contains("int"));
         assert!(diag.message.contains("string"));

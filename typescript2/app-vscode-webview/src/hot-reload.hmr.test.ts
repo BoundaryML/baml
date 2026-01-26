@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { chromium, Browser, Page } from 'playwright'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, ChildProcess, execSync } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'node:url'
@@ -134,46 +134,16 @@ async function startDevServer(): Promise<DevServer> {
 }
 
 /**
- * Start the WASM file watcher using nodemon
+ * Rebuild WASM directly using wasm-pack.
+ * This is synchronous - it blocks until the build completes.
  */
-async function startWasmWatcher(): Promise<ChildProcess> {
-  const proc = spawn(
-    'npx',
-    ['nodemon', '--watch', '../../baml_language', '--ext', 'rs,toml', '--exec', 'pnpm build:wasm'],
-    {
-      cwd: playgroundDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true,
-    }
-  )
-
-  proc.stdout?.on('data', (data) => {
-    if (process.env.DEBUG_HMR) {
-      process.stdout.write(`[nodemon] ${data}`)
-    }
+function rebuildWasm(): void {
+  console.log('[wasm] Rebuilding WASM...')
+  execSync('pnpm build:wasm', {
+    cwd: playgroundDir,
+    stdio: 'inherit',
   })
-  proc.stderr?.on('data', (data) => {
-    if (process.env.DEBUG_HMR) {
-      process.stderr.write(`[nodemon:err] ${data}`)
-    }
-  })
-
-  try {
-    await waitForOutput(proc, /\[nodemon\].*starting|watching path/, 15_000)
-  } catch (err) {
-    proc.kill()
-    throw new Error(`Failed to start nodemon watcher: ${err}`)
-  }
-
-  return proc
-}
-
-/**
- * Wait for WASM rebuild to complete by watching nodemon output.
- */
-async function waitForWasmRebuild(proc: ChildProcess, timeoutMs = 60_000): Promise<void> {
-  await waitForOutput(proc, /\[nodemon\].*restarting due to changes/, timeoutMs / 2)
-  await waitForOutput(proc, /\[nodemon\].*clean exit|Done in/, timeoutMs / 2)
+  console.log('[wasm] WASM rebuild complete')
 }
 
 /**
@@ -236,7 +206,6 @@ async function getHotReloadText(page: Page): Promise<string | null> {
 describe('WASM Build Pipeline', () => {
   let browser: Browser
   let page: Page
-  let wasmWatcher: ChildProcess
   let originalFileContent: string | null = null
   const processes: ChildProcess[] = []
 
@@ -254,19 +223,13 @@ describe('WASM Build Pipeline', () => {
 
   beforeAll(async () => {
     browser = await chromium.launch({ headless: true })
-
-    wasmWatcher = await startWasmWatcher()
-    processes.push(wasmWatcher)
-
-    // Give nodemon time to complete initial build
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-  }, 90_000)
+  }, 30_000)
 
   afterAll(async () => {
     // Restore file if it was modified
     if (originalFileContent) {
       writeFileSync(hotReloadSourcePath, originalFileContent, 'utf8')
-      await waitForWasmRebuild(wasmWatcher, 60_000).catch(() => {})
+      rebuildWasm()
     }
 
     await browser?.close()
@@ -317,8 +280,8 @@ describe('WASM Build Pipeline', () => {
     const modified = originalFileContent.replace(KNOWN_GOOD_STRING, MODIFIED_STRING)
     writeFileSync(hotReloadSourcePath, modified, 'utf8')
 
-    // Wait for nodemon to detect the change and rebuild WASM
-    await waitForWasmRebuild(wasmWatcher, 60_000)
+    // Rebuild WASM directly (blocks until complete)
+    rebuildWasm()
 
     // Verify the modified text appears via HMR (no page reload)
     await waitForHotReloadText(page, MODIFIED_STRING)

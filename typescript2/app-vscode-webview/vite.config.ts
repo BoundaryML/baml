@@ -25,7 +25,8 @@ export default defineConfig({
   plugins: [react(), wasmNoCachePlugin()],
   resolve: {
     alias: {
-      '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src')
+      '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
+      '@b/baml-playground-wasm': resolve(projectRoot, '../pkg-playground/wasm/baml_playground_wasm.js'),
     }
   },
   server: {

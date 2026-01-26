@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
-use baml_compiler_hir::{ItemId, function_body, function_signature};
+use baml_compiler_hir::{ItemId, function_body, function_signature, function_signature_source_map};
 use baml_compiler_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
@@ -665,7 +665,7 @@ impl CompilerRunner {
 
                             // Print body based on type
                             match &*body {
-                                baml_compiler_hir::FunctionBody::Expr(expr_body) => {
+                                baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
                                     let body_code = baml_compiler_hir::body_to_code(expr_body);
                                     // Combine header with body, putting { on same line
                                     let header = format!(
@@ -856,6 +856,7 @@ impl CompilerRunner {
             for item in items {
                 if let ItemId::Function(func_id) = item {
                     let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
@@ -863,6 +864,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
@@ -956,11 +958,12 @@ impl CompilerRunner {
             for item in items {
                 if let ItemId::Function(func_id) = item {
                     let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
                     // Skip non-expression bodies
-                    let baml_compiler_hir::FunctionBody::Expr(_) = &*body else {
+                    let baml_compiler_hir::FunctionBody::Expr(_, _) = &*body else {
                         continue;
                     };
 
@@ -968,6 +971,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
@@ -987,7 +991,7 @@ impl CompilerRunner {
                     writeln!(output, "{}", header).ok();
                     output_annotated.push((header, status));
 
-                    match lower_from_hir(&self.db, &body, &inference_result, &resolution_ctx) {
+                    match lower_from_hir(&body, &inference_result, &resolution_ctx) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
                             let ir_output = pretty_print(&typed_ir);
@@ -1071,6 +1075,7 @@ impl CompilerRunner {
             for item in items {
                 if let ItemId::Function(func_id) = item {
                     let signature = function_signature(&self.db, *func_id);
+                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
                     let body = function_body(&self.db, *func_id);
 
@@ -1078,6 +1083,7 @@ impl CompilerRunner {
                     let inference_result = baml_compiler_tir::infer_function(
                         &self.db,
                         &signature,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_field_types_map.clone()),
@@ -1088,7 +1094,6 @@ impl CompilerRunner {
 
                     // Lower HIR → VIR → MIR
                     let mir_output = match baml_compiler_vir::lower_from_hir(
-                        &self.db,
                         &body,
                         &inference_result,
                         &resolution_ctx,

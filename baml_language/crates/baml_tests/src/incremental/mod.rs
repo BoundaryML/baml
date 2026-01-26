@@ -5,9 +5,13 @@
 
 mod scenarios;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use baml_project::ProjectDatabase;
+use baml_workspace::Project;
 use salsa::{Database, Event, EventKind, Setter};
 
 /// Test database wrapper with Salsa event logging for incrementality verification.
@@ -16,6 +20,7 @@ use salsa::{Database, Event, EventKind, Setter};
 /// verify which queries were executed (cache misses) vs which were cached (hits).
 pub struct IncrementalTestDb {
     db: ProjectDatabase,
+    project: Project,
     events: Arc<Mutex<Vec<Event>>>,
 }
 
@@ -23,13 +28,24 @@ impl IncrementalTestDb {
     /// Create a new test database with event logging enabled.
     pub fn new() -> Self {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let db = ProjectDatabase::new_with_event_callback({
+        let mut db = ProjectDatabase::new_with_event_callback({
             let events = events.clone();
             Box::new(move |event| {
                 events.lock().unwrap().push(event);
             })
         });
-        Self { db, events }
+        // Set up a project root so TIR queries work
+        let project = db.set_project_root(Path::new("."));
+        Self {
+            db,
+            project,
+            events,
+        }
+    }
+
+    /// Get the project handle.
+    pub fn project(&self) -> Project {
+        self.project
     }
 
     /// Get mutable access to the database for modifying inputs.
