@@ -4,4 +4,4 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-cargo run -p tools_stow -- stow --graph architecture/architecture.svg
+cargo run -p cargo-stow -- stow --graph architecture/architecture.svg

@@ -1,120 +1,124 @@
-# tools_stow
+<div align="center">
+  <h1>cargo-stow</h1>
+  <p><strong>Workspace linting and structure validation for Rust monorepos</strong></p>
 
-A cargo subcommand that validates and fixes `Cargo.toml` files in the BAML workspace.
+  <a href="https://crates.io/crates/cargo-stow"><img src="https://img.shields.io/crates/v/cargo-stow.svg" alt="crates.io"></a>
+  <a href="https://crates.io/crates/cargo-stow"><img src="https://img.shields.io/crates/d/cargo-stow.svg" alt="downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/crates/l/cargo-stow.svg" alt="license"></a>
+</div>
+
+## Features
+
+- **Dependency sorting** - Keep deps organized (internal first, then external)
+- **Structure validation** - Enforce flat crate layout, naming conventions
+- **Dependency rules** - Control who can depend on what
+- **Dependency graph** - Visualize workspace structure as SVG
+- **Auto-fix** - Automatically fix sortable issues
 
 ## Installation
 
 ```bash
-cargo install --path crates/tools_stow
+cargo install cargo-stow
 ```
 
-## Usage
+## Quick Start
 
 ```bash
-# Check for validation errors (default)
-cargo stow --check
-
-# Automatically fix issues
-cargo stow --fix
-
-# Verbose output
-cargo stow --check --verbose
+cargo stow init        # Generate config
+cargo stow             # Validate (default)
+cargo stow --fix       # Auto-fix sortable issues
+cargo stow --graph deps.svg  # Generate dependency graph
 ```
+
+## Why cargo-stow?
+
+Rust workspaces are powerful, but as they grow, they need governance:
+
+| Feature | cargo-stow | cargo-deny | cargo-machete |
+|---------|:----------:|:----------:|:-------------:|
+| Dependency sorting | ✅ | ❌ | ❌ |
+| Workspace structure validation | ✅ | ❌ | ❌ |
+| Crate naming conventions | ✅ | ❌ | ❌ |
+| Dependency graph visualization | ✅ | ❌ | ❌ |
+| Namespace/prefix enforcement | ✅ | ❌ | ❌ |
+| License checking | ❌ | ✅ | ❌ |
+| Unused dependency detection | ❌ | ❌ | ✅ |
+
+**cargo-stow** fills the gap for workspace structure linting - use it alongside cargo-deny and cargo-machete for comprehensive workspace hygiene.
 
 ## Configuration
 
-Stow can be configured via a `stow.toml` file in the workspace root, or via `[workspace.metadata.stow]` in `Cargo.toml`. If both exist, `stow.toml` takes precedence.
-
-### stow.toml Example
+Run `cargo stow init` to generate a `stow.toml` configuration file:
 
 ```toml
-# Approved prefixes for multi-word crate names (e.g., baml_compiler_*)
-approved_prefixes = ["lsp", "tools", "compiler", "builtins", "vm", "ide", "playground"]
+# Define namespace(s) for your crates
+[[namespaces]]
+name = "myapp"
+approved_prefixes = ["api", "cli"]
+test_crate_exceptions = []
 
-# Test crates exempt from "must have prefix crate" rule
-test_crate_exceptions = ["baml_tests"]
-
-# Dependency restriction rules
+# Control which crates can depend on what
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_prefixes = ["lsp"]
-allowed_crates = ["baml_cli"]
+allowed_crates = ["*_cli"]
 regular_deps_only = true
-reason = "Use thiserror for proper error types in library crates."
-
-[[dependency_rules]]
-pattern = "baml_compiler*"
-allowed_prefixes = ["compiler", "lsp"]
-allowed_crates = ["baml_db", "baml_project"]
-regular_deps_only = true
-reason = "Use baml_db or baml_project to access compiler interfaces."
+reason = "Use thiserror for library crates."
 ```
 
-### Cargo.toml Metadata Example
-
-```toml
-[workspace.metadata.stow]
-approved_prefixes = ["lsp", "tools", "compiler", "builtins", "vm", "ide", "playground"]
-test_crate_exceptions = ["baml_tests"]
-
-[[workspace.metadata.stow.dependency_rules]]
-pattern = "anyhow"
-allowed_prefixes = ["lsp"]
-allowed_crates = ["baml_cli"]
-regular_deps_only = true
-reason = "Use thiserror for proper error types in library crates."
-```
-
-If no configuration is found, sensible defaults are used.
+Alternatively, configure via `[workspace.metadata.stow]` in your `Cargo.toml`.
 
 ## Validation Rules
 
 ### 1. Flat Crate Structure
-All crates must be directly under `crates/` - no nested crates allowed.
+All crates must be directly under your crates directory - no nested crates.
 
 ### 2. Crate Name Matches Folder
 The `name` field in `Cargo.toml` must match the folder name.
 
 ### 3. Naming Convention
-Crate names must follow one of these patterns:
-- `baml_<word>` - simple crate name (e.g., `baml_cli`, `baml_db`)
-- `baml_<prefix>_<word>` - prefixed crate name with approved prefix
+Crate names must follow: `<namespace>_<word>` or `<namespace>_<prefix>_<word>`
 
-**Approved prefixes:** `lsp`, `tools`, `compiler`, `builtins`, `vm`, `ide`
-
-Test crates can use `_test` or `_tests` suffix (e.g., `baml_ide_tests`).
+- `myapp_core` - simple crate name
+- `myapp_api_client` - prefixed name (requires "api" in `approved_prefixes`)
+- `myapp_core_types` - auto-allowed `_types` suffix
+- `myapp_core_tests` - auto-allowed `_tests` suffix
 
 ### 4. Test Crate Pairing
-Crates ending in `_test` or `_tests` must have a corresponding base crate (e.g., `baml_ide_tests` requires `baml_ide`).
-
-**Exceptions:** `baml_tests`
+Crates ending in `_test` or `_tests` must have a corresponding base crate.
 
 ### 5. Workspace Dependencies
-All dependencies must use `{ workspace = true }` format to ensure version consistency.
+All dependencies must use `{ workspace = true }` format.
 
 ### 6. Dependency Restrictions
-Certain dependencies are restricted to specific crates:
-
-| Dependency | Allowed In | Reason |
-|------------|------------|--------|
-| `anyhow` | `baml_lsp_*`, `baml_cli` | Use `thiserror` for proper error types in libraries |
-| `baml_compiler_*` | `baml_compiler_*`, `baml_lsp_*`, `baml_db`, `baml_project` | Use `baml_db` or `baml_project` for compiler access |
-
-Test crates (`*_test`, `*_tests`) and tool crates (`baml_tools_*`) are exempt from these restrictions.
+Configure rules to restrict which crates can use specific dependencies.
 
 ### 7. Dependency Sorting
-Dependencies must be sorted:
-1. Internal (`baml_*`) dependencies first, alphabetically sorted
-2. External dependencies second, alphabetically sorted
+Dependencies are sorted: internal deps first (alphabetically), then external deps (alphabetically).
 
 ## What Gets Fixed
 
-When running `cargo stow --fix`:
-- Dependencies are converted to `{ workspace = true }` format
-- Dependencies are sorted according to the rules above
-- TOML files are formatted using taplo
+Running `cargo stow --fix`:
+- Converts dependencies to `{ workspace = true }` format
+- Sorts dependencies (internal first, then external)
+- Formats TOML files using taplo
+
+## CI Integration
+
+Add to your GitHub Actions workflow:
+
+```yaml
+- name: Install cargo-stow
+  run: cargo install cargo-stow
+
+- name: Validate workspace structure
+  run: cargo stow
+```
 
 ## Exit Codes
 
 - `0` - All validations passed
 - `1` - Validation errors found
+
+## License
+
+MIT

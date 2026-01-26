@@ -8,10 +8,11 @@
 
 use std::{collections::HashMap, io::Write};
 
-use baml_snapshot::BamlSnapshot;
 use baml_tests::bytecode::compile_source_with_schema;
 use bex_engine::{BexEngine, BexExternalValue};
+use bex_program::BexProgram;
 use indexmap::IndexMap;
+use sys_native::SysOpsExt;
 use tempfile::TempDir;
 
 /// Test input for engine execution.
@@ -38,7 +39,7 @@ impl Default for EngineProgram {
 }
 
 /// Compile BAML source code into a snapshot with schema populated.
-pub(crate) fn compile_for_engine(source: &str) -> BamlSnapshot {
+pub(crate) fn compile_for_engine(source: &str) -> BexProgram {
     compile_source_with_schema(source)
 }
 
@@ -66,7 +67,8 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new()).expect("Failed to create engine");
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
 
     let result = engine.call_function(input.entry, &[]).await;
 

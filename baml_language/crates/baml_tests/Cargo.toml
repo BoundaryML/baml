@@ -18,8 +18,8 @@ baml_compiler_mir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }
-baml_snapshot = { workspace = true }
 baml_workspace = { workspace = true }
+bex_program = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 anyhow = { workspace = true }
@@ -42,7 +42,6 @@ divan = { workspace = true }
 name = "compiler_benchmark"
 harness = false
 
-
 [features]
-default = []
-heap_debug = ["bex_vm/heap_debug", "bex_vm_types/heap_debug"]
+default = [  ]
+heap_debug = [ "bex_vm/heap_debug", "bex_vm_types/heap_debug" ]

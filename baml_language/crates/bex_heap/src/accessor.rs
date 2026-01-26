@@ -1,7 +1,7 @@
 //! Safe accessor API for external code to read heap objects.
 //!
 //! External code (`baml_sys`) runs outside the epoch system and cannot
-//! safely hold bare `ObjectIndex` values. This module provides an API
+//! safely hold bare `HeapPtr` values. This module provides an API
 //! that holds the handle table lock during access, preventing GC races.
 //!
 //! # Example
@@ -12,44 +12,44 @@
 //!
 //! // Or for complex access with GC protection:
 //! let result = heap.with_gc_protection(|protected| {
-//!     let idx = protected.resolve_handle(handle.slab_key())?;
-//!     // idx is safe to use - GC cannot run while we hold the guard
-//!     Some(recursive_snapshot(protected, idx))
+//!     let ptr = protected.resolve_handle(handle.slab_key())?;
+//!     // ptr is safe to use - GC cannot run while we hold the guard
+//!     Some(recursive_snapshot(protected, ptr))
 //! });
 //! ```
 
 use std::sync::RwLockReadGuard;
 
 use bex_external_types::Handle;
-use bex_vm_types::{Object, ObjectIndex, Value};
+use bex_vm_types::{HeapPtr, Object, Value};
 
 use crate::BexHeap;
 
 /// Guard type proving the handles read lock is held.
 ///
 /// This type can only be obtained from `BexHeap::with_gc_protection`.
-/// Methods that return `ObjectIndex` require this guard to ensure
-/// the index remains valid (GC cannot run while the lock is held).
-pub struct GcProtectedHeap<'a, F> {
-    heap: &'a BexHeap<F>,
+/// Methods that return `HeapPtr` require this guard to ensure
+/// the pointer remains valid (GC cannot run while the lock is held).
+pub struct GcProtectedHeap<'a> {
+    heap: &'a BexHeap,
     // Hold the read lock - prevents GC from updating handles
-    _guard: RwLockReadGuard<'a, std::collections::HashMap<usize, ObjectIndex>>,
+    _guard: RwLockReadGuard<'a, std::collections::HashMap<usize, HeapPtr>>,
 }
 
-impl<'a, F> GcProtectedHeap<'a, F> {
-    /// Resolve a handle's slab key to an ObjectIndex.
+impl<'a> GcProtectedHeap<'a> {
+    /// Resolve a handle's slab key to a HeapPtr.
     ///
     /// Safe because we hold the handles read lock, preventing GC from
-    /// moving objects and invalidating indices.
-    pub fn resolve_handle(&self, slab_key: usize) -> Option<ObjectIndex> {
+    /// moving objects and invalidating pointers.
+    pub fn resolve_handle(&self, slab_key: usize) -> Option<HeapPtr> {
         self._guard.get(&slab_key).copied()
     }
 
     /// Get the underlying heap reference.
     ///
-    /// Use this for operations that don't return ObjectIndex
+    /// Use this for operations that don't return HeapPtr
     /// (e.g., reading object contents).
-    pub fn heap(&self) -> &'a BexHeap<F> {
+    pub fn heap(&self) -> &'a BexHeap {
         self.heap
     }
 }
@@ -57,22 +57,19 @@ impl<'a, F> GcProtectedHeap<'a, F> {
 /// Safe object access API for external code.
 ///
 /// All methods hold the handle table read lock during access,
-/// ensuring GC cannot run and invalidate indices mid-operation.
-impl<F> BexHeap<F>
-where
-    F: Send + Sync,
-{
+/// ensuring GC cannot run and invalidate pointers mid-operation.
+impl BexHeap {
     /// Read a string object through a handle.
     ///
     /// Returns `None` if the handle is invalid or doesn't point to a string.
     pub fn read_string(&self, handle: &Handle) -> Option<String> {
         // Hold read lock on handles during entire operation
         let handles = self.handles.read().ok()?;
-        let idx = *handles.get(&handle.slab_key())?;
+        let ptr = *handles.get(&handle.slab_key())?;
 
         // SAFETY: We hold the handles read lock, so GC cannot run
-        // (GC needs write lock). The index is valid.
-        let obj = unsafe { self.get_object(idx) };
+        // (GC needs write lock). The pointer is valid.
+        let obj = unsafe { ptr.get() };
         match obj {
             Object::String(s) => Some(s.clone()),
             _ => None,
@@ -85,9 +82,9 @@ where
     /// Returns `None` if the handle is invalid or doesn't point to an array.
     pub fn read_array(&self, handle: &Handle) -> Option<Vec<Value>> {
         let handles = self.handles.read().ok()?;
-        let idx = *handles.get(&handle.slab_key())?;
+        let ptr = *handles.get(&handle.slab_key())?;
 
-        let obj = unsafe { self.get_object(idx) };
+        let obj = unsafe { ptr.get() };
         match obj {
             Object::Array(arr) => Some(arr.clone()),
             _ => None,
@@ -100,9 +97,9 @@ where
     /// Returns `None` if the handle is invalid or doesn't point to a map.
     pub fn read_map(&self, handle: &Handle) -> Option<indexmap::IndexMap<String, Value>> {
         let handles = self.handles.read().ok()?;
-        let idx = *handles.get(&handle.slab_key())?;
+        let ptr = *handles.get(&handle.slab_key())?;
 
-        let obj = unsafe { self.get_object(idx) };
+        let obj = unsafe { ptr.get() };
         match obj {
             Object::Map(map) => Some(map.clone()),
             _ => None,
@@ -125,18 +122,18 @@ where
     ///     }
     /// })?;
     /// ```
-    pub fn with_object<R>(&self, handle: &Handle, f: impl FnOnce(&Object<F>) -> R) -> Option<R> {
+    pub fn with_object<R>(&self, handle: &Handle, f: impl FnOnce(&Object) -> R) -> Option<R> {
         let handles = self.handles.read().ok()?;
-        let idx = *handles.get(&handle.slab_key())?;
+        let ptr = *handles.get(&handle.slab_key())?;
 
         // SAFETY: Handle table read lock held, GC cannot run
-        let obj = unsafe { self.get_object(idx) };
+        let obj = unsafe { ptr.get() };
         Some(f(obj))
     }
 
     /// Execute a closure while holding the handles read lock.
     ///
-    /// This prevents GC from updating handle indices during the operation.
+    /// This prevents GC from updating handle pointers during the operation.
     /// The closure receives a `GcProtectedHeap` which provides safe access
     /// to `resolve_handle` - you can't accidentally call it without the lock.
     ///
@@ -145,11 +142,11 @@ where
     /// ```ignore
     /// // Snapshot an entire object graph while protected from GC
     /// let snapshot = heap.with_gc_protection(|protected| {
-    ///     let idx = protected.resolve_handle(handle.slab_key())?;
-    ///     recursive_snapshot(protected.heap(), idx)
+    ///     let ptr = protected.resolve_handle(handle.slab_key())?;
+    ///     recursive_snapshot(protected.heap(), ptr)
     /// });
     /// ```
-    pub fn with_gc_protection<R>(&self, f: impl FnOnce(GcProtectedHeap<'_, F>) -> R) -> R {
+    pub fn with_gc_protection<R>(&self, f: impl FnOnce(GcProtectedHeap<'_>) -> R) -> R {
         let guard = self.handles.read().expect("handles lock poisoned");
         f(GcProtectedHeap {
             heap: self,

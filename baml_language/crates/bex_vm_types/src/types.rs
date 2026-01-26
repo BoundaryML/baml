@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
+use sys_resource_types::ResourceHandle;
 
-use crate::{
-    bytecode::Bytecode,
-    indexable::{GlobalPool, ObjectIndex, ObjectPool},
-};
+use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -40,6 +38,8 @@ pub mod type_tags {
     pub const FUTURE: i64 = 9;
     /// Media type tag.
     pub const MEDIA: i64 = 10;
+    /// Resource type tag (file handle, socket, etc.).
+    pub const RESOURCE: i64 = 11;
     /// Base value for class type tags (classes start at 100).
     pub const CLASS_BASE: i64 = 100;
     /// Unknown/invalid type tag.
@@ -50,50 +50,41 @@ pub mod type_tags {
 ///
 /// This is what `baml_compiler_emit` produces. It contains all the objects and globals
 /// needed to run a BAML program.
-#[derive(Clone, Debug)]
-pub struct Program<F> {
+///
+/// Note: At compile time, globals use `ConstValue` (with `ObjectIndex` for object refs).
+/// At load time (`BexEngine::new`), these are converted to `Value` (with `HeapPtr`).
+#[derive(Clone, Debug, Default)]
+pub struct Program {
     /// Object pool containing functions, classes, strings, etc.
-    pub objects: ObjectPool<F>,
+    pub objects: ObjectPool,
 
-    /// Global variables (typically function references).
-    pub globals: GlobalPool,
+    /// Global variables (converted from `ConstValue` to Value at load time).
+    pub globals: Vec<ConstValue>,
 
     /// Maps function names to their object indices.
     pub function_indices: HashMap<String, usize>,
 }
 
-impl<F> Default for Program<F> {
-    fn default() -> Self {
-        Self {
-            objects: ObjectPool::new(),
-            globals: GlobalPool::new(),
-            function_indices: HashMap::new(),
-        }
-    }
-}
-
-impl<F> Program<F> {
+impl Program {
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Add an object to the pool and return its index.
-    pub fn add_object(&mut self, object: Object<F>) -> usize {
+    pub fn add_object(&mut self, object: Object) -> usize {
         let idx = self.objects.len();
         self.objects.push(object);
         idx
     }
 
-    /// Add a global value.
-    pub fn add_global(&mut self, value: Value) {
+    /// Add a global value (`ConstValue`, converted to Value at load time).
+    pub fn add_global(&mut self, value: ConstValue) {
         self.globals.push(value);
     }
 
     /// Look up a function's object index by name.
-    pub fn function_index(&self, name: &str) -> Option<crate::ObjectIndex> {
-        self.function_indices
-            .get(name)
-            .map(|&idx| crate::ObjectIndex::from_raw(idx))
+    pub fn function_index(&self, name: &str) -> Option<usize> {
+        self.function_indices.get(name).copied()
     }
 }
 
@@ -133,9 +124,18 @@ pub enum SysOp {
     NetRead,
     /// Close a socket: `Socket.close()`
     NetClose,
-    // Future operations:
-    // /// HTTP request
-    // HttpRequest,
+    /// HTTP fetch: `baml.http.fetch(url: String) -> Response`
+    HttpFetch,
+    /// Get response body as text: `Response.text() -> String`
+    HttpResponseText,
+    /// Get response status code: `Response.status() -> i64`
+    HttpResponseStatus,
+    /// Check if response is OK (2xx): `Response.ok() -> bool`
+    HttpResponseOk,
+    /// Get request URL: `Response.url() -> String`
+    HttpResponseUrl,
+    /// Get response headers: `Response.headers() -> Map<String, String>`
+    HttpResponseHeaders,
 }
 
 impl std::fmt::Display for ExternalOp {
@@ -157,6 +157,12 @@ impl std::fmt::Display for SysOp {
             SysOp::NetConnect => write!(f, "net.connect"),
             SysOp::NetRead => write!(f, "net.read"),
             SysOp::NetClose => write!(f, "net.close"),
+            SysOp::HttpFetch => write!(f, "http.fetch"),
+            SysOp::HttpResponseText => write!(f, "http.Response.text"),
+            SysOp::HttpResponseStatus => write!(f, "http.Response.status"),
+            SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
+            SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
+            SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
         }
     }
 }
@@ -167,27 +173,24 @@ impl std::fmt::Display for SysOp {
 
 /// Function type.
 ///
-/// # Generic Parameter `F`
+/// # Native Function Pointers
 ///
-/// The `F` parameter represents the native function implementation type. This is
-/// generic to avoid a circular dependency between crates:
+/// Native functions are stored as type-erased `*const ()` pointers to avoid
+/// a circular dependency between crates:
 ///
 /// - `baml_vm` defines `NativeFunction = fn(&mut Vm, &[Value]) -> Result<...>`
 /// - This type references `Vm`, which is defined in `baml_vm`
 /// - `baml_vm_types` cannot depend on `baml_vm` (that would be circular)
 ///
-/// The generic allows different instantiations at different compilation stages:
+/// The type erasure allows different stages:
 ///
-/// - **Compile time**: `FunctionKind<()>` — the compiler (`baml_compiler_emit`) uses
-///   `()` as a placeholder since it doesn't know about native function implementations.
-/// - **Runtime**: `FunctionKind<NativeFunction>` — the VM (`baml_vm`) substitutes the
-///   actual function pointer type when loading a program via `Vm::from_program()`.
+/// - **Compile time**: The compiler emits `NativeUnresolved` for built-in functions
+/// - **Runtime**: The VM resolves these to `Native(ptr)` at load time
 ///
-/// The conversion from `FunctionKind<()>` to `FunctionKind<NativeFunction>` happens
-/// in `baml_vm::native::attach_builtins()`, which resolves native function names to
-/// their actual function pointers.
-#[derive(Clone, Copy, Debug)]
-pub enum FunctionKind<F> {
+/// The resolution happens in `baml_vm::native::attach_builtins()`, which looks up
+/// native function names and casts the real function pointers to `*const ()`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FunctionKind {
     /// Regular executable function.
     ///
     /// The VM pushes a call frame onto the call stack and runs the bytecode.
@@ -199,20 +202,35 @@ pub enum FunctionKind<F> {
     /// asynchronously via static dispatch on the `ExternalOp` enum.
     External(ExternalOp),
 
-    /// Rust native functions.
+    /// Unresolved native function (placeholder).
     ///
-    /// Contains a Rust function pointer that implements the actual logic.
-    /// Used mostly for built-in functions.
-    Native(F),
+    /// The compiler emits this for built-in functions. The VM resolves these
+    /// to `Native(ptr)` at load time. Panics if executed without resolution.
+    NativeUnresolved,
+
+    /// Rust native function (type-erased pointer).
+    ///
+    /// Contains a type-erased function pointer that the VM casts back to
+    /// the real `NativeFunction` type when calling.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be cast from a valid `NativeFunction` and only
+    /// cast back to that same type when calling.
+    Native(*const ()),
 }
 
+// SAFETY: FunctionKind contains a raw pointer (*const ()) that points to
+// immutable code (function pointers). Code doesn't change at runtime,
+// so sharing the pointer between threads is safe.
+#[allow(unsafe_code)]
+unsafe impl Send for FunctionKind {}
+#[allow(unsafe_code)]
+unsafe impl Sync for FunctionKind {}
+
 /// Represents any Baml function.
-///
-/// # Generic Parameter `F`
-///
-/// See [`FunctionKind`] for why this type is generic.
 #[derive(Clone, Debug)]
-pub struct Function<F> {
+pub struct Function {
     /// Function name.
     pub name: String,
 
@@ -225,7 +243,7 @@ pub struct Function<F> {
     pub bytecode: Bytecode,
 
     /// Type of function.
-    pub kind: FunctionKind<F>,
+    pub kind: FunctionKind,
 
     /// Local variable names.
     ///
@@ -247,7 +265,7 @@ pub struct Function<F> {
     pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
 }
 
-impl<F> std::fmt::Display for Function<F> {
+impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
     }
@@ -276,8 +294,8 @@ impl std::fmt::Display for Class {
 /// Runtime instance representation.
 #[derive(Clone, Debug)]
 pub struct Instance {
-    /// Class index in the `Vm::objects` pool.
-    pub class: ObjectIndex,
+    /// Pointer to the class object in the heap.
+    pub class: HeapPtr,
 
     /// Fields are accessed by index. No string lookups.
     pub fields: Vec<Value>,
@@ -285,7 +303,7 @@ pub struct Instance {
 
 impl std::fmt::Display for Instance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<instance of {}>", self.class)
+        write!(f, "<instance of {:p}>", self.class.as_ptr())
     }
 }
 
@@ -308,8 +326,8 @@ impl std::fmt::Display for Enum {
 /// Same as [`Instance`] but for enums.
 #[derive(Clone, Debug)]
 pub struct Variant {
-    /// Locate the enum.
-    pub enm: ObjectIndex,
+    /// Pointer to the enum object in the heap.
+    pub enm: HeapPtr,
 
     /// Index of the variant in the ordered list of variants.
     pub index: usize,
@@ -317,7 +335,7 @@ pub struct Variant {
 
 impl std::fmt::Display for Variant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<variant of {}>", self.enm)
+        write!(f, "<variant of {:p}>", self.enm.as_ptr())
     }
 }
 
@@ -352,10 +370,11 @@ pub enum Value {
     Float(f64),
     Bool(bool),
 
-    /// Index into the `Vm::objects` vec.
+    /// Pointer to a heap-allocated object.
     ///
+    /// This is a raw pointer (`HeapPtr`) that points directly into the heap.
     /// Strings are also objects, don't add `Value::String`.
-    Object(ObjectIndex),
+    Object(HeapPtr),
 }
 
 impl std::fmt::Display for Value {
@@ -365,7 +384,37 @@ impl std::fmt::Display for Value {
             Value::Int(int) => write!(f, "{int}"),
             Value::Float(float) => write!(f, "{float}"),
             Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Object(object) => write!(f, "{object}"),
+            Value::Object(ptr) => write!(f, "{ptr}"),
+        }
+    }
+}
+
+/// Compile-time constant values.
+///
+/// Similar to `Value` but uses `ObjectIndex` for object references instead of `HeapPtr`.
+/// Used in bytecode constants which are converted to `Value` when loading into the engine.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ConstValue {
+    Null,
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    /// Index into the object pool (converted to `HeapPtr` at load time).
+    Object(crate::ObjectIndex),
+}
+
+impl ConstValue {
+    /// Convert to a runtime `Value` using a function to resolve object indices to heap pointers.
+    pub fn to_value<F>(&self, resolve: F) -> Value
+    where
+        F: Fn(crate::ObjectIndex) -> HeapPtr,
+    {
+        match self {
+            ConstValue::Null => Value::Null,
+            ConstValue::Int(v) => Value::Int(*v),
+            ConstValue::Float(v) => Value::Float(*v),
+            ConstValue::Bool(v) => Value::Bool(*v),
+            ConstValue::Object(idx) => Value::Object(resolve(*idx)),
         }
     }
 }
@@ -379,9 +428,9 @@ impl std::fmt::Display for Value {
 ///
 /// Read `Vm::objects` for more information.
 #[derive(Clone, Debug)]
-pub enum Object<F> {
+pub enum Object {
     /// Function object.
-    Function(Function<F>),
+    Function(Function),
 
     /// Class object.
     Class(Class),
@@ -417,6 +466,9 @@ pub enum Object<F> {
     // /// Images, audio, pdf, video.
     Media(MediaValue),
 
+    /// External resource (file handle, socket, etc.).
+    Resource(ResourceHandle),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -424,7 +476,7 @@ pub enum Object<F> {
     // BamlType(TypeIR),
 }
 
-impl<F> std::fmt::Display for Object<F> {
+impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
@@ -433,9 +485,10 @@ impl<F> std::fmt::Display for Object<F> {
             Object::Enum(enm) => enm.fmt(f),
             Object::Variant(value) => value.fmt(f),
             Object::String(string) => string.fmt(f),
-            Object::Array(array) => write!(f, "{array:?}"),
-            Object::Map(map) => write!(f, "{map:?}"),
+            Object::Array(array) => write!(f, "<array len={}>", array.len()),
+            Object::Map(map) => write!(f, "<map len={}>", map.len()),
             Object::Media(media) => media.fmt(f),
+            Object::Resource(r) => write!(f, "<{r}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -474,7 +527,7 @@ pub struct PendingFuture {
 
 #[derive(Clone, Debug)]
 pub struct MediaValue {
-    pub kind: MediaKind,
+    pub kind: baml_base::MediaKind,
     pub content: MediaContent,
     pub mime_type: Option<String>,
 }
@@ -551,12 +604,12 @@ impl<O: Into<ObjectType>> From<O> for Type {
 
 impl Type {
     /// Get the type of a value.
-    pub fn of(value: &Value, when_object: impl FnOnce(ObjectIndex) -> ObjectType) -> Self {
+    pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
         match value {
             Value::Int(_) => Type::Int,
             Value::Float(_) => Type::Float,
             Value::Bool(_) => Type::Bool,
-            Value::Object(index) => Type::Object(when_object(*index)),
+            Value::Object(ptr) => Type::Object(when_object(*ptr)),
             // TODO: Actually?
             Value::Null => Type::Object(ObjectType::Any),
         }
@@ -577,12 +630,13 @@ pub enum ObjectType {
     String,
     Enum,
     Variant,
-    Media(MediaKind),
+    Media(baml_base::MediaKind),
     Future(FutureType),
+    Resource,
 }
 
 impl ObjectType {
-    pub fn of<F>(ob: &Object<F>) -> Self {
+    pub fn of(ob: &Object) -> Self {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
             Object::Class(_) => Self::Class,
@@ -593,6 +647,7 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::Media(media) => Self::Media(media.kind),
+            Object::Resource(_) => Self::Resource,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -627,6 +682,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
+            ObjectType::Resource => write!(f, "resource"),
         }
     }
 }
@@ -649,8 +705,8 @@ impl std::fmt::Display for FunctionType {
     }
 }
 
-impl<F> From<&FunctionKind<F>> for FunctionType {
-    fn from(value: &FunctionKind<F>) -> Self {
+impl From<&FunctionKind> for FunctionType {
+    fn from(value: &FunctionKind) -> Self {
         if matches!(value, FunctionKind::External(_)) {
             FunctionType::External
         } else {
@@ -682,27 +738,6 @@ impl From<&Future> for FutureType {
         match value {
             Future::Pending(_) => Self::Pending,
             Future::Ready(_) => Self::Ready,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MediaKind {
-    Image,
-    Audio,
-    Video,
-    Pdf,
-    Generic,
-}
-
-impl std::fmt::Display for MediaKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MediaKind::Image => write!(f, "image"),
-            MediaKind::Audio => write!(f, "audio"),
-            MediaKind::Video => write!(f, "video"),
-            MediaKind::Pdf => write!(f, "pdf"),
-            MediaKind::Generic => write!(f, "media"),
         }
     }
 }

@@ -7,8 +7,11 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-baml_snapshot = { workspace = true }
+baml_base = { workspace = true }
+bex_program = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_resource_types = { workspace = true }
 indexmap = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = [ "fs", "net", "rt" ] }

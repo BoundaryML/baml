@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 21
-Objects: 56
-Globals: 52
+Objects: 62
+Globals: 58
 
 Function ConditionalLogic (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (age)
@@ -18,11 +18,11 @@ Function ConditionalLogic (arity: 1, kind: Bytecode):
      7    CMP_OP <               
      8    POP_JUMP_IF_FALSE +2   (to 10)
      9    JUMP +3                (to 12)
-     10   LOAD_CONST 2           (senior)
+     10   LOAD_CONST 2           ("senior")
      11   RETURN                 
-     12   LOAD_CONST 3           (adult)
+     12   LOAD_CONST 3           ("adult")
      13   RETURN                 
-     14   LOAD_CONST 4           (minor)
+     14   LOAD_CONST 4           ("minor")
      15   RETURN                 
 
 Function add_assign (arity: 0, kind: Bytecode):

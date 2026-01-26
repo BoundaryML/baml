@@ -1,4 +1,4 @@
-use bex_vm_types::{Object, ObjectIndex};
+use bex_vm_types::{HeapPtr, Object, ObjectIndex};
 
 use crate::BexHeap;
 
@@ -52,7 +52,7 @@ impl HeapDebuggerState {
     }
 }
 
-impl<F> BexHeap<F> {
+impl BexHeap {
     #[inline]
     pub fn debug_config(&self) -> &HeapDebuggerConfig {
         self.debug_state().config()
@@ -62,7 +62,14 @@ impl<F> BexHeap<F> {
     pub fn verify_quick(&self) {}
 
     #[inline]
-    pub fn debug_assert_valid_index(&self, _idx: ObjectIndex) {}
+    pub fn debug_assert_valid_index(&self, _idx: HeapPtr) {}
+
+    /// Create a HeapPtr from a raw pointer.
+    /// In non-debug mode, just wraps the pointer.
+    #[inline]
+    pub(crate) unsafe fn make_heap_ptr(&self, ptr: *mut Object) -> HeapPtr {
+        unsafe { HeapPtr::from_ptr(ptr) }
+    }
 
     #[inline]
     pub(crate) fn record_tlab_canary(&self, _idx: usize) {}
@@ -87,11 +94,11 @@ impl<F> BexHeap<F> {
         ObjectIndex::from_raw(raw)
     }
 
-    pub(crate) fn placeholder_object(&self) -> Object<F> {
+    pub(crate) fn placeholder_object(&self) -> Object {
         Object::String(String::new())
     }
 
-    pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object<F> {
+    pub(crate) fn tlab_canary_object(&self, _chunk_start: usize, _chunk_end: usize) -> Object {
         Object::String(String::new())
     }
 
@@ -102,5 +109,5 @@ impl<F> BexHeap<F> {
     }
 
     #[inline]
-    pub(crate) fn debug_assert_not_sentinel(&self, _obj: &Object<F>) {}
+    pub(crate) fn debug_assert_not_sentinel(&self, _obj: &Object) {}
 }

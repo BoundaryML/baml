@@ -60,7 +60,7 @@ repos:
 
       - id: cargo-stow
         name: cargo stow
-        entry: bash -c 'cd baml_language && cargo run -p tools_stow --bin cargo-stow -- stow --check'
+        entry: bash -c 'cd baml_language && cargo run -p cargo-stow -- stow --check'
         language: system
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/tools_stow/)
@@ -93,7 +93,7 @@ repos:
 
       - id: cargo-clippy-wasm
         name: cargo clippy (wasm)
-        entry: bash -c 'cd baml_language && cargo clippy --workspace --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude tools_stow --exclude bex_sys --exclude bex_engine --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings'
+        entry: bash -c 'cd baml_language && cargo clippy --workspace --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --target wasm32-unknown-unknown --all-features --locked -- -D warnings'
         language: system
         pass_filenames: false
         types: [rust]

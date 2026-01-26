@@ -18,9 +18,20 @@ use std::{
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
-    ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, Pattern, StmtId,
+    ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, MatchArmId,
+    Pattern, SignatureSourceMap, StmtId, TirContext,
 };
 use baml_workspace::Project;
+
+/// Type alias for TIR type errors.
+///
+/// Uses `TirContext<Ty>` which has:
+/// - `Ty` as the type representation
+/// - `ErrorLocation` as the location (position-independent IDs)
+///
+/// This enables Salsa caching to work correctly - whitespace changes don't
+/// invalidate type inference results because locations use IDs instead of spans.
+pub type TirTypeError = TypeError<TirContext<Ty>>;
 
 pub mod builtins;
 mod exhaustiveness;
@@ -400,7 +411,7 @@ impl TypeResolutionContext {
         &self,
         type_ref: &baml_compiler_hir::TypeRef,
         span: Span,
-    ) -> (Ty, Vec<TypeError<Ty>>) {
+    ) -> (Ty, Vec<TirTypeError>) {
         lower_type_ref_validated_resolved(
             type_ref,
             &self.known_types,
@@ -437,7 +448,7 @@ pub struct InferenceResult {
     /// enabling phi-like optimization for match results.
     pub exhaustive_matches: HashSet<ExprId>,
     /// Type checking errors.
-    pub errors: Vec<TypeError<Ty>>,
+    pub errors: Vec<TirTypeError>,
     /// Resolution information for IDE features (go-to-definition, find-references).
     /// Maps expression IDs to what they resolve to.
     pub expr_resolutions: ResolutionMap,
@@ -485,7 +496,7 @@ pub struct TypeContext<'db> {
     /// Used to validate that all return paths match the declared return type.
     return_types: Vec<(Ty, Span)>,
     /// Accumulated type errors.
-    errors: Vec<TypeError<Ty>>,
+    errors: Vec<TirTypeError>,
     /// The current file being typechecked
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
@@ -589,7 +600,7 @@ impl<'db> TypeContext<'db> {
     }
 
     /// Add a type error.
-    pub fn push_error(&mut self, error: TypeError<Ty>) {
+    pub fn push_error(&mut self, error: TirTypeError) {
         self.errors.push(error);
     }
 
@@ -772,22 +783,24 @@ pub fn infer_function_body<'db>(
     }
 
     // Type check the body against the expected return type (checking mode for bidirectional typing)
-    let (trailing_expr_type, body_span) = match body {
-        FunctionBody::Expr(expr_body) => {
+    let (trailing_expr_type, body_location) = match body {
+        FunctionBody::Expr(expr_body, _source_map) => {
             if let Some(root_expr) = expr_body.root_expr {
                 // Use check_expr for bidirectional typing - check body against expected return type
                 let ty = check_expr(&mut ctx, root_expr, expr_body, expected_return);
-                let span = expr_body.get_expr_span(root_expr).unwrap_or_default();
-                (ty, span)
+                (ty, ErrorLocation::Expr(root_expr))
             } else {
-                (Ty::Void, Span::default())
+                (Ty::Void, ErrorLocation::Span(Span::default()))
             }
         }
         FunctionBody::Llm(_) => {
             // LLM functions return their declared return type
-            (expected_return.clone(), Span::default())
+            (
+                expected_return.clone(),
+                ErrorLocation::Span(Span::default()),
+            )
         }
-        FunctionBody::Missing => (Ty::Unknown, Span::default()),
+        FunctionBody::Missing => (Ty::Unknown, ErrorLocation::Span(Span::default())),
     };
 
     // With bidirectional type checking, return statements are already checked
@@ -807,14 +820,14 @@ pub fn infer_function_body<'db>(
         let error = if trailing_expr_type.is_void() && !expected_return.is_void() {
             TypeError::MissingReturnExpression {
                 expected: expected_return.clone(),
-                span: body_span,
+                location: body_location,
             }
         } else {
             TypeError::TypeMismatch {
                 expected: expected_return.clone(),
                 found: trailing_expr_type.clone(),
-                span: body_span,
-                info_span: return_type_span,
+                location: body_location,
+                info_location: return_type_span.map(ErrorLocation::Span),
             }
         };
         ctx.push_error(error);
@@ -856,6 +869,11 @@ pub fn function_type_inference<'db>(
     function: FunctionLoc<'db>,
 ) -> Arc<InferenceResult> {
     // Get the function signature and body
+    // NOTE: We intentionally don't call function_signature_source_map here.
+    // This allows Salsa early cutoff: when only whitespace/comments change,
+    // function_signature returns an equal value, so this query is cached.
+    // The trade-off is that type mismatch errors won't point to the return
+    // type annotation, but they'll still point to the offending expression.
     let signature = baml_compiler_hir::function_signature(db, function);
     let body = baml_compiler_hir::function_body(db, function);
 
@@ -882,6 +900,7 @@ pub fn function_type_inference<'db>(
     let result = infer_function(
         db,
         &signature,
+        None, // No source map - enables Salsa early cutoff on whitespace changes
         &body,
         globals,
         class_fields,
@@ -902,10 +921,17 @@ pub fn function_type_inference<'db>(
 ///
 /// The `globals` parameter provides types for top-level functions, allowing
 /// function calls to be properly typed. Pass `None` if no global context is needed.
+///
+/// The `sig_source_map` parameter is optional. When provided, type mismatch errors
+/// will include a secondary location pointing to the return type annotation.
+/// When `None`, errors still point to the offending expression but without the
+/// return type annotation location. Pass `None` for cached queries to enable
+/// Salsa early cutoff on whitespace/comment changes.
 #[allow(clippy::too_many_arguments)]
 pub fn infer_function<'db>(
     db: &'db dyn Db,
     signature: &FunctionSignature,
+    sig_source_map: Option<&SignatureSourceMap>,
     body: &FunctionBody,
     globals: Option<HashMap<Name, Ty>>,
     class_fields: Option<HashMap<Name, HashMap<Name, Ty>>>,
@@ -927,7 +953,7 @@ pub fn infer_function<'db>(
     // Use a placeholder span for now - ideally we'd have spans on TypeRef
     let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
 
-    let mut type_errors: Vec<TypeError<Ty>> = Vec::new();
+    let mut type_errors: Vec<TirTypeError> = Vec::new();
 
     // Convert parameter TypeRefs to Tys with validation and resolution
     let param_types: HashMap<Name, Ty> = signature
@@ -956,9 +982,9 @@ pub fn infer_function<'db>(
     );
     type_errors.extend(errors);
 
-    // Convert return type TextRange to Span for diagnostics
-    let return_type_span = signature
-        .return_type_span
+    // Convert return type TextRange to Span for diagnostics (if source map provided)
+    let return_type_span = sig_source_map
+        .and_then(SignatureSourceMap::return_type_span)
         .map(|range| Span::new(file_id, range));
 
     // Delegate to the body inference function
@@ -992,8 +1018,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
     let expr = &body.exprs[expr_id];
 
-    // Create a placeholder span for errors (ideally we'd track spans in ExprBody)
-    let span = body.get_expr_span(expr_id).unwrap_or_default();
+    // Use position-independent location for errors - resolved to spans at render time
+    let location = ErrorLocation::Expr(expr_id);
 
     let ty = match expr {
         Expr::Literal(lit) => infer_literal(lit),
@@ -1038,7 +1064,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 } else {
                     ctx.push_error(TypeError::UnknownVariable {
                         name: name.to_string(),
-                        span,
+                        location,
                     });
                     Ty::Unknown
                 }
@@ -1106,7 +1132,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::UnknownEnumVariant {
                             enum_name: enum_name.to_string(),
                             variant_name: variant_name.to_string(),
-                            span,
+                            location,
                         });
                         return Ty::Unknown;
                     }
@@ -1119,7 +1145,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 } else {
                     ctx.push_error(TypeError::UnknownVariable {
                         name: first.to_string(),
-                        span,
+                        location,
                     });
                     return Ty::Unknown;
                 };
@@ -1140,7 +1166,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             },
                         );
                     }
-                    ty = infer_field_access(ctx, &ty, field, span);
+                    ty = infer_field_access(ctx, &ty, field, location);
                     segment_types.push(ty.clone());
                 }
 
@@ -1162,13 +1188,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 let lhs_ty = infer_expr(ctx, *lhs, body);
                 let rhs_ty = infer_expr(ctx, *rhs, body);
-                infer_binary_op(ctx, *op, &lhs_ty, &rhs_ty, span)
+                infer_binary_op(ctx, *op, &lhs_ty, &rhs_ty, location)
             }
         }
 
         Expr::Unary { op, expr: inner } => {
             let inner_ty = infer_expr(ctx, *inner, body);
-            infer_unary_op(ctx, *op, &inner_ty, span)
+            infer_unary_op(ctx, *op, &inner_ty, location)
         }
 
         Expr::Call { callee, args } => {
@@ -1176,8 +1202,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             // If so, we need to pass the receiver as the first argument.
             // We track (type, Option<span>) for each argument so we can report errors
             // at the correct location. Implicit receiver args have None for span.
-            let (callee_ty, effective_args): (Ty, Vec<(Ty, Option<Span>)>) = match &body.exprs
-                [*callee]
+            let (callee_ty, effective_args): (Ty, Vec<(Ty, Option<ErrorLocation>)>) = match &body
+                .exprs[*callee]
             {
                 Expr::FieldAccess { base, field: _ } => {
                     // Method call: receiver.method(args) -> Type.method(receiver, args)
@@ -1189,8 +1215,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     let mut effective_args = vec![(receiver_ty, None)];
                     for arg in args {
                         let arg_ty = infer_expr(ctx, *arg, body);
-                        let arg_span = body.get_expr_span(*arg);
-                        effective_args.push((arg_ty, arg_span));
+                        let arg_location = Some(ErrorLocation::Expr(*arg));
+                        effective_args.push((arg_ty, arg_location));
                     }
                     (callee_ty, effective_args)
                 }
@@ -1205,12 +1231,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
                         // It's a builtin function - infer argument types first so we can
                         // bind type variables (e.g., T in deep_copy(x: T) -> T)
-                        let arg_types_with_spans: Vec<(Ty, Option<Span>)> = args
+                        let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
                             .iter()
                             .map(|arg| {
                                 let ty = infer_expr(ctx, *arg, body);
-                                let arg_span = body.get_expr_span(*arg);
-                                (ty, arg_span)
+                                let arg_location = Some(ErrorLocation::Expr(*arg));
+                                (ty, arg_location)
                             })
                             .collect();
                         let arg_types: Vec<Ty> = arg_types_with_spans
@@ -1284,7 +1310,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             let first = &receiver_segments[0];
                             let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
                             for field in &receiver_segments[1..] {
-                                ty = infer_field_access(ctx, &ty, field, span);
+                                ty = infer_field_access(ctx, &ty, field, location);
                             }
                             ty
                         };
@@ -1295,8 +1321,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let mut effective_args = vec![(receiver_ty, None)];
                         for arg in args {
                             let arg_ty = infer_expr(ctx, *arg, body);
-                            let arg_span = body.get_expr_span(*arg);
-                            effective_args.push((arg_ty, arg_span));
+                            let arg_location = Some(ErrorLocation::Expr(*arg));
+                            effective_args.push((arg_ty, arg_location));
                         }
                         (callee_ty, effective_args)
                     }
@@ -1304,12 +1330,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 _ => {
                     // Regular function call (single-segment Path or other expression)
                     let callee_ty = infer_expr(ctx, *callee, body);
-                    let arg_types_with_spans: Vec<(Ty, Option<Span>)> = args
+                    let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
                         .iter()
                         .map(|arg| {
                             let ty = infer_expr(ctx, *arg, body);
-                            let arg_span = body.get_expr_span(*arg);
-                            (ty, arg_span)
+                            let arg_location = Some(ErrorLocation::Expr(*arg));
+                            (ty, arg_location)
                         })
                         .collect();
                     (callee_ty, arg_types_with_spans)
@@ -1324,20 +1350,22 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
                             found: effective_args.len(),
-                            span,
+                            location,
                         });
                     }
 
-                    // Check argument types - use each argument's span for precise error location
-                    for ((arg_ty, arg_span), param_ty) in effective_args.iter().zip(params.iter()) {
+                    // Check argument types - use each argument's location for precise error location
+                    for ((arg_ty, arg_location), param_ty) in
+                        effective_args.iter().zip(params.iter())
+                    {
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
-                            // Use the argument's span if available, otherwise fall back to call span
-                            let error_span = arg_span.unwrap_or(span);
+                            // Use the argument's location if available, otherwise fall back to call location
+                            let error_location = arg_location.unwrap_or(location);
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
                                 found: generalize_for_error(param_ty, arg_ty),
-                                span: error_span,
-                                info_span: None,
+                                location: error_location,
+                                info_location: None,
                             });
                         }
                     }
@@ -1349,7 +1377,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 _ => {
                     ctx.push_error(TypeError::NotCallable {
                         ty: callee_ty,
-                        span,
+                        location,
                     });
                     Ty::Unknown
                 }
@@ -1368,25 +1396,25 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         if !ctx.is_watched(var_name) {
                             ctx.push_error(TypeError::WatchOnUnwatchedVariable {
                                 name: var_name.to_string(),
-                                span,
+                                location,
                             });
                         }
                     }
                     _ => {
                         // Not a simple variable (e.g., arr[0].$watch, obj.field.$watch)
-                        ctx.push_error(TypeError::WatchOnNonVariable { span });
+                        ctx.push_error(TypeError::WatchOnNonVariable { location });
                     }
                 }
             }
 
             let base_ty = infer_expr(ctx, *base, body);
-            infer_field_access(ctx, &base_ty, field, span)
+            infer_field_access(ctx, &base_ty, field, location)
         }
 
         Expr::Index { base, index } => {
             let base_ty = infer_expr(ctx, *base, body);
             let index_ty = infer_expr(ctx, *index, body);
-            infer_index_access(ctx, &base_ty, &index_ty, span)
+            infer_index_access(ctx, &base_ty, &index_ty, location)
         }
 
         Expr::Array { elements } => {
@@ -1405,8 +1433,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: elem_ty.clone(),
                             found: other_ty,
-                            span,
-                            info_span: None,
+                            location,
+                            info_location: None,
                         });
                     }
                 }
@@ -1450,8 +1478,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: obj_ty.clone(),
                         found: spread_ty,
-                        span,
-                        info_span: None,
+                        location,
+                        info_location: None,
                     });
                 }
             }
@@ -1481,16 +1509,16 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: key_ty.clone(),
                             found: generalize_for_error(&key_ty, &other_key_ty),
-                            span,
-                            info_span: None,
+                            location,
+                            info_location: None,
                         });
                     }
                     if !ctx.is_subtype_of(&other_value_ty, &value_ty) {
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: value_ty.clone(),
                             found: generalize_for_error(&value_ty, &other_value_ty),
-                            span,
-                            info_span: None,
+                            location,
+                            info_location: None,
                         });
                     }
                 }
@@ -1531,8 +1559,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Bool,
                     found: cond_ty,
-                    span,
-                    info_span: None,
+                    location,
+                    info_location: None,
                 });
             }
 
@@ -1577,9 +1605,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         Expr::Match { scrutinee, arms } => {
             let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
 
-            // Use the actual match expression span if available, otherwise fall back to placeholder
-            let match_span = body.get_expr_span(expr_id).unwrap_or(span);
-
             if arms.is_empty() {
                 // Empty match is non-exhaustive (unless scrutinee is uninhabited).
                 // An uninhabited type has no possible values, so an empty match is
@@ -1589,18 +1614,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     ctx.push_error(TypeError::NonExhaustiveMatch {
                         scrutinee_type: scrutinee_ty.clone(),
                         missing_cases: vec!["all cases".to_string()],
-                        span: match_span,
+                        location: ErrorLocation::Expr(expr_id),
                     });
                 }
                 Ty::Unknown
             } else {
                 // Perform exhaustiveness checking and unreachable arm detection
-                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id, match_span);
+                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id);
 
                 // Collect result types from all arms
                 let arm_types: Vec<Ty> = arms
                     .iter()
-                    .map(|arm| {
+                    .map(|arm_id| {
+                        let arm = &body.match_arms[*arm_id];
+
                         // Push a scope for the arm's pattern bindings
                         ctx.push_scope();
 
@@ -1621,8 +1648,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 ctx.push_error(TypeError::TypeMismatch {
                                     expected: Ty::Bool,
                                     found: guard_ty,
-                                    span,
-                                    info_span: None,
+                                    location,
+                                    info_location: None,
                                 });
                             }
                         }
@@ -1662,7 +1689,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
     use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
-    let span = body.get_expr_span(expr_id).unwrap_or_default();
+    let location = ErrorLocation::Expr(expr_id);
 
     let ty = match expr {
         // For most cases, we synthesize then check subtyping
@@ -1741,8 +1768,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_elem).clone(),
                                 found: generalize_for_error(expected_elem, &elem_ty),
-                                span,
-                                info_span: None,
+                                location,
+                                info_location: None,
                             });
                         }
                     }
@@ -1758,8 +1785,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
-                        span,
-                        info_span: None,
+                        location,
+                        info_location: None,
                     });
                 }
                 ty
@@ -1838,8 +1865,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
-                        span,
-                        info_span: None,
+                        location,
+                        info_location: None,
                     });
                 }
                 ty
@@ -1866,8 +1893,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_key).clone(),
                                 found: generalize_for_error(expected_key, &key_ty),
-                                span,
-                                info_span: None,
+                                location,
+                                info_location: None,
                             });
                         }
                         let value_ty = check_expr(ctx, value_expr, body, expected_value);
@@ -1875,8 +1902,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_value).clone(),
                                 found: generalize_for_error(expected_value, &value_ty),
-                                span,
-                                info_span: None,
+                                location,
+                                info_location: None,
                             });
                         }
                     }
@@ -1892,8 +1919,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
-                        span,
-                        info_span: None,
+                        location,
+                        info_location: None,
                     });
                 }
                 ty
@@ -1914,8 +1941,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: expected.clone(),
                     found: generalize_for_error(expected, &ty),
-                    span,
-                    info_span: None,
+                    location,
+                    info_location: None,
                 });
             }
             ty
@@ -2001,10 +2028,9 @@ fn extract_pattern_binding(
 fn check_match_exhaustiveness(
     ctx: &mut TypeContext<'_>,
     scrutinee_ty: &Ty,
-    arms: &[baml_compiler_hir::MatchArm],
+    arm_ids: &[MatchArmId],
     body: &ExprBody,
     match_expr_id: ExprId,
-    match_span: Span,
 ) {
     // Skip exhaustiveness checking for unknown/error types
     if scrutinee_ty.is_unknown() || scrutinee_ty.is_error() {
@@ -2020,20 +2046,14 @@ fn check_match_exhaustiveness(
         &ctx.known_types,
     );
 
-    let result = checker.check(scrutinee_ty, arms, body);
+    let result = checker.check(scrutinee_ty, arm_ids, body);
 
-    // Get arm spans if available (for accurate error locations)
-    let arm_spans = body.get_match_arm_spans(match_expr_id);
-
-    // Report unreachable arms with accurate spans
+    // Report unreachable arms using position-independent MatchArmId
     for arm_idx in result.unreachable_arms {
-        // Use the arm's specific span if available, otherwise fall back to match span
-        let span = arm_spans
-            .and_then(|spans| spans.get(arm_idx))
-            .map(|s| s.arm_span)
-            .unwrap_or(match_span);
-
-        ctx.push_error(TypeError::UnreachableArm { span });
+        let arm_id = arm_ids[arm_idx];
+        ctx.push_error(TypeError::UnreachableArm {
+            location: ErrorLocation::MatchArm(arm_id),
+        });
     }
 
     // Report non-exhaustive match (points to the match expression itself)
@@ -2047,7 +2067,7 @@ fn check_match_exhaustiveness(
         ctx.push_error(TypeError::NonExhaustiveMatch {
             scrutinee_type: scrutinee_ty.clone(),
             missing_cases,
-            span: match_span,
+            location: ErrorLocation::Expr(match_expr_id),
         });
     } else {
         // Record that this match is exhaustive for codegen optimization
@@ -2148,7 +2168,7 @@ fn infer_binary_op(
     op: baml_compiler_hir::BinaryOp,
     lhs: &Ty,
     rhs: &Ty,
-    span: Span,
+    location: ErrorLocation,
 ) -> Ty {
     use baml_compiler_hir::BinaryOp::{
         Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Instanceof, Le, Lt, Mod, Mul, Ne, Or,
@@ -2189,7 +2209,7 @@ fn infer_binary_op(
                     op: format!("{op:?}"),
                     lhs: generalize(lhs),
                     rhs: generalize(rhs),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2206,7 +2226,7 @@ fn infer_binary_op(
                     op: format!("{op:?}"),
                     lhs: generalize(lhs),
                     rhs: generalize(rhs),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2225,7 +2245,7 @@ fn infer_binary_op(
                     op: format!("{op:?}"),
                     lhs: generalize(lhs),
                     rhs: generalize(rhs),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2240,7 +2260,7 @@ fn infer_binary_op(
                     op: format!("{op:?}"),
                     lhs: generalize(lhs),
                     rhs: generalize(rhs),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2255,7 +2275,7 @@ fn infer_binary_op(
                     op: format!("{op:?}"),
                     lhs: generalize(lhs),
                     rhs: generalize(rhs),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2271,7 +2291,7 @@ fn infer_unary_op(
     ctx: &mut TypeContext<'_>,
     op: baml_compiler_hir::UnaryOp,
     operand: &Ty,
-    span: Span,
+    location: ErrorLocation,
 ) -> Ty {
     use baml_compiler_hir::UnaryOp::{Neg, Not};
 
@@ -2291,7 +2311,7 @@ fn infer_unary_op(
                 ctx.push_error(TypeError::InvalidUnaryOp {
                     op: "!".to_string(),
                     operand: generalize(operand),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2303,7 +2323,7 @@ fn infer_unary_op(
                 ctx.push_error(TypeError::InvalidUnaryOp {
                     op: "-".to_string(),
                     operand: generalize(operand),
-                    span,
+                    location,
                 });
                 Ty::Error
             }
@@ -2315,7 +2335,12 @@ fn infer_unary_op(
 ///
 /// For class types, this handles both field access and method access.
 /// For primitive types (arrays, strings, maps), this handles builtin methods.
-fn infer_field_access(ctx: &mut TypeContext<'_>, base: &Ty, field: &Name, span: Span) -> Ty {
+fn infer_field_access(
+    ctx: &mut TypeContext<'_>,
+    base: &Ty,
+    field: &Name,
+    location: ErrorLocation,
+) -> Ty {
     // Special case: $watch accessor on any type
     // The actual watched check happens at MIR lowering time
     if field.as_str() == "$watch" {
@@ -2346,7 +2371,7 @@ fn infer_field_access(ctx: &mut TypeContext<'_>, base: &Ty, field: &Name, span: 
                 ctx.push_error(TypeError::NoSuchField {
                     ty: base.clone(),
                     field: field.to_string(),
-                    span,
+                    location,
                 });
                 return Ty::Unknown;
             }
@@ -2399,13 +2424,18 @@ fn infer_field_access(ctx: &mut TypeContext<'_>, base: &Ty, field: &Name, span: 
     ctx.push_error(TypeError::NoSuchField {
         ty: base.clone(),
         field: field.to_string(),
-        span,
+        location,
     });
     Ty::Unknown
 }
 
 /// Infer the type of an index access.
-fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Span) -> Ty {
+fn infer_index_access(
+    ctx: &mut TypeContext<'_>,
+    base: &Ty,
+    index: &Ty,
+    location: ErrorLocation,
+) -> Ty {
     match base {
         Ty::List(elem) => {
             // Index must be int
@@ -2413,8 +2443,8 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Int,
                     found: index.clone(),
-                    span,
-                    info_span: None,
+                    location,
+                    info_location: None,
                 });
             }
             (**elem).clone()
@@ -2425,8 +2455,8 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: (**key).clone(),
                     found: index.clone(),
-                    span,
-                    info_span: None,
+                    location,
+                    info_location: None,
                 });
             }
             (**value).clone()
@@ -2437,8 +2467,8 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: Ty::Int,
                     found: index.clone(),
-                    span,
-                    info_span: None,
+                    location,
+                    info_location: None,
                 });
             }
             Ty::String
@@ -2447,7 +2477,7 @@ fn infer_index_access(ctx: &mut TypeContext<'_>, base: &Ty, index: &Ty, span: Sp
         _ => {
             ctx.push_error(TypeError::NotIndexable {
                 ty: base.clone(),
-                span,
+                location,
             });
             Ty::Unknown
         }
@@ -2530,22 +2560,18 @@ fn check_stmt_with_return(
         }
 
         Stmt::Return(expr) => {
-            let (return_ty, span) = if let Some(e) = expr {
+            let return_ty = if let Some(e) = expr {
                 // If we have an expected return type, use check_expr for bidirectional typing
-                let ty = if let Some(expected) = expected_return {
+                if let Some(expected) = expected_return {
                     check_expr(ctx, *e, body, expected)
                 } else {
                     infer_expr(ctx, *e, body)
-                };
-                // Use the return expression's span for more precise error location
-                let span = body.get_expr_span(*e).unwrap_or_default();
-                (ty, span)
+                }
             } else {
-                // For bare `return;`, use the statement span
-                let span = body.get_stmt_span(stmt_id).unwrap_or_default();
-                (Ty::Void, span)
+                Ty::Void
             };
-            ctx.record_return(return_ty, span);
+            // Record return type (span resolved at render time if needed)
+            ctx.record_return(return_ty, Span::default());
         }
 
         Stmt::While {
@@ -2574,12 +2600,11 @@ fn check_stmt_with_return(
             let value_ty = infer_expr(ctx, *value, body);
             // Check that value type is compatible with target type
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
-                let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: target_ty.clone(),
                     found: generalize_for_error(&target_ty, &value_ty),
-                    span,
-                    info_span: None,
+                    location: ErrorLocation::Expr(*value),
+                    info_location: None,
                 });
             }
         }
@@ -2594,12 +2619,11 @@ fn check_stmt_with_return(
             let value_ty = infer_expr(ctx, *value, body);
             // Check that value type is compatible with target type
             if !ctx.is_subtype_of(&value_ty, &target_ty) {
-                let span = body.get_expr_span(*value).unwrap_or_default();
                 ctx.push_error(TypeError::TypeMismatch {
                     expected: target_ty.clone(),
                     found: generalize_for_error(&target_ty, &value_ty),
-                    span,
-                    info_span: None,
+                    location: ErrorLocation::Expr(*value),
+                    info_location: None,
                 });
             }
         }

@@ -11,6 +11,7 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod heap_ptr;
 pub mod indexable;
 pub mod types;
 
@@ -18,8 +19,9 @@ pub use bytecode::{
     BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp, VizExecDelta, VizExecEvent,
     VizNodeMeta, VizNodeType,
 };
+pub use heap_ptr::HeapPtr;
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
-    Class, Enum, ExternalOp, Function, FunctionKind, Future, Object, ObjectType, PendingFuture,
-    Program, SysOp, Value, Variant, type_tags,
+    Class, ConstValue, Enum, ExternalOp, Function, FunctionKind, Future, Instance, Object,
+    ObjectType, PendingFuture, Program, SysOp, Value, Variant, type_tags,
 };

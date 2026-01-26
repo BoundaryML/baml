@@ -166,12 +166,23 @@ async function handleWorkspaceCommand(
   try {
     switch (command) {
       case 'baml.openBamlPanel': {
+        // VSCode sends: [{ functionName: "..." }]
         if (!firstArg?.functionName) {
           console.warn('[MessageHandler] baml.openBamlPanel: missing functionName');
           return;
         }
-        // Use SDK navigation method
         sdk.navigation.selectFunction(firstArg.functionName);
+        break;
+      }
+
+      case 'baml.openBamlPanelInBrowser': {
+        // Language server (Zed/JetBrains) sends: ["FunctionName"] (plain string)
+        const functionName = typeof firstArg === 'string' ? firstArg : null;
+        if (!functionName) {
+          console.warn('[MessageHandler] baml.openBamlPanelInBrowser: missing functionName');
+          return;
+        }
+        sdk.navigation.selectFunction(functionName);
         break;
       }
 

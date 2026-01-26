@@ -185,7 +185,9 @@ where
     tokio::pin!(cancel_future);
 
     //advanced curl viewing, use render_raw_curl on each node. TODO
-    for node in iter {
+    let total_nodes = iter.len();
+    for (node_index, node) in iter.into_iter().enumerate() {
+        let is_last_node = node_index == total_nodes - 1;
         // Check for cancellation at the start of each iteration
         let cancel_scope = node.scope.clone();
         tokio::select! {
@@ -470,25 +472,43 @@ where
                     Some(Err(e)) => Some(Err(e)),
                     None => None,
                 };
-                // Call on_event for the final response (success or failure)
-                // We need to do this before moving response_value_without_flags into result
-                if let Some(ref on_event_cb) = on_event {
-                    // We can't clone anyhow::Error, so we need to check the response type
-                    // and only send on_event for responses we can represent
-                    let event_result = match &response_value_without_flags {
-                        Some(Ok(val)) => Some(Ok(val.clone())),
-                        Some(Err(e)) => {
-                            // print the type of the error
-                            Some(Err(anyhow::anyhow!(e.to_string())))
-                        }
-                        None => None,
-                    };
+                // Call on_event for the final response, but only for:
+                // 1. Success responses (always emit)
+                // 2. Failure responses when this is the last node (all retries exhausted)
+                //
+                // We must NOT emit failure events for intermediate retries because the
+                // TypeScript/Python client will throw immediately on receiving an error event,
+                // even though we're about to retry and may succeed.
+                //
+                // TODO: If a stream yields partial chunks before failing mid-stream, those
+                // chunks have already been emitted via on_event in run_parser_loop. When the
+                // retry starts, fresh chunks will also be emitted. Users iterating over the
+                // stream would see partials from both attempts (the stream may appear to
+                // "reset" or go backwards). The final response from getFinalResponse() will
+                // be correct. To fully handle mid-stream failures, we'd need to buffer chunks
+                // until the stream completes successfully, which would hurt streaming latency.
+                let is_success = matches!(final_response, LLMResponse::Success(_));
+                let should_emit_event = is_success || is_last_node;
 
-                    on_event_cb(FunctionResult::new(
-                        node.scope.clone(),
-                        final_response.clone(),
-                        event_result,
-                    ));
+                if should_emit_event {
+                    if let Some(ref on_event_cb) = on_event {
+                        // We can't clone anyhow::Error, so we need to check the response type
+                        // and only send on_event for responses we can represent
+                        let event_result = match &response_value_without_flags {
+                            Some(Ok(val)) => Some(Ok(val.clone())),
+                            Some(Err(e)) => {
+                                // print the type of the error
+                                Some(Err(anyhow::anyhow!(e.to_string())))
+                            }
+                            None => None,
+                        };
+
+                        on_event_cb(FunctionResult::new(
+                            node.scope.clone(),
+                            final_response.clone(),
+                            event_result,
+                        ));
+                    }
                 }
 
                 let result = (node.scope, final_response, response_value_without_flags);

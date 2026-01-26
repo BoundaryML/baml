@@ -36,6 +36,7 @@ mod path;
 pub mod pretty;
 pub mod reserved_names;
 mod signature;
+mod source_map;
 pub mod symbol_table;
 mod test;
 mod type_ref;
@@ -52,6 +53,7 @@ pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
 pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};
+pub use source_map::{ErrorLocation, HirSourceMap, SignatureSourceMap, TirContext};
 pub use symbol_table::*;
 pub use type_ref::*;
 
@@ -243,11 +245,41 @@ pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<G
 ///
 /// This is separate from the `ItemTree` to provide fine-grained incrementality.
 /// Changing a function body does NOT invalidate this query.
+///
+/// This query returns only the position-independent signature data.
+/// For source location information, use `function_signature_source_map`.
 #[salsa::tracked]
 pub fn function_signature<'db>(
     db: &'db dyn Db,
     function: FunctionLoc<'db>,
 ) -> Arc<FunctionSignature> {
+    let (signature, _source_map) = function_signature_with_source_map(db, function);
+    signature
+}
+
+/// Returns the source map for a function signature (parameter and return type spans).
+///
+/// This is separate from `function_signature` to enable early cutoff:
+/// when comments or whitespace change, `function_signature` can return
+/// an equal value (cached), while this query returns updated spans.
+#[salsa::tracked]
+pub fn function_signature_source_map<'db>(
+    db: &'db dyn Db,
+    function: FunctionLoc<'db>,
+) -> SignatureSourceMap {
+    let (_signature, source_map) = function_signature_with_source_map(db, function);
+    source_map
+}
+
+/// Internal helper that computes both signature and source map together.
+///
+/// Both `function_signature` and `function_signature_source_map` delegate to this,
+/// but Salsa's early cutoff means that downstream queries depending only on
+/// `function_signature` won't re-execute when only spans change.
+fn function_signature_with_source_map<'db>(
+    db: &'db dyn Db,
+    function: FunctionLoc<'db>,
+) -> (Arc<FunctionSignature>, SignatureSourceMap) {
     let file = function.file(db);
     let tree = syntax_tree(db, file);
     let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
@@ -257,12 +289,14 @@ pub fn function_signature<'db>(
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    let default_signature = Arc::new(FunctionSignature {
-        name: func.name.clone(),
-        params: vec![],
-        return_type: TypeRef::Unknown,
-        return_type_span: None,
-    });
+    let default_signature = (
+        Arc::new(FunctionSignature {
+            name: func.name.clone(),
+            params: vec![],
+            return_type: TypeRef::Unknown,
+        }),
+        SignatureSourceMap::default(),
+    );
 
     let function_def = source_file.items().find_map(|item| match item {
         baml_compiler_syntax::ast::Item::Function(func_node) => {
@@ -296,7 +330,9 @@ fn lower_method_signature(
     method_node: &baml_compiler_syntax::ast::FunctionDef,
     method_name: &Name,
     class_name: &str,
-) -> Arc<FunctionSignature> {
+) -> (Arc<FunctionSignature>, SignatureSourceMap) {
+    let mut source_map = SignatureSourceMap::new();
+
     // Extract parameters, replacing 'self' with the class type
     let mut params = Vec::new();
     if let Some(param_list) = method_node.param_list() {
@@ -313,13 +349,12 @@ fn lower_method_signature(
                         .unwrap_or(TypeRef::Unknown)
                 };
 
-                // Get the span of the entire parameter
-                let span = Some(param_node.syntax().text_range());
+                // Store the span in the source map
+                source_map.push_param_span(Some(param_node.syntax().text_range()));
 
                 params.push(Param {
                     name: Name::new(param_name),
                     type_ref,
-                    span,
                 });
             }
         }
@@ -331,14 +366,20 @@ fn lower_method_signature(
         .as_ref()
         .map(TypeRef::from_ast)
         .unwrap_or(TypeRef::Unknown);
-    let return_type_span = return_type_node.map(|t| t.text_range());
 
-    Arc::new(FunctionSignature {
-        name: method_name.clone(),
-        params,
-        return_type,
-        return_type_span,
-    })
+    // Store return type span in source map
+    if let Some(span) = return_type_node.map(|t| t.text_range()) {
+        source_map.set_return_type_span(span);
+    }
+
+    (
+        Arc::new(FunctionSignature {
+            name: method_name.clone(),
+            params,
+            return_type,
+        }),
+        source_map,
+    )
 }
 
 /// Tracked struct holding the fields of a class.

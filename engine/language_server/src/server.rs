@@ -162,8 +162,13 @@ impl Server {
                 anyhow::anyhow!("Failed to get the current working directory while creating a default workspace.")
             })?;
 
-        tracing::info!("Starting server with {} worker threads", worker_threads);
-        tracing::info!("-------- Version: {}", env!("CARGO_PKG_VERSION"));
+        tracing::info!(
+            "Starting language server: worker_threads={}, version={}, playground=http://localhost:{}, proxy=http://localhost:{}",
+            worker_threads,
+            env!("CARGO_PKG_VERSION"),
+            args.playground_port,
+            args.proxy_port
+        );
 
         let rt = tokio::runtime::Runtime::new()?;
 
@@ -296,7 +301,10 @@ impl Server {
     }
 
     pub fn run(self) -> anyhow::Result<()> {
-        tracing::info!("BAML language server started inside hot reload lorem ipsum");
+        tracing::info!(
+            "BAML language server started at {}",
+            chrono::Utc::now().to_rfc3339()
+        );
         // The new PanicInfoHook name requires MSRV >= 1.82
         #[allow(deprecated)]
         type PanicHook = Box<dyn Fn(&PanicInfo<'_>) + 'static + Sync + Send>;
@@ -410,13 +418,13 @@ impl Server {
         Self::try_register_capabilities(client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
-            // tracing::info!("Received message: {:?}", msg);
+            tracing::info!("Received message: {:?}", msg);
             if connection.handle_shutdown(&msg)? {
                 break;
             }
-            // webview_router_to_websocket_tx.send(LangServerToWasmMessage::LspMessage(msg.clone()))?;
             let tasks = match msg {
                 Message::Request(req) => {
+                    tracing::info!("Received LSP request: id={} method={}", req.id, req.method);
                     if lsp_methods_to_forward_to_webview
                         .clone()
                         .unwrap_or_default()
@@ -437,9 +445,12 @@ impl Server {
                     }
                     vec![api::request(req)]
                 }
-                Message::Notification(notification) => api::notification(notification),
+                Message::Notification(notification) => {
+                    tracing::info!("Received LSP notification: method={}", notification.method);
+                    api::notification(notification)
+                }
                 Message::Response(response) => {
-                    tracing::info!("Preparing to send response: {:?}", response);
+                    tracing::info!("Received LSP response: id={}", response.id);
                     vec![scheduler.response(response)]
                 }
             };
@@ -546,7 +557,7 @@ impl Server {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
-            code_action_provider: None,
+            code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
             execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
                 commands: vec![api::OPEN_IN_BROWSER_COMMAND.to_string()],
                 work_done_progress_options: Default::default(),

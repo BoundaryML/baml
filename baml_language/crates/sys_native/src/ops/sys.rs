@@ -1,31 +1,27 @@
 //! System operations.
-//!
-//! Implements `baml.sys.shell`.
 
-use std::sync::Arc;
-
+use bex_external_types::BexExternalValue;
+use sys_types::{OpError, SysOpResult};
 use tokio::process::Command;
-
-use crate::{OpContext, OpError, ResolvedArgs, ResolvedValue};
-
-// ============================================================================
-// baml.sys.shell
-// ============================================================================
 
 /// Execute a shell command and return stdout.
 ///
 /// Signature: `fn shell(command: String) -> String`
-pub async fn shell(_ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedValue, OpError> {
-    // Extract the command argument
-    let command = match args.args.into_iter().next() {
-        Some(ResolvedValue::String(s)) => s,
+pub(crate) fn shell(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(shell_async(args)))
+}
+
+async fn shell_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let command = match args.into_iter().next() {
+        Some(BexExternalValue::String(s)) => s,
         other => {
-            let msg = format!("Expected string command argument, got: {other:?}");
-            return Err(OpError::Other(msg));
+            return Err(OpError::TypeError {
+                expected: "string command",
+                actual: format!("{other:?}"),
+            });
         }
     };
 
-    // Execute the command using sh -c
     let output = Command::new("sh")
         .arg("-c")
         .arg(&command)
@@ -33,7 +29,6 @@ pub async fn shell(_ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedV
         .await
         .map_err(|e| OpError::Other(format!("Failed to execute command '{command}': {e}")))?;
 
-    // Check for non-zero exit status
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let code = output.status.code().unwrap_or(-1);
@@ -45,7 +40,6 @@ pub async fn shell(_ctx: Arc<OpContext>, args: ResolvedArgs) -> Result<ResolvedV
         )));
     }
 
-    // Return stdout as string
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    Ok(ResolvedValue::String(stdout))
+    Ok(BexExternalValue::String(stdout))
 }

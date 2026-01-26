@@ -1,6 +1,16 @@
-//! cargo-stow: Validates and fixes Cargo.toml files in the workspace.
+//! cargo-stow: Workspace linting and structure validation for Rust monorepos.
 //!
-//! Rules:
+//! A cargo subcommand that validates workspace structure, enforces naming conventions,
+//! and keeps dependencies organized.
+//!
+//! ## Features
+//! - **Dependency sorting**: Keep deps organized (internal first, then external)
+//! - **Structure validation**: Enforce flat crate layout, naming conventions
+//! - **Dependency rules**: Control who can depend on what
+//! - **Dependency graph**: Visualize workspace structure as SVG
+//! - **Auto-fix**: Automatically fix sortable issues
+//!
+//! ## Rules
 //! 1. No nested crates (flat structure only)
 //! 2. Crate names must match folder names
 //! 3. Crate names must be `<namespace>_<word>` or `<namespace>_<approved_prefix>_<word>`
@@ -14,9 +24,13 @@
 //! 7. Dependencies must be sorted: internal deps first (sorted), then external deps (sorted)
 //! 8. Internal deps must be grouped together (not interleaved with external deps)
 //!
-//! Usage:
-//!     cargo stow --check
-//!     cargo stow --fix
+//! ## Usage
+//! ```bash
+//! cargo stow              # Validate (default)
+//! cargo stow --fix        # Auto-fix sortable issues
+//! cargo stow --graph out.svg  # Generate dependency graph
+//! cargo stow init         # Generate config file
+//! ```
 
 // CLI tool - print statements and exit are expected
 #![allow(clippy::print_stdout, clippy::print_stderr, clippy::exit)]
@@ -54,11 +68,17 @@ pub struct Namespace {
     /// Dependency rules that only apply to crates in this namespace
     #[serde(default)]
     pub dependency_rules: Vec<DependencyRule>,
+    /// Name exceptions: allows a crate folder to have a different package name
+    /// Key is folder name, value is allowed package name
+    /// Example: { "`tools_stow`" = "cargo-stow" }
+    #[serde(default)]
+    pub name_exceptions: HashMap<String, String>,
 }
 
 /// Stow configuration - can be loaded from stow.toml or [workspace.metadata.stow]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct Config {
     /// Crate namespaces (e.g., baml, bex)
     pub namespaces: Vec<Namespace>,
@@ -79,84 +99,30 @@ pub struct Config {
     test_crate_exceptions: Vec<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            namespaces: vec![
-                Namespace {
-                    name: "baml".into(),
-                    // Note: lsp, vm, ide removed - auto-allowed via _types/_tests suffix
-                    approved_prefixes: vec![
-                        "compiler".into(),
-                        "builtins".into(),
-                        "playground".into(),
-                    ],
-                    test_crate_exceptions: vec!["baml_tests".into()],
-                    dependency_rules: vec![
-                        DependencyRule {
-                            pattern: Pattern::Simple("baml_compiler*".into()),
-                            allowed_prefixes: vec!["compiler".into(), "lsp".into()],
-                            allowed_crates: vec!["baml_db".into(), "baml_project".into()],
-                            regular_deps_only: true,
-                            reason: "Use baml_db or baml_project to access compiler interfaces."
-                                .into(),
-                        },
-                        DependencyRule {
-                            pattern: Pattern::WithExclusions {
-                                select: "bex_*".into(),
-                                exclude: vec!["bex_vm_types".into()],
-                            },
-                            allowed_prefixes: vec![],
-                            allowed_crates: vec![],
-                            regular_deps_only: true,
-                            reason: "baml_* crates should not depend on bex_* crates.".into(),
-                        },
-                    ],
-                },
-                Namespace {
-                    name: "bex".into(),
-                    approved_prefixes: vec![], // bex_vm_types auto-allowed via _types suffix
-                    test_crate_exceptions: vec![],
-                    dependency_rules: vec![],
-                },
-            ],
-            dependency_rules: vec![
-                // Global rule: anyhow is only for CLI/LSP crates
-                DependencyRule {
-                    pattern: Pattern::Simple("anyhow".into()),
-                    allowed_prefixes: vec!["lsp".into()],
-                    allowed_crates: vec!["*_cli".into()],
-                    regular_deps_only: true,
-                    reason: "Use thiserror for proper error types in library crates.".into(),
-                },
-            ],
-            ignore_crates: vec![],
-            graph_external_deps: vec![],
-            // Legacy fields (empty when using namespaces)
-            approved_prefixes: vec![],
-            test_crate_exceptions: vec![],
-        }
-    }
+/// Error type for configuration loading
+#[derive(Debug)]
+pub enum ConfigError {
+    /// No configuration file found
+    NotFound,
+    /// Configuration file exists but failed to parse
+    ParseError(String),
 }
 
 impl Config {
     /// Load config from stow.toml or [workspace.metadata.stow] in Cargo.toml
-    /// Priority: stow.toml > Cargo.toml metadata > defaults
-    pub fn load(workspace_root: &Path) -> Self {
+    /// Priority: stow.toml > Cargo.toml metadata
+    /// Returns an error if no configuration is found.
+    pub fn load(workspace_root: &Path) -> Result<Self, ConfigError> {
         // Try stow.toml first
         let stow_toml = workspace_root.join("stow.toml");
         if stow_toml.exists() {
-            if let Ok(content) = std::fs::read_to_string(&stow_toml) {
-                match toml::from_str::<Config>(&content) {
-                    Ok(config) => {
-                        eprintln!("Loaded config from {}", stow_toml.display());
-                        return config.normalize();
-                    }
-                    Err(e) => {
-                        eprintln!("Warning: Failed to parse {}: {}", stow_toml.display(), e);
-                    }
-                }
-            }
+            let content = std::fs::read_to_string(&stow_toml)
+                .map_err(|e| ConfigError::ParseError(format!("Failed to read stow.toml: {e}")))?;
+            let config = toml::from_str::<Config>(&content).map_err(|e| {
+                ConfigError::ParseError(format!("Failed to parse {}: {e}", stow_toml.display()))
+            })?;
+            eprintln!("Loaded config from {}", stow_toml.display());
+            return Ok(config.normalize());
         }
 
         // Try [workspace.metadata.stow] in Cargo.toml
@@ -168,20 +134,16 @@ impl Config {
                         if let Some(metadata) = workspace.get("metadata").and_then(|m| m.as_table())
                         {
                             if let Some(stow) = metadata.get("stow") {
-                                match stow.clone().try_into::<Config>() {
-                                    Ok(config) => {
-                                        eprintln!(
-                                            "Loaded config from [workspace.metadata.stow] in {}",
-                                            cargo_toml.display()
-                                        );
-                                        return config.normalize();
-                                    }
-                                    Err(e) => {
-                                        eprintln!(
-                                            "Warning: Failed to parse [workspace.metadata.stow]: {e}"
-                                        );
-                                    }
-                                }
+                                let config = stow.clone().try_into::<Config>().map_err(|e| {
+                                    ConfigError::ParseError(format!(
+                                        "Failed to parse [workspace.metadata.stow]: {e}"
+                                    ))
+                                })?;
+                                eprintln!(
+                                    "Loaded config from [workspace.metadata.stow] in {}",
+                                    cargo_toml.display()
+                                );
+                                return Ok(config.normalize());
                             }
                         }
                     }
@@ -189,9 +151,13 @@ impl Config {
             }
         }
 
-        // Fall back to defaults
-        eprintln!("Using default config (no stow.toml or [workspace.metadata.stow] found)");
-        Config::default()
+        // No configuration found
+        Err(ConfigError::NotFound)
+    }
+
+    /// Check if a stow.toml file already exists
+    pub fn config_exists(workspace_root: &Path) -> bool {
+        workspace_root.join("stow.toml").exists()
     }
 
     /// Normalize config by converting legacy flat format to namespace format
@@ -203,21 +169,36 @@ impl Config {
                 approved_prefixes: std::mem::take(&mut self.approved_prefixes),
                 test_crate_exceptions: std::mem::take(&mut self.test_crate_exceptions),
                 dependency_rules: vec![],
+                name_exceptions: HashMap::new(),
             }];
         }
         self
     }
 
-    /// Get the namespace for a given crate name
+    /// Get the namespace for a given crate name (by prefix match)
     pub fn get_namespace(&self, crate_name: &str) -> Option<&Namespace> {
         self.namespaces
             .iter()
             .find(|ns| crate_name.starts_with(&format!("{}_", ns.name)))
     }
 
+    /// Get the namespace for a crate, considering `name_exceptions`
+    /// This checks both the standard prefix match AND if the crate name
+    /// is listed as an exception in any namespace
+    pub fn get_namespace_for_crate(&self, crate_name: &str) -> Option<&Namespace> {
+        // First try standard prefix match
+        if let Some(ns) = self.get_namespace(crate_name) {
+            return Some(ns);
+        }
+        // Then check if it's a name exception in any namespace
+        self.namespaces
+            .iter()
+            .find(|ns| ns.name_exceptions.values().any(|v| v == crate_name))
+    }
+
     /// Check if a crate name belongs to any known namespace
     pub fn is_internal_crate(&self, crate_name: &str) -> bool {
-        self.get_namespace(crate_name).is_some()
+        self.get_namespace_for_crate(crate_name).is_some()
     }
 
     /// Check if a crate should be ignored based on config patterns
@@ -328,10 +309,20 @@ enum Cargo {
 }
 
 #[derive(Parser)]
-#[command(author, version, about = "Validate and fix Cargo.toml files")]
+#[command(
+    author,
+    version,
+    about = "Workspace linting and structure validation for Rust monorepos",
+    long_about = "cargo-stow validates workspace structure, enforces naming conventions, and keeps dependencies organized.\n\n\
+    Run `cargo stow init` to generate a configuration file, then `cargo stow` to validate."
+)]
 #[allow(clippy::struct_excessive_bools)]
 struct Args {
-    /// Check for validation errors without fixing
+    /// Subcommand to run
+    #[command(subcommand)]
+    command: Option<Command>,
+
+    /// Check for validation errors (default if no subcommand)
     #[arg(long, conflicts_with = "fix")]
     check: bool,
 
@@ -350,6 +341,16 @@ struct Args {
     /// Include test crates (*_test, *_tests) in the dependency graph
     #[arg(long)]
     include_tests: bool,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Initialize a new stow.toml configuration file
+    Init {
+        /// Generate a minimal configuration instead of a fully commented template
+        #[arg(long)]
+        minimal: bool,
+    },
 }
 
 // =============================================================================
@@ -655,18 +656,95 @@ fn workspace_crate_dirs(metadata: &cargo_metadata::Metadata, fallback_root: &Pat
     dirs
 }
 
-fn get_workspace_dependencies(workspace_cargo: &Path) -> HashSet<String> {
-    let content = std::fs::read_to_string(workspace_cargo).unwrap_or_default();
-    let doc: DocumentMut = content.parse().unwrap_or_default();
+/// Workspace dependency info including features
+#[derive(Debug, Clone, Default)]
+struct WorkspaceDep {
+    features: HashSet<String>,
+}
 
-    let mut deps = HashSet::new();
-    if let Some(workspace) = doc.get("workspace").and_then(|w| w.as_table()) {
-        if let Some(ws_deps) = workspace.get("dependencies").and_then(|d| d.as_table()) {
-            for key in ws_deps.iter().map(|(k, _)| k) {
-                deps.insert(key.to_string());
+/// Extract features from a dependency value (inline table or table)
+fn extract_features_from_dep(item: &Item) -> HashSet<String> {
+    let mut features = HashSet::new();
+
+    // Try inline table first: { workspace = true, features = ["a", "b"] }
+    if let Some(table) = item.as_inline_table() {
+        if let Some(feat_val) = table.get("features") {
+            if let Some(arr) = feat_val.as_array() {
+                for v in arr {
+                    if let Some(s) = v.as_str() {
+                        features.insert(s.to_string());
+                    }
+                }
             }
         }
     }
+    // Try regular table: [dependencies.foo]\nfeatures = ["a", "b"]
+    else if let Some(table) = item.as_table_like() {
+        if let Some(feat_item) = table.get("features") {
+            if let Some(arr) = feat_item.as_array() {
+                for v in arr {
+                    if let Some(s) = v.as_str() {
+                        features.insert(s.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    features
+}
+
+fn get_workspace_dependencies(workspace_cargo: &Path) -> HashMap<String, WorkspaceDep> {
+    let content = std::fs::read_to_string(workspace_cargo).unwrap_or_default();
+    let doc: DocumentMut = content.parse().unwrap_or_default();
+
+    let mut deps = HashMap::new();
+    if let Some(workspace) = doc.get("workspace").and_then(|w| w.as_table()) {
+        if let Some(ws_deps) = workspace.get("dependencies").and_then(|d| d.as_table()) {
+            for (key, value) in ws_deps {
+                let features = extract_features_from_dep(value);
+                deps.insert(key.to_string(), WorkspaceDep { features });
+            }
+        }
+    }
+    deps
+}
+
+/// Get all dependencies from a crate with their features
+fn get_crate_dependencies(doc: &DocumentMut) -> HashMap<String, HashSet<String>> {
+    let mut deps = HashMap::new();
+    let dep_sections = ["dependencies", "dev-dependencies", "build-dependencies"];
+
+    for section in dep_sections {
+        if let Some(table) = doc.get(section).and_then(|d| d.as_table_like()) {
+            for (dep_name, dep_value) in table.iter() {
+                let features = extract_features_from_dep(dep_value);
+                // Merge features if already present (from another section)
+                deps.entry(dep_name.to_string())
+                    .or_insert_with(HashSet::new)
+                    .extend(features);
+            }
+        }
+    }
+
+    // Also check target-specific dependencies
+    if let Some(target) = doc.get("target").and_then(|t| t.as_table_like()) {
+        for (_, target_data) in target.iter() {
+            if let Some(target_table) = target_data.as_table_like() {
+                for section in dep_sections {
+                    if let Some(table) = target_table.get(section).and_then(|d| d.as_table_like()) {
+                        for (dep_name, dep_value) in table.iter() {
+                            let features = extract_features_from_dep(dep_value);
+                            deps.entry(dep_name.to_string())
+                                .or_insert_with(HashSet::new)
+                                .extend(features);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     deps
 }
 
@@ -740,18 +818,28 @@ fn check_crate_name_matches_folder(
     folder_name: &str,
     doc: &DocumentMut,
     cargo_path: &Path,
+    config: &Config,
 ) -> Vec<ValidationError> {
     let mut errors = Vec::new();
     if let Some(package) = doc.get("package").and_then(|p| p.as_table()) {
         if let Some(name) = package.get("name").and_then(|n| n.as_str()) {
             if name != folder_name {
-                errors.push(ValidationError {
-                    crate_name: folder_name.to_string(),
-                    file_path: cargo_path.to_path_buf(),
-                    message: format!(
-                        "Crate name '{name}' does not match folder name '{folder_name}'"
-                    ),
+                // Check if there's a name exception for this folder
+                let has_exception = config.namespaces.iter().any(|ns| {
+                    ns.name_exceptions
+                        .get(folder_name)
+                        .is_some_and(|allowed| allowed == name)
                 });
+
+                if !has_exception {
+                    errors.push(ValidationError {
+                        crate_name: folder_name.to_string(),
+                        file_path: cargo_path.to_path_buf(),
+                        message: format!(
+                            "Crate name '{name}' does not match folder name '{folder_name}'"
+                        ),
+                    });
+                }
             }
         }
     }
@@ -774,6 +862,17 @@ fn check_crate_naming_convention(
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
         .unwrap_or(folder_name);
+
+    // Check if this folder has a name exception - if so, skip naming convention check
+    // (the folder name determines the namespace, not the crate name)
+    let has_name_exception = config.namespaces.iter().any(|ns| {
+        ns.name_exceptions
+            .get(folder_name)
+            .is_some_and(|allowed| allowed == crate_name)
+    });
+    if has_name_exception {
+        return errors;
+    }
 
     // Find which namespace this crate belongs to
     let Some(namespace) = config.get_namespace(crate_name) else {
@@ -1157,7 +1256,7 @@ fn convert_to_workspace_dep(item: &Item) -> Item {
 
 fn fix_cargo_toml(
     cargo_path: &Path,
-    workspace_deps: &HashSet<String>,
+    workspace_deps: &HashMap<String, WorkspaceDep>,
     config: &Config,
 ) -> std::io::Result<bool> {
     let content = std::fs::read_to_string(cargo_path)?;
@@ -1178,7 +1277,7 @@ fn fix_cargo_toml(
             let keys: Vec<String> = deps.iter().map(|(k, _)| k.to_string()).collect();
             for key in keys {
                 if let Some(item) = deps.get(&key) {
-                    if !is_workspace_dependency(item) && workspace_deps.contains(&key) {
+                    if !is_workspace_dependency(item) && workspace_deps.contains_key(&key) {
                         let new_item = convert_to_workspace_dep(item);
                         deps.insert(&key, new_item);
                     }
@@ -1418,8 +1517,8 @@ fn generate_midpoint_arrows(points: &[(f64, f64)]) -> Vec<String> {
         }
 
         // Midpoint arrow
-        let mx = f64::midpoint(x1, x2);
-        let my = f64::midpoint(y1, y2);
+        let mx = (x1 + x2) / 2.0;
+        let my = (y1 + y2) / 2.0;
         arrows.push(make_chevron_arrow(mx, my, angle));
     }
 
@@ -1450,6 +1549,13 @@ fn make_chevron_arrow(x: f64, y: f64, angle: f64) -> String {
     )
 }
 
+/// Feature additions for an external dependency
+#[derive(Debug, Clone, Default)]
+struct ExternalDepFeatures {
+    /// Additional features added by crates (`crate_name` -> `added_features`)
+    crate_additions: HashMap<String, HashSet<String>>,
+}
+
 /// Generate a dependency graph SVG using graphviz-rust with cluster support.
 ///
 /// This function:
@@ -1458,11 +1564,14 @@ fn make_chevron_arrow(x: f64, y: f64, angle: f64) -> String {
 /// 3. Filters nodes: local crates (in namespace, not ignored) OR in `graph_external_deps`
 /// 4. Filters edges: only if both source and target pass the node filter
 /// 5. Renders to SVG with clusters for namespaces
+/// 6. Shows feature additions for external dependencies
 fn generate_dependency_graph_svg(
     metadata: &cargo_metadata::Metadata,
     config: &Config,
     output_path: &Path,
     include_tests: bool,
+    workspace_deps: &HashMap<String, WorkspaceDep>,
+    crate_features: &HashMap<String, HashMap<String, HashSet<String>>>,
 ) -> std::io::Result<()> {
     // Build a lookup map from PackageId to Package
     let packages_by_id: HashMap<&PackageId, &cargo_metadata::Package> =
@@ -1477,7 +1586,7 @@ fn generate_dependency_graph_svg(
 
     // Helper to check if a crate should be included in the graph
     let should_include_crate = |name: &str| -> bool {
-        if config.get_namespace(name).is_some() && !config.is_ignored_crate(name) {
+        if config.get_namespace_for_crate(name).is_some() && !config.is_ignored_crate(name) {
             return true;
         }
         graph_external_deps.contains(name)
@@ -1489,7 +1598,8 @@ fn generate_dependency_graph_svg(
         .iter()
         .filter(|id| {
             if let Some(pkg) = packages_by_id.get(id) {
-                config.get_namespace(&pkg.name).is_some() && !config.is_ignored_crate(&pkg.name)
+                config.get_namespace_for_crate(&pkg.name).is_some()
+                    && !config.is_ignored_crate(&pkg.name)
             } else {
                 false
             }
@@ -1598,9 +1708,61 @@ fn generate_dependency_graph_svg(
                 continue;
             };
 
-            let is_redundant = adjacency[src]
-                .iter()
-                .any(|&intermediate| intermediate != dst && reachable[intermediate][dst]);
+            let is_external_target = graph_external_deps.contains(to);
+            let source_namespace = config.get_namespace_for_crate(from);
+            let target_namespace = config.get_namespace_for_crate(to);
+
+            // Get features for this crate's dependency on the external target
+            let source_features: Option<&HashSet<String>> = if is_external_target {
+                crate_features.get(*from).and_then(|deps| deps.get(*to))
+            } else {
+                None
+            };
+
+            // Transitive reduction rules:
+            // - For internal targets: reduce if intermediate is in same namespace as TARGET
+            //   This keeps first cross-namespace edge but reduces redundant ones
+            //   (e.g., ns1_A -> ns2_B is reduced when ns1_A -> ns2_A -> ns2_B exists)
+            // - For external targets: reduce if intermediate is in same namespace as SOURCE
+            //   This keeps one edge per namespace to external deps
+            //   (e.g., baml_compiler_hir -> salsa reduced when baml_base -> salsa exists)
+            let is_redundant = adjacency[src].iter().any(|&intermediate| {
+                if intermediate == dst {
+                    return false;
+                }
+                if !reachable[intermediate][dst] {
+                    return false;
+                }
+                let intermediate_name = nodes[intermediate];
+                let intermediate_namespace = config.get_namespace_for_crate(intermediate_name);
+
+                // Check namespace based on whether target is external or internal
+                let reference_namespace = if is_external_target {
+                    source_namespace
+                } else {
+                    target_namespace
+                };
+                let same_namespace = match (reference_namespace, intermediate_namespace) {
+                    (Some(ref_ns), Some(int_ns)) => ref_ns.name == int_ns.name,
+                    _ => false,
+                };
+                if !same_namespace {
+                    return false;
+                }
+                // For external targets, also check if features are the same
+                if is_external_target {
+                    let intermediate_features = crate_features
+                        .get(intermediate_name)
+                        .and_then(|deps| deps.get(*to));
+                    match (source_features, intermediate_features) {
+                        (Some(src_feat), Some(int_feat)) => src_feat == int_feat,
+                        (None, None) => true,
+                        _ => false,
+                    }
+                } else {
+                    true
+                }
+            });
 
             if !is_redundant {
                 reduced_edges.push((*from, *to));
@@ -1636,9 +1798,45 @@ fn generate_dependency_graph_svg(
     let mut sorted_edges = edges.clone();
     sorted_edges.sort_unstable();
 
+    // Compute feature additions for external deps
+    // For each external dep, collect features added by each crate beyond workspace defaults
+    let mut external_dep_features: HashMap<&str, ExternalDepFeatures> = HashMap::new();
+
+    for ext_dep in &config.graph_external_deps {
+        let ws_features = workspace_deps
+            .get(ext_dep)
+            .map(|d| d.features.clone())
+            .unwrap_or_default();
+
+        let mut crate_additions: HashMap<String, HashSet<String>> = HashMap::new();
+
+        // Check each crate that uses this external dep
+        for (crate_name, deps) in crate_features {
+            if let Some(crate_features_for_dep) = deps.get(ext_dep) {
+                // Find features added by this crate (not in workspace)
+                let added: HashSet<String> = crate_features_for_dep
+                    .difference(&ws_features)
+                    .cloned()
+                    .collect();
+                if !added.is_empty() {
+                    crate_additions.insert(crate_name.clone(), added);
+                }
+            }
+        }
+
+        if !crate_additions.is_empty() {
+            external_dep_features.insert(ext_dep.as_str(), ExternalDepFeatures { crate_additions });
+        }
+    }
+
     // Extract namespace and tag from crate name
     let get_crate_parts = |name: &str| -> (String, Option<String>) {
         for ns in &config.namespaces {
+            // Check if this crate is a name exception for this namespace
+            if ns.name_exceptions.values().any(|v| v == name) {
+                return (ns.name.clone(), None);
+            }
+            // Standard prefix match
             if let Some(suffix) = name.strip_prefix(&format!("{}_", ns.name)) {
                 let parts: Vec<&str> = suffix.split('_').collect();
                 if parts.len() >= 2 {
@@ -1734,30 +1932,70 @@ fn generate_dependency_graph_svg(
         }
     }
 
-    // Build a map of which external crates are used by which namespaces
-    let mut external_deps_by_namespace: BTreeMap<String, HashSet<&str>> = BTreeMap::new();
+    // Build a map of external deps with their features per crate
+    // Key: (namespace, external_dep, features_key) -> list of crates using it
+    // This allows separate nodes for different feature sets within the same namespace
+    #[allow(clippy::items_after_statements)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    struct ExternalDepKey {
+        namespace: String,
+        dep_name: String,
+        features: Vec<String>, // sorted for deterministic hashing
+    }
+
+    let mut external_dep_nodes: BTreeMap<ExternalDepKey, Vec<String>> = BTreeMap::new();
+
     for (from, to) in &sorted_edges {
         let (from_ns, _) = get_crate_parts(from);
         let (to_ns, _) = get_crate_parts(to);
 
-        // If a local crate depends on an external crate, add it to that namespace's externals
+        // If a local crate depends on an external crate
         if from_ns != "external" && to_ns == "external" {
-            external_deps_by_namespace
-                .entry(from_ns)
+            // Get features this crate adds for this dep
+            let features: Vec<String> = if let Some(feat_info) = external_dep_features.get(to) {
+                feat_info
+                    .crate_additions
+                    .get(*from)
+                    .map(|f| {
+                        let mut v: Vec<_> = f.iter().cloned().collect();
+                        v.sort();
+                        v
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            let key = ExternalDepKey {
+                namespace: from_ns.clone(),
+                dep_name: (*to).to_string(),
+                features,
+            };
+
+            external_dep_nodes
+                .entry(key)
                 .or_default()
-                .insert(to);
+                .push((*from).to_string());
         }
     }
 
-    // Helper to create a valid graphviz node ID (replace dashes and other invalid chars)
-    // Include namespace prefix for external deps to allow duplicates across clusters
-    let node_id = |name: &str, host_namespace: &str, is_external: bool| -> String {
-        let safe_name = name.replace('-', "_");
-        if is_external {
-            // External deps get prefixed with their host namespace so they can appear in multiple clusters
-            format!("{host_namespace}_{safe_name}")
+    // Helper to create a valid graphviz node ID
+    let node_id = |name: &str| -> String { name.replace('-', "_") };
+
+    // Helper to create external dep node ID (includes namespace and feature hash for uniqueness)
+    let ext_node_id = |key: &ExternalDepKey| -> String {
+        let safe_name = key.dep_name.replace('-', "_");
+        if key.features.is_empty() {
+            format!("{}_{}", key.namespace, safe_name)
         } else {
-            safe_name
+            // Include a hash of features for uniqueness
+            let feat_hash: u32 = key.features.iter().fold(0u32, |acc, f| {
+                acc.wrapping_mul(31).wrapping_add(
+                    f.bytes()
+                        .fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(u32::from(b))),
+                )
+            });
+            format!("{}_{}_{:x}", key.namespace, safe_name, feat_hash)
         }
     };
 
@@ -1815,24 +2053,31 @@ fn generate_dependency_graph_svg(
                     .unwrap_or_else(|| (external_border.clone(), external_fill.clone()))
             };
 
-            let id = node_id(crate_name, namespace, false);
+            let id = node_id(crate_name);
             let _ = writeln!(
                 dot,
                 "        {id} [label=\"{crate_name}\", fillcolor=\"{fill_color}\", color=\"{border_color}\", penwidth=2];"
             );
         }
 
-        // Add external deps used by this namespace inside the cluster
-        if let Some(ext_deps) = external_deps_by_namespace.get(namespace) {
-            let mut sorted_ext: Vec<_> = ext_deps.iter().copied().collect();
-            sorted_ext.sort_unstable();
-            for ext_name in sorted_ext {
-                let id = node_id(ext_name, namespace, true);
-                let _ = writeln!(
-                    dot,
-                    "        {id} [label=\"{ext_name}\", fillcolor=\"{external_fill}\", color=\"{external_border}\", penwidth=2];"
-                );
+        // Add external deps used by this namespace (one node per unique feature set)
+        for key in external_dep_nodes.keys() {
+            if key.namespace != *namespace {
+                continue;
             }
+
+            let id = ext_node_id(key);
+            let label = if key.features.is_empty() {
+                key.dep_name.clone()
+            } else {
+                let features_str = key.features.join(", ");
+                format!("{}\\n[{}]", key.dep_name, features_str)
+            };
+
+            let _ = writeln!(
+                dot,
+                "        {id} [label=\"{label}\", fillcolor=\"{external_fill}\", color=\"{external_border}\", penwidth=2];"
+            );
         }
 
         dot.push_str("    }\n\n");
@@ -1843,16 +2088,33 @@ fn generate_dependency_graph_svg(
         let (from_ns, _) = get_crate_parts(from);
         let (to_ns, _) = get_crate_parts(to);
 
-        let from_is_external = from_ns == "external";
         let to_is_external = to_ns == "external";
 
-        // For edges to external deps, use the source namespace's copy of the external dep
-        let from_id = node_id(from, &from_ns, from_is_external);
+        let from_id = node_id(from);
         let to_id = if to_is_external {
-            // External dep - use the source namespace's copy
-            node_id(to, &from_ns, true)
+            // External dep - find the matching node with the right features
+            let features: Vec<String> = if let Some(feat_info) = external_dep_features.get(to) {
+                feat_info
+                    .crate_additions
+                    .get(*from)
+                    .map(|f| {
+                        let mut v: Vec<_> = f.iter().cloned().collect();
+                        v.sort();
+                        v
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            let key = ExternalDepKey {
+                namespace: from_ns.clone(),
+                dep_name: (*to).to_string(),
+                features,
+            };
+            ext_node_id(&key)
         } else {
-            node_id(to, &to_ns, false)
+            node_id(to)
         };
 
         // Edges crossing namespace boundaries should be dashed
@@ -1907,6 +2169,47 @@ fn load_crates(crate_dirs: &[PathBuf], config: &Config) -> Vec<CrateInfo> {
         .collect()
 }
 
+/// Embedded template for stow.toml
+const STOW_TEMPLATE: &str = include_str!("stow_template.toml");
+
+/// Embedded minimal template for stow.toml
+const STOW_TEMPLATE_MINIMAL: &str = r#"# cargo-stow configuration
+# See https://github.com/boundaryml/baml/tree/main/baml_language/crates/tools_stow for documentation
+
+[[namespaces]]
+name = "myproject"
+approved_prefixes = []
+test_crate_exceptions = []
+"#;
+
+fn run_init(workspace_root: &Path, minimal: bool) {
+    let stow_toml = workspace_root.join("stow.toml");
+
+    if stow_toml.exists() {
+        eprintln!("Error: stow.toml already exists at {}", stow_toml.display());
+        eprintln!("Remove it first if you want to regenerate.");
+        std::process::exit(1);
+    }
+
+    let template = if minimal {
+        STOW_TEMPLATE_MINIMAL
+    } else {
+        STOW_TEMPLATE
+    };
+
+    if let Err(e) = std::fs::write(&stow_toml, template) {
+        eprintln!("Error: Failed to write stow.toml: {e}");
+        std::process::exit(1);
+    }
+
+    println!("✅ Created {}", stow_toml.display());
+    println!();
+    println!("Next steps:");
+    println!("  1. Edit stow.toml to configure your namespace(s)");
+    println!("  2. Run `cargo stow` to validate your workspace");
+    println!("  3. Run `cargo stow --fix` to auto-fix sortable issues");
+}
+
 fn main() {
     let Cargo::Stow(args) = Cargo::parse();
 
@@ -1919,13 +2222,52 @@ fn main() {
     let metadata = load_metadata(&workspace_cargo);
     let workspace_root = PathBuf::from(metadata.workspace_root.as_str());
 
-    // Load configuration
-    let config = Config::load(&workspace_root);
+    // Handle init subcommand first (doesn't require config to exist)
+    if let Some(Command::Init { minimal }) = args.command {
+        run_init(&workspace_root, minimal);
+        return;
+    }
+
+    // Load configuration (required for all other operations)
+    let config = match Config::load(&workspace_root) {
+        Ok(config) => config,
+        Err(ConfigError::NotFound) => {
+            eprintln!("Error: No stow.toml found.");
+            eprintln!();
+            eprintln!("Run `cargo stow init` to create a configuration file.");
+            eprintln!();
+            eprintln!("Alternatively, add [workspace.metadata.stow] to your Cargo.toml.");
+            std::process::exit(1);
+        }
+        Err(ConfigError::ParseError(msg)) => {
+            eprintln!("Error: {msg}");
+            std::process::exit(1);
+        }
+    };
+
+    // Load workspace dependencies with features (needed for both graph and validation)
+    let workspace_deps = get_workspace_dependencies(&workspace_cargo);
 
     // Handle graph generation mode
     if let Some(graph_path) = &args.graph {
         println!("Generating dependency graph...");
-        match generate_dependency_graph_svg(&metadata, &config, graph_path, args.include_tests) {
+
+        // Load crate feature info for external deps visualization
+        let crate_dirs = workspace_crate_dirs(&metadata, &workspace_root);
+        let crates = load_crates(&crate_dirs, &config);
+        let crate_features: HashMap<String, HashMap<String, HashSet<String>>> = crates
+            .iter()
+            .map(|c| (c.crate_name.clone(), get_crate_dependencies(&c.doc)))
+            .collect();
+
+        match generate_dependency_graph_svg(
+            &metadata,
+            &config,
+            graph_path,
+            args.include_tests,
+            &workspace_deps,
+            &crate_features,
+        ) {
             Ok(()) => {
                 println!("Saved to: {}", graph_path.display());
                 std::process::exit(0);
@@ -1943,7 +2285,6 @@ fn main() {
     }
     println!();
 
-    let workspace_deps = get_workspace_dependencies(&workspace_cargo);
     let mut discovered_crate_dirs = workspace_crate_dirs(&metadata, &workspace_root);
     if discovered_crate_dirs.is_empty() {
         discovered_crate_dirs.push(manifest_root);
@@ -2040,6 +2381,7 @@ fn main() {
             &crate_info.folder_name,
             &crate_info.doc,
             &crate_info.cargo_path,
+            &config,
         ));
         all_errors.extend(check_crate_naming_convention(
             &crate_info.folder_name,
@@ -2077,15 +2419,15 @@ fn main() {
     for crate_info in &crates {
         used_workspace_deps.extend(collect_dep_names(&crate_info.doc));
     }
-    for dep in &workspace_deps {
-        if workspace_member_names.contains(dep) {
+    for dep_name in workspace_deps.keys() {
+        if workspace_member_names.contains(dep_name) {
             continue;
         }
-        if !used_workspace_deps.contains(dep) {
+        if !used_workspace_deps.contains(dep_name) {
             all_errors.push(ValidationError {
                 crate_name: "workspace".to_string(),
                 file_path: workspace_cargo.clone(),
-                message: format!("Workspace dependency '{dep}' is not used by any crate"),
+                message: format!("Workspace dependency '{dep_name}' is not used by any crate"),
             });
         }
     }

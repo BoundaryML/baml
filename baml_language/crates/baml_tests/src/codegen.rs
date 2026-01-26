@@ -16,10 +16,10 @@ pub struct Program {
 }
 
 /// Resolve a variable index to its name using scope information.
-fn resolve_var_name<T: std::fmt::Debug>(
+fn resolve_var_name(
     var_idx: usize,
     inst_idx: usize,
-    function: &bex_vm_types::Function<T>,
+    function: &bex_vm_types::Function,
 ) -> anyhow::Result<String> {
     // Get the scope ID for this instruction
     let scope_id = function
@@ -46,13 +46,13 @@ fn resolve_var_name<T: std::fmt::Debug>(
 }
 
 /// Convert a runtime Instruction to a test Instruction by resolving indices to values.
-fn convert_instruction<T: std::fmt::Debug>(
+fn convert_instruction(
     inst: &bex_vm_types::Instruction,
     inst_idx: usize,
-    constants: &[bex_vm_types::Value],
-    objects: &[bex_vm_types::Object<T>],
+    constants: &[bex_vm_types::ConstValue],
+    objects: &bex_vm_types::ObjectPool,
     globals: &HashMap<String, usize>,
-    function: &bex_vm_types::Function<T>,
+    function: &bex_vm_types::Function,
 ) -> anyhow::Result<Instruction> {
     // Build reverse lookup for globals (index -> name)
     let globals_by_index: HashMap<usize, &str> = globals
@@ -148,17 +148,17 @@ fn convert_instruction<T: std::fmt::Debug>(
     })
 }
 
-/// Convert a runtime Value to a test Value by resolving object indices.
-fn convert_value<T: std::fmt::Debug>(
-    value: &bex_vm_types::Value,
-    objects: &[bex_vm_types::Object<T>],
+/// Convert a compile-time ConstValue to a test Value by resolving object indices.
+fn convert_value(
+    value: &bex_vm_types::ConstValue,
+    objects: &bex_vm_types::ObjectPool,
 ) -> anyhow::Result<Value> {
     Ok(match value {
-        bex_vm_types::Value::Null => Value::Null,
-        bex_vm_types::Value::Int(i) => Value::Int(*i),
-        bex_vm_types::Value::Float(f) => Value::Float(*f),
-        bex_vm_types::Value::Bool(b) => Value::Bool(*b),
-        bex_vm_types::Value::Object(obj_idx) => {
+        bex_vm_types::ConstValue::Null => Value::Null,
+        bex_vm_types::ConstValue::Int(i) => Value::Int(*i),
+        bex_vm_types::ConstValue::Float(f) => Value::Float(*f),
+        bex_vm_types::ConstValue::Bool(b) => Value::Bool(*b),
+        bex_vm_types::ConstValue::Object(obj_idx) => {
             let obj = objects
                 .get(obj_idx.raw())
                 .ok_or_else(|| anyhow::anyhow!("Object index {obj_idx} not found"))?;
@@ -175,9 +175,9 @@ fn convert_value<T: std::fmt::Debug>(
 
 /// Compiled function with its objects.
 struct CompiledFunction {
-    function: bex_vm_types::Function<()>,
+    function: bex_vm_types::Function,
     /// All objects from the program - indices in bytecode constants reference this.
-    objects: bex_vm_types::ObjectPool<()>,
+    objects: bex_vm_types::ObjectPool,
 }
 
 /// Result of compiling source code.
@@ -215,7 +215,7 @@ fn compile_source(source: &str) -> CompileResult {
     // Include both user-defined functions and builtins
     let mut globals: HashMap<String, usize> = HashMap::new();
     for (global_idx, value) in program.globals.iter().enumerate() {
-        if let bex_vm_types::Value::Object(obj_idx) = value {
+        if let bex_vm_types::ConstValue::Object(obj_idx) = value {
             // First check user-defined functions
             let mut found = false;
             for (name, fn_obj_idx) in &program.function_indices {

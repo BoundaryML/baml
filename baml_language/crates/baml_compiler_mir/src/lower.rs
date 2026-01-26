@@ -1822,7 +1822,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::String => Ty::String,
             baml_compiler_vir::Ty::Bool => Ty::Bool,
             baml_compiler_vir::Ty::Null => Ty::Null,
-            baml_compiler_vir::Ty::Media(kind) => Ty::Media(kind.clone()),
+            baml_compiler_vir::Ty::Media(kind) => Ty::Media(*kind),
             baml_compiler_vir::Ty::Class(fqn) => Ty::Class(fqn.clone()),
             baml_compiler_vir::Ty::Enum(fqn) => Ty::Enum(fqn.clone()),
             baml_compiler_vir::Ty::TypeAlias(fqn) => Ty::TypeAlias(fqn.clone()),

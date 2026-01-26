@@ -1,53 +1,52 @@
 use std::fs;
 
-use zed_extension_api::{self as zed, settings::LspSettings, LanguageServerId, Result};
+use zed_extension_api::{self as zed, LanguageServerId, Result};
 
-// Follows csharp extension as a template:
-// https://github.com/zed-extensions/csharp/blob/main/src/csharp.rs
-
-const GITHUB_REPO: &str = "BoundaryML/baml";
-struct BamlBinary {
-    path: String,
-    args: Option<Vec<String>>,
+#[derive(Debug)]
+enum BamlExtensionLspSource {
+    #[allow(dead_code)]
+    LocalBuild,
+    GithubRelease,
 }
 
-struct BamlExtension {}
+#[derive(Debug)]
+struct HardcodedExtensionConfig {
+    lsp_source: BamlExtensionLspSource,
+}
 
-impl BamlExtension {
-    fn language_server_binary(
-        &mut self,
-        language_server_id: &LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<BamlBinary> {
-        let binary_settings = LspSettings::for_worktree("baml", worktree)
-            .ok()
-            .and_then(|lsp_settings| lsp_settings.binary);
-        let binary_args = binary_settings
-            .as_ref()
-            .and_then(|binary_settings| binary_settings.arguments.clone());
+const HARDCODED_EXTENSION_CONFIG: HardcodedExtensionConfig = HardcodedExtensionConfig {
+    // uncomment this to use the local build
+    // THIS MUST BE COMMENTED OUT WHEN MERGING
+    // lsp_source: BamlExtensionLspSource::LocalBuild,
+    lsp_source: BamlExtensionLspSource::GithubRelease,
+};
 
-        if let Some(path) = binary_settings.and_then(|binary_settings| binary_settings.path) {
-            return Ok(BamlBinary {
-                path,
-                args: binary_args,
-            });
-        }
+const GITHUB_REPO: &str = "BoundaryML/baml";
 
-        #[cfg(feature = "debug")]
-        {
-            let binary_path = "baml-cli";
-            fs::write(binary_path, BAML_CLI_BINARY)
-                .map_err(|e| format!("failed to write embedded binary: {}", e))?;
-            zed::make_file_executable(binary_path)?;
-            self.cached_binary_path = Some(binary_path.to_string());
-            return Ok(BamlBinary {
-                path: binary_path.to_string(),
-                args: binary_args,
-            });
-        }
+fn language_server_binary(
+    language_server_id: &LanguageServerId,
+    _worktree: &zed::Worktree,
+) -> Result<zed::Command> {
+    log::info!(
+        "Retrieving language server binary with settings: {:?}",
+        HARDCODED_EXTENSION_CONFIG
+    );
+    // let binary_settings = LspSettings::for_worktree("baml", worktree)
+    //     .ok()
+    //     .and_then(|lsp_settings| lsp_settings.binary);
+    // let binary_args = binary_settings
+    //     .as_ref()
+    //     .and_then(|binary_settings| binary_settings.arguments.clone());
 
-        #[cfg(not(feature = "debug"))]
-        {
+    // if let Some(path) = binary_settings.and_then(|binary_settings| binary_settings.path) {
+    //     return Ok(BamlBinary {
+    //         path,
+    //         args: binary_args,
+    //     });
+    // }
+
+    match HARDCODED_EXTENSION_CONFIG.lsp_source {
+        BamlExtensionLspSource::GithubRelease => {
             zed::set_language_server_installation_status(
                 language_server_id,
                 &zed::LanguageServerInstallationStatus::CheckingForUpdate,
@@ -76,7 +75,7 @@ impl BamlExtension {
                 },
                 extension = match platform {
                     zed::Os::Mac | zed::Os::Linux => ".tar.gz",
-                    zed::Os::Windows => ".exe",
+                    zed::Os::Windows => ".zip",
                 },
                 version = release.version,
             );
@@ -88,7 +87,13 @@ impl BamlExtension {
                 .ok_or_else(|| format!("no asset found matching {:?}", asset_name))?;
 
             let version_dir = format!("baml-cli-{}", release.version);
-            let binary_path = format!("{version_dir}/baml-cli");
+            let binary_path = format!(
+                "{version_dir}/baml-cli{}",
+                match platform {
+                    zed::Os::Mac | zed::Os::Linux => "",
+                    zed::Os::Windows => ".exe",
+                },
+            );
 
             if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
                 zed::set_language_server_installation_status(
@@ -116,13 +121,18 @@ impl BamlExtension {
                 }
             }
 
-            Ok(BamlBinary {
-                path: binary_path,
-                args: binary_args,
-            })
+            Ok(zed::Command::new(binary_path).arg("lsp"))
         }
+        BamlExtensionLspSource::LocalBuild => Ok(zed::Command::new(format!(
+            "{}/../target/debug/language-server-hot-reload",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .arg("lsp")
+        .env("VSCODE_DEBUG_MODE", "true")),
     }
 }
+
+struct BamlExtension {}
 
 impl zed::Extension for BamlExtension {
     fn new() -> Self {
@@ -134,27 +144,7 @@ impl zed::Extension for BamlExtension {
         language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> Result<zed::Command> {
-        #[cfg(feature = "debug")]
-        {
-            Ok(zed::Command {
-                command: format!(
-                    "{}/../target/debug/language-server-hot-reload",
-                    env!("CARGO_MANIFEST_DIR")
-                ),
-                args: vec!["lsp".into()],
-                env: vec![("VSCODE_DEBUG_MODE".to_string(), "true".to_string())],
-            })
-        }
-
-        #[cfg(not(feature = "debug"))]
-        {
-            let baml_binary = self.language_server_binary(language_server_id, worktree)?;
-            Ok(zed::Command {
-                command: baml_binary.path,
-                args: baml_binary.args.unwrap_or_else(|| vec!["lsp".into()]),
-                env: Default::default(),
-            })
-        }
+        language_server_binary(language_server_id, worktree)
     }
 
     fn language_server_initialization_options(
@@ -164,7 +154,7 @@ impl zed::Extension for BamlExtension {
     ) -> Result<Option<zed::serde_json::Value>> {
         Ok(Some(zed::serde_json::json!({
             "settings": {
-                "featureFlags": ["beta"],
+                "featureFlags": [],
                 "generateCodeOnSave": "always",
                 "lspMethodsToForwardToWebview": [
                     "runtime_updated",

@@ -32,9 +32,10 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
-baml_snapshot = { path = "crates/baml_snapshot" }
+bex_program = { path = "crates/bex_program" }
 bex_engine = { path = "crates/bex_engine" }
-bex_sys = { path = "crates/bex_sys" }
+sys_types = { path = "crates/sys_types" }
+sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
 baml_ide = { path = "crates/baml_ide" }
 baml_lsp = { path = "crates/baml_lsp" }
@@ -47,6 +48,7 @@ bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 baml_bridge_cffi = { path = "crates/baml_bridge_cffi" }
+sys_resource_types = { path = "crates/sys_resource_types" }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
@@ -135,7 +137,7 @@ text-size = { version = "1.1" }
 thiserror = { version = "2.0.0" }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
-tokio = { version = "1.36", features = [ "full", "tracing" ] }
+tokio = { version = "1.36" }
 tower = "0.5"
 tower-http = { version = "0.6.6", features = [ "fs", "cors" ] }
 tracing = { version = "0.1.40" }
@@ -150,6 +152,7 @@ wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
 webbrowser = "1.0.5"
 wee_alloc = "0.4"
+wiremock = "0.6"
 [workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"

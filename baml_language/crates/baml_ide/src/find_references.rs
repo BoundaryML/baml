@@ -82,12 +82,12 @@ fn find_symbol_at_position(
     if let Some(function_loc) = find_function_at_position(db, file_id, position) {
         // Get the function body
         let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
-        let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) = &*body else {
+        let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body else {
             return None;
         };
 
         // Find the expression at this position
-        if let Some(expr_id) = find_expr_at_position(expr_body, position) {
+        if let Some(expr_id) = find_expr_at_position(expr_body, source_map, position) {
             // Get the type inference results
             let inference_result =
                 baml_db::baml_compiler_tir::function_type_inference(db, function_loc);
@@ -177,9 +177,11 @@ fn find_local_definition_at_position(
 
     // Check parameters first
     let signature = baml_db::baml_compiler_hir::function_signature(db, function_loc);
+    let sig_source_map =
+        baml_db::baml_compiler_hir::function_signature_source_map(db, function_loc);
     for (index, param) in signature.params.iter().enumerate() {
         if param.name.as_str() == word {
-            if let Some(param_span) = param.span {
+            if let Some(param_span) = sig_source_map.param_span(index) {
                 if param_span.contains(position) {
                     return Some(ResolvedValue::Local {
                         name: baml_db::Name::new(word),
@@ -192,7 +194,7 @@ fn find_local_definition_at_position(
 
     // Check let statements in the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
-    if let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) = &*body {
+    if let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body {
         for (stmt_id, stmt) in expr_body.stmts.iter() {
             if let baml_db::baml_compiler_hir::Stmt::Let { pattern, .. } = stmt {
                 // Get the pattern name
@@ -200,7 +202,7 @@ fn find_local_definition_at_position(
                 if let baml_db::baml_compiler_hir::Pattern::Binding(name) = pat {
                     if name.as_str() == word {
                         // Check if position is within this statement's span
-                        if let Some(span) = expr_body.get_stmt_span(stmt_id) {
+                        if let Some(span) = source_map.stmt_span(stmt_id) {
                             if span.range.contains(position) {
                                 return Some(ResolvedValue::Local {
                                     name: name.clone(),
@@ -261,12 +263,18 @@ fn find_function_at_position(
 }
 
 /// Find the expression at the given position.
-fn find_expr_at_position(body: &ExprBody, position: TextSize) -> Option<ExprId> {
+fn find_expr_at_position(
+    body: &ExprBody,
+    source_map: &baml_db::baml_compiler_hir::HirSourceMap,
+    position: TextSize,
+) -> Option<ExprId> {
     // Find the smallest expression that contains this position
     let mut candidates: Vec<(ExprId, text_size::TextRange)> = Vec::new();
-    for (expr_id, span) in &body.expr_spans {
-        if span.range.contains(position) {
-            candidates.push((*expr_id, span.range));
+    for (expr_id, _expr) in body.exprs.iter() {
+        if let Some(span) = source_map.expr_span(expr_id) {
+            if span.range.contains(position) {
+                candidates.push((expr_id, span.range));
+            }
         }
     }
 
@@ -297,7 +305,8 @@ fn find_references_to_symbol(db: &ProjectDatabase, target: &ResolvedValue) -> Ve
             if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
                 // Get the function body
                 let body = baml_db::baml_compiler_hir::function_body(db, *func_loc);
-                let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body) = &*body else {
+                let baml_db::baml_compiler_hir::FunctionBody::Expr(_expr_body, source_map) = &*body
+                else {
                     continue;
                 };
 
@@ -309,7 +318,7 @@ fn find_references_to_symbol(db: &ProjectDatabase, target: &ResolvedValue) -> Ve
                 for (expr_id, resolution) in &inference_result.expr_resolutions {
                     if is_same_resolution(target, resolution) {
                         // Get the span for this expression
-                        if let Some(span) = expr_body.get_expr_span(*expr_id) {
+                        if let Some(span) = source_map.expr_span(*expr_id) {
                             references.push(Reference::new(
                                 file_path.clone(),
                                 span,

@@ -17,6 +17,7 @@ use std::{collections::HashMap, path::PathBuf};
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
+    function_signature_source_map,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -94,10 +95,11 @@ pub fn collect_diagnostics(
         for item in items {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
+                let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
                 // Only infer types for expression functions (not LLM functions)
-                if let FunctionBody::Expr(expr_body) = &*body {
+                if let FunctionBody::Expr(expr_body, hir_source_map) = &*body {
                     // Collect body lowering diagnostics (e.g., missing semicolons)
                     for diag in &expr_body.diagnostics {
                         diagnostics.push(diag.to_diagnostic());
@@ -106,6 +108,7 @@ pub fn collect_diagnostics(
                     let inference_result = baml_compiler_tir::infer_function(
                         db,
                         &signature,
+                        Some(&sig_source_map),
                         &body,
                         Some(globals.clone()),
                         Some(class_fields.clone()),
@@ -114,8 +117,13 @@ pub fn collect_diagnostics(
                         *func_loc,
                     );
 
+                    // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
                     for type_error in &inference_result.errors {
-                        diagnostics.push(type_error.to_diagnostic());
+                        diagnostics.push(
+                            type_error.to_diagnostic(ToString::to_string, |loc| {
+                                loc.to_span(hir_source_map)
+                            }),
+                        );
                     }
                 }
             }

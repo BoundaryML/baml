@@ -1,10 +1,16 @@
 [package]
-name = "tools_stow"
-version = { workspace = true }
-edition = { workspace = true }
-rust-version = { workspace = true }
-license = { workspace = true }
-publish = false
+name = "cargo-stow"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+publish = true
+description = "Workspace linting and structure validation for Rust monorepos"
+repository = "https://github.com/boundaryml/baml"
+documentation = "https://github.com/boundaryml/baml/tree/main/baml_language/crates/tools_stow"
+readme = "README.md"
+keywords = [ "cargo", "workspace", "linter", "monorepo", "lint" ]
+categories = [ "development-tools::cargo-plugins" ]
 
 [[bin]]
 name = "cargo-stow"

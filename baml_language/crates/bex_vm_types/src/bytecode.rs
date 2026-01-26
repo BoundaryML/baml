@@ -1,6 +1,6 @@
 //! Instruction set and bytecode representation.
 
-use crate::{GlobalIndex, ObjectIndex, types::Value};
+use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
 // ============================================================================
 // Jump Table Data Structure
@@ -573,8 +573,13 @@ pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
 
-    /// Constant pool.
-    pub constants: Vec<Value>,
+    /// Constant pool (compile-time, serializable).
+    /// Contains `ObjectIndex` for object references.
+    pub constants: Vec<ConstValue>,
+
+    /// Resolved constants (runtime, populated at load time).
+    /// Contains `HeapPtr` for object references. Used by `LoadConst`.
+    pub resolved_constants: Vec<crate::Value>,
 
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
@@ -599,10 +604,24 @@ impl Bytecode {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             source_lines: Vec::new(),
             scopes: Vec::new(),
         }
+    }
+
+    /// Resolve constants from `ConstValue` to Value using a resolver function.
+    /// Called at load time to convert `ObjectIndex` to `HeapPtr`.
+    pub fn resolve_constants<F>(&mut self, resolve: F)
+    where
+        F: Fn(crate::ObjectIndex) -> crate::HeapPtr,
+    {
+        self.resolved_constants = self
+            .constants
+            .iter()
+            .map(|cv| cv.to_value(&resolve))
+            .collect();
     }
 }
 

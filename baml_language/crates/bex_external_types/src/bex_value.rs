@@ -96,7 +96,7 @@ impl PartialEq for BexValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             // Object handles compare by slab_key (identity)
-            (BexValue::Opaque(a), BexValue::Opaque(b)) => a.slab_key() == b.slab_key(),
+            (BexValue::Opaque(a), BexValue::Opaque(b)) => a == b,
             // Snapshots compare by value
             (BexValue::External(a), BexValue::External(b)) => a == b,
             _ => false,
