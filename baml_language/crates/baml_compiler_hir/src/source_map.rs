@@ -13,7 +13,7 @@ use baml_base::Span;
 use baml_compiler_diagnostics::ErrorContext;
 use rowan::TextRange;
 
-use crate::{ExprId, MatchArmId, MatchArmSpans, PatId, StmtId};
+use crate::{ExprId, MatchArmId, MatchArmSpans, PatId, StmtId, TypeId};
 
 // ============================================================================
 // Error Location for TIR
@@ -109,6 +109,9 @@ pub struct HirSourceMap {
 
     /// Match arm spans
     match_arm_spans: HashMap<MatchArmId, MatchArmSpans>,
+
+    /// Type annotation spans
+    type_spans: HashMap<TypeId, Span>,
 }
 
 impl HirSourceMap {
@@ -171,6 +174,20 @@ impl HirSourceMap {
     /// Get the spans for a match arm.
     pub fn match_arm_spans(&self, id: MatchArmId) -> Option<MatchArmSpans> {
         self.match_arm_spans.get(&id).copied()
+    }
+
+    // ========================================================================
+    // Type annotation mappings
+    // ========================================================================
+
+    /// Insert a type annotation span.
+    pub fn insert_type(&mut self, id: TypeId, span: Span) {
+        self.type_spans.insert(id, span);
+    }
+
+    /// Get the span for a type annotation.
+    pub fn type_span(&self, id: TypeId) -> Option<Span> {
+        self.type_spans.get(&id).copied()
     }
 }
 

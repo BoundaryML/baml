@@ -546,8 +546,9 @@ impl<'a> LoweringContext<'a> {
                 let pat_id = self.lower_pattern(*pattern, hir_body)?;
 
                 // Get the type from annotation or initializer
-                let ty = if let Some(annot) = type_annotation {
-                    self.lower_type_ref(annot)
+                let ty = if let Some(type_id) = type_annotation {
+                    let type_ref = &hir_body.types[*type_id];
+                    self.lower_type_ref(type_ref)
                 } else if let Some(init) = initializer {
                     self.inference
                         .expr_types

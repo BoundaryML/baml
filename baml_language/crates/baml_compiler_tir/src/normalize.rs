@@ -251,7 +251,11 @@ pub fn find_invalid_map_keys(ty: &Ty, aliases: &HashMap<Name, Ty>) -> Vec<Ty> {
     invalid_keys
 }
 
-fn find_invalid_map_keys_recursive(ty: &Ty, aliases: &HashMap<Name, Ty>, invalid_keys: &mut Vec<Ty>) {
+fn find_invalid_map_keys_recursive(
+    ty: &Ty,
+    aliases: &HashMap<Name, Ty>,
+    invalid_keys: &mut Vec<Ty>,
+) {
     match ty {
         Ty::Map { key, value } => {
             if !is_valid_map_key_type(key, aliases) {

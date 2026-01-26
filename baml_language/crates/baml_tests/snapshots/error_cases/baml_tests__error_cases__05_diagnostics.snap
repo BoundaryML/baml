@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-50646ef7890fdaa2/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -52,3 +52,13 @@ expression: output
     │ 
     │ Note: Error code: E0010
 ────╯
+
+  [type] Error: Unknown type `b`
+   ╭─[ syntax_errors.baml:1:1 ]
+   │
+ 1 │ // Missing closing brace
+   │ │ 
+   │ ╰─ Unknown type `b`
+   │ 
+   │ Note: Error code: E0002
+───╯

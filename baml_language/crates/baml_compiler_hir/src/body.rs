@@ -97,6 +97,9 @@ pub struct ExprBody {
     /// Match arm arena
     pub match_arms: Arena<MatchArm>,
 
+    /// Type annotation arena (for let bindings, etc.)
+    pub types: Arena<crate::type_ref::TypeRef>,
+
     /// Root expression of the function body (usually a `BLOCK_EXPR`)
     pub root_expr: Option<ExprId>,
 
@@ -118,6 +121,8 @@ pub type ExprId = Idx<Expr>;
 pub type StmtId = Idx<Stmt>;
 pub type PatId = Idx<Pattern>;
 pub type MatchArmId = Idx<MatchArm>;
+/// ID for any syntactic occurrence of a type (annotations, generic arguments, etc.)
+pub type TypeId = Idx<crate::type_ref::TypeRef>;
 
 /// A spread element in an object constructor: `...expr`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -216,8 +221,7 @@ pub enum Stmt {
     /// If `is_watched` is true, this is a `watch let` that tracks variable changes.
     Let {
         pattern: PatId,
-        type_annotation: Option<crate::type_ref::TypeRef>,
-        type_span: Option<TextRange>,
+        type_annotation: Option<TypeId>,
         initializer: Option<ExprId>,
         is_watched: bool,
     },
@@ -517,6 +521,7 @@ struct LoweringContext {
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
     match_arms: Arena<MatchArm>,
+    types: Arena<crate::type_ref::TypeRef>,
     /// File ID for creating spans
     file_id: FileId,
     /// All names used in this function, for generating unique synthetic variable names.
@@ -547,6 +552,7 @@ impl LoweringContext {
             stmts: Arena::new(),
             patterns: Arena::new(),
             match_arms: Arena::new(),
+            types: Arena::new(),
             file_id,
             names_in_scope: std::collections::HashSet::new(),
             source_map: HirSourceMap::new(),
@@ -612,12 +618,19 @@ impl LoweringContext {
         id
     }
 
+    fn alloc_type(&mut self, type_ref: crate::type_ref::TypeRef, range: TextRange) -> TypeId {
+        let id = self.types.alloc(type_ref);
+        self.source_map.insert_type(id, self.span_from_range(range));
+        id
+    }
+
     fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, HirSourceMap) {
         let body = ExprBody {
             exprs: self.exprs,
             stmts: self.stmts,
             patterns: self.patterns,
             match_arms: self.match_arms,
+            types: self.types,
             root_expr,
             diagnostics: self.diagnostics,
         };
@@ -2303,10 +2316,11 @@ impl LoweringContext {
             .as_ref()
             .and_then(baml_compiler_syntax::LetStmt::ty);
 
-        // Extract type annotation if present
-        let type_annotation = type_node.as_ref().map(TypeRef::from_ast);
-
-        let type_span = type_node.map(|t: TypeExpr| t.text_range());
+        // Extract type annotation if present, allocating it in the arena
+        let type_annotation = type_node.map(|t: TypeExpr| {
+            let type_ref = TypeRef::from_ast(&t);
+            self.alloc_type(type_ref, t.text_range())
+        });
 
         // Extract initializer expression - first try as a node, then as a token
         let initializer = let_stmt
@@ -2325,7 +2339,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern,
                 type_annotation,
-                type_span,
                 initializer,
                 is_watched,
             },
@@ -2750,7 +2763,6 @@ impl LoweringContext {
         let arr_let = self.stmts.alloc(Stmt::Let {
             pattern: arr_pat,
             type_annotation: None,
-            type_span: None,
             initializer: Some(iterator_expr),
             is_watched: false,
         });
@@ -2771,7 +2783,6 @@ impl LoweringContext {
         let len_let = self.stmts.alloc(Stmt::Let {
             pattern: len_pat,
             type_annotation: None,
-            type_span: None,
             initializer: Some(length_call),
             is_watched: false,
         });
@@ -2782,7 +2793,6 @@ impl LoweringContext {
         let idx_let = self.stmts.alloc(Stmt::Let {
             pattern: idx_pat,
             type_annotation: None,
-            type_span: None,
             initializer: Some(zero),
             is_watched: false,
         });
@@ -2821,7 +2831,6 @@ impl LoweringContext {
         let elem_let = self.stmts.alloc(Stmt::Let {
             pattern: user_pattern,
             type_annotation: None,
-            type_span: None,
             initializer: Some(element_access),
             is_watched: false,
         });

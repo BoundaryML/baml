@@ -395,7 +395,8 @@ impl<'a> TreeRenderer<'a> {
                     Pattern::Union(pats) => format!("union[{}]", pats.len()),
                 };
 
-                let ty_str = if let Some(type_ref) = type_annotation {
+                let ty_str = if let Some(type_id) = type_annotation {
+                    let type_ref = &body.types[*type_id];
                     let ty = self
                         .resolution_ctx
                         .lower_type_ref(type_ref, Span::default())
