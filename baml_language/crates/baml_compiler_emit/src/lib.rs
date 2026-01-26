@@ -382,6 +382,12 @@ fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
         "baml.net.connect" => Some(ExternalOp::Sys(SysOp::NetConnect)),
         "baml.net.Socket.read" => Some(ExternalOp::Sys(SysOp::NetRead)),
         "baml.net.Socket.close" => Some(ExternalOp::Sys(SysOp::NetClose)),
+        "baml.http.fetch" => Some(ExternalOp::Sys(SysOp::HttpFetch)),
+        "baml.http.Response.text" => Some(ExternalOp::Sys(SysOp::HttpResponseText)),
+        "baml.http.Response.status" => Some(ExternalOp::Sys(SysOp::HttpResponseStatus)),
+        "baml.http.Response.ok" => Some(ExternalOp::Sys(SysOp::HttpResponseOk)),
+        "baml.http.Response.url" => Some(ExternalOp::Sys(SysOp::HttpResponseUrl)),
+        "baml.http.Response.headers" => Some(ExternalOp::Sys(SysOp::HttpResponseHeaders)),
         _ => None,
     }
 }

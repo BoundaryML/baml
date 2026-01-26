@@ -1122,12 +1122,14 @@ impl BexEngine {
                         ExternalOp::Sys(sys_op) => {
                             match self.execute_sys_op(sys_op, args) {
                                 SysOpResult::Ready(result) => {
-                                    // Sync operation - fulfill immediately
+                                    // Sync operation - set future to Ready without touching stack.
+                                    // The VM will continue to the Await instruction which will
+                                    // extract the value from the Ready future.
                                     let value = Self::external_to_vm_value(
                                         vm,
                                         result.map_err(EngineError::from)?,
                                     );
-                                    vm.fulfil_future(id, value)?;
+                                    vm.set_future_ready(id, value)?;
                                 }
                                 SysOpResult::Async(fut) => {
                                     // Async operation - spawn task
@@ -1232,6 +1234,12 @@ impl BexEngine {
             SysOp::NetRead => (self.sys_ops.net_read)(args),
             SysOp::NetClose => (self.sys_ops.net_close)(args),
             SysOp::Shell => (self.sys_ops.shell)(args),
+            SysOp::HttpFetch => (self.sys_ops.http_fetch)(args),
+            SysOp::HttpResponseText => (self.sys_ops.http_response_text)(args),
+            SysOp::HttpResponseStatus => (self.sys_ops.http_response_status)(args),
+            SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(args),
+            SysOp::HttpResponseUrl => (self.sys_ops.http_response_url)(args),
+            SysOp::HttpResponseHeaders => (self.sys_ops.http_response_headers)(args),
         }
     }
 

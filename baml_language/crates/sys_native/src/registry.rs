@@ -23,10 +23,23 @@ pub struct SocketResource {
     pub addr: String,
 }
 
+/// An HTTP response resource with lazy body consumption.
+pub struct ResponseResource {
+    /// The underlying reqwest response (None after body consumed).
+    pub response: Arc<TokioMutex<Option<reqwest::Response>>>,
+    /// HTTP status code (captured at fetch time).
+    pub status: u16,
+    /// Response headers (captured at fetch time).
+    pub headers: HashMap<String, String>,
+    /// Request URL (captured at fetch time).
+    pub url: String,
+}
+
 /// Registry entry for a resource.
 pub enum RegistryEntry {
     File(FileResource),
     Socket(SocketResource),
+    HttpResponse(ResponseResource),
 }
 
 /// Global resource registry.
@@ -103,6 +116,61 @@ impl ResourceRegistry {
         let entries = self.entries.read().unwrap();
         match entries.get(&key) {
             Some(RegistryEntry::Socket(s)) => Some(s.stream.clone()),
+            _ => None,
+        }
+    }
+
+    /// Register an HTTP response and return an opaque handle.
+    pub fn register_http_response(
+        self: &Arc<Self>,
+        response: reqwest::Response,
+        status: u16,
+        headers: HashMap<String, String>,
+        url: String,
+    ) -> ResourceHandle {
+        let key = self.next_key.fetch_add(1, Ordering::SeqCst);
+        let resource = ResponseResource {
+            response: Arc::new(TokioMutex::new(Some(response))),
+            status,
+            headers,
+            url: url.clone(),
+        };
+
+        self.entries
+            .write()
+            .unwrap()
+            .insert(key, RegistryEntry::HttpResponse(resource));
+
+        ResourceHandle::new(
+            key,
+            ResourceType::HttpResponse,
+            url,
+            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
+        )
+    }
+
+    /// Get HTTP response metadata (status, headers, url) by handle key.
+    pub fn get_http_response_metadata(
+        &self,
+        key: usize,
+    ) -> Option<(u16, HashMap<String, String>, String)> {
+        let entries = self.entries.read().unwrap();
+        match entries.get(&key) {
+            Some(RegistryEntry::HttpResponse(r)) => {
+                Some((r.status, r.headers.clone(), r.url.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the HTTP response mutex for body consumption.
+    pub fn get_http_response_body(
+        &self,
+        key: usize,
+    ) -> Option<Arc<TokioMutex<Option<reqwest::Response>>>> {
+        let entries = self.entries.read().unwrap();
+        match entries.get(&key) {
+            Some(RegistryEntry::HttpResponse(r)) => Some(r.response.clone()),
             _ => None,
         }
     }

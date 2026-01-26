@@ -565,6 +565,7 @@ impl BexHeap {
         self.next_chunk.store(new_value, Ordering::Release);
     }
 
+    #[cfg(feature = "heap_debug")]
     pub(crate) fn next_chunk_value(&self) -> usize {
         self.next_chunk.load(Ordering::Acquire)
     }
