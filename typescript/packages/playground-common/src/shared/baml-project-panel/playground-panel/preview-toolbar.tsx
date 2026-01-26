@@ -36,6 +36,7 @@ import { useRunBamlTests } from './prompt-preview/test-panel/test-runner';
 import { standaloneBetaFeatureEnabledAtom, isVSCodeEnvironment } from '../feature-flags';
 import { vscodeSettingsAtom } from '../atoms';
 import { useTheme } from 'next-themes';
+import { useBAMLSDK } from '../../../sdk/hooks';
 
 export const displaySettingsAtom = atom({
   showTokens: false,
@@ -114,6 +115,7 @@ export function PreviewToolbar() {
   const setVscodeSettings = useSetAtom(vscodeSettingsAtom);
   const { resolvedTheme, setTheme } = useTheme();
   const isLightMode = resolvedTheme === 'light';
+  const sdk = useBAMLSDK();
 
   // Beta feature flag settings
   const [betaFeatureEnabled, setBetaFeatureEnabled] = useAtom(standaloneBetaFeatureEnabledAtom);
@@ -124,6 +126,7 @@ export function PreviewToolbar() {
   const displayBetaEnabled = isInVSCode
     ? (vscodeSettings?.featureFlags?.includes('beta') ?? false)
     : betaFeatureEnabled;
+
 
   const handleBetaToggle = (enabled: boolean) => {
     // This function only runs in standalone mode (not VSCode)
@@ -248,11 +251,11 @@ export function PreviewToolbar() {
                 checked={proxySettings.proxyEnabled}
                 onCheckedChange={async (checked) => {
                   try {
-                    // Optimistically update vscodeSettingsAtom so proxyUrlAtom updates immediately
-                    setVscodeSettings((prev) => ({
-                      ...prev,
+
+
+                    sdk.settings.updateVSCodeSettings({
                       enablePlaygroundProxy: !!checked,
-                    }));
+                    });
                     // Also update bamlConfig for consistency
                     setBamlConfig((prev: BamlConfigAtom) => ({
                       ...prev,
