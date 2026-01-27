@@ -644,6 +644,86 @@ async function run() {
 > `b.request` (non-streaming) when targeting AWS, and re-sign after any
 > modifications to the body or headers.
 
+## AWS Bedrock Batch Inference Example
+
+Similar to OpenAI's Batch API, you can use the modular API with [AWS Bedrock's batch inference](https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference.html) to process large volumes of requests asynchronously.
+
+> ⚠️ **Prerequisites**: You'll need a S3 bucket, an IAM role with permissions to access S3 and Bedrock, and access to a Bedrock model. See [AWS docs](https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference-prereq.html) for setup.
+
+<CodeBlocks>
+```python Python
+import json
+import time
+import boto3
+from baml_client.sync_client import b
+
+def to_jsonl(req):
+    return json.dumps({
+        'recordId': req.id,
+        'modelInput': {'messages': req.body.json().get('messages')}
+    })
+
+if __name__ == '__main__':
+    # 50 × 2 resumes = 100 requests (Bedrock batch minimum)
+    jsonl = '\n'.join([
+        to_jsonl(b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")),
+        to_jsonl(b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics")),
+    ] * 50)
+
+    bucket = '<YOUR_S3_BUCKET>'
+    key = '<YOUR_INPUT_KEY_PREFIX>/batch.jsonl'
+    output_prefix = '<YOUR_OUTPUT_KEY_PREFIX>/'
+    region = '<YOUR_REGION>'
+
+    boto3.client('s3', region_name=region).put_object(Bucket=bucket, Key=key, Body=jsonl)
+
+    print(boto3.client('bedrock', region_name=region).create_model_invocation_job(
+        jobName=f'baml-batch-{int(time.time() * 1000)}',
+        modelId='<YOUR_MODEL_ID>',
+        roleArn='arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+        inputDataConfig={'s3InputDataConfig': {'s3Uri': f's3://{bucket}/{key}', 's3InputFormat': 'JSONL'}},
+        outputDataConfig={'s3OutputDataConfig': {'s3Uri': f's3://{bucket}/{output_prefix}'}}
+    ))
+```
+```typescript TypeScript
+import { b } from './baml_client/sync_client';
+import type { HttpRequest } from '@boundaryml/baml/native';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { BedrockClient, CreateModelInvocationJobCommand } from '@aws-sdk/client-bedrock';
+
+const toJsonl = (req: HttpRequest) => JSON.stringify({
+  recordId: req.id,
+  modelInput: { messages: req.body.json().messages }
+});
+
+// 50 × 2 resumes = 100 requests (Bedrock batch minimum)
+const jsonl = [...Array(50)].flatMap(() => [
+  toJsonl(b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")),
+  toJsonl(b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics")),
+]).join('\n');
+
+const bucket = '<YOUR_S3_BUCKET>';
+const key = '<YOUR_INPUT_KEY_PREFIX>/batch.jsonl';
+const outputPrefix = '<YOUR_OUTPUT_KEY_PREFIX>/';
+const region = '<YOUR_REGION>';
+
+new S3Client({ region }).send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: jsonl })).then(() => {
+  new BedrockClient({ region }).send(new CreateModelInvocationJobCommand({
+    jobName: `baml-batch-${Date.now()}`,
+    modelId: '<YOUR_MODEL_ID>',
+    roleArn: 'arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<YOUR_BEDROCK_ROLE>',
+    inputDataConfig: { s3InputDataConfig: { s3Uri: `s3://${bucket}/${key}`, s3InputFormat: 'JSONL' } },
+    outputDataConfig: { s3OutputDataConfig: { s3Uri: `s3://${bucket}/${outputPrefix}` } }
+  })).then(console.log);
+});
+```
+</CodeBlocks>
+
+> ℹ️ **Limitations**:
+> - Bedrock batch requires a minimum of 100 requests
+> - Jobs are asynchronous—poll. You must use `get_model_invocation_job` for completion results
+> - Errors are only visible after the batch job completes
+
 ## Type Checking
 
 ### Python
