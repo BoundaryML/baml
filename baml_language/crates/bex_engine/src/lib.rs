@@ -648,6 +648,9 @@ impl BexEngine {
                 kind: m.kind,
             }),
             Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
+            Object::PromptAst(_) => Err(EngineError::CannotConvert {
+                type_name: "prompt_ast".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),

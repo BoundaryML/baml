@@ -58,12 +58,12 @@ unsafe impl Send for HeapPtr {}
 unsafe impl Sync for HeapPtr {}
 
 impl HeapPtr {
-    /// Create a new HeapPtr from a raw pointer.
+    /// Create a new `HeapPtr` from a raw pointer.
     ///
     /// # Safety
     ///
     /// The pointer must point to a valid Object in the heap that will
-    /// remain valid for the lifetime of this HeapPtr (until GC collects it).
+    /// remain valid for the lifetime of this `HeapPtr` (until GC collects it).
     #[cfg(not(feature = "heap_debug"))]
     #[inline]
     pub unsafe fn from_ptr(ptr: *mut Object) -> Self {

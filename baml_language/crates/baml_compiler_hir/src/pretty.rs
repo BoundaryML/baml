@@ -235,7 +235,6 @@ impl<'a> CodePrinter<'a> {
                 type_annotation,
                 initializer,
                 is_watched,
-                ..
             } => {
                 if *is_watched {
                     self.output.push_str("watch let ");
@@ -243,8 +242,9 @@ impl<'a> CodePrinter<'a> {
                     self.output.push_str("let ");
                 }
                 self.print_pattern(*pattern);
-                if let Some(ty) = type_annotation {
-                    write!(self.output, ": {}", type_ref_to_str(ty)).unwrap();
+                if let Some(type_id) = type_annotation {
+                    let type_ref = &self.body.types[*type_id];
+                    write!(self.output, ": {}", type_ref_to_str(type_ref)).unwrap();
                 }
                 if let Some(init) = initializer {
                     self.output.push_str(" = ");

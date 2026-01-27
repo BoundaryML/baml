@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Name, Span};
 use baml_compiler_hir::{ExprBody, Literal, MatchArmId, Pattern};
 
-use crate::{LiteralValue, Ty, lower_type_ref_validated_resolved};
+use crate::{LiteralValue, Ty, lower_type_ref};
 
 // ============================================================================
 // ValueSet: The Core Abstraction
@@ -166,8 +166,8 @@ pub struct ExhaustivenessChecker<'a> {
     /// Enum names for type resolution
     enum_names: &'a HashSet<Name>,
 
-    /// Known types for validation
-    known_types: &'a HashSet<Name>,
+    /// Type alias names for validation
+    type_alias_names: &'a HashSet<Name>,
 }
 
 /// Result of exhaustiveness checking.
@@ -190,14 +190,14 @@ impl<'a> ExhaustivenessChecker<'a> {
         type_aliases: &'a HashMap<Name, Ty>,
         class_names: &'a HashSet<Name>,
         enum_names: &'a HashSet<Name>,
-        known_types: &'a HashSet<Name>,
+        type_alias_names: &'a HashSet<Name>,
     ) -> Self {
         Self {
             enum_variants,
             type_aliases,
             class_names,
             enum_names,
-            known_types,
+            type_alias_names,
         }
     }
 
@@ -430,9 +430,9 @@ impl<'a> ExhaustivenessChecker<'a> {
 
             // Typed binding: matches all values of that type
             Pattern::TypedBinding { ty, .. } => {
-                let (lowered_ty, _) = lower_type_ref_validated_resolved(
+                let (lowered_ty, _) = lower_type_ref(
                     ty,
-                    self.known_types,
+                    self.type_alias_names,
                     self.class_names,
                     self.enum_names,
                     Span::default(),

@@ -226,6 +226,17 @@ macro_rules! with_builtins {
                     #[external]
                     fn fetch(url: String) -> Response;
                 }
+
+                // =====================================================================
+                // LLM operations (hidden - internal use only)
+                // =====================================================================
+                #[hide]
+                mod llm {
+                    /// Prompt AST - a structured prompt for LLM calls.
+                    /// This is hidden from the type checker as it's for internal use.
+                    #[builtin]
+                    struct PromptAst {}
+                }
             }
 
             mod env {
@@ -363,6 +374,18 @@ mod tests {
         assert_eq!(paths::ENV_GET, "env.get");
         assert_eq!(paths::BAML_DEEP_COPY, "baml.deep_copy");
         assert_eq!(paths::BAML_UNSTABLE_STRING, "baml.unstable.string");
+    }
+
+    #[test]
+    fn test_hidden_llm_module() {
+        // The baml.llm module is hidden from the type checker.
+        // It should NOT appear in the builtins list, even though
+        // the VM can still use it internally.
+        assert!(find_builtin_by_path("baml.llm.PromptAst").is_none());
+
+        // Other builtins in the same parent module are still visible
+        assert!(find_builtin_by_path("baml.http.Response.text").is_some());
+        assert!(find_builtin_by_path("baml.http.fetch").is_some());
     }
 
     #[test]

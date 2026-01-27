@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.218.1](https://github.com/boundaryml/baml/compare/0.218.0..0.218.1) - 2026-01-27
+
+### Bug Fixes
+- Fix streaming retries not working (#3025) - ([149a9ae](https://github.com/boundaryml/baml/commit/149a9ae5748664659888b4d2d53c3eb8df7c33d3)) - Antonio Sarosi
+- **(zed)** get zed extension working again (#3024) - ([95934b7](https://github.com/boundaryml/baml/commit/95934b793455983e5e7d77a2c1d17ef6d5943906)) - Sam Lijin
+- proxy toggling error message (#3026) - ([cc2a120](https://github.com/boundaryml/baml/commit/cc2a12044eadb561b15dfca1d6f48d4d66ec5e20)) - Sam Lijin
+- make HMR test pass (#3029) - ([03e95d2](https://github.com/boundaryml/baml/commit/03e95d2de94640c55d34a1debdcaa1ffedf63319)) - Sam Lijin
+- fix issue with vscode 'unspecified error' where CORS proxy wasnt enabled (#3034)
+- Fix Vertex AI credential parsing for double-quoted JSON (#3028) - ([68f4ad6](https://github.com/boundaryml/baml/commit/68f4ad6918c1d68c739718bb5940349575c73bd3)) - Dave Laird
+
+### Features
+- support --turbo build for Next.js (#2422) - ([9ef044b](https://github.com/boundaryml/baml/commit/9ef044b6bf8d2414ce959f28865732bd8f444549)) - Chris Watts
+
+
 ## [0.218.0](https://github.com/boundaryml/baml/compare/0.217.0..0.218.0) - 2026-01-22
 
 ### Bug Fixes

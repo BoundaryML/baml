@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-50646ef7890fdaa2/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -751,11 +751,11 @@ fn ExhaustiveTypeAliasWithCatchAll(r: TypeAlias(FullyQualifiedName { namespace: 
     let _2: Bool
     let _3: Class(FullyQualifiedName { namespace: Local, name: "Success" }) // s
     let _4: Class(FullyQualifiedName { namespace: Local, name: "Success" })
-    let _5: TypeAlias(FullyQualifiedName { namespace: Local, name: "Result" }) // _
+    let _5: Error // _
 
     bb0: {
         _2 = is_type(copy _1, Class(FullyQualifiedName { namespace: Local, name: "Success" }));
-        branch copy _2 -> [bb6, bb5];
+        branch copy _2 -> [bb5, bb4];
     }
 
     bb1: {
@@ -767,27 +767,27 @@ fn ExhaustiveTypeAliasWithCatchAll(r: TypeAlias(FullyQualifiedName { namespace: 
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
 
-    bb5: {
+    bb4: {
         _5 = copy _1;
-        goto -> bb7;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _3 = copy _1;
+        goto -> bb3;
     }
 
     bb6: {
-        _3 = copy _1;
-        goto -> bb4;
+        _0 = const "fallback";
+        goto -> bb2;
     }
 
     bb7: {
-        _0 = const "fallback";
         goto -> bb2;
     }
 
@@ -3589,11 +3589,11 @@ fn StringLiteralWithCatchAll(role: TypeAlias(FullyQualifiedName { namespace: Loc
     let _1: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // role // param
     let _2: Bool
     let _3: Bool
-    let _4: TypeAlias(FullyQualifiedName { namespace: Local, name: "Role" }) // _
+    let _4: Error // _
 
     bb0: {
         _2 = copy _1 == const "user";
-        branch copy _2 -> [bb4, bb5];
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb1: {
@@ -3605,31 +3605,31 @@ fn StringLiteralWithCatchAll(role: TypeAlias(FullyQualifiedName { namespace: Loc
     }
 
     bb3: {
-        unreachable;
-    }
-
-    bb4: {
         _0 = const "User message";
         goto -> bb2;
     }
 
-    bb5: {
+    bb4: {
         _3 = copy _1 == const "assistant";
-        branch copy _3 -> [bb6, bb7];
+        branch copy _3 -> [bb5, bb6];
     }
 
-    bb6: {
+    bb5: {
         _0 = const "Assistant message";
         goto -> bb2;
     }
 
-    bb7: {
+    bb6: {
         _4 = copy _1;
-        goto -> bb8;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _0 = const "Other";
+        goto -> bb2;
     }
 
     bb8: {
-        _0 = const "Other";
         goto -> bb2;
     }
 

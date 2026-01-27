@@ -197,6 +197,14 @@ impl<C: ErrorContext> TypeError<C> {
                 ),
             )
             .with_primary_span(loc_fn(location)),
+
+            TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
+                DiagnosticId::InvalidMapKeyType,
+                format!(
+                    "Invalid type {} for map key. Only strings, string literals and enums are valid map keys.",
+                    ty_fn(ty)
+                )
+            ).with_primary_span(loc_fn(location)),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

@@ -146,6 +146,9 @@ impl Object {
 
             VmObject::Future(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
             VmObject::Resource(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
+            VmObject::PromptAst(_) => {
+                anyhow::bail!("Unsupported object type for testing: {obj:?}")
+            }
             #[cfg(feature = "heap_debug")]
             VmObject::Sentinel(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
         }

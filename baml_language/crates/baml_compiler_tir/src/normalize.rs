@@ -201,6 +201,86 @@ fn substitute(ty: &StructuralTy, var: &Name, replacement: &StructuralTy) -> Stru
     }
 }
 
+/// Check if a type is valid as a map key.
+///
+/// Valid key types are: string, string literals, and unions of valid key types.
+/// Enums are NOT valid (they're structurally distinct from string literals).
+fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
+    fn can_be_key(structural_ty: &StructuralTy) -> bool {
+        match structural_ty {
+            StructuralTy::String => true,
+            StructuralTy::Literal(literal_value) => match literal_value {
+                LiteralValue::String(_) => true,
+                LiteralValue::Int(_) => false,
+                LiteralValue::Float(_) => false,
+                LiteralValue::Bool(_) => false,
+            },
+            StructuralTy::Error => true,
+            StructuralTy::Union(variants) => variants.iter().all(can_be_key),
+            StructuralTy::Int => false,
+            StructuralTy::Float => false,
+            StructuralTy::Bool => false,
+            StructuralTy::Null => false,
+            StructuralTy::Media(_) => false,
+            StructuralTy::Class(_) => false,
+            StructuralTy::Enum(_) => false,
+            StructuralTy::Optional(_) => false,
+            StructuralTy::List(_) => false,
+            StructuralTy::Map { .. } => false,
+            StructuralTy::Function { .. } => false,
+            StructuralTy::Mu { .. } => false,
+            StructuralTy::TyVar(_) => false,
+            StructuralTy::Unknown => false,
+            StructuralTy::Void => false,
+            StructuralTy::WatchAccessor(_) => false,
+            StructuralTy::Builtin(_) => false,
+        }
+    }
+    let recursive = find_recursive_aliases(aliases);
+    let norm = normalize(ty, aliases, &recursive);
+    can_be_key(&norm)
+}
+
+/// Find all invalid map key types within a type (recursively).
+///
+/// Returns a list of the invalid key types found. The caller should create
+/// appropriate diagnostics for each.
+pub fn find_invalid_map_keys(ty: &Ty, aliases: &HashMap<Name, Ty>) -> Vec<Ty> {
+    let mut invalid_keys = Vec::new();
+    find_invalid_map_keys_recursive(ty, aliases, &mut invalid_keys);
+    invalid_keys
+}
+
+fn find_invalid_map_keys_recursive(
+    ty: &Ty,
+    aliases: &HashMap<Name, Ty>,
+    invalid_keys: &mut Vec<Ty>,
+) {
+    match ty {
+        Ty::Map { key, value } => {
+            if !is_valid_map_key_type(key, aliases) {
+                invalid_keys.push((**key).clone());
+            }
+            find_invalid_map_keys_recursive(key, aliases, invalid_keys);
+            find_invalid_map_keys_recursive(value, aliases, invalid_keys);
+        }
+        Ty::List(inner) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
+        Ty::Optional(inner) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
+        Ty::Union(types) => {
+            for t in types {
+                find_invalid_map_keys_recursive(t, aliases, invalid_keys);
+            }
+        }
+        Ty::Function { params, ret } => {
+            for p in params {
+                find_invalid_map_keys_recursive(p, aliases, invalid_keys);
+            }
+            find_invalid_map_keys_recursive(ret, aliases, invalid_keys);
+        }
+        _ => {}
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NORMALIZATION (private)
 // ═══════════════════════════════════════════════════════════════════════════

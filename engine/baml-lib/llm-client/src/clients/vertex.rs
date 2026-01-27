@@ -25,6 +25,7 @@ enum UnresolvedGcpAuthStrategy<Meta> {
     SystemDefault,
 }
 
+#[derive(Debug)]
 pub enum ResolvedGcpAuthStrategy {
     /// GCP SDKs usually support passing in GOOGLE_APPLICATION_CREDENTIALS as a file path
     /// In WASM, however, we treat both StringContainingJson and MaybeFilePath as a string
@@ -84,7 +85,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     fn resolve(&self, ctx: &impl GetEnvVar) -> Result<ResolvedGcpAuthStrategy> {
         Ok(match self {
             UnresolvedGcpAuthStrategy::CredentialsString(s) => {
-                let s = s.resolve(ctx)?;
+                let s = try_unwrap_quoted_json(s.resolve(ctx)?);
                 match serde_json::from_str::<serde_json::Value>(&s) {
                     Ok(_) => ResolvedGcpAuthStrategy::StringContainingJson(s),
                     Err(_) => ResolvedGcpAuthStrategy::MaybeFilePath(s),
@@ -98,7 +99,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
                 ResolvedGcpAuthStrategy::JsonObject(m)
             }
             UnresolvedGcpAuthStrategy::CredentialsContentString(s) => {
-                let s = s.resolve(ctx)?;
+                let s = try_unwrap_quoted_json(s.resolve(ctx)?);
                 ResolvedGcpAuthStrategy::StringContainingJson(s)
             }
             UnresolvedGcpAuthStrategy::SystemDefault => {
@@ -116,6 +117,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
                         if credentials.is_empty() {
                             log::warn!("Resolving GOOGLE_APPLICATION_CREDENTIALS from env, but it is an empty string");
                         }
+                        let credentials = try_unwrap_quoted_json(credentials);
                         match serde_json::from_str::<serde_json::Value>(&credentials) {
                             Ok(_) => ResolvedGcpAuthStrategy::StringContainingJson(credentials),
                             Err(_) => ResolvedGcpAuthStrategy::MaybeFilePath(credentials),
@@ -126,6 +128,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
                         if credentials_content.is_empty() {
                             log::warn!("Resolving GOOGLE_APPLICATION_CREDENTIALS_CONTENT from env, but it is an empty string");
                         }
+                        let credentials_content = try_unwrap_quoted_json(credentials_content);
                         ResolvedGcpAuthStrategy::StringContainingJson(credentials_content)
                     }
                     (None, None) => {
@@ -136,6 +139,29 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
             }
         })
     }
+}
+
+/// Try to unwrap a double-quoted JSON string.
+///
+/// Some tools like `vercel env pull` produce JSON strings that are wrapped in double quotes
+/// with escaped inner quotes, like: `"{\"type\":\"service_account\",\"project_id\":\"test\"}"`
+///
+/// This function attempts to parse such a string as a JSON string value and unwrap it.
+/// If the string is not a valid double-quoted JSON, it returns the original string unchanged.
+fn try_unwrap_quoted_json(s: String) -> String {
+    // Quick check: only try to unwrap if it looks like a quoted string
+    if s.starts_with('"') && s.ends_with('"') {
+        // Try to parse as a JSON string (which would unescape the inner content)
+        if let Ok(serde_json::Value::String(unwrapped)) =
+            serde_json::from_str::<serde_json::Value>(&s)
+        {
+            // Verify the unwrapped content is valid JSON before returning it
+            if serde_json::from_str::<serde_json::Value>(&unwrapped).is_ok() {
+                return unwrapped;
+            }
+        }
+    }
+    s
 }
 
 #[derive(Debug, Clone, BamlHash)]
@@ -439,5 +465,203 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             media_url_handler,
             http_config,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    /// A simple mock implementation of GetEnvVar for testing
+    struct MockEnvVars {
+        vars: HashMap<String, String>,
+        #[allow(dead_code)]
+        allow_missing: bool,
+    }
+
+    impl MockEnvVars {
+        fn new() -> Self {
+            Self {
+                vars: HashMap::new(),
+                allow_missing: true,
+            }
+        }
+
+        fn with_var(mut self, key: &str, value: &str) -> Self {
+            self.vars.insert(key.to_string(), value.to_string());
+            self
+        }
+    }
+
+    impl GetEnvVar for MockEnvVars {
+        fn get_env_var(&self, key: &str) -> Result<String> {
+            self.vars
+                .get(key)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("env var {} not found", key))
+        }
+
+        fn set_allow_missing_env_var(&self, allow: bool) -> Self {
+            MockEnvVars {
+                vars: self.vars.clone(),
+                allow_missing: allow,
+            }
+        }
+    }
+
+    // Sample valid JSON credentials (minimal structure)
+    const VALID_JSON: &str = r#"{"type":"service_account","project_id":"test-project"}"#;
+
+    // Double-quoted JSON as produced by `vercel env pull`
+    fn double_quoted_json() -> String {
+        format!(r#""{}""#, VALID_JSON.replace('"', r#"\""#))
+    }
+
+    #[test]
+    fn test_credentials_string_with_valid_json() {
+        // Baseline: valid JSON should be parsed as StringContainingJson
+        let strategy: UnresolvedGcpAuthStrategy<()> =
+            UnresolvedGcpAuthStrategy::CredentialsString(StringOr::Value(VALID_JSON.to_string()));
+        let ctx = MockEnvVars::new();
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                assert_eq!(s, VALID_JSON);
+            }
+            other => panic!("Expected StringContainingJson, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_credentials_string_with_double_quoted_json() {
+        // Bug case: double-quoted JSON should still be parsed as StringContainingJson
+        let double_quoted = double_quoted_json();
+        let strategy: UnresolvedGcpAuthStrategy<()> =
+            UnresolvedGcpAuthStrategy::CredentialsString(StringOr::Value(double_quoted.clone()));
+        let ctx = MockEnvVars::new();
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                // Should contain the unwrapped JSON, not the double-quoted version
+                assert_eq!(s, VALID_JSON);
+            }
+            ResolvedGcpAuthStrategy::MaybeFilePath(s) => {
+                panic!(
+                    "Double-quoted JSON was incorrectly treated as file path: {}",
+                    s
+                );
+            }
+            other => panic!("Expected StringContainingJson, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_credentials_string_from_env_with_double_quoted_json() {
+        // Bug case: double-quoted JSON from env var should be unwrapped
+        let double_quoted = double_quoted_json();
+        let strategy: UnresolvedGcpAuthStrategy<()> = UnresolvedGcpAuthStrategy::CredentialsString(
+            StringOr::EnvVar("TEST_CREDENTIALS".to_string()),
+        );
+        let ctx = MockEnvVars::new().with_var("TEST_CREDENTIALS", &double_quoted);
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                assert_eq!(s, VALID_JSON);
+            }
+            ResolvedGcpAuthStrategy::MaybeFilePath(s) => {
+                panic!(
+                    "Double-quoted JSON from env was incorrectly treated as file path: {}",
+                    s
+                );
+            }
+            other => panic!("Expected StringContainingJson, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_credentials_content_with_double_quoted_json() {
+        // Bug case: credentials_content with double-quoted JSON should be unwrapped
+        let double_quoted = double_quoted_json();
+        let strategy: UnresolvedGcpAuthStrategy<()> =
+            UnresolvedGcpAuthStrategy::CredentialsContentString(StringOr::Value(
+                double_quoted.clone(),
+            ));
+        let ctx = MockEnvVars::new();
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                // Should contain the unwrapped JSON
+                assert_eq!(s, VALID_JSON);
+            }
+            other => panic!(
+                "Expected StringContainingJson with unwrapped JSON, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn test_system_default_google_application_credentials_double_quoted() {
+        // Bug case: GOOGLE_APPLICATION_CREDENTIALS env var with double-quoted JSON
+        let double_quoted = double_quoted_json();
+        let strategy: UnresolvedGcpAuthStrategy<()> = UnresolvedGcpAuthStrategy::SystemDefault;
+        let ctx = MockEnvVars::new().with_var("GOOGLE_APPLICATION_CREDENTIALS", &double_quoted);
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                assert_eq!(s, VALID_JSON);
+            }
+            ResolvedGcpAuthStrategy::MaybeFilePath(s) => {
+                panic!(
+                    "Double-quoted JSON in GOOGLE_APPLICATION_CREDENTIALS was incorrectly treated as file path: {}",
+                    s
+                );
+            }
+            other => panic!("Expected StringContainingJson, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_system_default_google_application_credentials_content_double_quoted() {
+        // Bug case: GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var with double-quoted JSON
+        let double_quoted = double_quoted_json();
+        let strategy: UnresolvedGcpAuthStrategy<()> = UnresolvedGcpAuthStrategy::SystemDefault;
+        let ctx =
+            MockEnvVars::new().with_var("GOOGLE_APPLICATION_CREDENTIALS_CONTENT", &double_quoted);
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
+                assert_eq!(s, VALID_JSON);
+            }
+            other => panic!(
+                "Expected StringContainingJson with unwrapped JSON, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn test_file_path_still_works() {
+        // Regression test: file paths should still be recognized as file paths
+        let strategy: UnresolvedGcpAuthStrategy<()> = UnresolvedGcpAuthStrategy::CredentialsString(
+            StringOr::Value("/path/to/credentials.json".to_string()),
+        );
+        let ctx = MockEnvVars::new();
+        let resolved = strategy.resolve(&ctx).unwrap();
+
+        match resolved {
+            ResolvedGcpAuthStrategy::MaybeFilePath(s) => {
+                assert_eq!(s, "/path/to/credentials.json");
+            }
+            other => panic!("Expected MaybeFilePath, got {:?}", other),
+        }
     }
 }

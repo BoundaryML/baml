@@ -18,8 +18,8 @@ use std::{
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
-    ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, MatchArmId,
-    Pattern, SignatureSourceMap, StmtId, TirContext,
+    ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
+    MatchArmId, Pattern, SignatureSourceMap, StmtId, TirContext, TypeId,
 };
 use baml_workspace::Project;
 
@@ -46,7 +46,8 @@ pub use builtins::{
     method_return_type, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::{TypeLoweringContext, lower_type_ref_validated_resolved};
+pub use lower::lower_type_ref;
+pub use normalize::find_invalid_map_keys;
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
@@ -183,9 +184,9 @@ pub struct EnumNamesSet<'db> {
     pub names: HashSet<Name>,
 }
 
-/// Tracked struct holding all known type names (classes, enums, type aliases).
+/// Tracked struct holding type alias names.
 #[salsa::tracked]
-pub struct KnownTypesSet<'db> {
+pub struct TypeAliasNamesSet<'db> {
     #[tracked]
     #[returns(ref)]
     pub names: HashSet<Name>,
@@ -353,37 +354,22 @@ pub fn enum_names(db: &dyn Db, project: Project) -> EnumNamesSet<'_> {
     EnumNamesSet::new(db, names)
 }
 
-/// Query: Get all known type names for a project (classes, enums, type aliases).
+/// Query: Get type alias names for a project.
 #[salsa::tracked]
-pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
+pub fn type_alias_names(db: &dyn Db, project: Project) -> TypeAliasNamesSet<'_> {
     let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
     for item in items.items(db) {
-        match item {
-            baml_compiler_hir::ItemId::Class(class_loc) => {
-                let file = class_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let class_data = &item_tree[class_loc.id(db)];
-                names.insert(class_data.name.clone());
-            }
-            baml_compiler_hir::ItemId::Enum(enum_loc) => {
-                let file = enum_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let enum_data = &item_tree[enum_loc.id(db)];
-                names.insert(enum_data.name.clone());
-            }
-            baml_compiler_hir::ItemId::TypeAlias(alias_loc) => {
-                let file = alias_loc.file(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let alias_data = &item_tree[alias_loc.id(db)];
-                names.insert(alias_data.name.clone());
-            }
-            _ => {}
+        if let baml_compiler_hir::ItemId::TypeAlias(alias_loc) = item {
+            let file = alias_loc.file(db);
+            let item_tree = baml_compiler_hir::file_item_tree(db, file);
+            let alias_data = &item_tree[alias_loc.id(db)];
+            names.insert(alias_data.name.clone());
         }
     }
 
-    KnownTypesSet::new(db, names)
+    TypeAliasNamesSet::new(db, names)
 }
 
 /// Context for type resolution across a project.
@@ -393,7 +379,7 @@ pub fn known_types(db: &dyn Db, project: Project) -> KnownTypesSet<'_> {
 pub struct TypeResolutionContext {
     pub class_names: HashSet<Name>,
     pub enum_names: HashSet<Name>,
-    pub known_types: HashSet<Name>,
+    pub type_alias_names: HashSet<Name>,
 }
 
 impl TypeResolutionContext {
@@ -402,7 +388,7 @@ impl TypeResolutionContext {
         Self {
             class_names: class_names(db, project).names(db).clone(),
             enum_names: enum_names(db, project).names(db).clone(),
-            known_types: known_types(db, project).names(db).clone(),
+            type_alias_names: type_alias_names(db, project).names(db).clone(),
         }
     }
 
@@ -412,9 +398,9 @@ impl TypeResolutionContext {
         type_ref: &baml_compiler_hir::TypeRef,
         span: Span,
     ) -> (Ty, Vec<TirTypeError>) {
-        lower_type_ref_validated_resolved(
+        lower_type_ref(
             type_ref,
-            &self.known_types,
+            &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
             span,
@@ -482,8 +468,8 @@ pub struct TypeContext<'db> {
     class_names: HashSet<Name>,
     /// Enum names for type resolution
     enum_names: HashSet<Name>,
-    /// Known type names for validation
-    known_types: HashSet<Name>,
+    /// Type alias names for validation
+    type_alias_names: HashSet<Name>,
     /// Inferred types for expressions.
     expr_types: HashMap<ExprId, Ty>,
     /// For multi-segment paths, the type of each segment.
@@ -505,6 +491,8 @@ pub struct TypeContext<'db> {
     expr_resolutions: ResolutionMap,
     /// Track where local variables were defined (for go-to-definition).
     local_definitions: HashMap<Name, DefinitionSite>,
+    /// Optional source map for looking up spans (for type annotation errors).
+    hir_source_map: Option<HirSourceMap>,
 }
 
 impl<'db> TypeContext<'db> {
@@ -518,8 +506,9 @@ impl<'db> TypeContext<'db> {
         enum_variants: HashMap<Name, Vec<Name>>,
         class_names: HashSet<Name>,
         enum_names: HashSet<Name>,
-        known_types: HashSet<Name>,
+        type_alias_names: HashSet<Name>,
         file_id: FileId,
+        hir_source_map: Option<HirSourceMap>,
     ) -> Self {
         TypeContext {
             db,
@@ -529,7 +518,7 @@ impl<'db> TypeContext<'db> {
             enum_variants,
             class_names,
             enum_names,
-            known_types,
+            type_alias_names,
             expr_types: HashMap::new(),
             path_segment_types: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
@@ -540,6 +529,7 @@ impl<'db> TypeContext<'db> {
             watched_vars: HashSet::new(),
             expr_resolutions: HashMap::new(),
             local_definitions: HashMap::new(),
+            hir_source_map,
         }
     }
 
@@ -648,22 +638,45 @@ impl<'db> TypeContext<'db> {
         range.map(|s| self.build_span(s)).unwrap_or_default()
     }
 
+    /// Look up the span for a type from the source map.
+    pub fn type_span(&self, id: TypeId) -> Span {
+        self.hir_source_map
+            .as_ref()
+            .and_then(|sm| sm.type_span(id))
+            .unwrap_or_default()
+    }
+
     /// Check if `sub` is a subtype of `sup`, resolving type aliases.
     pub fn is_subtype_of(&self, sub: &Ty, sup: &Ty) -> bool {
         normalize::is_subtype_of(sub, sup, &self.type_aliases)
     }
 
-    /// Lower a `TypeRef` to a Ty with full resolution (classes/enums resolved to names).
-    pub fn lower_type_resolved(&self, type_ref: &baml_compiler_hir::TypeRef, span: Span) -> Ty {
-        let (ty, _errors) = lower_type_ref_validated_resolved(
+    /// Lower a `TypeRef` to a `Ty` with full resolution and validation.
+    ///
+    /// This is the single entry point for type lowering during inference.
+    /// It resolves classes/enums to their concrete types, validates map key
+    /// types, and accumulates any errors.
+    pub fn lower_type(&mut self, type_ref: &baml_compiler_hir::TypeRef, span: Span) -> Ty {
+        let (ty, errors) = lower_type_ref(
             type_ref,
-            &self.known_types,
+            &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
             span,
         );
-        // Note: errors are not accumulated here since they should have been
-        // caught during earlier validation passes
+
+        // Accumulate lowering errors (e.g., unknown types)
+        self.errors.extend(errors);
+
+        // Validate map key types
+        let invalid_keys = normalize::find_invalid_map_keys(&ty, &self.type_aliases);
+        for invalid_key in invalid_keys {
+            self.errors.push(TypeError::InvalidMapKeyType {
+                ty: invalid_key,
+                location: ErrorLocation::Span(span),
+            });
+        }
+
         ty
     }
 
@@ -760,10 +773,17 @@ pub fn infer_function_body<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     class_names_opt: Option<HashSet<Name>>,
     enum_names_opt: Option<HashSet<Name>>,
-    known_types: Option<HashSet<Name>>,
+    type_alias_names: Option<HashSet<Name>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
     let file_id = function_loc.file(db).file_id(db);
+
+    // Extract source map from body if available
+    let hir_source_map = match body {
+        FunctionBody::Expr(_, source_map) => Some(source_map.clone()),
+        _ => None,
+    };
+
     let mut ctx = TypeContext::with_type_info(
         db,
         globals.unwrap_or_default(),
@@ -772,8 +792,9 @@ pub fn infer_function_body<'db>(
         enum_variants.unwrap_or_default(),
         class_names_opt.unwrap_or_default(),
         enum_names_opt.unwrap_or_default(),
-        known_types.unwrap_or_default(),
+        type_alias_names.unwrap_or_default(),
         file_id,
+        hir_source_map,
     );
 
     // Add parameters to the current scope (on top of globals)
@@ -939,11 +960,9 @@ pub fn infer_function<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
-    // Query known type names from the project (Salsa-cached)
     let project = db.project();
-    let known_type_names = baml_compiler_hir::project_type_names(db, project);
-    let known_types: std::collections::HashSet<_> =
-        known_type_names.names(db).iter().cloned().collect();
+    let type_aliases = type_aliases.unwrap_or_default();
+    let type_alias_name_set: HashSet<Name> = type_aliases.keys().cloned().collect();
 
     // Get class and enum name sets for type resolution (Salsa-cached)
     let class_name_set = class_names(db, project).names(db).clone();
@@ -960,9 +979,9 @@ pub fn infer_function<'db>(
         .params
         .iter()
         .map(|param| {
-            let (ty, errors) = lower_type_ref_validated_resolved(
+            let (ty, errors) = lower_type_ref(
                 &param.type_ref,
-                &known_types,
+                &type_alias_name_set,
                 &class_name_set,
                 &enum_name_set,
                 placeholder_span,
@@ -973,9 +992,9 @@ pub fn infer_function<'db>(
         .collect();
 
     // Convert return type with validation and resolution
-    let (expected_return, errors) = lower_type_ref_validated_resolved(
+    let (expected_return, errors) = lower_type_ref(
         &signature.return_type,
-        &known_types,
+        &type_alias_name_set,
         &class_name_set,
         &enum_name_set,
         placeholder_span,
@@ -987,6 +1006,37 @@ pub fn infer_function<'db>(
         .and_then(SignatureSourceMap::return_type_span)
         .map(|range| Span::new(file_id, range));
 
+    // Validate map key types in function signature
+    // Check return type for invalid map keys
+    if let Some(span) = return_type_span {
+        let invalid_return_keys = normalize::find_invalid_map_keys(&expected_return, &type_aliases);
+        for invalid_key in invalid_return_keys {
+            type_errors.push(TypeError::InvalidMapKeyType {
+                ty: invalid_key,
+                location: ErrorLocation::Span(span),
+            });
+        }
+    }
+
+    // Check param types for invalid map keys
+    if let Some(source_map) = sig_source_map {
+        for (idx, param) in signature.params.iter().enumerate() {
+            if let Some(param_ty) = param_types.get(&param.name) {
+                if let Some(range) = source_map.param_span(idx) {
+                    let span = Span::new(file_id, range);
+                    let invalid_param_keys =
+                        normalize::find_invalid_map_keys(param_ty, &type_aliases);
+                    for invalid_key in invalid_param_keys {
+                        type_errors.push(TypeError::InvalidMapKeyType {
+                            ty: invalid_key,
+                            location: ErrorLocation::Span(span),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     // Delegate to the body inference function
     let mut result = infer_function_body(
         db,
@@ -996,11 +1046,11 @@ pub fn infer_function<'db>(
         return_type_span,
         globals,
         class_fields,
-        type_aliases,
+        Some(type_aliases),
         enum_variants,
         Some(class_name_set),
         Some(enum_name_set),
-        Some(known_types),
+        Some(type_alias_name_set),
         function_loc,
     );
 
@@ -1964,7 +2014,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
 /// - `_` is a special case of binding that's semantically discarded later
 /// - Literals, enum variants, and union patterns don't introduce bindings
 fn extract_pattern_binding(
-    ctx: &TypeContext<'_>,
+    ctx: &mut TypeContext<'_>,
     pattern: &Pattern,
     scrutinee_ty: &Ty,
     _body: &ExprBody,
@@ -1972,7 +2022,8 @@ fn extract_pattern_binding(
     match pattern {
         // Typed binding: `s: Success` -> s has type Success
         Pattern::TypedBinding { name, ty } => {
-            let narrowed_ty = ctx.lower_type_resolved(ty, Span::default());
+            // TODO: Pattern types should use TypeId for proper span tracking
+            let narrowed_ty = ctx.lower_type(ty, Span::default());
             (Some(name.clone()), narrowed_ty)
         }
 
@@ -2043,7 +2094,7 @@ fn check_match_exhaustiveness(
         &ctx.type_aliases,
         &ctx.class_names,
         &ctx.enum_names,
-        &ctx.known_types,
+        &ctx.type_alias_names,
     );
 
     let result = checker.check(scrutinee_ty, arm_ids, body);
@@ -2507,15 +2558,15 @@ fn check_stmt_with_return(
         Stmt::Let {
             pattern,
             type_annotation,
-            type_span,
             initializer,
             is_watched,
         } => {
             let ty = if let Some(init) = initializer {
                 // If there's a type annotation, use check_expr for bidirectional typing
-                if let Some(annot) = type_annotation {
-                    let span = ctx.build_span_default(type_span);
-                    let annot_ty = ctx.lower_type_resolved(annot, span);
+                if let Some(type_id) = type_annotation {
+                    let type_ref = &body.types[*type_id];
+                    let span = ctx.type_span(*type_id);
+                    let annot_ty = ctx.lower_type(type_ref, span);
                     // Use check_expr when we have an expected type
                     // check_expr already reports any type mismatch errors
                     check_expr(ctx, *init, body, &annot_ty);
@@ -2526,8 +2577,10 @@ fn check_stmt_with_return(
                     let inferred = infer_expr(ctx, *init, body);
                     generalize(&inferred)
                 }
-            } else if let Some(annot) = type_annotation {
-                ctx.lower_type_resolved(annot, Span::default())
+            } else if let Some(type_id) = type_annotation {
+                let type_ref = &body.types[*type_id];
+                let span = ctx.type_span(*type_id);
+                ctx.lower_type(type_ref, span)
             } else {
                 Ty::Unknown
             };

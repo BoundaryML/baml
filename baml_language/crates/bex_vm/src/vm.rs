@@ -348,6 +348,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Enum(_) => type_tags::ENUM,
                 Object::Media(_) => type_tags::MEDIA,
                 Object::Resource(_) => type_tags::RESOURCE,
+                Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -725,6 +726,24 @@ impl BexVm {
     /// Allocate a resource object on the heap.
     pub fn alloc_resource(&mut self, resource: ResourceHandle) -> Value {
         Value::Object(self.tlab.alloc(Object::Resource(resource)))
+    }
+
+    /// Allocate a prompt AST object on the heap.
+    pub fn alloc_prompt_ast(&mut self, ast: bex_vm_types::PromptAst) -> Value {
+        Value::Object(self.tlab.alloc(Object::PromptAst(ast)))
+    }
+
+    /// Get prompt AST from a Value.
+    pub fn as_prompt_ast(&self, value: &Value) -> Result<&bex_vm_types::PromptAst, InternalError> {
+        let index = self.as_object_ptr(value, ObjectType::PromptAst)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::PromptAst(ast) => Ok(ast),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::PromptAst.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
     }
 
     // pub fn alloc_media(&mut self, media: BamlMedia) -> Value {
