@@ -1500,30 +1500,6 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
-    def ExecFetchAs(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
-
-    def ExecFetchAsWithHttpPostRequest(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
-
-    def ExecFetchAsWithHttpPutRequestAndClassJson(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
-
-    def HomeEnvVarIsEmpty(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> bool:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="request")
-        return typing.cast(bool, __result__)
-
     def IsTargetWord(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -1566,12 +1542,6 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
-    def ReturnImageFromUrl(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> baml_py.Image:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="request")
-        return typing.cast(baml_py.Image, __result__)
-
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1588,12 +1558,6 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
-
-    def SimpleWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
     def StoreFnCallInLocalVar(
@@ -1620,22 +1584,10 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
-    def WorkflowWatch(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
-
     def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
-
-    def WorkflowWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
     
@@ -3122,30 +3074,6 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], __result__)
 
-    def ExecFetchAs(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
-
-    def ExecFetchAsWithHttpPostRequest(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
-
-    def ExecFetchAsWithHttpPutRequestAndClassJson(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
-
-    def HomeEnvVarIsEmpty(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[bool]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[bool], __result__)
-
     def IsTargetWord(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[bool]:
@@ -3188,12 +3116,6 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
-    def ReturnImageFromUrl(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[baml_py.Image]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[baml_py.Image], __result__)
-
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -3210,12 +3132,6 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
-
-    def SimpleWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
     def StoreFnCallInLocalVar(
@@ -3242,22 +3158,10 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
-    def WorkflowWatch(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
-
     def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
-
-    def WorkflowWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
     

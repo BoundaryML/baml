@@ -3772,66 +3772,6 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAs(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAs(url=url,
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAs", args={
-                "url": url,
-            })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAsWithHttpPostRequest(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAsWithHttpPostRequest(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-                
-            })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-                
-            })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def HomeEnvVarIsEmpty(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> bool:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.HomeEnvVarIsEmpty(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="HomeEnvVarIsEmpty", args={
-                
-            })
-            return typing.cast(bool, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -3937,21 +3877,6 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.Image:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ReturnImageFromUrl(url=url,
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnImageFromUrl", args={
-                "url": url,
-            })
-            return typing.cast(baml_py.Image, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnNumber(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3994,21 +3919,6 @@ class BamlAsyncClient:
         else:
             # Original non-streaming code
             __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnOne", args={
-                
-            })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.SimpleWatchWithFilter(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="SimpleWatchWithFilter", args={
                 
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
@@ -4072,21 +3982,6 @@ class BamlAsyncClient:
                 "x": x,"y": y,
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def WorkflowWatch(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.WorkflowWatch(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatch", args={
-                
-            })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -4099,21 +3994,6 @@ class BamlAsyncClient:
         else:
             # Original non-streaming code
             __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatchChild", args={
-                
-            })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.WorkflowWatchWithFilter(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatchWithFilter", args={
                 
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
@@ -7078,54 +6958,6 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def ExecFetchAs(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAs", args={
-            "url": url,
-        })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
-          __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def ExecFetchAsWithHttpPostRequest(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
-          __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
-          __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def HomeEnvVarIsEmpty(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="HomeEnvVarIsEmpty", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[bool], bool](
-          __result__,
-          lambda x: typing.cast(typing.Optional[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
     def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
@@ -7210,18 +7042,6 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[baml_py.Image], baml_py.Image]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnImageFromUrl", args={
-            "url": url,
-        })
-        return baml_py.BamlStream[typing.Optional[baml_py.Image], baml_py.Image](
-          __result__,
-          lambda x: typing.cast(typing.Optional[baml_py.Image], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(baml_py.Image, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
     def ReturnNumber(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -7250,18 +7070,6 @@ class BamlStreamClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnOne", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="SimpleWatchWithFilter", args={
             
         })
         return baml_py.BamlStream[typing.Optional[int], int](
@@ -7318,34 +7126,10 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def WorkflowWatch(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatch", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
     def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatchChild", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatchWithFilter", args={
             
         })
         return baml_py.BamlStream[typing.Optional[int], int](
@@ -9084,34 +8868,6 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return __result__
-    async def ExecFetchAs(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
-            "url": url,
-        }, mode="request")
-        return __result__
-    async def ExecFetchAsWithHttpPostRequest(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
-        }, mode="request")
-        return __result__
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
-        }, mode="request")
-        return __result__
-    async def HomeEnvVarIsEmpty(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="HomeEnvVarIsEmpty", args={
-            
-        }, mode="request")
-        return __result__
     async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9161,13 +8917,6 @@ class BamlHttpRequestClient:
             "a": a,"b": b,
         }, mode="request")
         return __result__
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnImageFromUrl", args={
-            "url": url,
-        }, mode="request")
-        return __result__
     async def ReturnNumber(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9186,13 +8935,6 @@ class BamlHttpRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
-            
-        }, mode="request")
-        return __result__
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleWatchWithFilter", args={
             
         }, mode="request")
         return __result__
@@ -9224,24 +8966,10 @@ class BamlHttpRequestClient:
             "x": x,"y": y,
         }, mode="request")
         return __result__
-    async def WorkflowWatch(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatch", args={
-            
-        }, mode="request")
-        return __result__
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchChild", args={
-            
-        }, mode="request")
-        return __result__
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchWithFilter", args={
             
         }, mode="request")
         return __result__
@@ -10975,34 +10703,6 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return __result__
-    async def ExecFetchAs(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
-            "url": url,
-        }, mode="stream")
-        return __result__
-    async def ExecFetchAsWithHttpPostRequest(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
-        }, mode="stream")
-        return __result__
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
-        }, mode="stream")
-        return __result__
-    async def HomeEnvVarIsEmpty(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="HomeEnvVarIsEmpty", args={
-            
-        }, mode="stream")
-        return __result__
     async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -11052,13 +10752,6 @@ class BamlHttpStreamRequestClient:
             "a": a,"b": b,
         }, mode="stream")
         return __result__
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnImageFromUrl", args={
-            "url": url,
-        }, mode="stream")
-        return __result__
     async def ReturnNumber(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -11077,13 +10770,6 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
-            
-        }, mode="stream")
-        return __result__
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleWatchWithFilter", args={
             
         }, mode="stream")
         return __result__
@@ -11115,24 +10801,10 @@ class BamlHttpStreamRequestClient:
             "x": x,"y": y,
         }, mode="stream")
         return __result__
-    async def WorkflowWatch(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatch", args={
-            
-        }, mode="stream")
-        return __result__
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchChild", args={
-            
-        }, mode="stream")
-        return __result__
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchWithFilter", args={
             
         }, mode="stream")
         return __result__

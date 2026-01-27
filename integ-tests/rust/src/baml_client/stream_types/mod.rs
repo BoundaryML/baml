@@ -66,8 +66,6 @@ pub enum StreamTypes {
 
     DummyJsonTodo(DummyJsonTodo),
 
-    DummyJsonTodoUpdate(DummyJsonTodoUpdate),
-
     DummyOutput(DummyOutput),
 
     DynInputOutput(DynInputOutput),
@@ -323,8 +321,6 @@ impl baml::KnownTypes for StreamTypes {
             StreamTypes::Document1559(_) => "Document1559",
 
             StreamTypes::DummyJsonTodo(_) => "DummyJsonTodo",
-
-            StreamTypes::DummyJsonTodoUpdate(_) => "DummyJsonTodoUpdate",
 
             StreamTypes::DummyOutput(_) => "DummyOutput",
 

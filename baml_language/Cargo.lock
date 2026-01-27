@@ -384,10 +384,10 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_project",
- "baml_snapshot",
  "baml_workspace",
  "bex_engine",
  "bex_external_types",
+ "bex_program",
  "cbindgen",
  "indexmap 2.13.0",
  "libc",
@@ -397,6 +397,8 @@ dependencies = [
  "protoc-bin-vendored",
  "serde",
  "serde_json",
+ "sys_native",
+ "sys_types",
  "tokio",
 ]
 

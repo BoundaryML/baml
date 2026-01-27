@@ -12,7 +12,7 @@ fn main() {
             ("lib", "so")
         };
 
-        // TEMPORARY: Use baml_cffi from baml_language instead of engine
+        // Use baml_cffi from baml_language (new bex_engine-based implementation)
         let lib_name = format!("{lib_prefix}baml_cffi.{lib_ext}");
         let release_path = cwd.join(format!("../../baml_language/target/release/{}", lib_name));
         let debug_path = cwd.join(format!("../../baml_language/target/debug/{}", lib_name));
@@ -25,7 +25,7 @@ fn main() {
             .cloned()
             .unwrap_or_else(|| {
                 panic!(
-                    "Neither release nor debug baml_bridge_cffi library found at:\n  {}\n  {}\n  Run `cargo build -p baml_bridge_cffi` from within baml_language",
+                    "Neither release nor debug baml_cffi library found at:\n  {}\n  {}\n  Run `cargo build -p baml_bridge_cffi` from within baml_language",
                     release_path.display(),
                     debug_path.display()
                 )

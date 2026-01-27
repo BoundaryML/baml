@@ -86,6 +86,22 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                 value: Some(Box::new(inner)),
             })))
         }
+        BexExternalValue::Media { kind, .. } => {
+            // Media is stored as a handle - return a placeholder string for now
+            // TODO: Properly serialize media content when needed
+            let kind_str = match kind {
+                baml_base::MediaKind::Image => "image",
+                baml_base::MediaKind::Audio => "audio",
+                baml_base::MediaKind::Video => "video",
+                baml_base::MediaKind::Pdf => "pdf",
+                baml_base::MediaKind::Generic => "media",
+            };
+            Some(CffiValueVariant::StringValue(format!("[{}:handle]", kind_str)))
+        }
+        BexExternalValue::Resource(_handle) => {
+            // Resources cannot be serialized across FFI - return null
+            None
+        }
     };
 
     Ok(CffiValueHolder { value: variant })
