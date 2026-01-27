@@ -11,17 +11,25 @@ client<llm> MyClient {
 
 // error: allowed_roles must not be empty
 //   -->  client/remap_role_empty_allowed_roles.baml:5
-//    | 
+//    |
 //  4 |     model "gpt-4o"
 //  5 |     allowed_roles []
-//    | 
+//    |
 // error: remap_roles values must be one of: . Got: user. To support different remap roles, add allowed_roles ["user", "assistant", "system", ...]
 //   -->  client/remap_role_empty_allowed_roles.baml:7
-//    | 
+//    |
 //  6 |     remap_roles {
 //  7 |       user "human"
 //    |
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: allowed_roles must not be empty
+//    ╭─[ client_remap_role_empty_allowed_roles.baml:5:18 ]
+//    │
+//  5 │     allowed_roles []
+//    │                  ─┬─  
+//    │                   ╰─── allowed_roles must not be empty
+//    │ 
+//    │ Note: Error code: E0044
+// ───╯

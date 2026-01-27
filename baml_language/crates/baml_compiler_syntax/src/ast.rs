@@ -900,6 +900,90 @@ impl ConfigItem {
             .unwrap_or(false)
     }
 
+    /// Check if the value is an array literal.
+    pub fn is_array(&self) -> bool {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            .map(|config_value| {
+                config_value
+                    .children()
+                    .any(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+            })
+            .unwrap_or(false)
+    }
+
+    /// Get array elements, returning only those that are string literals.
+    ///
+    /// Returns `None` if this is not an array.
+    /// For each element, returns `Some(string_value)` if it's a string literal,
+    /// or `None` if it's some other type (number, identifier, etc.).
+    /// The `TextRange` is always returned for error reporting on non-string elements.
+    pub fn array_string_elements(&self) -> Option<Vec<(Option<String>, rowan::TextRange)>> {
+        let config_value = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)?;
+
+        let array_literal = config_value
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)?;
+
+        Some(
+            array_literal
+                .children()
+                .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+                .map(|element| {
+                    // Check if this element contains a string literal
+                    let has_string_literal = element.descendants().any(|node| {
+                        matches!(
+                            node.kind(),
+                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                        )
+                    });
+
+                    if has_string_literal {
+                        // Extract the string content (excluding quotes)
+                        let value: String = element
+                            .descendants_with_tokens()
+                            .filter_map(rowan::NodeOrToken::into_token)
+                            .filter(|token| {
+                                !matches!(
+                                    token.kind(),
+                                    SyntaxKind::WHITESPACE
+                                        | SyntaxKind::NEWLINE
+                                        | SyntaxKind::LINE_COMMENT
+                                        | SyntaxKind::BLOCK_COMMENT
+                                        | SyntaxKind::QUOTE
+                                        | SyntaxKind::L_BRACKET
+                                        | SyntaxKind::R_BRACKET
+                                        | SyntaxKind::COMMA
+                                )
+                            })
+                            .map(|token| token.text().to_string())
+                            .collect();
+                        (Some(value), element.text_range())
+                    } else {
+                        // Not a string literal - return None for the value
+                        (None, element.text_range())
+                    }
+                })
+                .collect(),
+        )
+    }
+
+    /// Get the raw `SyntaxNode` for the array literal, if this value is an array.
+    pub fn array_node(&self) -> Option<SyntaxNode> {
+        let config_value = self
+            .syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)?;
+
+        config_value
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    }
+
     /// Check if this config item's key matches the given name.
     ///
     /// This is a convenience method to avoid the common pattern:

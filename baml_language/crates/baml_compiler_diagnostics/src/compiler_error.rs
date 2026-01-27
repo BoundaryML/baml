@@ -165,6 +165,7 @@ const UNKNOWN_HTTP_CONFIG_FIELD: ErrorCode = ErrorCode(24);
 const NEGATIVE_TIMEOUT: ErrorCode = ErrorCode(25);
 const MISSING_PROVIDER: ErrorCode = ErrorCode(26);
 const UNKNOWN_CLIENT_PROPERTY: ErrorCode = ErrorCode(27);
+const CLIENT_ROLE_OPTION_ERROR: ErrorCode = ErrorCode(44);
 
 // Constraint attribute diagnostics
 const INVALID_CONSTRAINT_SYNTAX: ErrorCode = ErrorCode(32);

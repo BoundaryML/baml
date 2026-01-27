@@ -144,6 +144,30 @@ pub enum HirDiagnostic {
         span: Span,
     },
 
+    /// `remap_roles` must be a map/block, not a scalar value.
+    RemapRolesNotMap {
+        client_name: String,
+        actual_type: String,
+        span: Span,
+    },
+
+    /// `remap_role` values must be strings.
+    RemapRoleValueNotString { client_name: String, span: Span },
+
+    /// `remap_roles` key is not in `allowed_roles`.
+    RemapRoleNotAllowed {
+        client_name: String,
+        role_key: String,
+        allowed_roles: Vec<String>,
+        span: Span,
+    },
+
+    /// `allowed_roles` must not be empty.
+    AllowedRolesEmpty { client_name: String, span: Span },
+
+    /// `allowed_roles` values must be strings.
+    AllowedRoleNotString { client_name: String, span: Span },
+
     // ============ Syntax Diagnostics ============
     /// Statement missing required semicolon.
     /// In Rust-style blocks, all statements except the final expression need semicolons.

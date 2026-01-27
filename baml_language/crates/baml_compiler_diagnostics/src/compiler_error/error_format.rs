@@ -11,8 +11,8 @@ use super::{
     NON_EXHAUSTIVE_MATCH, NOT_CALLABLE, NOT_INDEXABLE, NameError, ParseError, RESERVED_FIELD_NAME,
     Report, ReportKind, TYPE_MISMATCH, TypeError, UNEXPECTED_EOF, UNEXPECTED_TOKEN,
     UNKNOWN_ATTRIBUTE, UNKNOWN_CLIENT_PROPERTY, UNKNOWN_ENUM_VARIANT, UNKNOWN_GENERATOR_PROPERTY,
-    UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNMATCHED_DELIMITER, UNREACHABLE_ARM,
-    WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
+    UNKNOWN_HTTP_CONFIG_FIELD, UNKNOWN_TYPE, UNKNOWN_VARIABLE, UNMATCHED_DELIMITER,
+    UNREACHABLE_ARM, WATCH_ON_NON_VARIABLE, WATCH_ON_UNWATCHED_VARIABLE,
 };
 
 /// The message format and id of each compiler error variant.
@@ -459,6 +459,55 @@ where
                 format!("Unknown field `{field_name}` in client. Only `provider` and `options` are supported."),
                 span,
                 UNKNOWN_CLIENT_PROPERTY,
+            ),
+            HirDiagnostic::RemapRolesNotMap {
+                client_name: _,
+                actual_type,
+                span,
+            } => simple_error(
+                format!("remap_roles must be a map. Got: {actual_type}"),
+                span,
+                CLIENT_ROLE_OPTION_ERROR,
+            ),
+            HirDiagnostic::RemapRoleValueNotString {
+                client_name: _,
+                span,
+            } => simple_error(
+                "remap_roles values must be quoted strings".to_string(),
+                span,
+                CLIENT_ROLE_OPTION_ERROR,
+            ),
+            HirDiagnostic::RemapRoleNotAllowed {
+                client_name: _,
+                role_key,
+                allowed_roles,
+                span,
+            } => {
+                let allowed_str = allowed_roles
+                    .iter()
+                    .map(|r| format!("\"{r}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = format!(
+                    "unknown role \"{role_key}\" in remap_roles. Allowed roles: {allowed_str}"
+                );
+                simple_error(message, span, CLIENT_ROLE_OPTION_ERROR)
+            }
+            HirDiagnostic::AllowedRolesEmpty {
+                client_name: _,
+                span,
+            } => simple_error(
+                "allowed_roles must not be empty".to_string(),
+                span,
+                CLIENT_ROLE_OPTION_ERROR,
+            ),
+            HirDiagnostic::AllowedRoleNotString {
+                client_name: _,
+                span,
+            } => simple_error(
+                "allowed_roles values must be quoted strings".to_string(),
+                span,
+                CLIENT_ROLE_OPTION_ERROR,
             ),
             HirDiagnostic::MissingSemicolon { span } => simple_error(
                 "Missing semicolon after statement".to_string(),

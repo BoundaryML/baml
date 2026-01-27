@@ -98,6 +98,9 @@ pub(crate) fn lower_client(
 
                 // Validate http block
                 validate_http_block(ctx, &client_name, &options_block, is_composite);
+
+                // Validate allowed_roles and remap_roles
+                validate_roles(ctx, &client_name, &options_block);
             }
         }
     }
@@ -202,6 +205,163 @@ fn validate_http_config_fields(
                         span: field_span,
                     });
                 }
+            }
+        }
+    }
+}
+
+/// Default allowed roles when none are specified.
+const DEFAULT_ALLOWED_ROLES: &[&str] = &["user", "assistant", "system"];
+
+/// Validate `allowed_roles` and `remap_roles` fields.
+fn validate_roles(ctx: &mut LoweringContext, client_name: &str, options_block: &ConfigBlock) {
+    // First, extract and validate allowed_roles
+    let allowed_roles = validate_allowed_roles(ctx, client_name, options_block);
+
+    // Then validate remap_roles against the allowed_roles
+    validate_remap_roles(ctx, client_name, options_block, &allowed_roles);
+}
+
+/// Validate `allowed_roles` field and return the list of allowed roles.
+fn validate_allowed_roles(
+    ctx: &mut LoweringContext,
+    client_name: &str,
+    options_block: &ConfigBlock,
+) -> Vec<String> {
+    let Some(allowed_roles_item) = options_block
+        .items()
+        .find(|item| item.matches_key("allowed_roles"))
+    else {
+        // No allowed_roles specified, use defaults
+        return DEFAULT_ALLOWED_ROLES
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+    };
+
+    // Check if it's an array
+    if !allowed_roles_item.is_array() {
+        // Not an array - this is an error, but we'll handle it gracefully
+        if let Some(value_range) = allowed_roles_item.value_text_range() {
+            ctx.push_diagnostic(HirDiagnostic::AllowedRoleNotString {
+                client_name: client_name.to_string(),
+                span: ctx.span(value_range),
+            });
+        }
+        return DEFAULT_ALLOWED_ROLES
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+    }
+
+    let Some(elements) = allowed_roles_item.array_string_elements() else {
+        return DEFAULT_ALLOWED_ROLES
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+    };
+
+    // Check for empty array
+    if elements.is_empty() {
+        if let Some(array_node) = allowed_roles_item.array_node() {
+            ctx.push_diagnostic(HirDiagnostic::AllowedRolesEmpty {
+                client_name: client_name.to_string(),
+                span: ctx.span(array_node.text_range()),
+            });
+        }
+        return vec![];
+    }
+
+    // Validate each element is a string literal and collect them
+    let mut allowed_roles = Vec::new();
+    for (value, range) in elements {
+        match value {
+            Some(s) => {
+                allowed_roles.push(s);
+            }
+            None => {
+                // Not a string literal
+                ctx.push_diagnostic(HirDiagnostic::AllowedRoleNotString {
+                    client_name: client_name.to_string(),
+                    span: ctx.span(range),
+                });
+            }
+        }
+    }
+
+    allowed_roles
+}
+
+/// Validate `remap_roles` field.
+fn validate_remap_roles(
+    ctx: &mut LoweringContext,
+    client_name: &str,
+    options_block: &ConfigBlock,
+    allowed_roles: &[String],
+) {
+    // If allowed_roles is empty, we've already emitted AllowedRolesEmpty.
+    // Skip validation here - the user needs to fix allowed_roles first.
+    if allowed_roles.is_empty() {
+        return;
+    }
+
+    let Some(remap_roles_item) = options_block
+        .items()
+        .find(|item| item.matches_key("remap_roles"))
+    else {
+        return;
+    };
+
+    // remap_roles must be a map/block
+    let Some(remap_block) = remap_roles_item.nested_block() else {
+        // Not a block - check if it has a scalar value
+        if remap_roles_item.has_value() {
+            if let Some(value_range) = remap_roles_item.value_text_range() {
+                // Determine the type of the value
+                let actual_type = if remap_roles_item.value_str().is_some() {
+                    "string"
+                } else if remap_roles_item.value_int().is_some() {
+                    "number"
+                } else {
+                    "non-map"
+                };
+                ctx.push_diagnostic(HirDiagnostic::RemapRolesNotMap {
+                    client_name: client_name.to_string(),
+                    actual_type: actual_type.to_string(),
+                    span: ctx.span(value_range),
+                });
+            }
+        }
+        return;
+    };
+
+    // Validate each key-value pair in the remap_roles block
+    for item in remap_block.items() {
+        let Some(key_token) = item.key() else {
+            continue;
+        };
+        let role_key = key_token.text();
+        let key_span = ctx.span(key_token.text_range());
+
+        // Check if the key is in allowed_roles
+        if !allowed_roles.iter().any(|r| r == role_key) {
+            ctx.push_diagnostic(HirDiagnostic::RemapRoleNotAllowed {
+                client_name: client_name.to_string(),
+                role_key: role_key.to_string(),
+                allowed_roles: allowed_roles.to_vec(),
+                span: key_span,
+            });
+            continue;
+        }
+
+        // Check if the value is a string
+        if let Some(value_range) = item.value_text_range() {
+            // Check if it's a number or nested block (not a string)
+            if item.value_int().is_some() || item.nested_block().is_some() {
+                ctx.push_diagnostic(HirDiagnostic::RemapRoleValueNotString {
+                    client_name: client_name.to_string(),
+                    span: ctx.span(value_range),
+                });
             }
         }
     }

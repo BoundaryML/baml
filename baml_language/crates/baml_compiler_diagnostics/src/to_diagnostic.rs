@@ -520,6 +520,61 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary_span(*span),
 
+            HirDiagnostic::RemapRolesNotMap {
+                client_name: _,
+                actual_type,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::RemapRolesNotMap,
+                format!("remap_roles must be a map. Got: {actual_type}"),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::RemapRoleValueNotString {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::RemapRoleValueNotString,
+                "remap_roles values must be quoted strings",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::RemapRoleNotAllowed {
+                client_name: _,
+                role_key,
+                allowed_roles,
+                span,
+            } => {
+                let allowed_str = allowed_roles
+                    .iter()
+                    .map(|r| format!("\"{r}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = format!(
+                    "unknown role \"{role_key}\" in remap_roles. Allowed roles: {allowed_str}"
+                );
+                Diagnostic::error(DiagnosticId::RemapRoleNotAllowed, message)
+                    .with_primary_span(*span)
+            }
+
+            HirDiagnostic::AllowedRolesEmpty {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::AllowedRolesEmpty,
+                "allowed_roles must not be empty",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::AllowedRoleNotString {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::AllowedRoleNotString,
+                "allowed_roles values must be quoted strings",
+            )
+            .with_primary_span(*span),
+
             HirDiagnostic::MissingSemicolon { span } => Diagnostic::error(
                 DiagnosticId::MissingSemicolon,
                 "Statement must end with a semicolon.",
