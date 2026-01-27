@@ -9,7 +9,7 @@
 
 use std::{collections::HashMap, hash::Hash};
 
-use baml_base::Span;
+use baml_base::{Name, Span};
 use baml_compiler_diagnostics::ErrorContext;
 use rowan::TextRange;
 
@@ -27,12 +27,17 @@ use crate::{ExprId, MatchArmId, MatchArmSpans, PatId, StmtId, TypeId};
 ///
 /// At diagnostic rendering time, these locations are resolved to `Span` via
 /// the `HirSourceMap`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ErrorLocation {
     /// Error at an expression.
     Expr(ExprId),
     /// Error at a match arm (for unreachable arm errors).
     MatchArm(MatchArmId),
+    /// Error at a top-level type item (type alias or class).
+    ///
+    /// Used for validation errors about type definitions (e.g., cycle detection).
+    /// The Name is resolved to a span during diagnostic rendering.
+    TypeItem(Name),
     /// Fallback to a direct span (for errors from signatures or other non-body contexts).
     /// This should be minimized over time as we add more ID-based tracking.
     Span(Span),
@@ -40,6 +45,9 @@ pub enum ErrorLocation {
 
 impl ErrorLocation {
     /// Resolve this location to a `Span` using the provided source map.
+    ///
+    /// Note: This method doesn't handle `TypeItem` because those require project-level
+    /// context to resolve. Use a custom resolver in check.rs for type-level errors.
     pub fn to_span(&self, source_map: &HirSourceMap) -> Span {
         match self {
             ErrorLocation::Expr(id) => source_map.expr_span(*id).unwrap_or_default(),
@@ -47,6 +55,11 @@ impl ErrorLocation {
                 .match_arm_spans(*id)
                 .map(|s| s.arm_span)
                 .unwrap_or_default(),
+            ErrorLocation::TypeItem(_) => {
+                panic!(
+                    "TypeItem locations require project context - use a custom resolver in check.rs"
+                )
+            }
             ErrorLocation::Span(span) => *span,
         }
     }

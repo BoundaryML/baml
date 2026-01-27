@@ -1282,8 +1282,10 @@ pub struct HirValidationResult {
 /// - Reserved name validation (field names that are keywords in target languages)
 /// - Field name matches type name validation (Python-specific)
 pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
+    let hir_diagnostics = validate_reserved_names(db, root);
+
     HirValidationResult {
-        hir_diagnostics: validate_reserved_names(db, root),
+        hir_diagnostics,
         name_errors: validate_duplicate_names(db, root),
     }
 }
@@ -1885,7 +1887,7 @@ fn get_enum_variant_info(
 /// The `occurrence` parameter specifies which occurrence to return (0 = first, 1 = second, etc.)
 /// when there are multiple items of the same kind with the same name in the file.
 /// This corresponds to the collision index in `LocalItemId`.
-fn get_item_name_span(
+pub fn get_item_name_span(
     db: &dyn Db,
     file: baml_base::files::SourceFile,
     kind: &str,

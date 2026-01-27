@@ -670,5 +670,11 @@ pub fn short_display(error: &TirTypeError) -> String {
         TypeError::InvalidMapKeyType { ty, .. } => {
             format!("Invalid key type for map: {ty}.")
         }
+        TypeError::AliasCycle { cycle_path, .. } => {
+            format!("Alias cycle detected: {cycle_path}")
+        }
+        TypeError::ClassCycle { cycle_path, .. } => {
+            format!("Class cycle detected: {cycle_path}")
+        }
     }
 }

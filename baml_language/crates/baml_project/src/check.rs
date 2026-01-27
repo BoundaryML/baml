@@ -16,12 +16,14 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
-    self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
-    function_signature_source_map,
+    self, Definition, ErrorLocation, FunctionBody, ItemId, file_items, file_lowering,
+    fqn::FullyQualifiedName, function_body, function_signature, function_signature_source_map,
+    get_item_name_span, symbol_table,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
-use baml_db::{FileId, SourceFile, baml_compiler_parser};
+use baml_db::{FileId, SourceFile, Span, baml_compiler_parser};
 use baml_workspace::Project;
+use text_size::TextRange;
 
 use crate::ProjectDatabase;
 
@@ -34,6 +36,51 @@ pub struct CheckResult {
     pub sources: HashMap<FileId, String>,
     /// Maps `FileId` to file path (for URL generation).
     pub file_paths: HashMap<FileId, PathBuf>,
+}
+
+/// Resolve an `ErrorLocation` to a Span for type-level items.
+///
+/// For `ErrorLocation::TypeItem`, this looks up the type alias or class using the cached
+/// `SymbolTable` and returns its name span. For other `ErrorLocation` variants, this should
+/// not be called.
+fn resolve_type_item_location(db: &ProjectDatabase, project: Project, loc: &ErrorLocation) -> Span {
+    match loc {
+        ErrorLocation::TypeItem(name) => {
+            // Use the cached symbol table for efficient lookup
+            let symbols = symbol_table(db, project);
+            let fqn = FullyQualifiedName::local(name.clone());
+
+            if let Some(def) = symbols.lookup_type(db, &fqn) {
+                // Match on the definition type to get the appropriate location
+                match def {
+                    Definition::TypeAlias(alias_loc) => {
+                        let file = alias_loc.file(db);
+                        let local_id = alias_loc.id(db);
+                        get_item_name_span(db, file, "type alias", name.as_str(), local_id.index())
+                            .unwrap_or_else(|| {
+                                Span::new(file.file_id(db), TextRange::empty(0.into()))
+                            })
+                    }
+                    Definition::Class(class_loc) => {
+                        let file = class_loc.file(db);
+                        let local_id = class_loc.id(db);
+                        get_item_name_span(db, file, "class", name.as_str(), local_id.index())
+                            .unwrap_or_else(|| {
+                                Span::new(file.file_id(db), TextRange::empty(0.into()))
+                            })
+                    }
+                    _ => {
+                        // Should not happen - cycle errors are only for type aliases and classes
+                        Span::new(FileId::default(), TextRange::empty(0.into()))
+                    }
+                }
+            } else {
+                // Fallback if not found in symbol table
+                Span::new(FileId::default(), TextRange::empty(0.into()))
+            }
+        }
+        _ => panic!("resolve_type_item_location should only be called with TypeItem locations"),
+    }
 }
 
 /// Collect all diagnostics from a project.
@@ -81,10 +128,32 @@ pub fn collect_diagnostics(
         diagnostics.push(error.to_diagnostic());
     }
 
-    // 4. Collect type errors from function inference
-    let globals = typing_context(db, project).functions(db).clone();
+    // 3.5. Collect TIR validation errors (cycle detection)
+    // This requires resolved types, so it happens after HIR validation but uses TIR data
     let class_fields = class_field_types(db, project).classes(db).clone();
     let type_aliases_map = type_aliases(db, project).aliases(db).clone();
+
+    let alias_cycle_errors = baml_compiler_tir::validate_type_alias_cycles(&type_aliases_map);
+    for error in &alias_cycle_errors {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                resolve_type_item_location(db, project, loc)
+            }),
+        );
+    }
+
+    let class_cycle_errors =
+        baml_compiler_tir::validate_class_cycles(&class_fields, &type_aliases_map);
+    for error in &class_cycle_errors {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                resolve_type_item_location(db, project, loc)
+            }),
+        );
+    }
+
+    // 4. Collect type errors from function inference
+    let globals = typing_context(db, project).functions(db).clone();
     let enum_variants_struct = enum_variants(db, project);
     let enum_variants_map = enum_variants_struct.enums(db).clone();
 

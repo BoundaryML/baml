@@ -85,4 +85,39 @@ type Map = map<string, Map>
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: These aliases form a dependency cycle: A -> B -> C -> A
+//     ╭─[ class_recursive_type_aliases.baml:15:6 ]
+//     │
+//  15 │ type A = B
+//     │      ┬  
+//     │      ╰── These aliases form a dependency cycle: A -> B -> C -> A
+//     │ 
+//     │ Note: Error code: E0068
+// ────╯
+// Error: These aliases form a dependency cycle: EnterCycle -> NoStop -> EnterCycle
+//     ╭─[ class_recursive_type_aliases.baml:51:6 ]
+//     │
+//  51 │ type EnterCycle = NoStop
+//     │      ─────┬────  
+//     │           ╰────── These aliases form a dependency cycle: EnterCycle -> NoStop -> EnterCycle
+//     │ 
+//     │ Note: Error code: E0068
+// ────╯
+// Error: These aliases form a dependency cycle: One -> Two -> One
+//     ╭─[ class_recursive_type_aliases.baml:10:6 ]
+//     │
+//  10 │ type One = Two
+//     │      ─┬─  
+//     │       ╰─── These aliases form a dependency cycle: One -> Two -> One
+//     │ 
+//     │ Note: Error code: E0068
+// ────╯
+// Error: These classes form a dependency cycle: Recursive
+//     ╭─[ class_recursive_type_aliases.baml:22:7 ]
+//     │
+//  22 │ class Recursive {
+//     │       ────┬────  
+//     │           ╰────── These classes form a dependency cycle: Recursive
+//     │ 
+//     │ Note: Error code: E0069
+// ────╯
