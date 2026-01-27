@@ -19,11 +19,32 @@ pub struct DevArgs {
     pub from: PathBuf,
     #[arg(long, help = "port to expose BAML on", default_value = "2024")]
     port: u16,
+    #[arg(
+        long,
+        help = "Maximum request body size in MB (default: 50, set to 0 to disable limit). Can also be set via BAML_BODY_LIMIT_MB environment variable.",
+        default_value = "50"
+    )]
+    body_limit_mb: usize,
     #[command(flatten)]
     dotenv: DotenvArgs,
 }
 
 impl DevArgs {
+    fn get_body_limit_mb(&self) -> Option<usize> {
+        // Check environment variable first, then fall back to CLI argument
+        let limit_mb = std::env::var("BAML_BODY_LIMIT_MB")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(self.body_limit_mb);
+
+        // 0 means no limit (disable the limit)
+        if limit_mb == 0 {
+            None
+        } else {
+            Some(limit_mb)
+        }
+    }
+
     pub fn run(
         &self,
         defaults: crate::RuntimeCliDefaults,
@@ -34,6 +55,7 @@ impl DevArgs {
         baml_log::info!("Starting BAML development server on port {}", self.port);
 
         let t = BamlRuntime::get_tokio_singleton()?;
+        let body_limit_mb = self.get_body_limit_mb();
 
         let (tx, rx) = std::sync::mpsc::channel();
 
@@ -58,7 +80,7 @@ impl DevArgs {
             no_tests: false,
         }
         .run(defaults, feature_flags.clone());
-        t.spawn(server.clone().serve(tcp_listener));
+        t.spawn(server.clone().serve(tcp_listener, body_limit_mb));
 
         // print all events and errors
         t.block_on(async {
