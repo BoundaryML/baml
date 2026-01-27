@@ -55,12 +55,6 @@ pub struct ServeArgs {
         default_value_t = false
     )]
     no_version_check: bool,
-    #[arg(
-        long,
-        help = "Maximum request body size in MB (default: 50, set to 0 to disable limit). Can also be set via BAML_BODY_LIMIT_MB environment variable.",
-        default_value = "50"
-    )]
-    body_limit_mb: usize,
     #[command(flatten)]
     dotenv: DotenvArgs,
 }
@@ -97,29 +91,12 @@ impl ServeArgs {
 
         let t: Arc<tokio::runtime::Runtime> = BamlRuntime::get_tokio_singleton()?;
 
-        let body_limit_mb = self.get_body_limit_mb();
-
         let (server, tcp_listener) =
             t.block_on(Server::new(self.from.clone(), self.port, feature_flags))?;
 
-        t.block_on(server.serve(tcp_listener, body_limit_mb))?;
+        t.block_on(server.serve(tcp_listener))?;
 
         Ok(())
-    }
-
-    fn get_body_limit_mb(&self) -> Option<usize> {
-        // Check environment variable first, then fall back to CLI argument
-        let limit_mb = std::env::var("BAML_BODY_LIMIT_MB")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(self.body_limit_mb);
-
-        // 0 means no limit (disable the limit)
-        if limit_mb == 0 {
-            None
-        } else {
-            Some(limit_mb)
-        }
     }
 }
 
@@ -282,11 +259,7 @@ impl Server {
         next.run(request).await
     }
 
-    pub async fn serve(
-        self: Arc<Self>,
-        tcp_listener: TcpListener,
-        body_limit_mb: Option<usize>,
-    ) -> Result<()> {
+    pub async fn serve(self: Arc<Self>, tcp_listener: TcpListener) -> Result<()> {
         // build our application with a route
         let app = axum::Router::new();
 
@@ -323,22 +296,10 @@ impl Server {
             get(move || s.clone().openapi_json_handler()),
         );
 
-        // Apply body limit configuration
-        let app = match body_limit_mb {
-            Some(limit_mb) => {
-                let limit_bytes = limit_mb * 1024 * 1024;
-                baml_log::info!(
-                    "Setting request body size limit to {} MB ({} bytes)",
-                    limit_mb,
-                    limit_bytes
-                );
-                app.layer(DefaultBodyLimit::max(limit_bytes))
-            }
-            None => {
-                baml_log::info!("Request body size limit disabled");
-                app.layer(DefaultBodyLimit::disable())
-            }
-        };
+        // Set request body size limit to 100 MiB. This is chosen to be larger than
+        // providers like Gemini which accept files up to 50 MiB. The default Axum
+        // limit is only 2 MiB which is too restrictive for PDF uploads and similar use cases.
+        let app = app.layer(DefaultBodyLimit::max(100 * 1024 * 1024));
 
         let service = axum::serve(
             tcp_listener,
@@ -858,99 +819,5 @@ mod tests {
         assert_eq!(env_map.get("NEW_VAR"), Some(&"new_value".to_string()));
         assert_eq!(env_map.get("KEEP_ME"), Some(&"new_value".to_string()));
         assert!(!env_map.contains_key("REMOVE_ME"));
-    }
-
-    #[test]
-    fn test_body_limit_default() {
-        use std::path::PathBuf;
-
-        use crate::cli::dotenv::DotenvArgs;
-
-        let args = ServeArgs {
-            from: PathBuf::from("./baml_src"),
-            port: 2024,
-            no_version_check: false,
-            body_limit_mb: 50,
-            dotenv: DotenvArgs {
-                dotenv: true,
-                dotenv_path: None,
-            },
-        };
-
-        assert_eq!(args.get_body_limit_mb(), Some(50));
-    }
-
-    #[test]
-    fn test_body_limit_disabled() {
-        use std::path::PathBuf;
-
-        use crate::cli::dotenv::DotenvArgs;
-
-        let args = ServeArgs {
-            from: PathBuf::from("./baml_src"),
-            port: 2024,
-            no_version_check: false,
-            body_limit_mb: 0,
-            dotenv: DotenvArgs {
-                dotenv: true,
-                dotenv_path: None,
-            },
-        };
-
-        assert_eq!(args.get_body_limit_mb(), None);
-    }
-
-    #[test]
-    fn test_body_limit_from_env() {
-        use std::path::PathBuf;
-
-        use crate::cli::dotenv::DotenvArgs;
-
-        // Set environment variable
-        std::env::set_var("BAML_BODY_LIMIT_MB", "100");
-
-        let args = ServeArgs {
-            from: PathBuf::from("./baml_src"),
-            port: 2024,
-            no_version_check: false,
-            body_limit_mb: 50,
-            dotenv: DotenvArgs {
-                dotenv: true,
-                dotenv_path: None,
-            },
-        };
-
-        // Environment variable should override CLI argument
-        assert_eq!(args.get_body_limit_mb(), Some(100));
-
-        // Clean up
-        std::env::remove_var("BAML_BODY_LIMIT_MB");
-    }
-
-    #[test]
-    fn test_body_limit_disabled_from_env() {
-        use std::path::PathBuf;
-
-        use crate::cli::dotenv::DotenvArgs;
-
-        // Set environment variable to 0 to disable
-        std::env::set_var("BAML_BODY_LIMIT_MB", "0");
-
-        let args = ServeArgs {
-            from: PathBuf::from("./baml_src"),
-            port: 2024,
-            no_version_check: false,
-            body_limit_mb: 50,
-            dotenv: DotenvArgs {
-                dotenv: true,
-                dotenv_path: None,
-            },
-        };
-
-        // Environment variable set to 0 should disable limit
-        assert_eq!(args.get_body_limit_mb(), None);
-
-        // Clean up
-        std::env::remove_var("BAML_BODY_LIMIT_MB");
     }
 }
