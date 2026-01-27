@@ -6,6 +6,10 @@ function TestFnNamedArgsSingleStringArray(myStringArray: string[]) -> string {
   "#
 }
 
+function TestFnNamedArgsSingleStringArrayExprFunc(myStringArray: string[]) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleStringArray {
   functions [TestFnNamedArgsSingleStringArray]
   args {

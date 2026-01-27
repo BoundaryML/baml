@@ -9,6 +9,10 @@ function PdfInput(pdf: pdf) -> string{
   "#   
 }  
 
+function PdfInputExprFunc(doc: pdf) -> string {
+  return "Hello, world!";
+}
+
 function PdfInputOpenai(pdf: pdf, prompt: string) -> string{
   client GPT4o
   prompt #"

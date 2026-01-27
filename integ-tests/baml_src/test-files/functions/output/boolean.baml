@@ -5,6 +5,10 @@ function FnOutputBool(input: string) -> bool {
   "#
 }
 
+function FnOutputBoolExprFunc(input: string) -> bool {
+  return true;
+}
+
 test FnOutputBool {
   functions [FnOutputBool]
   args {

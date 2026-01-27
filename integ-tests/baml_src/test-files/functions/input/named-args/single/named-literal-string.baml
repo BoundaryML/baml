@@ -5,6 +5,10 @@ function TestNamedArgsLiteralString(myString: "My String") -> string {
   "#
 }
 
+function TestFnNamedArgsLiteralStringExprFunc(myString: "My String") -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsLiteralString {
   functions [TestNamedArgsLiteralString]
   args {

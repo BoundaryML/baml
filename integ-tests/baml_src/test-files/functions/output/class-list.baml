@@ -8,6 +8,13 @@ function FnOutputClassList(input: string) -> TestOutputClass[] {
   "#
 }
 
+function FnOutputClassListExprFunc(input: string) -> TestOutputClass[] {
+  return [TestOutputClass {
+    prop1: "example string",
+    prop2: 540
+  }];
+}
+
 test FnOutputClassList {
   functions [FnOutputClassList]
   args {

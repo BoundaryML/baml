@@ -8,6 +8,10 @@ function FnNamedArgsSingleStringOptional(myString: string?) -> string {
   "#
 }
 
+function FnNamedArgsSingleStringOptionalExprFunc(myString: string?) -> string {
+  return "Hello, world!";
+}
+
 test FnNamedArgsSingleStringOptional {
   functions [FnNamedArgsSingleStringOptional]
   args {

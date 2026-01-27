@@ -5,6 +5,10 @@ function FnOutputInt(input: string) -> int {
   "#
 }
 
+function FnOutputIntExprFunc(input: string) -> int {
+  return 5;
+}
+
 test FnOutputInt {
   functions [FnOutputInt]
   args {

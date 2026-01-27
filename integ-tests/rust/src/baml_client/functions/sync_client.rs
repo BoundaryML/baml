@@ -584,6 +584,114 @@ baml_function_sync!(VideoInputGemini(vid: &types::Video, ) -> (String, String));
 
 baml_function_sync!(VideoInputVertex(vid: &types::Video, ) -> (String, String));
 
+baml_function_sync!(AllowedOptionalsExprFunc(optionals: &types::OptionalListAndMap, ) -> (Option<stream_types::OptionalListAndMap>, types::OptionalListAndMap));
+
+baml_function_sync!(AnotherTakedown(xs: &[String], ) -> (Option<i64>, i64));
+
+baml_function_sync!(AssignElseIfExpr(a: bool, b: bool, ) -> (Option<i64>, i64));
+
+baml_function_sync!(AudioInputExprFunc(aud: &types::Audio, ) -> (Option<String>, String));
+
+baml_function_sync!(BoolToIntWithIfElse(b: bool, ) -> (Option<i64>, i64));
+
+baml_function_sync!(BoolToIntWithIfElseCallingLlm(b: bool, ) -> (Option<i64>, i64));
+
+baml_function_sync!(CallLlmDescribeImage(img: &types::Image, ) -> (Option<String>, String));
+
+baml_function_sync!(CallReturnOne() -> (Option<i64>, i64));
+
+baml_function_sync!(ChainedCalls() -> (Option<i64>, i64));
+
+baml_function_sync!(EchoWorkflow() -> (Option<String>, String));
+
+baml_function_sync!(FnLiteralClassInputOutputExprFunc(input: &types::LiteralClassHello, ) -> (Option<stream_types::LiteralClassHello>, types::LiteralClassHello));
+
+baml_function_sync!(FnLiteralUnionClassInputOutputExprFunc(input: &types::Union2LiteralClassOneOrLiteralClassTwo, ) -> (Option<stream_types::Union2LiteralClassOneOrLiteralClassTwo>, types::Union2LiteralClassOneOrLiteralClassTwo));
+
+baml_function_sync!(FnNamedArgsSingleStringOptionalExprFunc(myString: Option<impl AsRef<str> + BamlEncode>, ) -> (Option<String>, String));
+
+baml_function_sync!(FnOutputBoolExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Option<bool>, bool));
+
+baml_function_sync!(FnOutputClassExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Option<stream_types::TestOutputClass>, types::TestOutputClass));
+
+baml_function_sync!(FnOutputClassListExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Vec<stream_types::TestOutputClass>, Vec<types::TestOutputClass>));
+
+baml_function_sync!(FnOutputClassNestedExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Option<stream_types::TestClassNested>, types::TestClassNested));
+
+baml_function_sync!(FnOutputIntExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Option<i64>, i64));
+
+baml_function_sync!(FnOutputLiteralStringExprFunc(input: impl AsRef<str> + BamlEncode, ) -> (Option<String>, String));
+
+baml_function_sync!(FnTestNamedArgsSingleEnumExprFunc(myArg: &types::NamedArgsSingleEnum, ) -> (Option<String>, String));
+
+baml_function_sync!(IsTargetWord(word: impl AsRef<str> + BamlEncode, ) -> (Option<bool>, bool));
+
+baml_function_sync!(IsTargetWord2(word: impl AsRef<str> + BamlEncode, ) -> (Option<bool>, bool));
+
+baml_function_sync!(IterativeFibonacci(n: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(NormalElseIfStmt(a: bool, b: bool, ) -> (Option<i64>, i64));
+
+baml_function_sync!(NotEmpty(value: impl AsRef<str> + BamlEncode, ) -> (Option<bool>, bool));
+
+baml_function_sync!(NullLiteralClassHelloExprFunc(s: impl AsRef<str> + BamlEncode, ) -> (Option<stream_types::ClassForNullLiteral>, types::ClassForNullLiteral));
+
+baml_function_sync!(PdfInputExprFunc(doc: &types::Pdf, ) -> (Option<String>, String));
+
+baml_function_sync!(ReturnCategory(category: &types::Category, ) -> (Option<types::Category>, types::Category));
+
+baml_function_sync!(ReturnElseIfExpr(a: bool, b: bool, ) -> (Option<i64>, i64));
+
+baml_function_sync!(ReturnNumber(n: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(ReturnNumberCallingLlm(n: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(ReturnOne() -> (Option<i64>, i64));
+
+baml_function_sync!(StoreFnCallInLocalVar(n: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(StoreLlmCallInLocalVar(n: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(SumArray(arr: &[i64], ) -> (Option<i64>, i64));
+
+baml_function_sync!(SumFromTo(x: i64, y: i64, ) -> (Option<i64>, i64));
+
+baml_function_sync!(TestFnNamedArgsLiteralBoolExprFunc(myBool: bool, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsLiteralIntExprFunc(myInt: i64, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsLiteralStringExprFunc(myString: impl AsRef<str> + BamlEncode, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleBoolExprFunc(myBool: bool, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleClassExprFunc(myArg: &types::NamedArgsSingleClass, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleEnumListExprFunc(myArg: &[types::NamedArgsSingleEnumList], ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleFloatExprFunc(myFloat: f64, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleIntExprFunc(myInt: i64, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleMapStringToClassExprFunc(myMap: &std::collections::HashMap<String, types::StringToClassEntry>, ) -> (std::collections::HashMap<String, stream_types::StringToClassEntry>, std::collections::HashMap<String, types::StringToClassEntry>));
+
+baml_function_sync!(TestFnNamedArgsSingleMapStringToMapExprFunc(myMap: &std::collections::HashMap<String, std::collections::HashMap<String, String>>, ) -> (std::collections::HashMap<String, std::collections::HashMap<String, String>>, std::collections::HashMap<String, std::collections::HashMap<String, String>>));
+
+baml_function_sync!(TestFnNamedArgsSingleMapStringToStringExprFunc(myMap: &std::collections::HashMap<String, String>, ) -> (std::collections::HashMap<String, String>, std::collections::HashMap<String, String>));
+
+baml_function_sync!(TestFnNamedArgsSingleStringArrayExprFunc(myStringArray: &[String], ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleStringExprFunc(myString: impl AsRef<str> + BamlEncode, ) -> (Option<String>, String));
+
+baml_function_sync!(TestFnNamedArgsSingleStringListExprFunc(myArg: &[String], ) -> (Vec<String>, Vec<String>));
+
+baml_function_sync!(TestImageInputExprFunc(img: &types::Image, ) -> (Option<String>, String));
+
+baml_function_sync!(TestImageListInputExprFunc(imgs: &[types::Image], ) -> (Option<String>, String));
+
+baml_function_sync!(VideoInputExprFunc(vid: &types::Video, ) -> (Option<String>, String));
+
+baml_function_sync!(WorkflowWatchChild() -> (Option<i64>, i64));
+
 // =============================================================================
 // Client Struct
 // =============================================================================
@@ -1067,6 +1175,116 @@ pub struct BamlSyncClient {
     pub VideoInputGemini: VideoInputGemini,
 
     pub VideoInputVertex: VideoInputVertex,
+
+    pub AllowedOptionalsExprFunc: AllowedOptionalsExprFunc,
+
+    pub AnotherTakedown: AnotherTakedown,
+
+    pub AssignElseIfExpr: AssignElseIfExpr,
+
+    pub AudioInputExprFunc: AudioInputExprFunc,
+
+    pub BoolToIntWithIfElse: BoolToIntWithIfElse,
+
+    pub BoolToIntWithIfElseCallingLlm: BoolToIntWithIfElseCallingLlm,
+
+    pub CallLlmDescribeImage: CallLlmDescribeImage,
+
+    pub CallReturnOne: CallReturnOne,
+
+    pub ChainedCalls: ChainedCalls,
+
+    pub EchoWorkflow: EchoWorkflow,
+
+    pub FnLiteralClassInputOutputExprFunc: FnLiteralClassInputOutputExprFunc,
+
+    pub FnLiteralUnionClassInputOutputExprFunc: FnLiteralUnionClassInputOutputExprFunc,
+
+    pub FnNamedArgsSingleStringOptionalExprFunc: FnNamedArgsSingleStringOptionalExprFunc,
+
+    pub FnOutputBoolExprFunc: FnOutputBoolExprFunc,
+
+    pub FnOutputClassExprFunc: FnOutputClassExprFunc,
+
+    pub FnOutputClassListExprFunc: FnOutputClassListExprFunc,
+
+    pub FnOutputClassNestedExprFunc: FnOutputClassNestedExprFunc,
+
+    pub FnOutputIntExprFunc: FnOutputIntExprFunc,
+
+    pub FnOutputLiteralStringExprFunc: FnOutputLiteralStringExprFunc,
+
+    pub FnTestNamedArgsSingleEnumExprFunc: FnTestNamedArgsSingleEnumExprFunc,
+
+    pub IsTargetWord: IsTargetWord,
+
+    pub IsTargetWord2: IsTargetWord2,
+
+    pub IterativeFibonacci: IterativeFibonacci,
+
+    pub NormalElseIfStmt: NormalElseIfStmt,
+
+    pub NotEmpty: NotEmpty,
+
+    pub NullLiteralClassHelloExprFunc: NullLiteralClassHelloExprFunc,
+
+    pub PdfInputExprFunc: PdfInputExprFunc,
+
+    pub ReturnCategory: ReturnCategory,
+
+    pub ReturnElseIfExpr: ReturnElseIfExpr,
+
+    pub ReturnNumber: ReturnNumber,
+
+    pub ReturnNumberCallingLlm: ReturnNumberCallingLlm,
+
+    pub ReturnOne: ReturnOne,
+
+    pub StoreFnCallInLocalVar: StoreFnCallInLocalVar,
+
+    pub StoreLlmCallInLocalVar: StoreLlmCallInLocalVar,
+
+    pub SumArray: SumArray,
+
+    pub SumFromTo: SumFromTo,
+
+    pub TestFnNamedArgsLiteralBoolExprFunc: TestFnNamedArgsLiteralBoolExprFunc,
+
+    pub TestFnNamedArgsLiteralIntExprFunc: TestFnNamedArgsLiteralIntExprFunc,
+
+    pub TestFnNamedArgsLiteralStringExprFunc: TestFnNamedArgsLiteralStringExprFunc,
+
+    pub TestFnNamedArgsSingleBoolExprFunc: TestFnNamedArgsSingleBoolExprFunc,
+
+    pub TestFnNamedArgsSingleClassExprFunc: TestFnNamedArgsSingleClassExprFunc,
+
+    pub TestFnNamedArgsSingleEnumListExprFunc: TestFnNamedArgsSingleEnumListExprFunc,
+
+    pub TestFnNamedArgsSingleFloatExprFunc: TestFnNamedArgsSingleFloatExprFunc,
+
+    pub TestFnNamedArgsSingleIntExprFunc: TestFnNamedArgsSingleIntExprFunc,
+
+    pub TestFnNamedArgsSingleMapStringToClassExprFunc:
+        TestFnNamedArgsSingleMapStringToClassExprFunc,
+
+    pub TestFnNamedArgsSingleMapStringToMapExprFunc: TestFnNamedArgsSingleMapStringToMapExprFunc,
+
+    pub TestFnNamedArgsSingleMapStringToStringExprFunc:
+        TestFnNamedArgsSingleMapStringToStringExprFunc,
+
+    pub TestFnNamedArgsSingleStringArrayExprFunc: TestFnNamedArgsSingleStringArrayExprFunc,
+
+    pub TestFnNamedArgsSingleStringExprFunc: TestFnNamedArgsSingleStringExprFunc,
+
+    pub TestFnNamedArgsSingleStringListExprFunc: TestFnNamedArgsSingleStringListExprFunc,
+
+    pub TestImageInputExprFunc: TestImageInputExprFunc,
+
+    pub TestImageListInputExprFunc: TestImageListInputExprFunc,
+
+    pub VideoInputExprFunc: VideoInputExprFunc,
+
+    pub WorkflowWatchChild: WorkflowWatchChild,
 }
 
 impl BamlSyncClient {
@@ -1551,6 +1769,118 @@ impl BamlSyncClient {
             VideoInputGemini: VideoInputGemini::new(),
 
             VideoInputVertex: VideoInputVertex::new(),
+
+            AllowedOptionalsExprFunc: AllowedOptionalsExprFunc::new(),
+
+            AnotherTakedown: AnotherTakedown::new(),
+
+            AssignElseIfExpr: AssignElseIfExpr::new(),
+
+            AudioInputExprFunc: AudioInputExprFunc::new(),
+
+            BoolToIntWithIfElse: BoolToIntWithIfElse::new(),
+
+            BoolToIntWithIfElseCallingLlm: BoolToIntWithIfElseCallingLlm::new(),
+
+            CallLlmDescribeImage: CallLlmDescribeImage::new(),
+
+            CallReturnOne: CallReturnOne::new(),
+
+            ChainedCalls: ChainedCalls::new(),
+
+            EchoWorkflow: EchoWorkflow::new(),
+
+            FnLiteralClassInputOutputExprFunc: FnLiteralClassInputOutputExprFunc::new(),
+
+            FnLiteralUnionClassInputOutputExprFunc: FnLiteralUnionClassInputOutputExprFunc::new(),
+
+            FnNamedArgsSingleStringOptionalExprFunc: FnNamedArgsSingleStringOptionalExprFunc::new(),
+
+            FnOutputBoolExprFunc: FnOutputBoolExprFunc::new(),
+
+            FnOutputClassExprFunc: FnOutputClassExprFunc::new(),
+
+            FnOutputClassListExprFunc: FnOutputClassListExprFunc::new(),
+
+            FnOutputClassNestedExprFunc: FnOutputClassNestedExprFunc::new(),
+
+            FnOutputIntExprFunc: FnOutputIntExprFunc::new(),
+
+            FnOutputLiteralStringExprFunc: FnOutputLiteralStringExprFunc::new(),
+
+            FnTestNamedArgsSingleEnumExprFunc: FnTestNamedArgsSingleEnumExprFunc::new(),
+
+            IsTargetWord: IsTargetWord::new(),
+
+            IsTargetWord2: IsTargetWord2::new(),
+
+            IterativeFibonacci: IterativeFibonacci::new(),
+
+            NormalElseIfStmt: NormalElseIfStmt::new(),
+
+            NotEmpty: NotEmpty::new(),
+
+            NullLiteralClassHelloExprFunc: NullLiteralClassHelloExprFunc::new(),
+
+            PdfInputExprFunc: PdfInputExprFunc::new(),
+
+            ReturnCategory: ReturnCategory::new(),
+
+            ReturnElseIfExpr: ReturnElseIfExpr::new(),
+
+            ReturnNumber: ReturnNumber::new(),
+
+            ReturnNumberCallingLlm: ReturnNumberCallingLlm::new(),
+
+            ReturnOne: ReturnOne::new(),
+
+            StoreFnCallInLocalVar: StoreFnCallInLocalVar::new(),
+
+            StoreLlmCallInLocalVar: StoreLlmCallInLocalVar::new(),
+
+            SumArray: SumArray::new(),
+
+            SumFromTo: SumFromTo::new(),
+
+            TestFnNamedArgsLiteralBoolExprFunc: TestFnNamedArgsLiteralBoolExprFunc::new(),
+
+            TestFnNamedArgsLiteralIntExprFunc: TestFnNamedArgsLiteralIntExprFunc::new(),
+
+            TestFnNamedArgsLiteralStringExprFunc: TestFnNamedArgsLiteralStringExprFunc::new(),
+
+            TestFnNamedArgsSingleBoolExprFunc: TestFnNamedArgsSingleBoolExprFunc::new(),
+
+            TestFnNamedArgsSingleClassExprFunc: TestFnNamedArgsSingleClassExprFunc::new(),
+
+            TestFnNamedArgsSingleEnumListExprFunc: TestFnNamedArgsSingleEnumListExprFunc::new(),
+
+            TestFnNamedArgsSingleFloatExprFunc: TestFnNamedArgsSingleFloatExprFunc::new(),
+
+            TestFnNamedArgsSingleIntExprFunc: TestFnNamedArgsSingleIntExprFunc::new(),
+
+            TestFnNamedArgsSingleMapStringToClassExprFunc:
+                TestFnNamedArgsSingleMapStringToClassExprFunc::new(),
+
+            TestFnNamedArgsSingleMapStringToMapExprFunc:
+                TestFnNamedArgsSingleMapStringToMapExprFunc::new(),
+
+            TestFnNamedArgsSingleMapStringToStringExprFunc:
+                TestFnNamedArgsSingleMapStringToStringExprFunc::new(),
+
+            TestFnNamedArgsSingleStringArrayExprFunc: TestFnNamedArgsSingleStringArrayExprFunc::new(
+            ),
+
+            TestFnNamedArgsSingleStringExprFunc: TestFnNamedArgsSingleStringExprFunc::new(),
+
+            TestFnNamedArgsSingleStringListExprFunc: TestFnNamedArgsSingleStringListExprFunc::new(),
+
+            TestImageInputExprFunc: TestImageInputExprFunc::new(),
+
+            TestImageListInputExprFunc: TestImageListInputExprFunc::new(),
+
+            VideoInputExprFunc: VideoInputExprFunc::new(),
+
+            WorkflowWatchChild: WorkflowWatchChild::new(),
         }
     }
 
@@ -2509,6 +2839,225 @@ impl BamlSyncClient {
             },
 
             VideoInputVertex: VideoInputVertex {
+                options: options.clone(),
+            },
+
+            AllowedOptionalsExprFunc: AllowedOptionalsExprFunc {
+                options: options.clone(),
+            },
+
+            AnotherTakedown: AnotherTakedown {
+                options: options.clone(),
+            },
+
+            AssignElseIfExpr: AssignElseIfExpr {
+                options: options.clone(),
+            },
+
+            AudioInputExprFunc: AudioInputExprFunc {
+                options: options.clone(),
+            },
+
+            BoolToIntWithIfElse: BoolToIntWithIfElse {
+                options: options.clone(),
+            },
+
+            BoolToIntWithIfElseCallingLlm: BoolToIntWithIfElseCallingLlm {
+                options: options.clone(),
+            },
+
+            CallLlmDescribeImage: CallLlmDescribeImage {
+                options: options.clone(),
+            },
+
+            CallReturnOne: CallReturnOne {
+                options: options.clone(),
+            },
+
+            ChainedCalls: ChainedCalls {
+                options: options.clone(),
+            },
+
+            EchoWorkflow: EchoWorkflow {
+                options: options.clone(),
+            },
+
+            FnLiteralClassInputOutputExprFunc: FnLiteralClassInputOutputExprFunc {
+                options: options.clone(),
+            },
+
+            FnLiteralUnionClassInputOutputExprFunc: FnLiteralUnionClassInputOutputExprFunc {
+                options: options.clone(),
+            },
+
+            FnNamedArgsSingleStringOptionalExprFunc: FnNamedArgsSingleStringOptionalExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputBoolExprFunc: FnOutputBoolExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputClassExprFunc: FnOutputClassExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputClassListExprFunc: FnOutputClassListExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputClassNestedExprFunc: FnOutputClassNestedExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputIntExprFunc: FnOutputIntExprFunc {
+                options: options.clone(),
+            },
+
+            FnOutputLiteralStringExprFunc: FnOutputLiteralStringExprFunc {
+                options: options.clone(),
+            },
+
+            FnTestNamedArgsSingleEnumExprFunc: FnTestNamedArgsSingleEnumExprFunc {
+                options: options.clone(),
+            },
+
+            IsTargetWord: IsTargetWord {
+                options: options.clone(),
+            },
+
+            IsTargetWord2: IsTargetWord2 {
+                options: options.clone(),
+            },
+
+            IterativeFibonacci: IterativeFibonacci {
+                options: options.clone(),
+            },
+
+            NormalElseIfStmt: NormalElseIfStmt {
+                options: options.clone(),
+            },
+
+            NotEmpty: NotEmpty {
+                options: options.clone(),
+            },
+
+            NullLiteralClassHelloExprFunc: NullLiteralClassHelloExprFunc {
+                options: options.clone(),
+            },
+
+            PdfInputExprFunc: PdfInputExprFunc {
+                options: options.clone(),
+            },
+
+            ReturnCategory: ReturnCategory {
+                options: options.clone(),
+            },
+
+            ReturnElseIfExpr: ReturnElseIfExpr {
+                options: options.clone(),
+            },
+
+            ReturnNumber: ReturnNumber {
+                options: options.clone(),
+            },
+
+            ReturnNumberCallingLlm: ReturnNumberCallingLlm {
+                options: options.clone(),
+            },
+
+            ReturnOne: ReturnOne {
+                options: options.clone(),
+            },
+
+            StoreFnCallInLocalVar: StoreFnCallInLocalVar {
+                options: options.clone(),
+            },
+
+            StoreLlmCallInLocalVar: StoreLlmCallInLocalVar {
+                options: options.clone(),
+            },
+
+            SumArray: SumArray {
+                options: options.clone(),
+            },
+
+            SumFromTo: SumFromTo {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsLiteralBoolExprFunc: TestFnNamedArgsLiteralBoolExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsLiteralIntExprFunc: TestFnNamedArgsLiteralIntExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsLiteralStringExprFunc: TestFnNamedArgsLiteralStringExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleBoolExprFunc: TestFnNamedArgsSingleBoolExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleClassExprFunc: TestFnNamedArgsSingleClassExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleEnumListExprFunc: TestFnNamedArgsSingleEnumListExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleFloatExprFunc: TestFnNamedArgsSingleFloatExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleIntExprFunc: TestFnNamedArgsSingleIntExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleMapStringToClassExprFunc:
+                TestFnNamedArgsSingleMapStringToClassExprFunc {
+                    options: options.clone(),
+                },
+
+            TestFnNamedArgsSingleMapStringToMapExprFunc:
+                TestFnNamedArgsSingleMapStringToMapExprFunc {
+                    options: options.clone(),
+                },
+
+            TestFnNamedArgsSingleMapStringToStringExprFunc:
+                TestFnNamedArgsSingleMapStringToStringExprFunc {
+                    options: options.clone(),
+                },
+
+            TestFnNamedArgsSingleStringArrayExprFunc: TestFnNamedArgsSingleStringArrayExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleStringExprFunc: TestFnNamedArgsSingleStringExprFunc {
+                options: options.clone(),
+            },
+
+            TestFnNamedArgsSingleStringListExprFunc: TestFnNamedArgsSingleStringListExprFunc {
+                options: options.clone(),
+            },
+
+            TestImageInputExprFunc: TestImageInputExprFunc {
+                options: options.clone(),
+            },
+
+            TestImageListInputExprFunc: TestImageListInputExprFunc {
+                options: options.clone(),
+            },
+
+            VideoInputExprFunc: VideoInputExprFunc {
+                options: options.clone(),
+            },
+
+            WorkflowWatchChild: WorkflowWatchChild {
                 options: options.clone(),
             },
         }

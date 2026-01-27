@@ -5,6 +5,10 @@ function TestNamedArgsLiteralInt(myInt: 1) -> string {
   "#
 }
 
+function TestFnNamedArgsLiteralIntExprFunc(myInt: 1) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsLiteralInt {
   functions [TestNamedArgsLiteralInt]
   args {

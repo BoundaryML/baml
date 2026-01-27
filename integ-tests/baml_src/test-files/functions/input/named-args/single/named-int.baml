@@ -6,6 +6,10 @@ function TestFnNamedArgsSingleInt(myInt: int) -> string {
   "#
 }
 
+function TestFnNamedArgsSingleIntExprFunc(myInt: int) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleInt {
   functions [TestFnNamedArgsSingleInt]
   args {

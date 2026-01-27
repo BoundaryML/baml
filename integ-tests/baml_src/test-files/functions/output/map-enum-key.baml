@@ -12,3 +12,8 @@ function InOutEnumMapKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> ma
     {{ ctx.output_format }}
   "#
 }
+
+// TODO: expr func
+// function InOutEnumMapKeyExprFunc(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
+//   return i1;
+// }

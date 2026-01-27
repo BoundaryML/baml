@@ -17,6 +17,10 @@ function FnLiteralUnionClassInputOutput(input: LiteralClassOne | LiteralClassTwo
   "#
 }
 
+function FnLiteralUnionClassInputOutputExprFunc(input: LiteralClassOne | LiteralClassTwo) -> LiteralClassOne | LiteralClassTwo {
+  return input;
+}
+
 test TestFnLiteralUnionClassInputOutput{
   functions [FnLiteralUnionClassInputOutput]
   args {

@@ -6,6 +6,10 @@ function TestFnNamedArgsSingleMapStringToMap(myMap: map<string, map<string, stri
   "#
 }
 
+function TestFnNamedArgsSingleMapStringToMapExprFunc(myMap: map<string, map<string, string>>) -> map<string, map<string, string>> {
+  return myMap;
+}
+
 test TestFnNamedArgsSingleMapStringToMap {
   functions [TestFnNamedArgsSingleMapStringToMap]
   args {

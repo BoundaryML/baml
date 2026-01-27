@@ -11,6 +11,10 @@ function FnTestNamedArgsSingleEnum(myArg: NamedArgsSingleEnum) -> string {
   "#
 }
 
+function FnTestNamedArgsSingleEnumExprFunc(myArg: NamedArgsSingleEnum) -> string {
+  return "Hello, world!";
+}
+
 test FnTestNamedArgsSingleEnum {
   functions [FnTestNamedArgsSingleEnum]
   args {

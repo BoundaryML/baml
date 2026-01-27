@@ -9,6 +9,11 @@ function FnEnumListOutput(input: string) -> EnumOutput[] {
   "#
 } 
 
+// TODO:
+// function FnEnumListOutputExprFunc(input: string) -> EnumOutput[] {
+//   return [EnumOutput.ONE, EnumOutput.TWO];
+// }
+
 test FnEnumListOutput {
   functions [FnEnumListOutput]
   args {

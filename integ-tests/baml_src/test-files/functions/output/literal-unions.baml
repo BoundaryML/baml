@@ -6,6 +6,11 @@ function LiteralUnionsTest(input: string) -> 1 | true | "string output" {
   "#
 }
 
+// TODO: expr func
+// function LiteralUnionsTestExprFunc(input: string) -> 1 | true | "string output" {
+//   return 1;
+// }
+
 test LiteralUnionsTest {
   functions [LiteralUnionsTest]
   args {
