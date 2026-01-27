@@ -47,7 +47,18 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
+bex_llm_types = { path = "crates/bex_llm_types" }
+bex_jinja_runtime = { path = "crates/bex_jinja_runtime" }
 sys_resource_types = { path = "crates/sys_resource_types" }
+
+# External dependencies for bex_jinja_runtime
+minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [
+  "macros",
+  "builtins",
+  "debug",
+  "preserve_order",
+  "serde",
+] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies

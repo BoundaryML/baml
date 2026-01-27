@@ -583,21 +583,15 @@ impl std::fmt::Display for MediaContent {
 // PromptAst - represents a structured prompt (recursive tree)
 // ============================================================================
 
-/// Options for printing an output format in a prompt.
-#[derive(Debug, Clone)]
-pub struct PrintOutputFormatOptions {
-    /// Separator for union/or types (e.g., " | " or " or ")
-    pub or_splitter: String,
-}
-
 /// A node in the prompt AST tree.
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PromptAst {
     /// A plain string.
     String(String),
 
-    /// A media value (image, audio, video, etc.) - references heap object.
-    Media(HeapPtr),
+    /// A media value - serializable opaque handle.
+    /// WARNING: usize is platform-dependent. Serialization must occur within the same platform.
+    Media(usize),
 
     /// A message with a role, content, and optional metadata.
     Message {
@@ -608,9 +602,6 @@ pub enum PromptAst {
 
     /// A sequence of prompt nodes.
     Vec(Vec<PromptAst>),
-
-    /// Output format - prints the expected output format for the LLM.
-    PrintOutputFormat(PrintOutputFormatOptions),
 }
 
 /// Types of values.

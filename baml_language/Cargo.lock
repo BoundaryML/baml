@@ -808,6 +808,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_jinja_runtime"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bex_external_types",
+ "bex_llm_types",
+ "bex_program",
+ "bex_vm_types",
+ "indexmap 2.13.0",
+ "minijinja",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bex_llm_types"
+version = "0.0.0"
+dependencies = [
+ "bex_program",
+ "indexmap 2.13.0",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "bex_program"
 version = "0.0.0"
 dependencies = [
@@ -849,6 +874,8 @@ dependencies = [
  "colored",
  "indexmap 2.13.0",
  "paste",
+ "serde",
+ "serde_json",
  "sys_resource_types",
  "tokio",
 ]
@@ -2800,6 +2827,15 @@ checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
 dependencies = [
  "cc",
  "walkdir",
+]
+
+[[package]]
+name = "minijinja"
+version = "2.11.0"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
+dependencies = [
+ "indexmap 2.13.0",
+ "serde",
 ]
 
 [[package]]

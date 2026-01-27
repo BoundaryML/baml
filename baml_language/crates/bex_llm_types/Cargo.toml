@@ -1,0 +1,15 @@
+[package]
+name = "bex_llm_types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+bex_program = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
