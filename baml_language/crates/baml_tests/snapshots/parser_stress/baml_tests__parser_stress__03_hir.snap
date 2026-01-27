@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -7043,21 +7043,13 @@ enum Status95 {
 
 enum Item {
   Function
-  FunctionDef
   Class
-  ClassDef
   Enum
-  EnumDef
   Client
-  ClientDef
   Test
-  TestDef
   RetryPolicy
-  RetryPolicyDef
   TemplateString
-  TemplateStringDef
   TypeAlias
-  TypeAliasDef
 }
 
 type Language = crate

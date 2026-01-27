@@ -1481,6 +1481,68 @@ impl<'a> Parser<'a> {
             // Variant name
             p.bump();
 
+            // Check if a type expression follows (which is invalid for enum variants)
+            // We need to distinguish between:
+            // - `A int | string` (type annotation - error)
+            // - `A\n    B` (next variant - OK)
+            // A type annotation is present if we see:
+            // 1. A word followed by type modifiers (|, [, ?, <)
+            // 2. String/integer/float literals (can't be variant names)
+            // 3. Left paren (tuple type)
+            let has_type_annotation = if p.at(TokenKind::Word) {
+                // Peek ahead to see if there's a type modifier after the word
+                // peek(1) skips trivia and gets the next non-trivia token
+                p.peek(1)
+                    .map(|t| {
+                        matches!(
+                            t.kind,
+                            TokenKind::Pipe
+                                | TokenKind::LBracket
+                                | TokenKind::Question
+                                | TokenKind::Less
+                        )
+                    })
+                    .unwrap_or(false)
+            } else {
+                // String literals, integer literals, float literals, or left paren
+                // These can't be variant names, so they must be type annotations
+                p.at(TokenKind::Quote)
+                    || p.at(TokenKind::Hash)
+                    || p.at(TokenKind::IntegerLiteral)
+                    || p.at(TokenKind::FloatLiteral)
+                    || p.at(TokenKind::LParen)
+            };
+
+            if has_type_annotation {
+                // Record the start position of the type expression
+                // SAFETY: has_type_annotation is only true when we've confirmed a token exists
+                // via p.at() checks or p.peek() calls, so current() is guaranteed to be Some.
+                if let Some(start_token) = p.current() {
+                    let start_span = start_token.span;
+
+                    // Consume the entire type expression for error recovery
+                    p.parse_type();
+
+                    // Calculate the span covering the entire type expression
+                    let end_span = p
+                        .tokens
+                        .get(p.current.saturating_sub(1))
+                        .map(|t| t.span)
+                        .unwrap_or(start_span);
+
+                    let type_span = baml_base::Span::new(
+                        start_span.file_id,
+                        TextRange::new(start_span.range.start(), end_span.range.end()),
+                    );
+
+                    // Emit a helpful error message
+                    p.error(
+                        "Enum variants cannot have type annotations".to_string(),
+                        type_span,
+                    );
+                }
+            }
+
             // Optional field attributes (@alias, etc.)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_field_attribute();
