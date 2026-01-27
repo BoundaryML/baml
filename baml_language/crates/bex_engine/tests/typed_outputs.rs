@@ -19,6 +19,7 @@ async fn union_int_or_string_returns_int() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Int(42)),
             metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
@@ -37,6 +38,7 @@ async fn union_int_or_string_returns_string() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::String("hello".to_string())),
             metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
@@ -55,6 +57,7 @@ async fn optional_int_returns_value() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Int(42)),
             metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Int),
@@ -73,6 +76,7 @@ async fn optional_int_returns_null() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
             metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Null),
@@ -95,6 +99,7 @@ async fn class_with_union_field() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Instance {
             class_name: "Response".to_string(),
             fields: indexmap! {
@@ -126,6 +131,7 @@ async fn union_of_classes_returns_success() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Instance {
                 class_name: "Success".to_string(),
@@ -163,6 +169,7 @@ async fn union_of_classes_returns_failure() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Instance {
                 class_name: "Failure".to_string(),
@@ -192,6 +199,7 @@ async fn union_of_arrays() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Array {
                 element_type: Ty::Int,
@@ -223,6 +231,7 @@ async fn array_of_unions() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Array {
             element_type: Ty::Union(vec![Ty::Int, Ty::String]),
             items: vec![
@@ -258,6 +267,7 @@ async fn optional_class() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Instance {
                 class_name: "Data".to_string(),
@@ -288,6 +298,7 @@ async fn optional_class_returns_null() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
             metadata: UnionMetadata::new(
@@ -314,6 +325,7 @@ async fn class_with_optional_field() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Instance {
             class_name: "Person".to_string(),
             fields: indexmap! {
@@ -338,6 +350,7 @@ async fn map_with_union_values() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Map {
             key_type: Ty::String,
             value_type: Ty::Union(vec![Ty::Int, Ty::String]),
@@ -368,6 +381,7 @@ async fn union_of_array_with_union_elements_or_string() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Array {
                 element_type: Ty::Union(vec![Ty::Int, Ty::Bool]),
