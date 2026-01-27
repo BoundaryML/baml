@@ -1733,9 +1733,12 @@ impl<'a> Parser<'a> {
             let mut has_prompt = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword (except Client, which is valid in LLM bodies)
+                // Error recovery: if we see a top-level keyword (except Client and TypeBuilder)
                 // assume we missed a closing brace
-                if p.at_top_level_keyword() && !p.at(TokenKind::Client) {
+                if p.at_top_level_keyword()
+                    && !p.at(TokenKind::Client)
+                    && !p.at(TokenKind::TypeBuilder)
+                {
                     break;
                 }
 
@@ -1761,6 +1764,9 @@ impl<'a> Parser<'a> {
                     }
                     has_prompt = true;
                     p.parse_prompt_field();
+                } else if p.at(TokenKind::TypeBuilder) {
+                    // Parse type_builder block - HIR will emit proper error for non-test context
+                    p.parse_type_builder_block();
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
@@ -3254,7 +3260,9 @@ impl<'a> Parser<'a> {
             } else if p.at(TokenKind::Enum) {
                 p.parse_enum();
             } else {
-                p.error_unexpected_token("class or enum after 'dynamic'".to_string());
+                p.error_unexpected_token(
+                    "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.".to_string()
+                );
             }
         });
     }

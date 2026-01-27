@@ -100,11 +100,38 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
         // But we don't emit this if there are no properties at all (covered by missing args)
     }
 
-    // Lower type_builder block if present
-    let type_builder = test
-        .config_block()
-        .and_then(|config| config.type_builder_blocks().next())
-        .map(|tb_block| lower_type_builder_block(&tb_block, ctx));
+    // Lower type_builder block if present, with duplicate detection
+    let type_builder = if let Some(config) = test.config_block() {
+        let tb_blocks: Vec<_> = config.type_builder_blocks().collect();
+
+        // Check for duplicate type_builder blocks
+        if tb_blocks.len() > 1 {
+            let first_range = tb_blocks[0]
+                .keyword()
+                .map(|kw| kw.text_range())
+                .unwrap_or_else(|| tb_blocks[0].syntax().text_range());
+
+            for duplicate_block in tb_blocks.iter().skip(1) {
+                let second_range = duplicate_block
+                    .keyword()
+                    .map(|kw| kw.text_range())
+                    .unwrap_or_else(|| duplicate_block.syntax().text_range());
+
+                ctx.push_diagnostic(HirDiagnostic::DuplicateTypeBuilderBlock {
+                    test_name: name.to_string(),
+                    first_span: ctx.span(first_range),
+                    second_span: ctx.span(second_range),
+                });
+            }
+        }
+
+        // Lower only the first type_builder block (if any)
+        tb_blocks
+            .first()
+            .map(|tb_block| lower_type_builder_block(tb_block, ctx))
+    } else {
+        None
+    };
 
     Some(Test {
         name,

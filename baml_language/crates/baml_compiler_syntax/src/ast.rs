@@ -739,6 +739,14 @@ impl ConfigBlock {
 }
 
 impl TypeBuilderBlock {
+    /// Get the `type_builder` keyword token.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::KW_TYPE_BUILDER)
+    }
+
     /// Get all class definitions (non-dynamic).
     pub fn classes(&self) -> impl Iterator<Item = ClassDef> {
         self.syntax

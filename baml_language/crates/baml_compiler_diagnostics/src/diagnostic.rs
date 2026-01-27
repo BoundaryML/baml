@@ -111,6 +111,12 @@ pub enum DiagnosticId {
     UnknownTestProperty,
     MissingTestProperty,
     TestFieldAttribute,
+
+    // Type builder diagnostics (E0040-E0043)
+    TypeBuilderInNonTestContext,
+    DuplicateTypeBuilderBlock,
+    IncompleteDynamicDefinition,
+    TypeBuilderSyntaxError,
 }
 
 impl DiagnosticId {
@@ -186,6 +192,12 @@ impl DiagnosticId {
             DiagnosticId::UnknownTestProperty => "E0034",
             DiagnosticId::MissingTestProperty => "E0035",
             DiagnosticId::TestFieldAttribute => "E0036",
+
+            // Type builder diagnostics
+            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
+            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
+            DiagnosticId::IncompleteDynamicDefinition => "E0042",
+            DiagnosticId::TypeBuilderSyntaxError => "E0043",
         }
     }
 }
