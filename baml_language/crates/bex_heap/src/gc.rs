@@ -313,6 +313,10 @@ impl BexHeap {
             Object::PromptAst(ast) => {
                 Self::add_prompt_ast_references(ast, worklist);
             }
+            Object::PrimitiveClient(client) => {
+                // PrimitiveClient.options is a heap pointer to a map
+                worklist.push(client.options);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -405,6 +409,12 @@ impl BexHeap {
             }
             Object::PromptAst(ast) => {
                 self.fixup_prompt_ast_references(ast, forwarding);
+            }
+            Object::PrimitiveClient(client) => {
+                // Update options pointer
+                if let Some(&new_ptr) = forwarding.get(&client.options) {
+                    client.options = new_ptr;
+                }
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]

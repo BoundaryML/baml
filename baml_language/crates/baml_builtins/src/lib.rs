@@ -236,6 +236,16 @@ macro_rules! with_builtins {
                     /// This is hidden from the type checker as it's for internal use.
                     #[builtin]
                     struct PromptAst {}
+
+                    /// A primitive LLM client (single provider, not composite).
+                    /// This is hidden from the type checker as it's for internal use.
+                    #[builtin]
+                    struct PrimitiveClient {
+                        /// Render a Jinja template with the given arguments.
+                        /// Returns a structured PromptAst that can be sent to an LLM.
+                        #[external]
+                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+                    }
                 }
             }
 

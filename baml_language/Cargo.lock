@@ -776,6 +776,8 @@ dependencies = [
  "baml_tests",
  "bex_external_types",
  "bex_heap",
+ "bex_jinja_runtime",
+ "bex_llm_types",
  "bex_program",
  "bex_vm",
  "bex_vm_types",
@@ -827,6 +829,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -4398,6 +4401,7 @@ name = "sys_types"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "bex_jinja_runtime",
  "bex_vm_types",
  "sys_resource_types",
  "thiserror 2.0.17",

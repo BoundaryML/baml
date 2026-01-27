@@ -159,6 +159,49 @@ pub enum BexExternalValue {
 
     /// Resource handle (file, socket, etc.) for sys operations.
     Resource(ResourceHandle),
+
+    /// Prompt AST - a structured prompt for LLM calls.
+    PromptAst(PromptAst),
+
+    /// Primitive LLM client.
+    PrimitiveClient(PrimitiveClientValue),
+}
+
+/// Extracted PrimitiveClient data (no HeapPtr, fully owned).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PrimitiveClientValue {
+    /// Client name (e.g., "GPT4").
+    pub name: String,
+    /// Provider type (e.g., "openai", "anthropic").
+    pub provider: String,
+    /// Default role for chat messages (e.g., "user").
+    pub default_role: String,
+    /// Allowed roles for chat messages.
+    pub allowed_roles: Vec<String>,
+    /// Options extracted as a map (was HeapPtr in VM).
+    pub options: indexmap::IndexMap<String, BexExternalValue>,
+}
+
+/// Prompt AST - a structured prompt for LLM calls.
+/// This is a copy of bex_vm_types::PromptAst but with no HeapPtr references.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PromptAst {
+    /// A plain string.
+    String(String),
+
+    /// A media value - serializable opaque handle.
+    Media(usize),
+
+    /// A message with a role, content, and optional metadata.
+    Message {
+        role: String,
+        content: Box<PromptAst>,
+        /// Metadata stored as extracted value.
+        metadata: Box<BexExternalValue>,
+    },
+
+    /// A sequence of prompt nodes.
+    Vec(Vec<PromptAst>),
 }
 
 impl BexExternalValue {
@@ -187,6 +230,8 @@ impl BexExternalValue {
                 sys_resource_types::ResourceType::Socket => "socket",
                 sys_resource_types::ResourceType::HttpResponse => "http-response",
             },
+            BexExternalValue::PromptAst(_) => "prompt_ast",
+            BexExternalValue::PrimitiveClient(_) => "primitive_client",
         }
     }
 }

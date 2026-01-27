@@ -70,10 +70,19 @@ impl Program {
 /// The engine matches on this enum to execute the appropriate async operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExternalOp {
-    /// LLM function call (user-defined functions with LLM body).
-    Llm,
+    /// LLM operation (render prompt, specialize, build request, etc.).
+    Llm(LlmOp),
     /// System operation (file I/O, shell, HTTP, etc.).
     Sys(SysOp),
+}
+
+/// LLM operations that run outside the VM.
+///
+/// These are built-in LLM-related operations provided by the engine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LlmOp {
+    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
+    RenderPrompt,
 }
 
 /// System operations that run outside the VM.
@@ -113,8 +122,16 @@ pub enum SysOp {
 impl std::fmt::Display for ExternalOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExternalOp::Llm => write!(f, "llm"),
+            ExternalOp::Llm(llm_op) => write!(f, "{llm_op}"),
             ExternalOp::Sys(sys_op) => write!(f, "{sys_op}"),
+        }
+    }
+}
+
+impl std::fmt::Display for LlmOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LlmOp::RenderPrompt => write!(f, "llm.render_prompt"),
         }
     }
 }
@@ -444,6 +461,9 @@ pub enum Object {
     /// Prompt AST tree node.
     PromptAst(PromptAst),
 
+    /// LLM primitive client.
+    PrimitiveClient(PrimitiveClient),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -465,6 +485,9 @@ impl std::fmt::Display for Object {
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
+            Object::PrimitiveClient(client) => {
+                write!(f, "<client {}:{}>", client.provider, client.name)
+            }
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -547,6 +570,25 @@ impl std::fmt::Display for MediaContent {
             MediaContent::File { file, .. } => write!(f, "file({file})"),
         }
     }
+}
+
+// ============================================================================
+// PrimitiveClient - represents a single LLM provider client
+// ============================================================================
+
+/// A primitive LLM client (single provider, not composite).
+#[derive(Clone, Debug)]
+pub struct PrimitiveClient {
+    /// Client name (e.g., "GPT4").
+    pub name: String,
+    /// Provider type (e.g., "openai", "anthropic").
+    pub provider: String,
+    /// Default role for chat messages (e.g., "user").
+    pub default_role: String,
+    /// Allowed roles for chat messages.
+    pub allowed_roles: Vec<String>,
+    /// Provider-specific options (heap-allocated map).
+    pub options: HeapPtr,
 }
 
 // ============================================================================
@@ -635,6 +677,7 @@ pub enum ObjectType {
     Future(FutureType),
     Resource,
     PromptAst,
+    PrimitiveClient,
 }
 
 impl ObjectType {
@@ -651,6 +694,7 @@ impl ObjectType {
             Object::Media(media) => Self::Media(media.kind),
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
+            Object::PrimitiveClient(_) => Self::PrimitiveClient,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -687,6 +731,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
+            ObjectType::PrimitiveClient => write!(f, "primitive_client"),
         }
     }
 }

@@ -240,7 +240,9 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::External(ExternalOp::Llm),
+                            kind: FunctionKind::External(ExternalOp::Llm(
+                                bex_vm_types::LlmOp::RenderPrompt,
+                            )),
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -383,6 +385,11 @@ fn build_typing_context(
 /// for external builtin functions.
 fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
     match path {
+        // LLM operations
+        "baml.llm.PrimitiveClient.render_prompt" => {
+            Some(ExternalOp::Llm(bex_vm_types::LlmOp::RenderPrompt))
+        }
+        // System operations
         "baml.fs.open" => Some(ExternalOp::Sys(SysOp::FsOpen)),
         "baml.fs.File.read" => Some(ExternalOp::Sys(SysOp::FsRead)),
         "baml.fs.File.close" => Some(ExternalOp::Sys(SysOp::FsClose)),

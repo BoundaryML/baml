@@ -349,6 +349,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Media(_) => type_tags::MEDIA,
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
+                Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -741,6 +742,27 @@ impl BexVm {
             Object::PromptAst(ast) => Ok(ast),
             _ => Err(InternalError::TypeError {
                 expected: ObjectType::PromptAst.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Allocate a primitive client object on the heap.
+    pub fn alloc_primitive_client(&mut self, client: bex_vm_types::PrimitiveClient) -> Value {
+        Value::Object(self.tlab.alloc(Object::PrimitiveClient(client)))
+    }
+
+    /// Get primitive client from a Value.
+    pub fn as_primitive_client(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::PrimitiveClient, InternalError> {
+        let index = self.as_object_ptr(value, ObjectType::PrimitiveClient)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::PrimitiveClient(client) => Ok(client),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::PrimitiveClient.into(),
                 got: ObjectType::of(obj).into(),
             }),
         }

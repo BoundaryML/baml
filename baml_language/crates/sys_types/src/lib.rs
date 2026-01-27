@@ -8,14 +8,16 @@ use std::{future::Future, pin::Pin};
 
 // Re-export BexExternalValue for ops
 pub use bex_external_types::BexExternalValue;
+// ============================================================================
+// Operation Errors
+// ============================================================================
+
+// Re-export RenderPromptError for convenience
+pub use bex_jinja_runtime::RenderPromptError;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
 // Re-export resource types
 pub use sys_resource_types::{ResourceHandle, ResourceType};
-
-// ============================================================================
-// Operation Errors
-// ============================================================================
 
 /// Errors that can occur during external operation execution.
 #[derive(Debug, thiserror::Error)]
@@ -34,6 +36,9 @@ pub enum OpError {
 
     #[error("Operation not supported: {operation:?}")]
     Unsupported { operation: SysOp },
+
+    #[error("Render prompt error: {0}")]
+    RenderPrompt(#[from] RenderPromptError),
 }
 
 // ============================================================================

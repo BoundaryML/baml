@@ -348,6 +348,10 @@ impl BexHeap {
             Object::PromptAst(ast) => {
                 self.debug_assert_valid_prompt_ast(ast);
             }
+            Object::PrimitiveClient(client) => {
+                // Validate the options map reference
+                self.debug_assert_valid_index(client.options);
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)

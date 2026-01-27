@@ -1201,6 +1201,13 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
                 quote!(&PromptAst)
             }
         }
+        "PrimitiveClient" => {
+            if is_mut {
+                quote!(&mut PrimitiveClient)
+            } else {
+                quote!(&PrimitiveClient)
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote!(&mut Vec<Value>)
@@ -1245,6 +1252,7 @@ fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
         "()" => quote!(()),
         "Media" => quote!(MediaValue),
         "PromptAst" => quote!(PromptAst),
+        "PrimitiveClient" => quote!(PrimitiveClient),
         t if t.starts_with("Array") => quote!(Vec<Value>),
         t if t.starts_with("Map") => quote!(IndexMap<String, Value>),
         t if t.starts_with("Option<") => {
@@ -1396,6 +1404,17 @@ fn generate_single_extraction(
                 }
             }
         }
+        "PrimitiveClient" => {
+            if is_mut {
+                quote! {
+                    compile_error!("Mutable PrimitiveClient parameters not yet supported");
+                }
+            } else {
+                quote! {
+                    let #var_name = vm.as_primitive_client(&args[#idx])?.clone();
+                }
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote! {
@@ -1473,8 +1492,10 @@ fn needs_reference(type_name: &str, is_generic: bool) -> bool {
         return false; // Generic types are already passed as &Value
     }
 
-    matches!(type_name, "String" | "Media" | "PromptAst")
-        || type_name.starts_with("Array")
+    matches!(
+        type_name,
+        "String" | "Media" | "PromptAst" | "PrimitiveClient"
+    ) || type_name.starts_with("Array")
         || type_name.starts_with("Map")
 }
 
@@ -1507,6 +1528,7 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         t if t.starts_with("Array") => quote!(Ok(vm.alloc_array(result))),
         t if t.starts_with("Map") => quote!(Ok(vm.alloc_map(result))),
         "PromptAst" => quote!(Ok(vm.alloc_prompt_ast(result))),
+        "PrimitiveClient" => quote!(Ok(vm.alloc_primitive_client(result))),
         _ => quote!(Ok(result)),
     }
 }
