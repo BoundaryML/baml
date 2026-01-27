@@ -1036,7 +1036,12 @@ impl CompilerRunner {
             .clone();
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
+        // Also build class type tags for TypeTag switch optimization
         let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+        let mut class_type_tag_counter = 0i64;
+        // Build enums map (enum name -> variant name -> variant index) for MIR lowering
+        let mut enums: HashMap<String, HashMap<String, usize>> = HashMap::new();
         for file in &file_list {
             let item_tree = baml_compiler_hir::file_item_tree(&self.db, *file);
             let items_struct = baml_compiler_hir::file_items(&self.db, *file);
@@ -1049,7 +1054,21 @@ impl CompilerRunner {
                     for (idx, field) in class.fields.iter().enumerate() {
                         field_indices.insert(field.name.to_string(), idx);
                     }
+                    // Compute type tag for this class (CLASS_BASE + counter)
+                    let type_tag = baml_typetags::CLASS_BASE + class_type_tag_counter;
+                    class_type_tag_counter += 1;
+                    class_type_tags.insert(class_name.clone(), type_tag);
                     classes.insert(class_name, field_indices);
+                }
+                if let ItemId::Enum(enum_loc) = item {
+                    let enum_def = &item_tree[enum_loc.id(&self.db)];
+                    let enum_name = enum_def.name.to_string();
+
+                    let mut variant_indices = HashMap::new();
+                    for (idx, variant) in enum_def.variants.iter().enumerate() {
+                        variant_indices.insert(variant.name.to_string(), idx);
+                    }
+                    enums.insert(enum_name, variant_indices);
                 }
             }
         }
@@ -1104,6 +1123,8 @@ impl CompilerRunner {
                                 &vir,
                                 &self.db,
                                 &classes,
+                                &enums,
+                                &class_type_tags,
                                 &resolution_ctx,
                             );
                             baml_compiler_mir::pretty::display_function(&mir)

@@ -11,41 +11,11 @@ use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
 /// Global type tag constants for runtime type identification.
 ///
+/// Re-exported from `baml_typetags` crate to maintain backwards compatibility.
 /// These are used by the `TypeTag` instruction to extract a type identifier
 /// from any value for jump table dispatch on union types.
-///
-/// Primitives have fixed tags (0-10 reserved), classes start at 100.
 pub mod type_tags {
-    /// Integer type tag.
-    pub const INT: i64 = 0;
-    /// String type tag.
-    pub const STRING: i64 = 1;
-    /// Boolean type tag.
-    pub const BOOL: i64 = 2;
-    /// Null type tag.
-    pub const NULL: i64 = 3;
-    /// Float type tag.
-    pub const FLOAT: i64 = 4;
-    /// Enum variant type tag (all variants share this).
-    pub const ENUM: i64 = 5;
-    /// List/array type tag.
-    pub const LIST: i64 = 6;
-    /// Map type tag.
-    pub const MAP: i64 = 7;
-    /// Function type tag.
-    pub const FUNCTION: i64 = 8;
-    /// Future type tag.
-    pub const FUTURE: i64 = 9;
-    /// Media type tag.
-    pub const MEDIA: i64 = 10;
-    /// Resource type tag (file handle, socket, etc.).
-    pub const RESOURCE: i64 = 11;
-    /// `PromptAst` type tag.
-    pub const PROMPT_AST: i64 = 12;
-    /// Base value for class type tags (classes start at 100).
-    pub const CLASS_BASE: i64 = 100;
-    /// Unknown/invalid type tag.
-    pub const UNKNOWN: i64 = -1;
+    pub use baml_typetags::*;
 }
 
 /// Compiled program ready for execution.

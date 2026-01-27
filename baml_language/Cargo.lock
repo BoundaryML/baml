@@ -496,6 +496,7 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_compiler_vir",
+ "baml_typetags",
  "baml_workspace",
  "la-arena",
  "log",
@@ -709,6 +710,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_db",
  "baml_project",
+ "baml_typetags",
  "baml_workspace",
  "bex_program",
  "bex_vm",
@@ -724,6 +726,10 @@ dependencies = [
  "tempfile",
  "walkdir",
 ]
+
+[[package]]
+name = "baml_typetags"
+version = "0.1.0"
 
 [[package]]
 name = "baml_workspace"
@@ -870,6 +876,7 @@ dependencies = [
  "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
+ "baml_typetags",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
@@ -4827,6 +4834,7 @@ dependencies = [
  "baml_compiler_vir",
  "baml_db",
  "baml_project",
+ "baml_typetags",
  "baml_workspace",
  "bex_vm",
  "bex_vm_types",

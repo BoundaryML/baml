@@ -569,7 +569,7 @@ fn collect_uses_in_rvalue(
                 collect_uses_in_operand(field, block, stmt_idx, def_use);
             }
         }
-        Rvalue::Discriminant(place) | Rvalue::Len(place) => {
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             collect_uses_in_place(place, block, stmt_idx, def_use);
         }
         Rvalue::IsType { operand, .. } => {
@@ -1303,7 +1303,7 @@ fn collect_rvalue_reads(rvalue: &Rvalue, locals: &mut Vec<Local>) {
                 collect_operand_reads(op, locals);
             }
         }
-        Rvalue::Discriminant(place) | Rvalue::Len(place) => {
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
             collect_place_reads(place, locals);
         }
         Rvalue::IsType { operand, .. } => {

@@ -502,7 +502,12 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&db, root);
 
             // Build class field indices map (class name -> field name -> field index)
+            // Also build class type tags for TypeTag switch optimization
             let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
+            let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+            let mut class_type_tag_counter = 0i64;
+            // Build enum variant indices map (enum name -> variant name -> variant index)
+            let mut enums: HashMap<String, HashMap<String, usize>> = HashMap::new();
             for source_file in &source_files {
                 let item_tree = baml_compiler_hir::file_item_tree(&db, *source_file);
                 let items_struct = baml_compiler_hir::file_items(&db, *source_file);
@@ -514,7 +519,20 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         for (idx, field) in class.fields.iter().enumerate() {
                             field_indices.insert(field.name.to_string(), idx);
                         }
+                        // Compute type tag for this class (CLASS_BASE + counter)
+                        let type_tag = baml_typetags::CLASS_BASE + class_type_tag_counter;
+                        class_type_tag_counter += 1;
+                        class_type_tags.insert(class_name.clone(), type_tag);
                         classes.insert(class_name, field_indices);
+                    }
+                    if let baml_compiler_hir::ItemId::Enum(enum_loc) = item {
+                        let enum_def = &item_tree[enum_loc.id(&db)];
+                        let enum_name = enum_def.name.to_string();
+                        let mut variant_indices = HashMap::new();
+                        for (idx, variant) in enum_def.variants.iter().enumerate() {
+                            variant_indices.insert(variant.name.to_string(), idx);
+                        }
+                        enums.insert(enum_name, variant_indices);
                     }
                 }
             }
@@ -533,7 +551,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         // Lower HIR → VIR → MIR
                         let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx) {
                             Ok(vir) => {
-                                let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &resolution_ctx);
+                                let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &enums, &class_type_tags, &resolution_ctx);
                                 baml_compiler_mir::pretty::display_function(&mir)
                             }
                             Err(baml_compiler_vir::LoweringError::LlmFunction) => {

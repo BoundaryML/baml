@@ -301,6 +301,9 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
         Rvalue::Discriminant(place) => {
             write!(f, "discriminant({place})")
         }
+        Rvalue::TypeTag(place) => {
+            write!(f, "type_tag({place})")
+        }
         Rvalue::Len(place) => {
             write!(f, "len({place})")
         }

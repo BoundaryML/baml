@@ -672,7 +672,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             Rvalue::Discriminant(place) => {
                 self.emit_place_value_pull(place, mir);
-                // TODO: Emit actual discriminant extraction instruction
+                self.emit(Instruction::Discriminant);
+            }
+
+            Rvalue::TypeTag(place) => {
+                self.emit_place_value_pull(place, mir);
+                self.emit(Instruction::TypeTag);
             }
 
             Rvalue::Len(place) => {

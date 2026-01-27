@@ -423,6 +423,14 @@ pub enum Rvalue {
     /// Read discriminant of enum/union: `discriminant(_1)`
     Discriminant(Place),
 
+    /// Extract runtime type tag from any value: `type_tag(_1)`
+    ///
+    /// Used for jump table dispatch on union types (instanceof patterns).
+    /// Type tags are global constants:
+    /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
+    /// - Classes: assigned unique IDs starting at 100
+    TypeTag(Place),
+
     /// Get length of array: `len(_1)`
     Len(Place),
 

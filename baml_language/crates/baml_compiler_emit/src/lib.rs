@@ -112,9 +112,11 @@ pub fn compile_files(
 
     // Build classes map (class name -> field name -> field index) and add Class objects to program
     // Also build class_field_types for type inference (class name -> field name -> Ty)
+    // Also build class_type_tags for TypeTag switch optimization (class name -> type tag)
     let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
     let mut class_field_types: HashMap<Name, HashMap<Name, baml_compiler_tir::Ty>> = HashMap::new();
     let mut class_object_indices: HashMap<String, usize> = HashMap::new();
+    let mut class_type_tags: HashMap<String, i64> = HashMap::new();
     let mut class_type_tag_counter = 0i64;
 
     for file in files {
@@ -136,11 +138,15 @@ pub fn compile_files(
                     field_types.insert(field.name.clone(), ty);
                 }
 
+                // Compute type tag for this class
+                let type_tag = type_tags::CLASS_BASE + class_type_tag_counter;
+                class_type_tags.insert(class_name.clone(), type_tag);
+
                 // Add Class object to program and record its index
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
                     field_names,
-                    type_tag: type_tags::CLASS_BASE + class_type_tag_counter,
+                    type_tag,
                 });
                 class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
@@ -293,6 +299,8 @@ pub fn compile_files(
                             &vir,
                             db,
                             &classes,
+                            &enum_variants,
+                            &class_type_tags,
                             &resolution_ctx,
                         );
 
