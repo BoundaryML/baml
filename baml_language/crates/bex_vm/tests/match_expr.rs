@@ -1772,6 +1772,168 @@ fn match_enum_variant_last() -> anyhow::Result<()> {
 }
 
 // ============================================================================
+// Non-Exhaustive Enum Tests (with wildcard)
+// ============================================================================
+
+#[test]
+fn match_enum_variant_with_wildcard() -> anyhow::Result<()> {
+    // Non-exhaustive: wildcard catches unmatched variants
+    assert_vm_executes(Program {
+        source: r#"
+            enum Status {
+                Active
+                Inactive
+                Pending
+            }
+
+            function classify(s Status) -> string {
+                match (s) {
+                    Status.Active => "active",
+                    Status.Inactive => "inactive",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(Status.Pending)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("other")),
+    })
+}
+
+#[test]
+fn match_enum_variant_with_wildcard_matched() -> anyhow::Result<()> {
+    // Non-exhaustive: explicit variant matched
+    assert_vm_executes(Program {
+        source: r#"
+            enum Status {
+                Active
+                Inactive
+                Pending
+            }
+
+            function classify(s Status) -> string {
+                match (s) {
+                    Status.Active => "active",
+                    Status.Inactive => "inactive",
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(Status.Active)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("active")),
+    })
+}
+
+// ============================================================================
+// Exhaustive and Non-Exhaustive Class Type Tests
+// ============================================================================
+
+#[test]
+fn match_class_types_exhaustive_first() -> anyhow::Result<()> {
+    // Exhaustive: all classes covered, matches first
+    assert_vm_executes(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    b: Bird => "bird: " + b.name
+                }
+            }
+            function main() -> string {
+                classify(Cat { name: "Whiskers" })
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("cat: Whiskers")),
+    })
+}
+
+#[test]
+fn match_class_types_exhaustive_last() -> anyhow::Result<()> {
+    // Exhaustive: all classes covered, matches last
+    assert_vm_executes(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    b: Bird => "bird: " + b.name
+                }
+            }
+            function main() -> string {
+                classify(Bird { name: "Tweety" })
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("bird: Tweety")),
+    })
+}
+
+#[test]
+fn match_class_types_non_exhaustive_wildcard() -> anyhow::Result<()> {
+    // Non-exhaustive: wildcard catches unmatched class
+    assert_vm_executes(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(Bird { name: "Tweety" })
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("other")),
+    })
+}
+
+#[test]
+fn match_class_types_non_exhaustive_matched() -> anyhow::Result<()> {
+    // Non-exhaustive: explicit class matched
+    assert_vm_executes(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    _ => "other"
+                }
+            }
+            function main() -> string {
+                classify(Dog { name: "Rex" })
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("dog: Rex")),
+    })
+}
+
+// ============================================================================
 // Complex Scrutinee Expressions
 // ============================================================================
 

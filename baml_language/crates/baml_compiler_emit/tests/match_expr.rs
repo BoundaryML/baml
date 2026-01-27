@@ -4,7 +4,7 @@ use baml_tests::{
     codegen::{Program, assert_compiles},
     vm::{Instruction, Value},
 };
-use bex_vm_types::bytecode::CmpOp;
+use bex_vm_types::bytecode::{BinOp, CmpOp};
 
 // ============================================================================
 // Basic Catch-All Tests
@@ -1640,6 +1640,64 @@ fn match_enum_variant_switch() -> anyhow::Result<()> {
     })
 }
 
+/// Non-exhaustive enum match (with wildcard) should NOT get the exhaustive optimization.
+/// The last arm's comparison must still be emitted because the wildcard catches
+/// values that don't match any variant pattern.
+#[test]
+fn match_enum_variant_with_wildcard_not_exhaustive() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            enum Status {
+                Active
+                Inactive
+                Pending
+            }
+
+            function classify(s Status) -> string {
+                match (s) {
+                    Status.Active => "active",
+                    Status.Inactive => "inactive",
+                    _ => "other"
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // Non-exhaustive: wildcard arm means we can't skip comparisons
+            // All comparisons must be emitted (no exhaustive optimization)
+            vec![
+                // Extract discriminant (variant index) from enum value
+                Instruction::LoadVar("s".to_string()),
+                Instruction::Discriminant,
+                // First arm: check if variant index == 0 (Active)
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(0)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(12),
+                // Second arm: check if variant index == 1 (Inactive)
+                // NOT skipped because this is non-exhaustive (has wildcard)
+                Instruction::Copy(0),
+                Instruction::LoadConst(Value::Int(1)),
+                Instruction::CmpOp(CmpOp::Eq),
+                Instruction::PopJumpIfFalse(3),
+                Instruction::Pop(1),
+                Instruction::Jump(4),
+                // Fall through to wildcard (pop discriminant)
+                Instruction::Pop(1),
+                // Bodies in reverse order
+                Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(4),
+                Instruction::LoadConst(Value::string("inactive")),
+                Instruction::Jump(2),
+                Instruction::LoadConst(Value::string("active")),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
 /// Enum variant patterns with 4+ arms should use Discriminant + `JumpTable`.
 #[test]
 fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
@@ -1681,6 +1739,124 @@ fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("E")),
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("N")),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+// ============================================================================
+// Exhaustive and Non-Exhaustive Class Type Tests
+// ============================================================================
+
+/// Exhaustive class type match (all classes covered, no wildcard) should use
+/// the exhaustive optimization for if-else chain (skips last instanceof check).
+#[test]
+fn match_class_types_exhaustive() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    b: Bird => "bird: " + b.name
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // Exhaustive match: 3 classes with if-else chain
+            // Last arm (Bird) doesn't need instanceof check - exhaustive optimization
+            vec![
+                // c: Cat instanceof check
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadConst(Value::class("Cat")),
+                Instruction::CmpOp(CmpOp::InstanceOf),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(17),
+                // d: Dog instanceof check
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadConst(Value::class("Dog")),
+                Instruction::CmpOp(CmpOp::InstanceOf),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(7),
+                // b: Bird - no instanceof check (exhaustive optimization)
+                Instruction::Jump(1),
+                // Bird body
+                Instruction::LoadConst(Value::string("bird: ")),
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadField(0),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::Jump(10),
+                // Dog body
+                Instruction::LoadConst(Value::string("dog: ")),
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadField(0),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::Jump(5),
+                // Cat body
+                Instruction::LoadConst(Value::string("cat: ")),
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadField(0),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::Return,
+            ],
+        )],
+    })
+}
+
+/// Non-exhaustive class type match (with wildcard) should NOT get the exhaustive
+/// optimization. All instanceof checks must be emitted.
+#[test]
+fn match_class_types_non_exhaustive() -> anyhow::Result<()> {
+    assert_compiles(Program {
+        source: r#"
+            class Cat { name string }
+            class Dog { name string }
+            class Bird { name string }
+
+            function classify(animal Cat | Dog | Bird) -> string {
+                match (animal) {
+                    c: Cat => "cat: " + c.name,
+                    d: Dog => "dog: " + d.name,
+                    _ => "other"
+                }
+            }
+        "#,
+        expected: vec![(
+            "classify",
+            // Non-exhaustive: wildcard means ALL instanceof checks required
+            vec![
+                // c: Cat instanceof check
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadConst(Value::class("Cat")),
+                Instruction::CmpOp(CmpOp::InstanceOf),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(13),
+                // d: Dog instanceof check - NOT skipped (wildcard present)
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadConst(Value::class("Dog")),
+                Instruction::CmpOp(CmpOp::InstanceOf),
+                Instruction::PopJumpIfFalse(2),
+                Instruction::Jump(3),
+                // Fall through to wildcard
+                Instruction::LoadConst(Value::string("other")),
+                Instruction::Jump(10),
+                // Dog body
+                Instruction::LoadConst(Value::string("dog: ")),
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadField(0),
+                Instruction::BinOp(BinOp::Add),
+                Instruction::Jump(5),
+                // Cat body
+                Instruction::LoadConst(Value::string("cat: ")),
+                Instruction::LoadVar("animal".to_string()),
+                Instruction::LoadField(0),
+                Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
             ],
         )],
