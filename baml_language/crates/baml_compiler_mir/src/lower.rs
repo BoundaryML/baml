@@ -1112,6 +1112,13 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             return None;
         }
 
+        // Deduplicate switch arms - union patterns like `A | A` can create duplicates.
+        // We keep the first occurrence (earliest arm index) for each value.
+        // This is correct because if a value appears multiple times, they all
+        // map to the same arm anyway.
+        let mut seen_values = std::collections::HashSet::new();
+        switch_arms.retain(|(value, _)| seen_values.insert(*value));
+
         if matches!(kind, SwitchKind::TypeTag) && switch_arms.len() < MIN_TYPETAG_ARMS {
             return None;
         }
@@ -1133,6 +1140,18 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     ///
     /// Returns the type tag for primitives (using `baml_typetags` constants)
     /// or for classes (using the pre-computed `class_type_tags` map).
+    ///
+    /// # `TypeAlias` handling
+    ///
+    /// `TypeAliases` are looked up by their alias name in `class_type_tags`.
+    /// This has limitations:
+    /// - `TypeAliases` to primitives won't be found and will return `None`
+    /// - `TypeAliases` to classes will only work if the alias name is registered
+    ///
+    /// When `None` is returned, the pattern falls back to non-switch optimization,
+    /// which is safe but may miss optimization opportunities. Full `TypeAlias`
+    /// resolution would require resolving through potentially recursive aliases,
+    /// which is not yet implemented.
     fn type_tag_for_vir_ty(&self, ty: &baml_compiler_vir::Ty) -> Option<i64> {
         use baml_compiler_vir::Ty;
         match ty {
@@ -1142,6 +1161,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Ty::Null => Some(baml_typetags::NULL),
             Ty::Float => Some(baml_typetags::FLOAT),
             Ty::Class(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
+            // TypeAliases: look up by alias name. See doc comment for limitations.
             Ty::TypeAlias(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
             _ => None, // Not a type with a known tag
         }

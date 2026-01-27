@@ -1159,6 +1159,26 @@ fn match_union_client_error() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn match_union_with_duplicates() -> anyhow::Result<()> {
+    // Duplicate values in union patterns should be handled correctly
+    // (deduplicated, not cause undefined behavior)
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let x = 1;
+                match (x) {
+                    1 | 1 | 2 => "one or two",
+                    3 | 3 => "three",
+                    _ => "other"
+                }
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one or two")),
+    })
+}
+
 // ============================================================================
 // Catch-All Binding with Integer Patterns
 // ============================================================================
