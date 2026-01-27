@@ -175,6 +175,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             discriminant,
             arms,
             otherwise,
+            exhaustive,
         } => {
             write!(f, "switch ")?;
             write_operand(f, discriminant)?;
@@ -185,7 +186,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 }
                 write!(f, "{val}: {target}")?;
             }
-            write!(f, ", otherwise: {otherwise}];")
+            if *exhaustive {
+                write!(f, ", otherwise: {otherwise}] (exhaustive);")
+            } else {
+                write!(f, ", otherwise: {otherwise}];")
+            }
         }
         Terminator::Return => {
             write!(f, "return;")

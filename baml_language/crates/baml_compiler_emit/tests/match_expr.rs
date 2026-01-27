@@ -1581,6 +1581,9 @@ fn match_spanning_zero_jump_table() -> anyhow::Result<()> {
 
 /// Enum variant patterns with 3 arms use if-else chain with Discriminant extraction.
 /// (`JumpTable` requires 4+ arms)
+///
+/// For exhaustive enum matches, the last arm's comparison is skipped since if all
+/// other comparisons failed, the value must be the remaining variant.
 #[test]
 fn match_enum_variant_switch() -> anyhow::Result<()> {
     assert_compiles(Program {
@@ -1602,7 +1605,8 @@ fn match_enum_variant_switch() -> anyhow::Result<()> {
         expected: vec![(
             "classify",
             // With Discriminant instruction: extract variant index once, then compare integers
-            // This is more efficient than creating variant objects for each comparison
+            // This is more efficient than creating variant objects for each comparison.
+            // For exhaustive matches, the last arm's comparison is skipped.
             vec![
                 // Extract discriminant (variant index) from enum value
                 Instruction::LoadVar("s".to_string()),
@@ -1613,23 +1617,17 @@ fn match_enum_variant_switch() -> anyhow::Result<()> {
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(18),
+                Instruction::Jump(13),
                 // Second arm: check if variant index == 1 (Inactive)
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(10),
-                // Third arm: check if variant index == 2 (Pending)
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
+                Instruction::Jump(5),
+                // Third arm: exhaustive match - skip comparison, value must be Pending
                 Instruction::Pop(1),
-                Instruction::Jump(2),
-                // Fall through (pop discriminant and jump to unreachable -> pending body)
-                Instruction::Pop(1),
+                Instruction::Jump(1),
                 // Bodies in reverse order
                 Instruction::LoadConst(Value::string("pending")),
                 Instruction::Jump(4),

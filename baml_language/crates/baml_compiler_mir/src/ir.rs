@@ -216,6 +216,10 @@ pub enum Terminator {
         arms: Vec<(i64, BlockId)>,
         /// Default target if no arm matches.
         otherwise: BlockId,
+        /// Whether this switch is exhaustive (all possible values covered).
+        /// When true, the last arm's comparison can be skipped since if all
+        /// other arms failed, the discriminant must match the last one.
+        exhaustive: bool,
     },
 
     /// Return from function.

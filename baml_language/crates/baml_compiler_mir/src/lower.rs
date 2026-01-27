@@ -877,6 +877,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         switch_kind,
                         switch_values,
                         wildcard_arm_idx,
+                        *is_exhaustive,
                         join_block,
                         dest,
                         body,
@@ -1153,6 +1154,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     ///
     /// For enum variants, emits a `Discriminant` instruction first to extract the
     /// variant index before the switch.
+    ///
+    /// If `is_exhaustive` is true and there's no wildcard arm, the switch is marked
+    /// as exhaustive, allowing the codegen to skip the last arm's comparison.
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     fn lower_match_as_switch(
         &mut self,
@@ -1162,6 +1166,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         switch_kind: SwitchKind,
         switch_values: Vec<(i64, usize)>,
         wildcard_arm_idx: Option<usize>,
+        is_exhaustive: bool,
         join_block: BlockId,
         dest: Place,
         body: &ExprBody,
@@ -1214,9 +1219,18 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             .map(|(value, arm_idx)| (*value, arm_blocks[*arm_idx]))
             .collect();
 
+        // Switch is exhaustive when all values are explicitly enumerated (no wildcard)
+        // AND the type checker marked the match as exhaustive.
+        // This allows codegen to skip the last arm's comparison.
+        let exhaustive = wildcard_arm_idx.is_none() && is_exhaustive;
+
         // Emit the switch terminator
-        self.builder
-            .switch(switch_discriminant, switch_arms, otherwise_block);
+        self.builder.switch(
+            switch_discriminant,
+            switch_arms,
+            otherwise_block,
+            exhaustive,
+        );
 
         // Lower each arm's body
         for (i, arm) in arms.iter().enumerate() {
