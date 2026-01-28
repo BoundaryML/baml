@@ -242,15 +242,21 @@ jobs:
         run: |
           rustup component add clippy
           rustup target add wasm32-unknown-unknown
+          # install cargo binstall
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+            | bash
         working-directory: baml_language
 
       - name: "Install uv"
         uses: astral-sh/setup-uv@v5
 
-      - name: "Install prek"
-        uses: j178/prek-action@v1
+      - name: "Install mise"
+        uses: jdx/mise-action@v2
+        # Pinning to old version because newer versions time out on the npm backend,
+        # see https://github.com/jdx/mise/discussions/7630
         with:
-          install-only: true
+          version: 2025.12.12
 
       - name: "Cache prek"
         uses: actions/cache@v4

@@ -1,0 +1,27 @@
+# Mise tasks for baml_language
+# Ordering between tasks is enforced by .pre-commit-config.yaml priorities, not here
+
+[tasks.validate-markdown]
+description = "Validate markdown files"
+run = "scripts/validate_markdown.py"
+sources = ["**/*.md", ".markdown-whitelist"]
+
+[tasks.fmt]
+description = "Run cargo fmt"
+run = "cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate"
+sources = ["**/*.rs"]
+
+[tasks.clippy-fix]
+description = "Auto-fix clippy warnings"
+run = "cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged --allow-no-vcs -- -D warnings"
+sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.clippy]
+description = "Run cargo clippy"
+run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.clippy-wasm]
+description = "Run cargo clippy for wasm target"
+run = "cargo clippy --workspace --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --exclude baml_bridge_cffi --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
+sources = ["**/*.rs", "**/Cargo.toml"]

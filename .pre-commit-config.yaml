@@ -51,7 +51,7 @@ repos:
 
       - id: cargo-fmt
         name: cargo fmt
-        entry: bash -c 'cd baml_language && cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate'
+        entry: bash -c 'cd baml_language && mise run fmt'
         language: system
         pass_filenames: false
         types: [rust]
@@ -68,7 +68,7 @@ repos:
 
       - id: bep-readme
         name: bep readme
-        entry: bash -c 'command -v mise >/dev/null && mise run bep:readme || true'
+        entry: bash -c 'mise run bep:readme'
         language: system
         pass_filenames: false
         files: ^beps/
@@ -76,7 +76,7 @@ repos:
 
       - id: validate-markdown
         name: validate markdown files
-        entry: bash -c 'cd baml_language && scripts/validate_markdown.py'
+        entry: bash -c 'cd baml_language && mise run validate-markdown'
         language: system
         pass_filenames: false
         files: ^baml_language/(.*\.md|\.markdown-whitelist)$
@@ -84,7 +84,7 @@ repos:
 
       - id: cargo-clippy
         name: cargo clippy
-        entry: bash -c 'cd baml_language && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged -- -D warnings 2>/dev/null; cargo clippy --workspace --all-targets --all-features -- -D warnings'
+        entry: bash -c 'cd baml_language && mise run clippy-fix 2>/dev/null; mise run clippy'
         language: system
         pass_filenames: false
         types: [rust]
@@ -93,7 +93,7 @@ repos:
 
       - id: cargo-clippy-wasm
         name: cargo clippy (wasm)
-        entry: bash -c 'cd baml_language && cargo clippy --workspace --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --exclude baml_bridge_cffi --target wasm32-unknown-unknown --all-features --locked -- -D warnings'
+        entry: bash -c 'cd baml_language && mise run clippy-wasm'
         language: system
         pass_filenames: false
         types: [rust]
