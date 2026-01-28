@@ -323,6 +323,10 @@ impl BexHeap {
                     worklist.push(*ptr);
                 }
             }
+            Object::ClientDefinition(def) => {
+                // ClientDefinition.options is a heap pointer to a Function
+                worklist.push(def.options);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -428,6 +432,12 @@ impl BexHeap {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
                     }
+                }
+            }
+            Object::ClientDefinition(def) => {
+                // Update options pointer
+                if let Some(&new_ptr) = forwarding.get(&def.options) {
+                    def.options = new_ptr;
                 }
             }
             // Primitives have no references

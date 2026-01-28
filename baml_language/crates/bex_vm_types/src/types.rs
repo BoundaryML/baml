@@ -100,8 +100,10 @@ pub enum SysOp {
     LlmRenderPrompt,
     /// Get the Jinja template for a function: `baml.llm.get_jinja_template(function_name) -> String`
     LlmGetJinjaTemplate,
-    /// Get the client resolver function for a function: `baml.llm.get_client_function(function_name) -> fn() -> ClientCallChain`
-    LlmGetClientFunction,
+    /// Get the client chain for a function: `baml.llm.get_client_chain(function_name) -> Array<ClientDefinition>`
+    LlmGetClientChain,
+    /// Build a `PrimitiveClient` from evaluated options: `baml.llm.build_primitive_client(...) -> PrimitiveClient`
+    LlmBuildPrimitiveClient,
 }
 
 impl std::fmt::Display for SysOp {
@@ -122,7 +124,8 @@ impl std::fmt::Display for SysOp {
             SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
             SysOp::LlmRenderPrompt => write!(f, "llm.render_prompt"),
             SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
-            SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
+            SysOp::LlmGetClientChain => write!(f, "llm.get_client_chain"),
+            SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
         }
     }
 }
@@ -432,8 +435,11 @@ pub enum Object {
     /// Prompt AST tree node.
     PromptAst(PromptAst),
 
-    /// LLM primitive client.
+    /// LLM primitive client (resolved, options evaluated).
     PrimitiveClient(PrimitiveClient),
+
+    /// LLM client definition (unresolved, options not yet evaluated).
+    ClientDefinition(ClientDefinition),
 
     /// Client orchestration chain.
     ClientCallChain(ClientCallChain),
@@ -461,6 +467,9 @@ impl std::fmt::Display for Object {
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::PrimitiveClient(client) => {
                 write!(f, "<client {}:{}>", client.provider, client.name)
+            }
+            Object::ClientDefinition(def) => {
+                write!(f, "<client_def {}:{}>", def.provider, def.name)
             }
             Object::ClientCallChain(chain) => {
                 write!(f, "<client_call_chain len={}>", chain.clients.len())
@@ -554,6 +563,9 @@ impl std::fmt::Display for MediaContent {
 // ============================================================================
 
 /// A primitive LLM client (single provider, not composite).
+///
+/// This is the resolved/evaluated form of a client, ready to make API calls.
+/// Options have been evaluated (env vars resolved, expressions computed).
 #[derive(Clone, Debug)]
 pub struct PrimitiveClient {
     /// Client name (e.g., "GPT4").
@@ -564,7 +576,33 @@ pub struct PrimitiveClient {
     pub default_role: String,
     /// Allowed roles for chat messages.
     pub allowed_roles: Vec<String>,
-    /// Provider-specific options (heap-allocated map).
+    /// Provider-specific options (heap-allocated map, already evaluated).
+    pub options: HeapPtr,
+}
+
+// ============================================================================
+// ClientDefinition - unresolved client definition
+// ============================================================================
+
+/// An unresolved client definition.
+///
+/// Unlike `PrimitiveClient`, the options are not yet evaluated. The `options`
+/// field points to a Function that, when called, evaluates the options
+/// expressions (env vars, string concatenation, etc.) and returns a Map.
+///
+/// Call `resolve()` to evaluate options and get a `PrimitiveClient`.
+#[derive(Clone, Debug)]
+pub struct ClientDefinition {
+    /// Client name (e.g., "GPT4").
+    pub name: String,
+    /// Provider type (e.g., "openai", "anthropic").
+    pub provider: String,
+    /// Default role for chat messages (e.g., "user").
+    pub default_role: String,
+    /// Allowed roles for chat messages.
+    pub allowed_roles: Vec<String>,
+    /// Function that evaluates options and returns a Map.
+    /// Call this function to get the evaluated options.
     pub options: HeapPtr,
 }
 
@@ -671,6 +709,7 @@ pub enum ObjectType {
     Resource,
     PromptAst,
     PrimitiveClient,
+    ClientDefinition,
     ClientCallChain,
 }
 
@@ -689,6 +728,7 @@ impl ObjectType {
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::PrimitiveClient(_) => Self::PrimitiveClient,
+            Object::ClientDefinition(_) => Self::ClientDefinition,
             Object::ClientCallChain(_) => Self::ClientCallChain,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
@@ -727,6 +767,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::PrimitiveClient => write!(f, "primitive_client"),
+            ObjectType::ClientDefinition => write!(f, "client_definition"),
             ObjectType::ClientCallChain => write!(f, "client_call_chain"),
         }
     }

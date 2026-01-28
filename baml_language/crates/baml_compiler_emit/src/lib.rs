@@ -388,7 +388,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         // LLM operations
         "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::LlmRenderPrompt),
         "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
-        "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
+        "baml.llm.get_client_chain" => Some(SysOp::LlmGetClientChain),
+        "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
         // System operations
         "baml.fs.open" => Some(SysOp::FsOpen),
         "baml.fs.File.read" => Some(SysOp::FsRead),

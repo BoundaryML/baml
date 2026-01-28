@@ -155,6 +155,9 @@ impl Object {
             VmObject::ClientCallChain(_) => {
                 anyhow::bail!("Unsupported object type for testing: {obj:?}")
             }
+            VmObject::ClientDefinition(_) => {
+                anyhow::bail!("Unsupported object type for testing: {obj:?}")
+            }
             #[cfg(feature = "heap_debug")]
             VmObject::Sentinel(_) => anyhow::bail!("Unsupported object type for testing: {obj:?}"),
         }

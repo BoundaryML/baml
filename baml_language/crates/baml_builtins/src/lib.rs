@@ -237,14 +237,25 @@ macro_rules! with_builtins {
                     #[builtin]
                     struct PromptAst {}
 
-                    /// A primitive LLM client (single provider, not composite).
-                    /// This is hidden from the type checker as it's for internal use.
+                    /// A primitive LLM client (single provider, fully resolved).
+                    /// Options have been evaluated (env vars resolved, expressions computed).
                     #[builtin]
                     struct PrimitiveClient {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[external]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+                    }
+
+                    /// An unresolved client definition.
+                    /// Options are stored as a function that evaluates them when called.
+                    /// Call `resolve()` to get a fully evaluated `PrimitiveClient`.
+                    #[builtin]
+                    struct ClientDefinition {
+                        /// Evaluate options and return a resolved PrimitiveClient.
+                        /// This calls the options function to evaluate env vars, expressions, etc.
+                        #[external]
+                        fn resolve(self: ClientDefinition) -> PrimitiveClient;
                     }
 
                     /// A chain of clients for orchestration (fallback, round-robin, etc.).
@@ -260,10 +271,22 @@ macro_rules! with_builtins {
                     #[external]
                     fn get_jinja_template(function_name: String) -> String;
 
-                    /// Get the client resolver for an LLM function.
-                    /// Returns a ClientCallChain containing the client(s) configured for this function.
+                    /// Get the client chain for an LLM function.
+                    /// Returns an array of ClientDefinition objects for the function.
+                    /// TODO: Currently returns ClientCallChain with evaluated clients.
                     #[external]
-                    fn get_client_function(function_name: String) -> ClientCallChain;
+                    fn get_client_chain(function_name: String) -> ClientCallChain;
+
+                    /// Build a PrimitiveClient from evaluated options.
+                    /// Called after options have been evaluated by bytecode.
+                    #[external]
+                    fn build_primitive_client(
+                        name: String,
+                        provider: String,
+                        default_role: String,
+                        allowed_roles: Array<String>,
+                        options: Map<String, Any>
+                    ) -> PrimitiveClient;
                 }
             }
 

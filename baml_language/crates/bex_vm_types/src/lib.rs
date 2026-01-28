@@ -22,7 +22,7 @@ pub use bytecode::{
 pub use heap_ptr::HeapPtr;
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
-    Class, ClientCallChain, ConstValue, Enum, Function, FunctionKind, Future, Instance, Object,
-    ObjectType, PendingFuture, PrimitiveClient, Program, PromptAst, SysOp, Value, Variant,
-    type_tags,
+    Class, ClientCallChain, ClientDefinition, ConstValue, Enum, Function, FunctionKind, Future,
+    Instance, Object, ObjectType, PendingFuture, PrimitiveClient, Program, PromptAst, SysOp, Value,
+    Variant, type_tags,
 };

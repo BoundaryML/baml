@@ -350,6 +350,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
+                Object::ClientDefinition(_) => type_tags::CLIENT_DEFINITION,
                 Object::ClientCallChain(_) => type_tags::CLIENT_CALL_CHAIN,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]

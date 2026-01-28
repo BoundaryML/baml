@@ -309,6 +309,7 @@ fn deep_copy_value_recursive(
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
                 Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
+                Object::ClientDefinition(def) => vm.tlab.alloc(Object::ClientDefinition(def)),
                 Object::ClientCallChain(chain) => vm.tlab.alloc(Object::ClientCallChain(chain)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
@@ -537,6 +538,9 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
             Object::PrimitiveClient(c) => Ok(format!("<client {}:{}>", c.provider, c.name)),
+            Object::ClientDefinition(def) => {
+                Ok(format!("<client_def {}:{}>", def.provider, def.name))
+            }
             Object::ClientCallChain(chain) => {
                 Ok(format!("<client_call_chain len={}>", chain.clients.len()))
             }

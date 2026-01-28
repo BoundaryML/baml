@@ -16,15 +16,18 @@
 /// @param args The arguments to pass to the template
 /// @param client_index Which client in the chain to use (for fallback/retry)
 /// @return The rendered prompt AST
-function render_prompt(function_name: string, args: map<string, any>, client_index: int) -> baml.llm.PromptAst {
+// Note: args should be map<string, any> but BAML doesn't have 'any' type yet.
+// Using int as a placeholder - the actual type is determined at runtime.
+function render_prompt(function_name: string, args: int, client_index: int) -> baml.llm.PromptAst {
     // Get the Jinja template string for this function
     let jinja_string = baml.llm.get_jinja_template(function_name)
 
     // Get the client chain for this function
-    let client_call_chain = baml.llm.get_client_function(function_name)
+    // TODO: Should return Array<ClientDefinition>, currently returns ClientCallChain
+    let client_chain = baml.llm.get_client_chain(function_name)
 
     // Get the specific client from the chain
-    let clients = client_call_chain.as_list()
+    let clients = client_chain.as_list()
     let client = clients.at(client_index)
 
     // Render the prompt using the client's configuration

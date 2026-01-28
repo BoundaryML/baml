@@ -2466,6 +2466,9 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::ClientCallChain(chain) => {
                     format!("<client_call_chain: {} clients>", chain.clients.len())
                 }
+                Object::ClientDefinition(def) => {
+                    format!("<client_def {}:{}>", def.provider, def.name)
+                }
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),
             }

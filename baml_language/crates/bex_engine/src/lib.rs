@@ -657,6 +657,9 @@ impl BexEngine {
             Object::ClientCallChain(_) => Err(EngineError::CannotConvert {
                 type_name: "client_call_chain".to_string(),
             }),
+            Object::ClientDefinition(_) => Err(EngineError::CannotConvert {
+                type_name: "client_definition".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1315,10 +1318,16 @@ impl BexEngine {
                 let result = self.execute_get_jinja_template(&args);
                 SysOpResult::Ready(result)
             }
-            SysOp::LlmGetClientFunction => {
-                // get_client_function(function_name: String) -> ClientCallChain
-                // For now, returns the client chain directly instead of a function
-                let result = self.execute_get_client_function(&args);
+            SysOp::LlmGetClientChain => {
+                // get_client_chain(function_name: String) -> Array<ClientDefinition>
+                // TODO: Should return ClientDefinition objects with unevaluated options.
+                // For now, returns evaluated PrimitiveClients wrapped in a ClientCallChain.
+                let result = self.execute_get_client_chain(&args);
+                SysOpResult::Ready(result)
+            }
+            SysOp::LlmBuildPrimitiveClient => {
+                // build_primitive_client(name, provider, default_role, allowed_roles, options) -> PrimitiveClient
+                let result = Self::execute_build_primitive_client(&args);
                 SysOpResult::Ready(result)
             }
         }
@@ -1455,15 +1464,15 @@ impl BexEngine {
         }
     }
 
-    /// Execute the `get_client_function` LLM operation.
+    /// Execute the `get_client_chain` LLM operation.
     ///
     /// Arguments: [`function_name`: String]
     /// Returns: `ClientCallChain` (the client chain for the function)
     ///
-    /// Note: In the future, this should return a function that resolves to
-    /// a `ClientCallChain` (for dynamic client resolution). For now, we return
-    /// the chain directly with a simple lookup.
-    fn execute_get_client_function(
+    /// TODO: This should return `Array<ClientDefinition>` with unevaluated options.
+    /// The caller would then call `client_def.resolve()` to get a `PrimitiveClient`.
+    /// For now, we return a `ClientCallChain` with already-evaluated `PrimitiveClient`s.
+    fn execute_get_client_chain(
         &self,
         args: &[BexExternalValue],
     ) -> Result<BexExternalValue, OpError> {
@@ -1528,6 +1537,92 @@ impl BexEngine {
         };
 
         Ok(BexExternalValue::ClientCallChain(chain))
+    }
+
+    /// Execute the `build_primitive_client` LLM operation.
+    ///
+    /// Arguments: [name: String, provider: String, `default_role`: String, `allowed_roles`: Array<String>, options: Map]
+    /// Returns: `PrimitiveClient`
+    ///
+    /// This is a simple constructor that takes already-evaluated values and builds a `PrimitiveClient`.
+    /// Called from bytecode after the `options()` function has been evaluated.
+    fn execute_build_primitive_client(
+        args: &[BexExternalValue],
+    ) -> Result<BexExternalValue, OpError> {
+        // Extract name
+        let name = match &args[0] {
+            BexExternalValue::String(s) => s.clone(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Extract provider
+        let provider = match &args[1] {
+            BexExternalValue::String(s) => s.clone(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Extract default_role
+        let default_role = match &args[2] {
+            BexExternalValue::String(s) => s.clone(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Extract allowed_roles
+        let allowed_roles = match &args[3] {
+            BexExternalValue::Array { items, .. } => items
+                .iter()
+                .map(|item| match item {
+                    BexExternalValue::String(s) => Ok(s.clone()),
+                    other => Err(OpError::TypeError {
+                        expected: "String",
+                        actual: other.type_name().to_string(),
+                    }),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "Array<String>",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Extract options map
+        let options = match &args[4] {
+            BexExternalValue::Map { entries, .. } => entries.clone(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "Map",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Build the PrimitiveClient
+        let client = bex_external_types::PrimitiveClientValue {
+            name,
+            provider,
+            default_role,
+            allowed_roles,
+            options,
+        };
+
+        Ok(BexExternalValue::PrimitiveClient(client))
     }
 
     /// Convert VM values to `BexExternalValues` for sys ops.

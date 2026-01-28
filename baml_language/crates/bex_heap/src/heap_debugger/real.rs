@@ -358,6 +358,10 @@ impl BexHeap {
                     self.debug_assert_valid_index(*client_ptr);
                 }
             }
+            Object::ClientDefinition(def) => {
+                // Validate the options function reference
+                self.debug_assert_valid_index(def.options);
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)

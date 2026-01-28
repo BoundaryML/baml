@@ -59,6 +59,9 @@ pub const PRIMITIVE_CLIENT: i64 = 13;
 /// `ClientCallChain` type tag.
 pub const CLIENT_CALL_CHAIN: i64 = 14;
 
+/// `ClientDefinition` type tag.
+pub const CLIENT_DEFINITION: i64 = 15;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 
