@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn BadUnionPattern:
-  (no MIR due to errors: missing expression)
+  (no MIR due to errors: missing expression at file 0:0..0)
 
 fn Invalid() -> Unknown {
     // Locals:

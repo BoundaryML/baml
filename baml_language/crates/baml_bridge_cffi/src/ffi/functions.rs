@@ -84,13 +84,11 @@ fn call_function_inner(
     // TODO: Support type_builder when bex_engine adds support
 
     // Look up function definition to get parameter order
-    let func_def = engine
-        .program()
-        .functions
-        .get(&func_name)
-        .ok_or_else(|| BridgeError::FunctionNotFound {
+    let func_def = engine.program().functions.get(&func_name).ok_or_else(|| {
+        BridgeError::FunctionNotFound {
             name: func_name.clone(),
-        })?;
+        }
+    })?;
 
     // Reorder kwargs to match function parameter declaration order.
     // This ensures arguments are passed correctly even if the client sends
@@ -99,12 +97,13 @@ fn call_function_inner(
         .params
         .iter()
         .map(|param| {
-            kwargs.get(&param.name).cloned().ok_or_else(|| {
-                BridgeError::MissingArgument {
+            kwargs
+                .get(&param.name)
+                .cloned()
+                .ok_or_else(|| BridgeError::MissingArgument {
                     function: func_name.clone(),
                     parameter: param.name.clone(),
-                }
-            })
+                })
         })
         .collect::<Result<Vec<_>, _>>()?;
 
