@@ -35,6 +35,7 @@ async fn http_fetch_and_text() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::String("Hello from HTTP!".to_string())),
     })
     .await
@@ -65,6 +66,7 @@ async fn http_response_status() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Int(201)),
     })
     .await
@@ -95,6 +97,7 @@ async fn http_response_ok_true() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Bool(true)),
     })
     .await
@@ -125,6 +128,7 @@ async fn http_response_ok_false() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Bool(false)),
     })
     .await
@@ -156,6 +160,7 @@ async fn http_response_url() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::String(expected_url)),
     })
     .await
@@ -174,6 +179,7 @@ async fn http_fetch_network_error() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Err("HTTP request failed"),
     })
     .await
@@ -206,6 +212,7 @@ async fn http_response_text_consumed() -> anyhow::Result<()> {
         fs: indexmap! {},
         source: Box::leak(source.into_boxed_str()),
         entry: "main",
+        inputs: vec![],
         expected: Err("already been consumed"),
     })
     .await

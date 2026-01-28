@@ -1,0 +1,199 @@
+---
+source: target/debug/build/baml_tests-3880e224d4935138/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TypeBuilderFn"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "from_text"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Resume"
+      WORD "Resume"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD
+        KW_CLIENT "client"
+        STRING_LITERAL "openai/gpt-4o-mini"
+          QUOTE """
+          WORD "openai"
+          SLASH "/"
+          WORD "gpt-4o-mini"
+          QUOTE """
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL #"Hello"#
+          HASH "#"
+          QUOTE """
+          WORD "Hello"
+          QUOTE """
+          HASH "#"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "Foo"
+          L_BRACE "{"
+          FIELD
+            WORD "foo"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "Bar"
+            L_BRACE "{"
+            FIELD
+              WORD "bar"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_BRACE "}"
+        R_BRACE "}"
+      R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Resume"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "MultipleTypeBuilderBlocks"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TypeBuilderFn"
+              WORD "TypeBuilderFn"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "Foo"
+          L_BRACE "{"
+          FIELD
+            WORD "foo"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "Bar"
+            L_BRACE "{"
+            FIELD
+              WORD "bar"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_BRACE "}"
+        R_BRACE "}"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "A"
+          L_BRACE "{"
+          FIELD
+            WORD "a"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "B"
+            L_BRACE "{"
+            FIELD
+              WORD "b"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_BRACE "}"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "from_text"
+            CONFIG_VALUE
+              STRING_LITERAL "Test"
+                QUOTE """
+                WORD "Test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "SingleTypeBuilderBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TypeBuilderFn"
+              WORD "TypeBuilderFn"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "LocalClass"
+          L_BRACE "{"
+          FIELD
+            WORD "x"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "LocalDynamic"
+            L_BRACE "{"
+            FIELD
+              WORD "y"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_BRACE "}"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "from_text"
+            CONFIG_VALUE
+              STRING_LITERAL "Test"
+                QUOTE """
+                WORD "Test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

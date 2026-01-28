@@ -4,7 +4,7 @@ enum Test {
 
 // error: Error validating: Unexpected type specified for value `A`
 //   -->  enum/invalid_value_expr.baml:2
-//    | 
+//    |
 //  1 | enum Test {
 //  2 |     A int | string
 //  3 | }
@@ -12,12 +12,12 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Expected Unexpected token in enum body, found '|'
-//    ╭─[ enum_invalid_value_expr.baml:2:11 ]
+// Error: Enum variants cannot have type annotations
+//    ╭─[ enum_invalid_value_expr.baml:2:7 ]
 //    │
 //  2 │     A int | string
-//    │           ┬  
-//    │           ╰── Expected Unexpected token in enum body, found '|'
+//    │       ──────┬─────  
+//    │             ╰─────── Enum variants cannot have type annotations
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

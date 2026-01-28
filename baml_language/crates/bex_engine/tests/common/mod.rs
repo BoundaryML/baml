@@ -9,7 +9,7 @@
 use std::{collections::HashMap, io::Write};
 
 use baml_tests::bytecode::compile_source_with_schema;
-use bex_engine::{BexEngine, BexExternalValue};
+use bex_engine::{BexEngine, BexExternalValue, BexValue};
 use bex_program::BexProgram;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
@@ -23,6 +23,8 @@ pub(crate) struct EngineProgram {
     pub source: &'static str,
     /// The function name to execute.
     pub entry: &'static str,
+    /// Input arguments to pass to the function.
+    pub inputs: Vec<BexExternalValue>,
     /// Expected result: Ok(value) for success, Err(message) for expected error.
     pub expected: Result<BexExternalValue, &'static str>,
 }
@@ -33,6 +35,7 @@ impl Default for EngineProgram {
             fs: IndexMap::new(),
             source: "",
             entry: "main",
+            inputs: Vec::new(),
             expected: Ok(BexExternalValue::Null),
         }
     }
@@ -70,7 +73,13 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
         .expect("Failed to create engine");
 
-    let result = engine.call_function(input.entry, &[]).await;
+    // Convert BexExternalValue inputs to BexValue for call_function
+    let args: Vec<BexValue> = input
+        .inputs
+        .into_iter()
+        .map(std::convert::Into::into)
+        .collect();
+    let result = engine.call_function(input.entry, &args).await;
 
     match (result, input.expected) {
         (Ok(value), Ok(expected)) => {

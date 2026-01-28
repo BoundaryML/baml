@@ -1,0 +1,30 @@
+---
+source: target/debug/build/baml_tests-3880e224d4935138/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [hir] Error: Only tests may have a type_builder block.
+   ╭─[ test.baml:7:3 ]
+   │
+ 7 │   type_builder {
+   │   ──────┬─────  
+   │         ╰─────── type_builder not allowed in function
+   │ 
+   │ Note: Error code: E0040
+───╯
+
+  [hir] Error: Definition of multiple `type_builder` blocks in the same parent block
+    ╭─[ test.baml:31:3 ]
+    │
+ 31 │   type_builder {
+    │   ──────┬─────  
+    │         ╰─────── duplicate type_builder block
+    │
+    ├─[ test.baml:31:3 ]
+    │
+ 23 │   type_builder {
+    │   ──────┬─────  
+    │         ╰─────── first type_builder block here
+    │ 
+    │ Note: Error code: E0041
+────╯
