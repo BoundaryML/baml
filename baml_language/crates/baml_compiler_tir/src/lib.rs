@@ -34,6 +34,7 @@ use baml_workspace::Project;
 pub type TirTypeError = TypeError<TirContext<Ty>>;
 
 pub mod builtins;
+mod cycles;
 mod exhaustiveness;
 mod lower;
 mod normalize;
@@ -45,6 +46,7 @@ pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
     method_return_type, substitute,
 };
+pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
 pub use normalize::find_invalid_map_keys;
@@ -1216,7 +1218,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             },
                         );
                     }
-                    ty = infer_field_access(ctx, &ty, field, location);
+                    ty = infer_field_access(ctx, &ty, field, location.clone());
                     segment_types.push(ty.clone());
                 }
 
@@ -1360,7 +1362,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             let first = &receiver_segments[0];
                             let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
                             for field in &receiver_segments[1..] {
-                                ty = infer_field_access(ctx, &ty, field, location);
+                                ty = infer_field_access(ctx, &ty, field, location.clone());
                             }
                             ty
                         };
@@ -1400,7 +1402,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
                             found: effective_args.len(),
-                            location,
+                            location: location.clone(),
                         });
                     }
 
@@ -1410,7 +1412,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     {
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
                             // Use the argument's location if available, otherwise fall back to call location
-                            let error_location = arg_location.unwrap_or(location);
+                            let error_location =
+                                arg_location.clone().unwrap_or_else(|| location.clone());
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
                                 found: generalize_for_error(param_ty, arg_ty),
@@ -1446,13 +1449,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         if !ctx.is_watched(var_name) {
                             ctx.push_error(TypeError::WatchOnUnwatchedVariable {
                                 name: var_name.to_string(),
-                                location,
+                                location: location.clone(),
                             });
                         }
                     }
                     _ => {
                         // Not a simple variable (e.g., arr[0].$watch, obj.field.$watch)
-                        ctx.push_error(TypeError::WatchOnNonVariable { location });
+                        ctx.push_error(TypeError::WatchOnNonVariable {
+                            location: location.clone(),
+                        });
                     }
                 }
             }
@@ -1483,7 +1488,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: elem_ty.clone(),
                             found: other_ty,
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1528,7 +1533,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: obj_ty.clone(),
                         found: spread_ty,
-                        location,
+                        location: location.clone(),
                         info_location: None,
                     });
                 }
@@ -1559,7 +1564,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: key_ty.clone(),
                             found: generalize_for_error(&key_ty, &other_key_ty),
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1567,7 +1572,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: value_ty.clone(),
                             found: generalize_for_error(&value_ty, &other_value_ty),
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1698,7 +1703,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 ctx.push_error(TypeError::TypeMismatch {
                                     expected: Ty::Bool,
                                     found: guard_ty,
-                                    location,
+                                    location: location.clone(),
                                     info_location: None,
                                 });
                             }
@@ -1818,7 +1823,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_elem).clone(),
                                 found: generalize_for_error(expected_elem, &elem_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }
@@ -1943,7 +1948,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_key).clone(),
                                 found: generalize_for_error(expected_key, &key_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }
@@ -1952,7 +1957,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_value).clone(),
                                 found: generalize_for_error(expected_value, &value_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }

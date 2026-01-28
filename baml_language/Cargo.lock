@@ -587,6 +587,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_workspace",
+ "rowan 0.16.1",
  "salsa",
  "smol_str",
  "text-size",
@@ -833,6 +834,7 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "sys_llm",
  "sys_native",
  "sys_resource_types",
  "sys_types",
@@ -4559,6 +4561,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "sys_llm"
+version = "0.0.0"
+dependencies = [
+ "bex_external_types",
+ "bex_program",
+ "indexmap 2.13.0",
 ]
 
 [[package]]

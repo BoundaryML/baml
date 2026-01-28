@@ -1,0 +1,17 @@
+[package]
+name = "sys_llm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+bex_external_types = { workspace = true }
+indexmap = { workspace = true }
+
+[dev-dependencies]
+bex_program = { workspace = true }
+
+[lints]
+workspace = true

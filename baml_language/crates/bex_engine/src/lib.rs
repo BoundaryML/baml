@@ -1195,6 +1195,27 @@ impl BexEngine {
                                         }
                                     }
                                 }
+                                LlmOp::SpecializePrompt => {
+                                    // specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst
+                                    let result = Self::execute_specialize_prompt(&args)
+                                        .map_err(EngineError::from);
+                                    match result {
+                                        Ok(prompt_ast) => {
+                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
+                                                vm, prompt_ast,
+                                            );
+                                            let value = vm.alloc_prompt_ast(vm_ast);
+                                            vm.set_future_ready(id, value)?;
+                                        }
+                                        Err(e) => {
+                                            let pending_futures = pending_futures.clone();
+                                            tokio::spawn(async move {
+                                                let _ = pending_futures
+                                                    .send(FutureResult { id, result: Err(e) });
+                                            });
+                                        }
+                                    }
+                                }
                             }
                         }
                         ExternalOp::Sys(sys_op) => {
@@ -1381,6 +1402,35 @@ impl BexEngine {
 
         // Convert VM PromptAst to external PromptAst
         Ok(Self::vm_prompt_ast_to_external(&vm_prompt_ast))
+    }
+
+    /// Execute the `specialize_prompt` LLM operation.
+    ///
+    /// Arguments: [`PrimitiveClient`, prompt: `PromptAst`]
+    fn execute_specialize_prompt(
+        args: &[BexExternalValue],
+    ) -> Result<bex_external_types::PromptAst, OpError> {
+        let client = match &args[0] {
+            BexExternalValue::PrimitiveClient(c) => c,
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "PrimitiveClient",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        let prompt = match &args[1] {
+            BexExternalValue::PromptAst(p) => p.clone(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "PromptAst",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        Ok(sys_llm::specialize_prompt(client, prompt))
     }
 
     /// Convert VM `bex_vm_types::PromptAst` to external `bex_external_types::PromptAst`.

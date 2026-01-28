@@ -83,6 +83,8 @@ pub enum ExternalOp {
 pub enum LlmOp {
     /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
     RenderPrompt,
+    /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
+    SpecializePrompt,
 }
 
 /// System operations that run outside the VM.
@@ -132,6 +134,7 @@ impl std::fmt::Display for LlmOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LlmOp::RenderPrompt => write!(f, "llm.render_prompt"),
+            LlmOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
         }
     }
 }

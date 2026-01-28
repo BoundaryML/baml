@@ -98,4 +98,48 @@ class Union {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: These classes form a dependency cycle: A -> B -> C -> D -> A
+//     ╭─[ class_dependency_cycle.baml:37:7 ]
+//     │
+//  37 │ class A {
+//     │       ┬  
+//     │       ╰── These classes form a dependency cycle: A -> B -> C -> D -> A
+//     │ 
+//     │ Note: Error code: E0069
+// ────╯
+// Error: These classes form a dependency cycle: Five -> One -> Two -> Three -> Four -> Five
+//     ╭─[ class_dependency_cycle.baml:32:7 ]
+//     │
+//  32 │ class Five {
+//     │       ──┬─  
+//     │         ╰─── These classes form a dependency cycle: Five -> One -> Two -> Three -> Four -> Five
+//     │ 
+//     │ Note: Error code: E0069
+// ────╯
+// Error: These classes form a dependency cycle: InterfaceOne -> InterfaceTwo -> InterfaceOne
+//    ╭─[ class_dependency_cycle.baml:6:7 ]
+//    │
+//  6 │ class InterfaceOne {
+//    │       ──────┬─────  
+//    │             ╰─────── These classes form a dependency cycle: InterfaceOne -> InterfaceTwo -> InterfaceOne
+//    │ 
+//    │ Note: Error code: E0069
+// ───╯
+// Error: These classes form a dependency cycle: InterfaceThree
+//     ╭─[ class_dependency_cycle.baml:11:7 ]
+//     │
+//  11 │ class InterfaceThree {
+//     │       ───────┬──────  
+//     │              ╰──────── These classes form a dependency cycle: InterfaceThree
+//     │ 
+//     │ Note: Error code: E0069
+// ────╯
+// Error: These classes form a dependency cycle: Union
+//     ╭─[ class_dependency_cycle.baml:54:7 ]
+//     │
+//  54 │ class Union {
+//     │       ──┬──  
+//     │         ╰──── These classes form a dependency cycle: Union
+//     │ 
+//     │ Note: Error code: E0069
+// ────╯
