@@ -2,10 +2,13 @@
 
 use prost::Message;
 
-use crate::Buffer;
-use crate::baml::cffi::{InvocationResponse, invocation_response::Response as CResponse};
+use crate::{
+    Buffer,
+    baml::cffi::{InvocationResponse, invocation_response::Response as CResponse},
+};
 
 /// Encode a success response.
+#[allow(dead_code)] // Reserved for future object operations
 fn encode_success_response() -> Buffer {
     let msg = InvocationResponse { response: None };
     Buffer::from(msg.encode_to_vec())

@@ -5,13 +5,18 @@
 
 mod ctypes;
 mod engine;
+mod error;
 mod ffi;
 mod panic;
 
+pub use error::BridgeError;
 // Re-export FFI functions
 pub use ffi::{
-    callbacks::{register_callbacks, CallbackFn, OnTickCallbackFn},
-    functions::{call_function_from_c, call_function_parse_from_c, call_function_stream_from_c, cancel_function_call},
+    callbacks::{CallbackFn, OnTickCallbackFn, register_callbacks},
+    functions::{
+        call_function_from_c, call_function_parse_from_c, call_function_stream_from_c,
+        cancel_function_call,
+    },
     objects::{call_object_constructor, call_object_method, free_buffer},
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };

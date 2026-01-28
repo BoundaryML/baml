@@ -249,6 +249,7 @@ fn render_literal(lit: &LiteralValue) -> String {
     match lit {
         LiteralValue::String(s) => format!("\"{s}\""),
         LiteralValue::Int(n) => n.to_string(),
+        LiteralValue::Float(f) => f.clone(),
         LiteralValue::Bool(b) => b.to_string(),
     }
 }

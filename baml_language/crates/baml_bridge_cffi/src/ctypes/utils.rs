@@ -1,31 +1,21 @@
 //! Buffer encoding/decoding utilities.
 
-use anyhow::Result;
 use prost::Message;
+
+use crate::error::BridgeError;
 
 /// Trait for decoding from a C buffer (protobuf bytes).
 pub trait DecodeFromBuffer: Sized {
-    fn from_c_buffer(buffer: *const u8, length: usize) -> Result<Self>;
-}
-
-/// Trait for encoding to a C buffer (protobuf bytes).
-pub trait EncodeToBuffer {
-    fn to_c_buffer(&self) -> Result<Vec<u8>>;
+    fn from_c_buffer(buffer: *const u8, length: usize) -> Result<Self, BridgeError>;
 }
 
 /// Generic implementation for prost Message types.
 impl<T: Message + Default> DecodeFromBuffer for T {
-    fn from_c_buffer(buffer: *const u8, length: usize) -> Result<Self> {
+    fn from_c_buffer(buffer: *const u8, length: usize) -> Result<Self, BridgeError> {
         if buffer.is_null() {
-            anyhow::bail!("Null buffer pointer");
+            return Err(BridgeError::NullBuffer);
         }
         let slice = unsafe { std::slice::from_raw_parts(buffer, length) };
-        T::decode(slice).map_err(|e| anyhow::anyhow!("Protobuf decode error: {}", e))
-    }
-}
-
-impl<T: Message> EncodeToBuffer for T {
-    fn to_c_buffer(&self) -> Result<Vec<u8>> {
-        Ok(self.encode_to_vec())
+        T::decode(slice).map_err(BridgeError::from)
     }
 }

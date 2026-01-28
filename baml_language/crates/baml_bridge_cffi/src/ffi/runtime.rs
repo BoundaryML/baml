@@ -1,11 +1,8 @@
 //! Runtime management FFI functions.
 
-use std::collections::HashMap;
-use std::ffi::CStr;
+use std::{collections::HashMap, ffi::CStr};
 
-use crate::Buffer;
-use crate::engine::initialize_engine;
-use crate::panic::ffi_safe_ptr;
+use crate::{Buffer, engine::initialize_engine, panic::ffi_safe_ptr};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -64,7 +61,7 @@ pub extern "C" fn create_baml_runtime(
 
         // Return non-null pointer to indicate success
         // The actual value doesn't matter since we use global engine
-        Ok(1 as *const libc::c_void)
+        Ok(std::ptr::dangling::<libc::c_void>())
     })
 }
 

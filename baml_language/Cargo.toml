@@ -119,8 +119,7 @@ ratatui = "0.29"
 regex = { version = "1.10.2" }
 reqwest = { version = "0.13.1", features = [
   "json",
-  "native-tls-alpn",
-  "native-tls-vendored",
+  "rustls",
   "stream",
 ] }
 rowan = { version = "0.16" }

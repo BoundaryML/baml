@@ -1,13 +1,13 @@
 //! Global BexEngine management.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
+};
 
-use anyhow::Result;
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
-use baml_workspace::Db as _;
 use bex_engine::BexEngine;
 use bex_program::BexProgram;
 use once_cell::sync::OnceCell;
@@ -15,27 +15,31 @@ use sys_native::SysOpsExt;
 use sys_types::SysOps;
 use tokio::runtime::Runtime;
 
-/// Global BexEngine instance.
-static ENGINE: OnceCell<Arc<BexEngine>> = OnceCell::new();
+use crate::error::BridgeError;
+
+/// Global BexEngine instance. Uses RwLock to allow replacing the engine.
+static ENGINE: RwLock<Option<Arc<BexEngine>>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
 static RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
 
 /// Initialize the global Tokio runtime.
 pub fn get_runtime() -> &'static Arc<Runtime> {
-    RUNTIME.get_or_init(|| {
-        Arc::new(Runtime::new().expect("Failed to create Tokio runtime"))
-    })
+    RUNTIME.get_or_init(|| Arc::new(Runtime::new().expect("Failed to create Tokio runtime")))
 }
 
 /// Get the global BexEngine, or error if not initialized.
-pub fn get_engine() -> Result<&'static Arc<BexEngine>> {
+pub fn get_engine() -> Result<Arc<BexEngine>, BridgeError> {
     ENGINE
-        .get()
-        .ok_or_else(|| anyhow::anyhow!("Engine not initialized. Call create_baml_runtime first."))
+        .read()
+        .map_err(|_| BridgeError::LockPoisoned)?
+        .clone()
+        .ok_or(BridgeError::NotInitialized)
 }
 
 /// Initialize the global BexEngine from BAML source files.
+///
+/// If an engine is already initialized, it will be replaced with the new one.
 ///
 /// # Arguments
 /// * `root_path` - Root path for BAML files
@@ -45,12 +49,7 @@ pub fn initialize_engine(
     root_path: &str,
     src_files: HashMap<String, String>,
     env_vars: HashMap<String, String>,
-) -> Result<()> {
-    if ENGINE.get().is_some() {
-        // Already initialized - this is fine, just return
-        return Ok(());
-    }
-
+) -> Result<(), BridgeError> {
     // Create database
     let mut db = ProjectDatabase::new();
 
@@ -83,33 +82,33 @@ pub fn initialize_engine(
     // Create engine with native sys ops
     let engine = BexEngine::new(program, env_vars, SysOps::native())?;
 
-    // Store in global
-    ENGINE
-        .set(Arc::new(engine))
-        .map_err(|_| anyhow::anyhow!("Engine already initialized (race condition)"))?;
+    // Store in global (replacing any existing engine)
+    let mut guard = ENGINE.write().map_err(|_| BridgeError::LockPoisoned)?;
+    *guard = Some(Arc::new(engine));
 
     Ok(())
 }
 
 /// Extract schema information (classes, enums, functions) from the database.
+#[allow(clippy::type_complexity)]
 fn extract_schema(
     db: &ProjectDatabase,
-) -> Result<(
-    HashMap<String, bex_program::ClassDef>,
-    HashMap<String, bex_program::EnumDef>,
-    HashMap<String, bex_program::FunctionDef>,
-)> {
+) -> Result<
+    (
+        HashMap<String, bex_program::ClassDef>,
+        HashMap<String, bex_program::EnumDef>,
+        HashMap<String, bex_program::FunctionDef>,
+    ),
+    BridgeError,
+> {
     use baml_compiler_hir::{ItemId, file_item_tree, file_items, function_signature};
     use baml_compiler_tir::TypeResolutionContext;
-    use baml_workspace::Db as _;
 
     let mut classes = HashMap::new();
     let mut enums = HashMap::new();
     let mut functions = HashMap::new();
 
-    let project = db
-        .get_project()
-        .ok_or_else(|| anyhow::anyhow!("Project not initialized"))?;
+    let project = db.get_project().ok_or(BridgeError::ProjectNotInitialized)?;
     let resolution_ctx = TypeResolutionContext::new(db, project);
 
     for file in db.get_source_files() {
@@ -237,7 +236,7 @@ fn convert_tir_ty_to_program_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::
             let prog_val = match val {
                 baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
                 baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Int(s.parse().unwrap_or(0))
+                    bex_program::LiteralValue::Float(s.clone())
                 }
                 baml_compiler_tir::LiteralValue::String(s) => {
                     bex_program::LiteralValue::String(s.clone())
@@ -273,11 +272,15 @@ fn convert_tir_ty_to_program_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::
 }
 
 /// Render a LoweringError with source context for better debugging.
-fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> anyhow::Error {
+fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> BridgeError {
     // Get the span from the error
     let span = match error.span() {
         Some(s) => s,
-        None => return anyhow::anyhow!("{}", error),
+        None => {
+            return BridgeError::Compilation {
+                message: error.to_string(),
+            };
+        }
     };
 
     // Try to get the source file content
@@ -296,19 +299,23 @@ fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> anyhow:
             // Extract a few lines of context around the error
             let (line_num, col, context) = extract_source_context(content, start, end);
 
-            return anyhow::anyhow!(
-                "{}\n\n  --> {}:{}:{}\n\n{}",
-                error,
-                file_path.display(),
-                line_num,
-                col,
-                context
-            );
+            return BridgeError::Compilation {
+                message: format!(
+                    "{}\n\n  --> {}:{}:{}\n\n{}",
+                    error,
+                    file_path.display(),
+                    line_num,
+                    col,
+                    context
+                ),
+            };
         }
     }
 
     // Fallback if we can't find the source
-    anyhow::anyhow!("{}", error)
+    BridgeError::Compilation {
+        message: error.to_string(),
+    }
 }
 
 /// Extract source context around a byte range, returning (line_number, column, formatted_context).

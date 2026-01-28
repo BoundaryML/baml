@@ -1,20 +1,20 @@
 //! Function call FFI entry points.
 
-use std::ffi::CStr;
-use std::panic::AssertUnwindSafe;
+use std::{ffi::CStr, panic::AssertUnwindSafe};
 
-use anyhow::Result;
 use futures::future::FutureExt;
 use prost::Message;
 
-use crate::Buffer;
-use crate::baml::cffi::{
-    HostFunctionArguments, InvocationResponse,
-    invocation_response::Response as CResponse,
+use crate::{
+    Buffer,
+    baml::cffi::{
+        HostFunctionArguments, InvocationResponse, invocation_response::Response as CResponse,
+    },
+    ctypes::{DecodeFromBuffer, kwargs_to_bex_values},
+    engine::{get_engine, get_runtime},
+    error::BridgeError,
+    ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
-use crate::ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
-use crate::engine::{get_engine, get_runtime};
-use crate::ffi::callbacks::{send_error_to_callback, send_result_to_callback};
 
 /// Encode a success response (task spawned successfully).
 fn encode_success_response() -> Buffer {
@@ -23,7 +23,7 @@ fn encode_success_response() -> Buffer {
 }
 
 /// Encode an error response (failed to spawn task).
-fn encode_error_response(error: anyhow::Error) -> Buffer {
+fn encode_error_response(error: &BridgeError) -> Buffer {
     let msg = InvocationResponse {
         response: Some(CResponse::Error(error.to_string())),
     };
@@ -46,7 +46,7 @@ pub extern "C" fn call_function_from_c(
 ) -> Buffer {
     match call_function_inner(function_name, encoded_args, length, id) {
         Ok(()) => encode_success_response(),
-        Err(e) => encode_error_response(e),
+        Err(e) => encode_error_response(&e),
     }
 }
 
@@ -55,15 +55,21 @@ fn call_function_inner(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-) -> Result<()> {
+) -> Result<(), BridgeError> {
     // Get engine (must be initialized)
     let engine = get_engine()?.clone();
 
+    // Check for null function name pointer
+    if function_name.is_null() {
+        return Err(BridgeError::NullFunctionName);
+    }
+
     // Parse function name
+    // SAFETY: We've verified function_name is not null above
     let func_name = unsafe {
         CStr::from_ptr(function_name)
             .to_str()
-            .map_err(|e| anyhow::anyhow!("Invalid function name: {e}"))?
+            .map_err(BridgeError::from)?
             .to_owned()
     };
 
@@ -85,18 +91,16 @@ fn call_function_inner(
     let rt = get_runtime().clone();
     rt.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async {
-            engine.call_function(&func_name, &bex_args).await
-        })
-        .catch_unwind()
-        .await;
+        let result = AssertUnwindSafe(async { engine.call_function(&func_name, &bex_args).await })
+            .catch_unwind()
+            .await;
 
         match result {
             Ok(Ok(value)) => {
                 send_result_to_callback(id, true, &value);
             }
             Ok(Err(e)) => {
-                send_error_to_callback(id, &anyhow::anyhow!("{}", e));
+                send_error_to_callback(id, &format!("{}", e));
             }
             Err(panic_info) => {
                 // Extract panic message
@@ -107,7 +111,7 @@ fn call_function_inner(
                 } else {
                     "Unknown panic in async task".to_string()
                 };
-                send_error_to_callback(id, &anyhow::anyhow!("Panic: {}", msg));
+                send_error_to_callback(id, &format!("Panic: {}", msg));
             }
         }
     });
@@ -127,7 +131,7 @@ pub extern "C" fn call_function_parse_from_c(
     // TODO: Implement when bex_engine supports parsing
     send_error_to_callback(
         id,
-        &anyhow::anyhow!("call_function_parse not implemented in baml_bridge_cffi"),
+        "call_function_parse not implemented in baml_bridge_cffi",
     );
     encode_success_response()
 }
@@ -142,10 +146,7 @@ pub extern "C" fn call_function_stream_from_c(
     id: u32,
 ) -> Buffer {
     // TODO: Implement when bex_engine supports streaming
-    send_error_to_callback(
-        id,
-        &anyhow::anyhow!("Streaming not implemented in baml_bridge_cffi"),
-    );
+    send_error_to_callback(id, "Streaming not implemented in baml_bridge_cffi");
     encode_success_response()
 }
 

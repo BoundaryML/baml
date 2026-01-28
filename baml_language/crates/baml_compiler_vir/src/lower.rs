@@ -67,6 +67,7 @@ pub enum LoweringError {
 
 impl LoweringError {
     /// Wrap this error with function context.
+    #[must_use]
     pub fn in_function(self, function_name: impl Into<String>) -> Self {
         LoweringError::InFunction {
             function_name: function_name.into(),
@@ -109,8 +110,11 @@ impl std::fmt::Display for LoweringError {
             LoweringError::MissingBody => write!(f, "function body is missing"),
             LoweringError::LlmFunction => write!(f, "LLM function - no MIR"),
             LoweringError::NoRootExpression => write!(f, "no root expression in body"),
-            LoweringError::InFunction { function_name, error } => {
-                write!(f, "in function '{}': {}", function_name, error)
+            LoweringError::InFunction {
+                function_name,
+                error,
+            } => {
+                write!(f, "in function '{function_name}': {error}")
             }
         }
     }

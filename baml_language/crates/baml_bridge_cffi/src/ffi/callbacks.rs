@@ -1,11 +1,10 @@
 //! Callback registration and invocation.
 
+use bex_external_types::BexExternalValue;
 use once_cell::sync::OnceCell;
 use prost::Message;
 
-use crate::baml::cffi::CffiValueHolder;
 use crate::ctypes::external_to_cffi_value;
-use bex_external_types::BexExternalValue;
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
@@ -50,13 +49,13 @@ pub fn send_result_to_callback(id: u32, is_done: bool, value: &BexExternalValue)
             });
         }
         Err(e) => {
-            send_error_to_callback(id, &e);
+            send_error_to_callback(id, &e.to_string());
         }
     }
 }
 
 /// Send an error via callback.
-pub fn send_error_to_callback(id: u32, error: &anyhow::Error) {
+pub fn send_error_to_callback(id: u32, error: &str) {
     let error_callback_fn = match ERROR_CALLBACK_FN.get() {
         Some(f) => f,
         None => {
@@ -64,13 +63,13 @@ pub fn send_error_to_callback(id: u32, error: &anyhow::Error) {
             return;
         }
     };
-    let message = error.to_string();
     tokio::task::block_in_place(|| {
-        error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
+        error_callback_fn(id, 1, error.as_ptr() as *const i8, error.len());
     });
 }
 
 /// Trigger the on-tick callback for streaming progress.
+#[allow(dead_code)] // Will be used when streaming is implemented
 pub fn trigger_on_tick_callback(id: u32) {
     if let Some(on_tick_fn) = ON_TICK_CALLBACK_FN.get() {
         tokio::task::block_in_place(|| {

@@ -40,7 +40,7 @@ graph_external_deps = ["serde", "tokio", "clap", "anyhow", "salsa", "rowan"]
 [[dependency_rules]]
 pattern = "anyhow"
 allowed_prefixes = ["lsp"]
-allowed_crates = ["*_cli", "tools_*", "baml_bridge_cffi"]
+allowed_crates = ["*_cli", "tools_*"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 

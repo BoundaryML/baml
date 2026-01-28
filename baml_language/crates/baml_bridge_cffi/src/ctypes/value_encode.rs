@@ -1,37 +1,43 @@
 //! BexExternalValue -> CffiValueHolder conversion.
 
-use anyhow::Result;
 use bex_external_types::{BexExternalValue, Ty};
 
-use crate::baml::cffi::{
-    CffiFieldTypeHolder, CffiValueHolder, CffiValueList, CffiValueMap, CffiMapEntry,
-    CffiValueClass, CffiValueEnum, CffiValueUnionVariant, CffiTypeName, CffiTypeNamespace,
-    cffi_value_holder::Value as CffiValueVariant,
-    cffi_field_type_holder::Type as FieldType,
-    CffiFieldTypeString, CffiFieldTypeInt, CffiFieldTypeFloat, CffiFieldTypeBool,
-    CffiFieldTypeNull, CffiFieldTypeList, CffiFieldTypeMap, CffiFieldTypeUnionVariant,
-    CffiFieldTypeOptional, CffiFieldTypeAny,
+use crate::{
+    baml::cffi::{
+        CffiFieldTypeAny, CffiFieldTypeBool, CffiFieldTypeFloat, CffiFieldTypeHolder,
+        CffiFieldTypeInt, CffiFieldTypeList, CffiFieldTypeMap, CffiFieldTypeNull,
+        CffiFieldTypeOptional, CffiFieldTypeString, CffiFieldTypeUnionVariant, CffiMapEntry,
+        CffiTypeName, CffiTypeNamespace, CffiValueClass, CffiValueEnum, CffiValueHolder,
+        CffiValueList, CffiValueMap, CffiValueUnionVariant,
+        cffi_field_type_holder::Type as FieldType, cffi_value_holder::Value as CffiValueVariant,
+    },
+    error::BridgeError,
 };
 
 /// Convert BexExternalValue to CffiValueHolder for FFI return.
-pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolder> {
+pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolder, BridgeError> {
     let variant = match value {
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(CffiValueVariant::IntValue(*i)),
         BexExternalValue::Float(f) => Some(CffiValueVariant::FloatValue(*f)),
         BexExternalValue::Bool(b) => Some(CffiValueVariant::BoolValue(*b)),
         BexExternalValue::String(s) => Some(CffiValueVariant::StringValue(s.clone())),
-        BexExternalValue::Array { items, element_type } => {
-            let values: Result<Vec<CffiValueHolder>> = items
-                .iter()
-                .map(external_to_cffi_value)
-                .collect();
+        BexExternalValue::Array {
+            items,
+            element_type,
+        } => {
+            let values: Result<Vec<CffiValueHolder>, BridgeError> =
+                items.iter().map(external_to_cffi_value).collect();
             Some(CffiValueVariant::ListValue(CffiValueList {
                 item_type: Some(ty_to_field_type(element_type)),
                 items: values?,
             }))
         }
-        BexExternalValue::Map { entries, key_type, value_type } => {
+        BexExternalValue::Map {
+            entries,
+            key_type,
+            value_type,
+        } => {
             let mut cffi_entries = Vec::new();
             for (key, val) in entries {
                 cffi_entries.push(CffiMapEntry {
@@ -61,30 +67,33 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                 fields: cffi_fields,
             }))
         }
-        BexExternalValue::Variant { enum_name, variant_name } => {
-            Some(CffiValueVariant::EnumValue(CffiValueEnum {
-                name: Some(CffiTypeName {
-                    namespace: CffiTypeNamespace::Types as i32,
-                    name: enum_name.clone(),
-                }),
-                value: variant_name.clone(),
-                is_dynamic: false,
-            }))
-        }
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => Some(CffiValueVariant::EnumValue(CffiValueEnum {
+            name: Some(CffiTypeName {
+                namespace: CffiTypeNamespace::Types as i32,
+                name: enum_name.clone(),
+            }),
+            value: variant_name.clone(),
+            is_dynamic: false,
+        })),
         BexExternalValue::Union { value, metadata } => {
             // Unwrap the union and include variant info
             let inner = external_to_cffi_value(value)?;
-            Some(CffiValueVariant::UnionVariantValue(Box::new(CffiValueUnionVariant {
-                name: metadata.name.as_ref().map(|n| CffiTypeName {
-                    namespace: CffiTypeNamespace::Types as i32,
-                    name: n.clone(),
-                }),
-                is_optional: metadata.is_optional,
-                is_single_pattern: metadata.is_single_pattern,
-                self_type: Some(ty_to_field_type(&metadata.union_type)),
-                value_option_name: format!("{:?}", metadata.selected_option),
-                value: Some(Box::new(inner)),
-            })))
+            Some(CffiValueVariant::UnionVariantValue(Box::new(
+                CffiValueUnionVariant {
+                    name: metadata.name.as_ref().map(|n| CffiTypeName {
+                        namespace: CffiTypeNamespace::Types as i32,
+                        name: n.clone(),
+                    }),
+                    is_optional: metadata.is_optional,
+                    is_single_pattern: metadata.is_single_pattern,
+                    self_type: Some(ty_to_field_type(&metadata.union_type)),
+                    value_option_name: format!("{:?}", metadata.selected_option),
+                    value: Some(Box::new(inner)),
+                },
+            )))
         }
         BexExternalValue::Media { kind, .. } => {
             // Media is stored as a handle - return a placeholder string for now
@@ -96,7 +105,10 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                 baml_base::MediaKind::Pdf => "pdf",
                 baml_base::MediaKind::Generic => "media",
             };
-            Some(CffiValueVariant::StringValue(format!("[{}:handle]", kind_str)))
+            Some(CffiValueVariant::StringValue(format!(
+                "[{}:handle]",
+                kind_str
+            )))
         }
         BexExternalValue::Resource(_handle) => {
             // Resources cannot be serialized across FFI - return null
@@ -122,12 +134,14 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(name) => Some(FieldType::ClassType(crate::baml::cffi::CffiFieldTypeClass {
-            name: Some(CffiTypeName {
-                namespace: CffiTypeNamespace::Types as i32,
-                name: name.clone(),
-            }),
-        })),
+        Ty::Class(name) => Some(FieldType::ClassType(
+            crate::baml::cffi::CffiFieldTypeClass {
+                name: Some(CffiTypeName {
+                    namespace: CffiTypeNamespace::Types as i32,
+                    name: name.clone(),
+                }),
+            },
+        )),
         Ty::Enum(name) => Some(FieldType::EnumType(crate::baml::cffi::CffiFieldTypeEnum {
             name: name.clone(),
         })),

@@ -25,7 +25,6 @@ sys_native = { workspace = true }
 sys_types = { workspace = true }
 
 # External dependencies
-anyhow = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 libc = { workspace = true }
@@ -33,17 +32,10 @@ once_cell = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 
 [build-dependencies]
 cbindgen = { workspace = true }
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
-
-[profile.release] # When compiling in release mode
-debug = false # Exclude debug symbols
-strip = "symbols" # Exclude the rest of the symbols
-# opt-level = "z" # Did not use this, but it equals C++'s optimize for size (O3?)
-lto = true
-codegen-units = 1 # Cargo specifies 16 parallel codegen units for release builds. This improves compile times, but prevents some optimizations.
-# panic = "abort" # when Rust code encounters a situation when it must call panic!(), it unwinds the stack and produces a helpful backtrace. The unwinding code, however, does require extra binary size. rustc can be instructed to abort immediately rather than unwind, which removes the need for this extra unwinding code.

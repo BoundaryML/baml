@@ -56,6 +56,7 @@ pub enum MediaKind {
 pub enum LiteralValue {
     String(String),
     Int(i64),
+    Float(String),
     Bool(bool),
 }
 
