@@ -38,6 +38,12 @@ pub enum BridgeError {
     #[error("Map entry missing key")]
     MapEntryMissingKey,
 
+    #[error("Function not found: {name}")]
+    FunctionNotFound { name: String },
+
+    #[error("Missing argument '{parameter}' for function '{function}'")]
+    MissingArgument { function: String, parameter: String },
+
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 }

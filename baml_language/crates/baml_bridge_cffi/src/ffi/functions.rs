@@ -83,9 +83,30 @@ fn call_function_inner(
     // TODO: Support collectors when bex_engine adds support
     // TODO: Support type_builder when bex_engine adds support
 
-    // Convert kwargs to positional args for call_function
-    // bex_engine.call_function takes &[BexValue], so we need to convert
-    let bex_args: Vec<bex_external_types::BexValue> = kwargs.into_values().collect();
+    // Look up function definition to get parameter order
+    let func_def = engine
+        .program()
+        .functions
+        .get(&func_name)
+        .ok_or_else(|| BridgeError::FunctionNotFound {
+            name: func_name.clone(),
+        })?;
+
+    // Reorder kwargs to match function parameter declaration order.
+    // This ensures arguments are passed correctly even if the client sends
+    // them in a different order than the function expects.
+    let bex_args: Vec<bex_external_types::BexValue> = func_def
+        .params
+        .iter()
+        .map(|param| {
+            kwargs.get(&param.name).cloned().ok_or_else(|| {
+                BridgeError::MissingArgument {
+                    function: func_name.clone(),
+                    parameter: param.name.clone(),
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Spawn async task with panic catching
     let rt = get_runtime().clone();
