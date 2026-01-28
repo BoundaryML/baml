@@ -1,4 +1,4 @@
-//! Tests for HTTP operations (baml.http.fetch, Response methods).
+//! Tests for HTTP operations (baml.http.fetch, `HttpResponse` methods).
 
 mod common;
 

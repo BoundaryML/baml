@@ -11,9 +11,9 @@ use crate::registry::REGISTRY;
 /// Shared HTTP client with connection pooling.
 pub(crate) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
-/// Fetches a URL and returns a Response resource.
+/// Fetches a URL and returns an `HttpResponse` resource.
 ///
-/// Signature: `fn fetch(url: String) -> Response`
+/// Signature: `fn fetch(url: String) -> HttpResponse`
 pub(crate) fn fetch(args: Vec<BexExternalValue>) -> SysOpResult {
     SysOpResult::Async(Box::pin(fetch_async(args)))
 }
@@ -50,7 +50,7 @@ async fn fetch_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, Op
 
 /// Gets the response body as text (consumes the body).
 ///
-/// Signature: `fn text(self: Response) -> String`
+/// Signature: `fn text(self: HttpResponse) -> String`
 pub(crate) fn text(args: Vec<BexExternalValue>) -> SysOpResult {
     SysOpResult::Async(Box::pin(text_async(args)))
 }
@@ -60,7 +60,7 @@ async fn text_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
         Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
+                expected: "HttpResponse resource",
                 actual: format!("{other:?}"),
             });
         }
@@ -68,12 +68,12 @@ async fn text_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
 
     let response_mutex = REGISTRY
         .get_http_response_body(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse handle is invalid".into()))?;
 
     let mut guard = response_mutex.lock().await;
     let response = guard
         .take()
-        .ok_or_else(|| OpError::Other("Response body has already been consumed".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse body has already been consumed".into()))?;
 
     let text = response
         .text()
@@ -85,7 +85,7 @@ async fn text_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
 
 /// Gets the response status code.
 ///
-/// Signature: `fn status(self: Response) -> i64`
+/// Signature: `fn status(self: HttpResponse) -> i64`
 pub(crate) fn status(args: Vec<BexExternalValue>) -> SysOpResult {
     let result = status_sync(args);
     SysOpResult::Ready(result)
@@ -96,7 +96,7 @@ fn status_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError>
         Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
+                expected: "HttpResponse resource",
                 actual: format!("{other:?}"),
             });
         }
@@ -104,14 +104,14 @@ fn status_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError>
 
     let (status, _, _) = REGISTRY
         .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse handle is invalid".into()))?;
 
     Ok(BexExternalValue::Int(i64::from(status)))
 }
 
 /// Checks if the response status is OK (2xx).
 ///
-/// Signature: `fn ok(self: Response) -> bool`
+/// Signature: `fn ok(self: HttpResponse) -> bool`
 pub(crate) fn ok(args: Vec<BexExternalValue>) -> SysOpResult {
     let result = ok_sync(args);
     SysOpResult::Ready(result)
@@ -122,7 +122,7 @@ fn ok_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
         Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
+                expected: "HttpResponse resource",
                 actual: format!("{other:?}"),
             });
         }
@@ -130,14 +130,14 @@ fn ok_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
 
     let (status, _, _) = REGISTRY
         .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse handle is invalid".into()))?;
 
     Ok(BexExternalValue::Bool((200..300).contains(&status)))
 }
 
 /// Gets the request URL (may differ from original if redirected).
 ///
-/// Signature: `fn url(self: Response) -> String`
+/// Signature: `fn url(self: HttpResponse) -> String`
 pub(crate) fn url(args: Vec<BexExternalValue>) -> SysOpResult {
     let result = url_sync(args);
     SysOpResult::Ready(result)
@@ -148,7 +148,7 @@ fn url_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
         Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
+                expected: "HttpResponse resource",
                 actual: format!("{other:?}"),
             });
         }
@@ -156,14 +156,14 @@ fn url_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
 
     let (_, _, url) = REGISTRY
         .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse handle is invalid".into()))?;
 
     Ok(BexExternalValue::String(url))
 }
 
 /// Gets the response headers as a map.
 ///
-/// Signature: `fn headers(self: Response) -> Map<String, String>`
+/// Signature: `fn headers(self: HttpResponse) -> Map<String, String>`
 pub(crate) fn headers(args: Vec<BexExternalValue>) -> SysOpResult {
     let result = headers_sync(args);
     SysOpResult::Ready(result)
@@ -174,7 +174,7 @@ fn headers_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError
         Some(BexExternalValue::Resource(h)) => h,
         other => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
+                expected: "HttpResponse resource",
                 actual: format!("{other:?}"),
             });
         }
@@ -182,7 +182,7 @@ fn headers_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError
 
     let (_, headers, _) = REGISTRY
         .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
+        .ok_or_else(|| OpError::Other("HttpResponse handle is invalid".into()))?;
 
     let entries: IndexMap<String, BexExternalValue> = headers
         .into_iter()

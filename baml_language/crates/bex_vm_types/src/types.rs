@@ -84,17 +84,17 @@ pub enum SysOp {
     NetRead,
     /// Close a socket: `Socket.close()`
     NetClose,
-    /// HTTP fetch: `baml.http.fetch(url: String) -> Response`
+    /// HTTP fetch: `baml.http.fetch(url: String) -> HttpResponse`
     HttpFetch,
-    /// Get response body as text: `Response.text() -> String`
+    /// Get response body as text: `HttpResponse.text() -> String`
     HttpResponseText,
-    /// Get response status code: `Response.status() -> i64`
+    /// Get response status code: `HttpResponse.status() -> i64`
     HttpResponseStatus,
-    /// Check if response is OK (2xx): `Response.ok() -> bool`
+    /// Check if response is OK (2xx): `HttpResponse.ok() -> bool`
     HttpResponseOk,
-    /// Get request URL: `Response.url() -> String`
+    /// Get request URL: `HttpResponse.url() -> String`
     HttpResponseUrl,
-    /// Get response headers: `Response.headers() -> Map<String, String>`
+    /// Get response headers: `HttpResponse.headers() -> Map<String, String>`
     HttpResponseHeaders,
     /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
     RenderPrompt,
@@ -113,11 +113,11 @@ impl std::fmt::Display for SysOp {
             SysOp::NetRead => write!(f, "net.read"),
             SysOp::NetClose => write!(f, "net.close"),
             SysOp::HttpFetch => write!(f, "http.fetch"),
-            SysOp::HttpResponseText => write!(f, "http.Response.text"),
-            SysOp::HttpResponseStatus => write!(f, "http.Response.status"),
-            SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
-            SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
-            SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
+            SysOp::HttpResponseText => write!(f, "http.HttpResponse.text"),
+            SysOp::HttpResponseStatus => write!(f, "http.HttpResponse.status"),
+            SysOp::HttpResponseOk => write!(f, "http.HttpResponse.ok"),
+            SysOp::HttpResponseUrl => write!(f, "http.HttpResponse.url"),
+            SysOp::HttpResponseHeaders => write!(f, "http.HttpResponse.headers"),
             SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
             SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
         }

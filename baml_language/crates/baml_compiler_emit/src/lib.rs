@@ -396,11 +396,11 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.net.Socket.read" => Some(SysOp::NetRead),
         "baml.net.Socket.close" => Some(SysOp::NetClose),
         "baml.http.fetch" => Some(SysOp::HttpFetch),
-        "baml.http.Response.text" => Some(SysOp::HttpResponseText),
-        "baml.http.Response.status" => Some(SysOp::HttpResponseStatus),
-        "baml.http.Response.ok" => Some(SysOp::HttpResponseOk),
-        "baml.http.Response.url" => Some(SysOp::HttpResponseUrl),
-        "baml.http.Response.headers" => Some(SysOp::HttpResponseHeaders),
+        "baml.http.HttpResponse.text" => Some(SysOp::HttpResponseText),
+        "baml.http.HttpResponse.status" => Some(SysOp::HttpResponseStatus),
+        "baml.http.HttpResponse.ok" => Some(SysOp::HttpResponseOk),
+        "baml.http.HttpResponse.url" => Some(SysOp::HttpResponseUrl),
+        "baml.http.HttpResponse.headers" => Some(SysOp::HttpResponseHeaders),
         _ => None,
     }
 }

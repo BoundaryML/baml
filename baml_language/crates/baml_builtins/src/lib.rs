@@ -204,27 +204,27 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod http {
                     #[builtin]
-                    struct Response {
+                    struct HttpResponse {
                         /// Get response body as text (consumes body).
                         #[sys_op]
-                        fn text(self: Response) -> String;
+                        fn text(self: HttpResponse) -> String;
                         /// Get HTTP status code.
                         #[sys_op]
-                        fn status(self: Response) -> i64;
+                        fn status(self: HttpResponse) -> i64;
                         /// Check if status is 2xx.
                         #[sys_op]
-                        fn ok(self: Response) -> bool;
+                        fn ok(self: HttpResponse) -> bool;
                         /// Get request URL (may differ if redirected).
                         #[sys_op]
-                        fn url(self: Response) -> String;
+                        fn url(self: HttpResponse) -> String;
                         /// Get response headers.
                         #[sys_op]
-                        fn headers(self: Response) -> Map<String, String>;
+                        fn headers(self: HttpResponse) -> Map<String, String>;
                     }
 
                     /// Fetch a URL via HTTP GET.
                     #[sys_op]
-                    fn fetch(url: String) -> Response;
+                    fn fetch(url: String) -> HttpResponse;
                 }
 
                 // =====================================================================
@@ -400,7 +400,7 @@ mod tests {
         assert!(find_builtin_by_path("baml.llm.PromptAst").is_none());
 
         // Other builtins in the same parent module are still visible
-        assert!(find_builtin_by_path("baml.http.Response.text").is_some());
+        assert!(find_builtin_by_path("baml.http.HttpResponse.text").is_some());
         assert!(find_builtin_by_path("baml.http.fetch").is_some());
     }
 
