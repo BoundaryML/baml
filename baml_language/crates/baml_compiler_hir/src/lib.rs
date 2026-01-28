@@ -682,7 +682,7 @@ fn lower_file_with_ctx(root: &SyntaxNode, file_id: FileId) -> (ItemTree, Vec<Hir
 
 /// Lower a single item from the CST.
 fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext) {
-    use baml_compiler_syntax::SyntaxKind;
+    use baml_compiler_syntax::{SyntaxKind, ast::TypeBuilderBlock};
 
     match node.kind() {
         SyntaxKind::CLASS_DEF => {
@@ -702,6 +702,19 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
         SyntaxKind::FUNCTION_DEF => {
             if let Some(func) = lower_function(node) {
                 tree.alloc_function(func);
+            }
+            // Validate: type_builder blocks are not allowed in functions
+            for child in node.descendants() {
+                if let Some(tb_block) = TypeBuilderBlock::cast(child) {
+                    let keyword_range = tb_block
+                        .keyword()
+                        .map(|kw| kw.text_range())
+                        .unwrap_or_else(|| tb_block.syntax().text_range());
+                    ctx.push_diagnostic(HirDiagnostic::TypeBuilderInNonTestContext {
+                        context: "function",
+                        span: ctx.span(keyword_range),
+                    });
+                }
             }
         }
         SyntaxKind::TYPE_ALIAS_DEF => {

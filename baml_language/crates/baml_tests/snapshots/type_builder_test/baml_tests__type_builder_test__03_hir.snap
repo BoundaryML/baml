@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===

@@ -9,6 +9,8 @@ license.workspace = true
 [dependencies]
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_jinja_runtime = { workspace = true }
+bex_llm_types = { workspace = true }
 bex_program = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }

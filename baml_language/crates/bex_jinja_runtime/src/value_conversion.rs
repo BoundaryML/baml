@@ -65,5 +65,15 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
             // Resources shouldn't appear in template arguments
             JinjaValue::from("[Resource]")
         }
+
+        BexExternalValue::PromptAst(_) => {
+            // PromptAst shouldn't appear in template arguments
+            JinjaValue::from("[PromptAst]")
+        }
+
+        BexExternalValue::PrimitiveClient(_) => {
+            // PrimitiveClient shouldn't appear in template arguments
+            JinjaValue::from("[PrimitiveClient]")
+        }
     }
 }

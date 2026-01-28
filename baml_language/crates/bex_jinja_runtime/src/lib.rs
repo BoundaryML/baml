@@ -6,12 +6,14 @@
 //! - Value conversion from `BexExternalValue` to minijinja values
 //! - Magic delimiter handling for chat messages and media
 
+mod error;
 mod filters;
 mod output_format_object;
 mod render;
 mod value_conversion;
 
 pub use bex_llm_types::{OutputFormatContent, RenderOptions};
+pub use error::RenderPromptError;
 pub use output_format_object::OutputFormatObject;
 pub use render::{RenderContext, RenderContextClient, render_prompt};
 

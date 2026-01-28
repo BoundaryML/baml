@@ -18,6 +18,7 @@ baml_compiler_mir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }
+baml_typetags = { workspace = true }
 baml_workspace = { workspace = true }
 bex_program = { workspace = true }
 bex_vm = { workspace = true }
@@ -29,6 +30,7 @@ salsa = { workspace = true }
 tempfile = { workspace = true }
 
 [build-dependencies]
+baml_typetags = { workspace = true }
 prettyplease = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }

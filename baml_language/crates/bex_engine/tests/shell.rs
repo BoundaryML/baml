@@ -16,6 +16,7 @@ async fn shell_echo() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         // Note: echo adds a newline
         expected: Ok(BexExternalValue::String("Hello From Shell!\n".to_string())),
     })
@@ -32,6 +33,7 @@ async fn shell_with_pipe() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::String("HELLO WORLD\n".to_string())),
     })
     .await
@@ -47,6 +49,7 @@ async fn shell_failing_command() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Err("failed with exit code 1"),
     })
     .await
@@ -62,6 +65,7 @@ async fn shell_nonexistent_command() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Err("not found"),
     })
     .await
@@ -78,6 +82,7 @@ async fn shell_with_variable() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::String("dynamic\n".to_string())),
     })
     .await

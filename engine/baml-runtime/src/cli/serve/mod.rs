@@ -8,7 +8,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, task::Poll};
 use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
 use axum::{
-    extract::{self},
+    extract::{self, DefaultBodyLimit},
     http::{HeaderName, HeaderValue, StatusCode},
     middleware::Next,
     response::{
@@ -295,6 +295,11 @@ impl Server {
             "/openapi.json",
             get(move || s.clone().openapi_json_handler()),
         );
+
+        // Set request body size limit to 100 MiB. This is chosen to be larger than
+        // providers like Gemini which accept files up to 50 MiB. The default Axum
+        // limit is only 2 MiB which is too restrictive for PDF uploads and similar use cases.
+        let app = app.layer(DefaultBodyLimit::max(100 * 1024 * 1024));
 
         let service = axum::serve(
             tcp_listener,

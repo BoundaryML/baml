@@ -67,7 +67,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, Object, Value};
+use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, LlmOp, Object, Value};
 // Re-export sys_types types for convenience
 pub use sys_types::{
     CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
@@ -651,6 +651,9 @@ impl BexEngine {
             Object::PromptAst(_) => Err(EngineError::CannotConvert {
                 type_name: "prompt_ast".to_string(),
             }),
+            Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
+                type_name: "primitive_client".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1023,6 +1026,62 @@ impl BexEngine {
                 Value::Object(ptr)
             }
             BexExternalValue::Resource(handle) => vm.alloc_resource(handle.clone()),
+            BexExternalValue::PromptAst(ast) => {
+                // Convert external PromptAst to VM PromptAst
+                let vm_ast = Self::external_prompt_ast_to_vm(vm, ast, guard);
+                vm.alloc_prompt_ast(vm_ast)
+            }
+            BexExternalValue::PrimitiveClient(client) => {
+                // Allocate options map to heap
+                let options: indexmap::IndexMap<String, Value> = client
+                    .options
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Self::allocate_from_external(vm, v, guard)))
+                    .collect();
+                let options_ptr = vm.alloc_map(options);
+                let Value::Object(options_heap_ptr) = options_ptr else {
+                    panic!("alloc_map should return an Object");
+                };
+                vm.alloc_primitive_client(bex_vm_types::PrimitiveClient {
+                    name: client.name.clone(),
+                    provider: client.provider.clone(),
+                    default_role: client.default_role.clone(),
+                    allowed_roles: client.allowed_roles.clone(),
+                    options: options_heap_ptr,
+                })
+            }
+        }
+    }
+
+    /// Convert external `PromptAst` to VM `PromptAst`.
+    fn external_prompt_ast_to_vm(
+        vm: &mut BexVm,
+        ast: &bex_external_types::PromptAst,
+        guard: &EpochGuard<'_>,
+    ) -> bex_vm_types::PromptAst {
+        match ast {
+            bex_external_types::PromptAst::String(s) => bex_vm_types::PromptAst::String(s.clone()),
+            bex_external_types::PromptAst::Media(handle) => bex_vm_types::PromptAst::Media(*handle),
+            bex_external_types::PromptAst::Message {
+                role,
+                content,
+                metadata,
+            } => {
+                let vm_content = Self::external_prompt_ast_to_vm(vm, content, guard);
+                let metadata_value = Self::allocate_from_external(vm, metadata, guard);
+                bex_vm_types::PromptAst::Message {
+                    role: role.clone(),
+                    content: Box::new(vm_content),
+                    metadata: metadata_value,
+                }
+            }
+            bex_external_types::PromptAst::Vec(items) => {
+                let vm_items: Vec<_> = items
+                    .iter()
+                    .map(|item| Self::external_prompt_ast_to_vm(vm, item, guard))
+                    .collect();
+                bex_vm_types::PromptAst::Vec(vm_items)
+            }
         }
     }
 
@@ -1110,17 +1169,33 @@ impl BexEngine {
                     let args = Self::vm_args_to_external(vm, &pending.args);
 
                     match pending.operation {
-                        ExternalOp::Llm => {
-                            let pending_futures = pending_futures.clone();
-                            tokio::spawn(async move {
-                                let result = Err(OpError::Other(
-                                    "LLM operations not yet implemented".into(),
-                                ));
-                                let _ = pending_futures.send(FutureResult {
-                                    id,
-                                    result: result.map_err(EngineError::from),
-                                });
-                            });
+                        ExternalOp::Llm(llm_op) => {
+                            match llm_op {
+                                LlmOp::RenderPrompt => {
+                                    // render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst
+                                    // args[0] = PrimitiveClient, args[1] = template, args[2] = args map
+                                    let result = Self::execute_render_prompt(&args)
+                                        .map_err(EngineError::from);
+                                    match result {
+                                        Ok(prompt_ast) => {
+                                            // Convert external PromptAst to VM PromptAst and set future ready
+                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
+                                                vm, prompt_ast,
+                                            );
+                                            let value = vm.alloc_prompt_ast(vm_ast);
+                                            vm.set_future_ready(id, value)?;
+                                        }
+                                        Err(e) => {
+                                            // Send error through the channel
+                                            let pending_futures = pending_futures.clone();
+                                            tokio::spawn(async move {
+                                                let _ = pending_futures
+                                                    .send(FutureResult { id, result: Err(e) });
+                                            });
+                                        }
+                                    }
+                                }
+                            }
                         }
                         ExternalOp::Sys(sys_op) => {
                             match self.execute_sys_op(sys_op, args) {
@@ -1246,6 +1321,98 @@ impl BexEngine {
         }
     }
 
+    /// Execute the `render_prompt` LLM operation.
+    ///
+    /// Arguments: [`PrimitiveClient`, template: String, args: Map<String, Any>]
+    fn execute_render_prompt(
+        args: &[BexExternalValue],
+    ) -> Result<bex_external_types::PromptAst, OpError> {
+        use bex_jinja_runtime::RenderPromptError;
+
+        // Extract PrimitiveClient
+        let client = match &args[0] {
+            BexExternalValue::PrimitiveClient(c) => c,
+            other => {
+                return Err(RenderPromptError::InvalidArgument {
+                    message: format!("expected PrimitiveClient, got {}", other.type_name()),
+                }
+                .into());
+            }
+        };
+
+        // Extract template string
+        let template = match &args[1] {
+            BexExternalValue::String(s) => s.as_str(),
+            other => {
+                return Err(RenderPromptError::InvalidArgument {
+                    message: format!("expected String for template, got {}", other.type_name()),
+                }
+                .into());
+            }
+        };
+
+        // Extract args map
+        let template_args = match &args[2] {
+            BexExternalValue::Map { entries, .. } => entries.clone(),
+            other => {
+                return Err(RenderPromptError::InvalidArgument {
+                    message: format!("expected Map for args, got {}", other.type_name()),
+                }
+                .into());
+            }
+        };
+
+        // Build render context from PrimitiveClient
+        let render_ctx = bex_jinja_runtime::RenderContext {
+            client: bex_jinja_runtime::RenderContextClient {
+                name: client.name.clone(),
+                provider: client.provider.clone(),
+                default_role: client.default_role.clone(),
+                allowed_roles: client.allowed_roles.clone(),
+            },
+            // TODO: output_format should come from somewhere (function return type?)
+            output_format: bex_llm_types::OutputFormatContent::new(bex_program::Ty::String),
+            tags: indexmap::IndexMap::new(),
+        };
+
+        // Call the Jinja runtime - RenderPromptError converts to OpError via From
+        let vm_prompt_ast =
+            bex_jinja_runtime::render_prompt(template, &template_args, &render_ctx)?;
+
+        // Convert VM PromptAst to external PromptAst
+        Ok(Self::vm_prompt_ast_to_external(&vm_prompt_ast))
+    }
+
+    /// Convert VM `bex_vm_types::PromptAst` to external `bex_external_types::PromptAst`.
+    fn vm_prompt_ast_to_external(ast: &bex_vm_types::PromptAst) -> bex_external_types::PromptAst {
+        match ast {
+            bex_vm_types::PromptAst::String(s) => bex_external_types::PromptAst::String(s.clone()),
+            bex_vm_types::PromptAst::Media(handle) => bex_external_types::PromptAst::Media(*handle),
+            bex_vm_types::PromptAst::Message {
+                role,
+                content,
+                metadata,
+            } => {
+                let ext_content = Self::vm_prompt_ast_to_external(content);
+                // For now, just convert metadata to BexExternalValue::Null
+                // In a full implementation, we'd need to convert the Value properly
+                let ext_metadata = match metadata {
+                    Value::Null => BexExternalValue::Null,
+                    _ => BexExternalValue::Null, // TODO: proper conversion
+                };
+                bex_external_types::PromptAst::Message {
+                    role: role.clone(),
+                    content: Box::new(ext_content),
+                    metadata: Box::new(ext_metadata),
+                }
+            }
+            bex_vm_types::PromptAst::Vec(items) => {
+                let ext_items: Vec<_> = items.iter().map(Self::vm_prompt_ast_to_external).collect();
+                bex_external_types::PromptAst::Vec(ext_items)
+            }
+        }
+    }
+
     /// Convert VM values to `BexExternalValues` for sys ops.
     ///
     /// This is simpler than `vm_value_to_external` because sys ops only receive
@@ -1288,9 +1455,29 @@ impl BexEngine {
                         }
                     }
                     Object::Resource(handle) => BexExternalValue::Resource(handle.clone()),
+                    Object::PrimitiveClient(client) => {
+                        // Extract options map from heap
+                        let options_map = vm.get_object(client.options);
+                        let options = if let Object::Map(map) = options_map {
+                            map.iter()
+                                .map(|(k, v)| (k.clone(), Self::vm_arg_to_external(vm, v)))
+                                .collect()
+                        } else {
+                            indexmap::IndexMap::new()
+                        };
+                        BexExternalValue::PrimitiveClient(
+                            bex_external_types::PrimitiveClientValue {
+                                name: client.name.clone(),
+                                provider: client.provider.clone(),
+                                default_role: client.default_role.clone(),
+                                allowed_roles: client.allowed_roles.clone(),
+                                options,
+                            },
+                        )
+                    }
                     other => {
                         panic!(
-                            "Cannot convert object type to BexExternalValue for sys op: {other:?}"
+                            "Cannot convert object type to BexExternalValue for external op: {other:?}"
                         )
                     }
                 }
@@ -1331,6 +1518,61 @@ impl BexEngine {
             BexExternalValue::Union { value, .. } => Self::external_to_vm_value(vm, *value),
             BexExternalValue::Media { .. } => {
                 panic!("Unexpected Media from sys op")
+            }
+            BexExternalValue::PromptAst(ast) => {
+                // Convert external PromptAst to VM PromptAst
+                let vm_ast = Self::external_prompt_ast_to_vm_owned(vm, ast);
+                vm.alloc_prompt_ast(vm_ast)
+            }
+            BexExternalValue::PrimitiveClient(client) => {
+                // Allocate options map to heap
+                let options: indexmap::IndexMap<String, Value> = client
+                    .options
+                    .into_iter()
+                    .map(|(k, v)| (k, Self::external_to_vm_value(vm, v)))
+                    .collect();
+                let options_ptr = vm.alloc_map(options);
+                let Value::Object(options_heap_ptr) = options_ptr else {
+                    panic!("alloc_map should return an Object");
+                };
+                vm.alloc_primitive_client(bex_vm_types::PrimitiveClient {
+                    name: client.name,
+                    provider: client.provider,
+                    default_role: client.default_role,
+                    allowed_roles: client.allowed_roles,
+                    options: options_heap_ptr,
+                })
+            }
+        }
+    }
+
+    /// Convert owned external `PromptAst` to VM `PromptAst`.
+    fn external_prompt_ast_to_vm_owned(
+        vm: &mut BexVm,
+        ast: bex_external_types::PromptAst,
+    ) -> bex_vm_types::PromptAst {
+        match ast {
+            bex_external_types::PromptAst::String(s) => bex_vm_types::PromptAst::String(s),
+            bex_external_types::PromptAst::Media(handle) => bex_vm_types::PromptAst::Media(handle),
+            bex_external_types::PromptAst::Message {
+                role,
+                content,
+                metadata,
+            } => {
+                let vm_content = Self::external_prompt_ast_to_vm_owned(vm, *content);
+                let metadata_value = Self::external_to_vm_value(vm, *metadata);
+                bex_vm_types::PromptAst::Message {
+                    role,
+                    content: Box::new(vm_content),
+                    metadata: metadata_value,
+                }
+            }
+            bex_external_types::PromptAst::Vec(items) => {
+                let vm_items: Vec<_> = items
+                    .into_iter()
+                    .map(|item| Self::external_prompt_ast_to_vm_owned(vm, item))
+                    .collect();
+                bex_vm_types::PromptAst::Vec(vm_items)
             }
         }
     }

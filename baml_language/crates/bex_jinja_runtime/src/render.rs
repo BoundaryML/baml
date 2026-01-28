@@ -39,7 +39,7 @@ pub fn render_prompt(
     template: &str,
     args: &IndexMap<String, BexExternalValue>,
     ctx: &RenderContext,
-) -> Result<PromptAst, minijinja::Error> {
+) -> Result<PromptAst, crate::RenderPromptError> {
     let mut env = create_environment();
 
     // Preprocess template

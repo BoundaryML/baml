@@ -547,6 +547,7 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_compiler_vir",
+ "baml_typetags",
  "baml_workspace",
  "la-arena",
  "log",
@@ -760,6 +761,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_db",
  "baml_project",
+ "baml_typetags",
  "baml_workspace",
  "bex_program",
  "bex_vm",
@@ -775,6 +777,10 @@ dependencies = [
  "tempfile",
  "walkdir",
 ]
+
+[[package]]
+name = "baml_typetags"
+version = "0.1.0"
 
 [[package]]
 name = "baml_workspace"
@@ -821,6 +827,8 @@ dependencies = [
  "baml_tests",
  "bex_external_types",
  "bex_heap",
+ "bex_jinja_runtime",
+ "bex_llm_types",
  "bex_program",
  "bex_vm",
  "bex_vm_types",
@@ -872,6 +880,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -921,6 +930,7 @@ dependencies = [
  "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
+ "baml_typetags",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
@@ -4572,6 +4582,7 @@ name = "sys_types"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "bex_jinja_runtime",
  "bex_vm_types",
  "sys_resource_types",
  "thiserror 2.0.17",
@@ -4998,6 +5009,7 @@ dependencies = [
  "baml_compiler_vir",
  "baml_db",
  "baml_project",
+ "baml_typetags",
  "baml_workspace",
  "bex_vm",
  "bex_vm_types",

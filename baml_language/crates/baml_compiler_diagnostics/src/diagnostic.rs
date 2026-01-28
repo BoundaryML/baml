@@ -78,6 +78,16 @@ pub enum DiagnosticId {
     NegativeTimeout,
     MissingProvider,
     UnknownClientProperty,
+    /// `remap_roles` must be a map.
+    RemapRolesNotMap,
+    /// `remap_role` values must be strings.
+    RemapRoleValueNotString,
+    /// Invalid role not in `allowed_roles` list.
+    RemapRoleNotAllowed,
+    /// `allowed_roles` must not be empty.
+    AllowedRolesEmpty,
+    /// `allowed_roles` values must be strings.
+    AllowedRoleNotString,
 
     // Pattern matching errors (E0062-E0066)
     NonExhaustiveMatch,
@@ -111,6 +121,12 @@ pub enum DiagnosticId {
     UnknownTestProperty,
     MissingTestProperty,
     TestFieldAttribute,
+
+    // Type builder diagnostics (E0040-E0043)
+    TypeBuilderInNonTestContext,
+    DuplicateTypeBuilderBlock,
+    IncompleteDynamicDefinition,
+    TypeBuilderSyntaxError,
 }
 
 impl DiagnosticId {
@@ -153,6 +169,11 @@ impl DiagnosticId {
             DiagnosticId::NegativeTimeout => "E0025",
             DiagnosticId::MissingProvider => "E0026",
             DiagnosticId::UnknownClientProperty => "E0027",
+            DiagnosticId::RemapRolesNotMap
+            | DiagnosticId::RemapRoleValueNotString
+            | DiagnosticId::RemapRoleNotAllowed
+            | DiagnosticId::AllowedRolesEmpty
+            | DiagnosticId::AllowedRoleNotString => "E0044",
 
             // Pattern matching errors
             DiagnosticId::NonExhaustiveMatch => "E0062",
@@ -186,6 +207,12 @@ impl DiagnosticId {
             DiagnosticId::UnknownTestProperty => "E0034",
             DiagnosticId::MissingTestProperty => "E0035",
             DiagnosticId::TestFieldAttribute => "E0036",
+
+            // Type builder diagnostics
+            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
+            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
+            DiagnosticId::IncompleteDynamicDefinition => "E0042",
+            DiagnosticId::TypeBuilderSyntaxError => "E0043",
         }
     }
 }

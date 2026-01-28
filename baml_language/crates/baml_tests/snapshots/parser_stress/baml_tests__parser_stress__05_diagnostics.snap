@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -4213,242 +4213,82 @@ expression: output
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:192:13 ]
      │
  192 │     Function(FunctionDef),
-     │             ┬  
-     │             ╰── Expected Unexpected token in enum body, found '('
+     │             ──────┬──────  
+     │                   ╰──────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:192:25 ]
-     │
- 192 │     Function(FunctionDef),
-     │                         ┬  
-     │                         ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:192:26 ]
-     │
- 192 │     Function(FunctionDef),
-     │                          ┬  
-     │                          ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:193:10 ]
      │
  193 │     Class(ClassDef),
-     │          ┬  
-     │          ╰── Expected Unexpected token in enum body, found '('
+     │          ─────┬────  
+     │               ╰────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:193:19 ]
-     │
- 193 │     Class(ClassDef),
-     │                   ┬  
-     │                   ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:193:20 ]
-     │
- 193 │     Class(ClassDef),
-     │                    ┬  
-     │                    ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:194:9 ]
      │
  194 │     Enum(EnumDef),
-     │         ┬  
-     │         ╰── Expected Unexpected token in enum body, found '('
+     │         ────┬────  
+     │             ╰────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:194:17 ]
-     │
- 194 │     Enum(EnumDef),
-     │                 ┬  
-     │                 ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:194:18 ]
-     │
- 194 │     Enum(EnumDef),
-     │                  ┬  
-     │                  ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:195:11 ]
      │
  195 │     Client(ClientDef),
-     │           ┬  
-     │           ╰── Expected Unexpected token in enum body, found '('
+     │           ─────┬─────  
+     │                ╰─────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:195:21 ]
-     │
- 195 │     Client(ClientDef),
-     │                     ┬  
-     │                     ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:195:22 ]
-     │
- 195 │     Client(ClientDef),
-     │                      ┬  
-     │                      ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:196:9 ]
      │
  196 │     Test(TestDef),
-     │         ┬  
-     │         ╰── Expected Unexpected token in enum body, found '('
+     │         ────┬────  
+     │             ╰────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:196:17 ]
-     │
- 196 │     Test(TestDef),
-     │                 ┬  
-     │                 ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:196:18 ]
-     │
- 196 │     Test(TestDef),
-     │                  ┬  
-     │                  ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:197:16 ]
      │
  197 │     RetryPolicy(RetryPolicyDef),
-     │                ┬  
-     │                ╰── Expected Unexpected token in enum body, found '('
+     │                ────────┬───────  
+     │                        ╰───────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:197:31 ]
-     │
- 197 │     RetryPolicy(RetryPolicyDef),
-     │                               ┬  
-     │                               ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:197:32 ]
-     │
- 197 │     RetryPolicy(RetryPolicyDef),
-     │                                ┬  
-     │                                ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:198:19 ]
      │
  198 │     TemplateString(TemplateStringDef),
-     │                   ┬  
-     │                   ╰── Expected Unexpected token in enum body, found '('
+     │                   ─────────┬─────────  
+     │                            ╰─────────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯
 
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:198:37 ]
-     │
- 198 │     TemplateString(TemplateStringDef),
-     │                                     ┬  
-     │                                     ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:198:38 ]
-     │
- 198 │     TemplateString(TemplateStringDef),
-     │                                      ┬  
-     │                                      ╰── Expected Unexpected token in enum body, found ','
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found '('
+  [parse] Error: Enum variants cannot have type annotations
      ╭─[ rust.baml:199:14 ]
      │
  199 │     TypeAlias(TypeAliasDef),
-     │              ┬  
-     │              ╰── Expected Unexpected token in enum body, found '('
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ')'
-     ╭─[ rust.baml:199:27 ]
-     │
- 199 │     TypeAlias(TypeAliasDef),
-     │                           ┬  
-     │                           ╰── Expected Unexpected token in enum body, found ')'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Expected Unexpected token in enum body, found ','
-     ╭─[ rust.baml:199:28 ]
-     │
- 199 │     TypeAlias(TypeAliasDef),
-     │                            ┬  
-     │                            ╰── Expected Unexpected token in enum body, found ','
+     │              ───────┬──────  
+     │                     ╰──────── Enum variants cannot have type annotations
      │ 
      │ Note: Error code: E0010
 ─────╯

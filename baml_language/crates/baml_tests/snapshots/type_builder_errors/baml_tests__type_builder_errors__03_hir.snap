@@ -1,0 +1,38 @@
+---
+source: target/debug/build/baml_tests-3880e224d4935138/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function TypeBuilderFn(from_text: string) -> Resume {
+  prompt #"
+    Hello
+  "#
+}
+
+class Resume {
+  name: string
+}
+
+test MultipleTypeBuilderBlocks {
+  functions: ["TypeBuilderFn"]
+  type_builder {
+    class Foo {
+      foo: string
+    }
+    dynamic class Bar {
+      bar: int
+    }
+  }
+}
+
+test SingleTypeBuilderBlock {
+  functions: ["TypeBuilderFn"]
+  type_builder {
+    class LocalClass {
+      x: string
+    }
+    dynamic class LocalDynamic {
+      y: int
+    }
+  }
+}

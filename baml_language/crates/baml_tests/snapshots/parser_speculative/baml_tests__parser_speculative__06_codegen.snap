@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,19 +7,19 @@ Functions: 8
 Objects: 53
 Globals: 45
 
-Function Ambiguous (arity: 1, kind: External(Llm)):
+Function Ambiguous (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
-Function AnotherLLM (arity: 1, kind: External(Llm)):
+Function AnotherLLM (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
-Function ChainedProcess (arity: 1, kind: External(Llm)):
+Function ChainedProcess (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
-Function ExtractData (arity: 1, kind: External(Llm)):
+Function ExtractData (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
-Function LLMAnalyze (arity: 1, kind: External(Llm)):
+Function LLMAnalyze (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
 Function ProcessAnalysis (arity: 1, kind: Bytecode):

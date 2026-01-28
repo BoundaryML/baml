@@ -20,6 +20,7 @@ async fn fs_open_only() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::Int(42)),
     })
     .await
@@ -38,6 +39,7 @@ async fn fs_open_and_read() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Ok(BexExternalValue::String("Hello from BAML!".to_string())),
     })
     .await
@@ -54,6 +56,7 @@ async fn fs_open_nonexistent_file() -> anyhow::Result<()> {
             }
         "#,
         entry: "main",
+        inputs: vec![],
         expected: Err("Failed to open file"),
     })
     .await

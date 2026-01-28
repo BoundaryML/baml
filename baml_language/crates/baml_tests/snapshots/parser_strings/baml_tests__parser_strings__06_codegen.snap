@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,12 +7,12 @@ Functions: 3
 Objects: 45
 Globals: 40
 
-Function FormatMessage (arity: 1, kind: External(Llm)):
+Function FormatMessage (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
 
 Function GetRole (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   ("user")
      1   RETURN         
 
-Function ProcessText (arity: 1, kind: External(Llm)):
+Function ProcessText (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)

@@ -672,7 +672,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             Rvalue::Discriminant(place) => {
                 self.emit_place_value_pull(place, mir);
-                // TODO: Emit actual discriminant extraction instruction
+                self.emit(Instruction::Discriminant);
+            }
+
+            Rvalue::TypeTag(place) => {
+                self.emit_place_value_pull(place, mir);
+                self.emit(Instruction::TypeTag);
             }
 
             Rvalue::Len(place) => {
@@ -855,6 +860,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 discriminant,
                 arms,
                 otherwise,
+                exhaustive,
             } => {
                 // Analyze the switch to determine the best emission strategy
                 let strategy = analyze_switch(arms);
@@ -864,10 +870,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max, mir);
                     }
                     SwitchStrategy::BinarySearch => {
-                        self.emit_switch_binary_search(discriminant, arms, *otherwise, mir);
+                        self.emit_switch_binary_search(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            *exhaustive,
+                            mir,
+                        );
                     }
                     SwitchStrategy::IfElseChain => {
-                        self.emit_switch_if_else(discriminant, arms, *otherwise, mir);
+                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive, mir);
                     }
                 }
             }
@@ -1006,16 +1018,30 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Emit switch using if-else chain (O(n) comparisons).
     ///
     /// This is the original linear emission strategy.
+    ///
+    /// If `exhaustive` is true, the last arm's comparison is skipped since
+    /// if all previous comparisons failed, the discriminant must match.
     fn emit_switch_if_else(
         &mut self,
         discriminant: &Operand,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
+        exhaustive: bool,
         mir: &MirFunction,
     ) {
         self.emit_operand_pull(discriminant, mir);
 
-        for (value, target) in arms {
+        let num_arms = arms.len();
+        for (i, (value, target)) in arms.iter().enumerate() {
+            let is_last = i == num_arms - 1;
+
+            // For exhaustive switches, skip the last arm's comparison
+            if exhaustive && is_last {
+                self.emit(Instruction::Pop(1)); // Pop discriminant
+                self.emit_jump_unless_fallthrough(*target);
+                return;
+            }
+
             self.emit(Instruction::Copy(0));
             let idx = self.add_constant(ConstValue::Int(*value));
             self.emit(Instruction::LoadConst(idx));
@@ -1069,11 +1095,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Emit switch using binary search (O(log n) comparisons).
     ///
     /// Creates a balanced binary search tree of comparisons.
+    ///
+    /// Note: The exhaustive optimization is not applied to binary search because
+    /// the savings are minimal (O(1) instruction in O(log n) total) and the
+    /// implementation would be complex (need to track rightmost leaf of tree).
     fn emit_switch_binary_search(
         &mut self,
         discriminant: &Operand,
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
+        _exhaustive: bool,
         mir: &MirFunction,
     ) {
         // Push discriminant onto stack (will be popped by comparisons)

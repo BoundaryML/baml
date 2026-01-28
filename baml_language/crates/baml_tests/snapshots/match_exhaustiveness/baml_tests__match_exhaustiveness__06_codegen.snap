@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 86
-Objects: 298
+Objects: 294
 Globals: 123
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Bytecode):
@@ -84,32 +84,27 @@ Function DuplicateBoolLiteral (arity: 1, kind: Bytecode):
 
 Function DuplicateEnumVariant (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +20               (to 25)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 0           (0)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +12               (to 23)
-     12   LOAD_VAR 1             (s)
-     13   LOAD_CONST 1           (1)
-     14   ALLOC_VARIANT 3        (<enum Status>)
-     15   CMP_OP ==              
-     16   POP_JUMP_IF_FALSE +2   (to 18)
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +13               (to 20)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +5                (to 18)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("pending")
      17   JUMP +4                (to 21)
-     18   JUMP +1                (to 19)
-     19   LOAD_CONST 2           ("pending")
-     20   JUMP +6                (to 26)
-     21   LOAD_CONST 3           ("inactive")
-     22   JUMP +4                (to 26)
-     23   LOAD_CONST 4           ("second")
-     24   JUMP +2                (to 26)
-     25   LOAD_CONST 5           ("first")
-     26   RETURN                 
+     18   LOAD_CONST 3           ("inactive")
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 4           ("first")
+     21   RETURN                 
 
 Function DuplicateIntLiteral (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (x)
@@ -118,20 +113,12 @@ Function DuplicateIntLiteral (arity: 1, kind: Bytecode):
      3    CMP_OP ==              
      4    POP_JUMP_IF_FALSE +3   (to 7)
      5    POP 1                  
-     6    JUMP +12               (to 18)
-     7    COPY 0                 
-     8    LOAD_CONST 0           (1)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +3   (to 13)
-     11   POP 1                  
-     12   JUMP +4                (to 16)
-     13   POP 1                  
-     14   LOAD_CONST 1           ("other")
-     15   JUMP +4                (to 19)
-     16   LOAD_CONST 2           ("second one")
-     17   JUMP +2                (to 19)
-     18   LOAD_CONST 3           ("first one")
-     19   RETURN                 
+     6    JUMP +4                (to 10)
+     7    POP 1                  
+     8    LOAD_CONST 1           ("other")
+     9    JUMP +2                (to 11)
+     10   LOAD_CONST 2           ("first one")
+     11   RETURN                 
 
 Function DuplicateStringLiteral (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1              (role)
@@ -177,40 +164,46 @@ Function EnumVariantAfterTypedEnum (arity: 1, kind: Bytecode):
 
 Function EnumVariantUnion (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +10               (to 15)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (2)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +4                (to 15)
-     12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           ("inactive")
-     14   JUMP +2                (to 16)
-     15   LOAD_CONST 3           ("actionable")
-     16   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +11               (to 18)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (2)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +5                (to 18)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("inactive")
+     17   JUMP +2                (to 19)
+     18   LOAD_CONST 3           ("actionable")
+     19   RETURN                 
 
 Function EnumVariantUnionWithCatchAll (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +9                (to 14)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (2)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +3                (to 14)
-     12   LOAD_CONST 2           ("other")
-     13   JUMP +2                (to 15)
-     14   LOAD_CONST 3           ("actionable")
-     15   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +10               (to 17)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (2)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +4                (to 17)
+     14   POP 1                  
+     15   LOAD_CONST 2           ("other")
+     16   JUMP +2                (to 18)
+     17   LOAD_CONST 3           ("actionable")
+     18   RETURN                 
 
 Function ExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (code)
@@ -307,36 +300,42 @@ Function ExhaustiveDoubleMaybe (arity: 1, kind: Bytecode):
 
 Function ExhaustiveEnumAllVariants (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +12               (to 17)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +4                (to 15)
-     12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           ("pending")
-     14   JUMP +4                (to 18)
-     15   LOAD_CONST 3           ("inactive")
-     16   JUMP +2                (to 18)
-     17   LOAD_CONST 4           ("active")
-     18   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +13               (to 20)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +5                (to 18)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("pending")
+     17   JUMP +4                (to 21)
+     18   LOAD_CONST 3           ("inactive")
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 4           ("active")
+     21   RETURN                 
 
 Function ExhaustiveEnumWithCatchAll (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (s)
-     1   LOAD_CONST 0           (0)
-     2   ALLOC_VARIANT 3        (<enum Status>)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   JUMP +3                (to 8)
-     6   LOAD_CONST 1           ("other")
-     7   JUMP +2                (to 9)
-     8   LOAD_CONST 2           ("active")
-     9   RETURN                 
+     0    LOAD_VAR 1             (s)
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +4                (to 11)
+     8    POP 1                  
+     9    LOAD_CONST 1           ("other")
+     10   JUMP +2                (to 12)
+     11   LOAD_CONST 2           ("active")
+     12   RETURN                 
 
 Function ExhaustiveEnumWithTypedPattern (arity: 1, kind: Bytecode):
      0   JUMP +1        (to 1)
@@ -650,15 +649,17 @@ Function GuardedWithFallback (arity: 1, kind: Bytecode):
      13   RETURN                 
 
 Function HighLineNumberNonExhaustive (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (s)
-     1   LOAD_CONST 0           (0)
-     2   ALLOC_VARIANT 3        (<enum Status>)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +3   (to 7)
-     5   JUMP +2                (to 7)
-     6   JUMP +1                (to 7)
-     7   LOAD_CONST 1           ("active only")
-     8   RETURN                 
+     0    LOAD_VAR 1             (s)
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +2                (to 9)
+     8    POP 1                  
+     9    LOAD_CONST 1           ("active only")
+     10   RETURN                 
 
 Function IntLiteralUnionPattern (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (code)
@@ -786,28 +787,28 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
      23   RETURN                 
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0           (null)
-     1    LOAD_GLOBAL 78         (<fn GetStatus>)
-     2    CALL 0                 
-     3    STORE_VAR 1            (_1)
-     4    LOAD_VAR 1             (_1)
-     5    LOAD_CONST 1           (0)
-     6    ALLOC_VARIANT 3        (<enum Status>)
-     7    CMP_OP ==              
-     8    POP_JUMP_IF_FALSE +2   (to 10)
-     9    JUMP +12               (to 21)
-     10   LOAD_VAR 1             (_1)
-     11   LOAD_CONST 2           (1)
-     12   ALLOC_VARIANT 3        (<enum Status>)
-     13   CMP_OP ==              
-     14   POP_JUMP_IF_FALSE +2   (to 16)
-     15   JUMP +4                (to 19)
+     0    LOAD_GLOBAL 78         (<fn GetStatus>)
+     1    CALL 0                 
+     2    DISCRIMINANT           
+     3    COPY 0                 
+     4    LOAD_CONST 0           (0)
+     5    CMP_OP ==              
+     6    POP_JUMP_IF_FALSE +3   (to 9)
+     7    POP 1                  
+     8    JUMP +13               (to 21)
+     9    COPY 0                 
+     10   LOAD_CONST 1           (1)
+     11   CMP_OP ==              
+     12   POP_JUMP_IF_FALSE +3   (to 15)
+     13   POP 1                  
+     14   JUMP +5                (to 19)
+     15   POP 1                  
      16   JUMP +1                (to 17)
-     17   LOAD_CONST 3           ("pending")
+     17   LOAD_CONST 2           ("pending")
      18   JUMP +4                (to 22)
-     19   LOAD_CONST 4           ("inactive")
+     19   LOAD_CONST 3           ("inactive")
      20   JUMP +2                (to 22)
-     21   LOAD_CONST 5           ("active")
+     21   LOAD_CONST 4           ("active")
      22   RETURN                 
 
 Function MixedPatterns (arity: 1, kind: Bytecode):
@@ -840,95 +841,91 @@ Function MixedPatterns (arity: 1, kind: Bytecode):
 
 Function MultipleUnreachableSpans (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +28               (to 33)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 0           (0)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +20               (to 31)
-     12   LOAD_VAR 1             (s)
-     13   LOAD_CONST 1           (1)
-     14   ALLOC_VARIANT 3        (<enum Status>)
-     15   CMP_OP ==              
-     16   POP_JUMP_IF_FALSE +2   (to 18)
-     17   JUMP +12               (to 29)
-     18   LOAD_VAR 1             (s)
-     19   LOAD_CONST 0           (0)
-     20   ALLOC_VARIANT 3        (<enum Status>)
-     21   CMP_OP ==              
-     22   POP_JUMP_IF_FALSE +2   (to 24)
-     23   JUMP +4                (to 27)
-     24   JUMP +1                (to 25)
-     25   LOAD_CONST 2           ("pending")
-     26   JUMP +8                (to 34)
-     27   LOAD_CONST 3           ("duplicate 2")
-     28   JUMP +6                (to 34)
-     29   LOAD_CONST 4           ("inactive")
-     30   JUMP +4                (to 34)
-     31   LOAD_CONST 5           ("duplicate 1")
-     32   JUMP +2                (to 34)
-     33   LOAD_CONST 6           ("active")
-     34   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +13               (to 20)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +5                (to 18)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("pending")
+     17   JUMP +4                (to 21)
+     18   LOAD_CONST 3           ("inactive")
+     19   JUMP +2                (to 21)
+     20   LOAD_CONST 4           ("active")
+     21   RETURN                 
 
 Function NestedEnumMatch (arity: 2, kind: Bytecode):
      0    LOAD_VAR 1             (s1)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +12               (to 17)
-     6    LOAD_VAR 1             (s1)
-     7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +4                (to 15)
-     12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           ("first pending")
-     14   JUMP +21               (to 35)
-     15   LOAD_CONST 3           ("first inactive")
-     16   JUMP +19               (to 35)
-     17   LOAD_VAR 2             (s2)
-     18   LOAD_CONST 0           (0)
-     19   ALLOC_VARIANT 3        (<enum Status>)
-     20   CMP_OP ==              
-     21   POP_JUMP_IF_FALSE +2   (to 23)
-     22   JUMP +12               (to 34)
-     23   LOAD_VAR 2             (s2)
-     24   LOAD_CONST 1           (1)
-     25   ALLOC_VARIANT 3        (<enum Status>)
-     26   CMP_OP ==              
-     27   POP_JUMP_IF_FALSE +2   (to 29)
-     28   JUMP +4                (to 32)
-     29   JUMP +1                (to 30)
-     30   LOAD_CONST 4           ("first active, second pending")
-     31   JUMP +4                (to 35)
-     32   LOAD_CONST 5           ("first active, second inactive")
-     33   JUMP +2                (to 35)
-     34   LOAD_CONST 6           ("both active")
-     35   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +13               (to 20)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +5                (to 18)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("first pending")
+     17   JUMP +24               (to 41)
+     18   LOAD_CONST 3           ("first inactive")
+     19   JUMP +22               (to 41)
+     20   LOAD_VAR 2             (s2)
+     21   DISCRIMINANT           
+     22   COPY 0                 
+     23   LOAD_CONST 0           (0)
+     24   CMP_OP ==              
+     25   POP_JUMP_IF_FALSE +3   (to 28)
+     26   POP 1                  
+     27   JUMP +13               (to 40)
+     28   COPY 0                 
+     29   LOAD_CONST 1           (1)
+     30   CMP_OP ==              
+     31   POP_JUMP_IF_FALSE +3   (to 34)
+     32   POP 1                  
+     33   JUMP +5                (to 38)
+     34   POP 1                  
+     35   JUMP +1                (to 36)
+     36   LOAD_CONST 4           ("first active, second pending")
+     37   JUMP +4                (to 41)
+     38   LOAD_CONST 5           ("first active, second inactive")
+     39   JUMP +2                (to 41)
+     40   LOAD_CONST 6           ("both active")
+     41   RETURN                 
 
 Function NestedEnumVariantUnions (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +8                (to 13)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (2)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +2                (to 13)
-     12   JUMP +1                (to 13)
-     13   LOAD_CONST 2           ("all statuses")
-     14   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +9                (to 16)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (2)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +3                (to 16)
+     14   POP 1                  
+     15   JUMP +1                (to 16)
+     16   LOAD_CONST 2           ("all statuses")
+     17   RETURN                 
 
 Function NestedLiteralUnions (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1              (code)
@@ -1162,34 +1159,38 @@ Function NonExhaustiveDoubleMaybeMissingNull (arity: 1, kind: Bytecode):
      16   RETURN                 
 
 Function NonExhaustiveEnumMissingMultiple (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (s)
-     1   LOAD_CONST 0           (0)
-     2   ALLOC_VARIANT 3        (<enum Status>)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +3   (to 7)
-     5   JUMP +2                (to 7)
-     6   JUMP +1                (to 7)
-     7   LOAD_CONST 1           ("active")
-     8   RETURN                 
+     0    LOAD_VAR 1             (s)
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +2                (to 9)
+     8    POP 1                  
+     9    LOAD_CONST 1           ("active")
+     10   RETURN                 
 
 Function NonExhaustiveEnumMissingOne (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +10               (to 15)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +6   (to 16)
-     11   JUMP +2                (to 13)
-     12   JUMP +4                (to 16)
-     13   LOAD_CONST 2           ("inactive")
-     14   JUMP +2                (to 16)
-     15   LOAD_CONST 3           ("active")
-     16   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +10               (to 17)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +2                (to 15)
+     14   POP 1                  
+     15   LOAD_CONST 2           ("inactive")
+     16   JUMP +2                (to 18)
+     17   LOAD_CONST 3           ("active")
+     18   RETURN                 
 
 Function NonExhaustiveFullResultMissingOne (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (r)
@@ -1249,30 +1250,32 @@ Function NonExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
 
 Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
-     1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
-     3    CMP_OP ==              
-     4    POP_JUMP_IF_FALSE +2   (to 6)
-     5    JUMP +18               (to 23)
-     6    LOAD_VAR 1             (s)
-     7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
-     9    CMP_OP ==              
-     10   POP_JUMP_IF_FALSE +2   (to 12)
-     11   JUMP +10               (to 21)
-     12   LOAD_VAR 1             (s)
-     13   LOAD_CONST 2           (2)
-     14   ALLOC_VARIANT 3        (<enum Status>)
-     15   CMP_OP ==              
-     16   POP_JUMP_IF_FALSE +8   (to 24)
-     17   JUMP +2                (to 19)
-     18   JUMP +6                (to 24)
-     19   LOAD_CONST 3           ("pending")
-     20   JUMP +4                (to 24)
-     21   LOAD_CONST 4           ("inactive")
-     22   JUMP +2                (to 24)
-     23   LOAD_CONST 5           ("active")
-     24   RETURN                 
+     1    DISCRIMINANT           
+     2    COPY 0                 
+     3    LOAD_CONST 0           (0)
+     4    CMP_OP ==              
+     5    POP_JUMP_IF_FALSE +3   (to 8)
+     6    POP 1                  
+     7    JUMP +18               (to 25)
+     8    COPY 0                 
+     9    LOAD_CONST 1           (1)
+     10   CMP_OP ==              
+     11   POP_JUMP_IF_FALSE +3   (to 14)
+     12   POP 1                  
+     13   JUMP +10               (to 23)
+     14   COPY 0                 
+     15   LOAD_CONST 2           (2)
+     16   CMP_OP ==              
+     17   POP_JUMP_IF_FALSE +3   (to 20)
+     18   POP 1                  
+     19   JUMP +2                (to 21)
+     20   POP 1                  
+     21   LOAD_CONST 3           ("pending")
+     22   JUMP +4                (to 26)
+     23   LOAD_CONST 4           ("inactive")
+     24   JUMP +2                (to 26)
+     25   LOAD_CONST 5           ("active")
+     26   RETURN                 
 
 Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)

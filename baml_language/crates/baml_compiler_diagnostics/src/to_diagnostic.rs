@@ -520,6 +520,61 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary_span(*span),
 
+            HirDiagnostic::RemapRolesNotMap {
+                client_name: _,
+                actual_type,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::RemapRolesNotMap,
+                format!("remap_roles must be a map. Got: {actual_type}"),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::RemapRoleValueNotString {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::RemapRoleValueNotString,
+                "remap_roles values must be quoted strings",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::RemapRoleNotAllowed {
+                client_name: _,
+                role_key,
+                allowed_roles,
+                span,
+            } => {
+                let allowed_str = allowed_roles
+                    .iter()
+                    .map(|r| format!("\"{r}\""))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = format!(
+                    "unknown role \"{role_key}\" in remap_roles. Allowed roles: {allowed_str}"
+                );
+                Diagnostic::error(DiagnosticId::RemapRoleNotAllowed, message)
+                    .with_primary_span(*span)
+            }
+
+            HirDiagnostic::AllowedRolesEmpty {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::AllowedRolesEmpty,
+                "allowed_roles must not be empty",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::AllowedRoleNotString {
+                client_name: _,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::AllowedRoleNotString,
+                "allowed_roles values must be quoted strings",
+            )
+            .with_primary_span(*span),
+
             HirDiagnostic::MissingSemicolon { span } => Diagnostic::error(
                 DiagnosticId::MissingSemicolon,
                 "Statement must end with a semicolon.",
@@ -629,6 +684,35 @@ impl ToDiagnostic for HirDiagnostic {
                 format!(
                     "map<K, V> requires exactly {expected} type parameters, found {found}"
                 ),
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::TypeBuilderInNonTestContext { context, span } => Diagnostic::error(
+                DiagnosticId::TypeBuilderInNonTestContext,
+                "Only tests may have a type_builder block.".to_string(),
+            )
+            .with_primary(*span, format!("type_builder not allowed in {context}")),
+
+            HirDiagnostic::DuplicateTypeBuilderBlock {
+                test_name: _,
+                first_span,
+                second_span,
+            } => Diagnostic::error(
+                DiagnosticId::DuplicateTypeBuilderBlock,
+                "Definition of multiple `type_builder` blocks in the same parent block".to_string(),
+            )
+            .with_primary(*second_span, "duplicate type_builder block")
+            .with_secondary(*first_span, "first type_builder block here"),
+
+            HirDiagnostic::IncompleteDynamicDefinition { span } => Diagnostic::error(
+                DiagnosticId::IncompleteDynamicDefinition,
+                "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.",
+            )
+            .with_primary_span(*span),
+
+            HirDiagnostic::TypeBuilderSyntaxError { message, span } => Diagnostic::error(
+                DiagnosticId::TypeBuilderSyntaxError,
+                format!("Syntax error in type builder block: {message}"),
             )
             .with_primary_span(*span),
         };

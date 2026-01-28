@@ -224,11 +224,21 @@ impl MirBuilder {
     }
 
     /// Emit a multi-way switch.
-    pub fn switch(&mut self, discriminant: Operand, arms: Vec<(i64, BlockId)>, otherwise: BlockId) {
+    ///
+    /// If `exhaustive` is true, the switch covers all possible discriminant values,
+    /// allowing the last arm's comparison to be skipped during codegen.
+    pub fn switch(
+        &mut self,
+        discriminant: Operand,
+        arms: Vec<(i64, BlockId)>,
+        otherwise: BlockId,
+        exhaustive: bool,
+    ) {
         self.set_terminator(Terminator::Switch {
             discriminant,
             arms,
             otherwise,
+            exhaustive,
         });
     }
 

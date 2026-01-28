@@ -36,6 +36,19 @@ enum FieldSource {
     Spread(Local, usize),
 }
 
+/// Kind of switch optimization being performed.
+///
+/// This determines how the scrutinee is transformed before the switch.
+enum SwitchKind {
+    /// Direct integer comparison - no transformation needed.
+    Integer,
+    /// Enum variant switch - emit `Discriminant` to extract variant index first.
+    EnumDiscriminant(Name),
+    /// Type tag switch for union types - emit `TypeTag` to extract runtime type first.
+    /// Only supports primitive types (int, string, bool, float, null) which have fixed tags.
+    TypeTag,
+}
+
 /// Lower a function from VIR to MIR.
 ///
 /// This is the main entry point for VIR → MIR lowering.
@@ -44,9 +57,18 @@ pub fn lower<'ctx>(
     typed_body: &ExprBody,
     db: &dyn crate::Db,
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+    class_type_tags: &'ctx HashMap<String, i64>,
     resolution_ctx: &'ctx TypeResolutionContext,
 ) -> MirFunction {
-    let mut ctx = LoweringContext::new(db, signature.params.len(), class_fields, resolution_ctx);
+    let mut ctx = LoweringContext::new(
+        db,
+        signature.params.len(),
+        class_fields,
+        enum_variants,
+        class_type_tags,
+        resolution_ctx,
+    );
     ctx.lower_function(signature, typed_body);
     ctx.finish()
 }
@@ -62,6 +84,10 @@ struct LoweringContext<'a, 'ctx> {
     loop_context: Option<LoopContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Enum variant mappings (enum name -> variant name -> variant index).
+    enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Class type tags (class name -> type tag) for `TypeTag` switch optimization.
+    class_type_tags: &'ctx HashMap<String, i64>,
     /// Type resolution context for lowering type refs.
     resolution_ctx: &'ctx TypeResolutionContext,
     /// Stack of watched locals for tracking scope exit.
@@ -120,6 +146,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         db: &'a dyn crate::Db,
         arity: usize,
         class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
+        enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+        class_type_tags: &'ctx HashMap<String, i64>,
         resolution_ctx: &'ctx TypeResolutionContext,
     ) -> Self {
         Self {
@@ -128,6 +156,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
+            enum_variants,
+            class_type_tags,
             resolution_ctx,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext {
@@ -835,17 +865,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // Create join block
                 let join_block = self.builder.create_block();
 
-                // Try switch optimization for integer literal patterns
+                // Try switch optimization for integer or enum patterns
                 // This enables jump table or binary search codegen
-                if let Some((switch_values, wildcard_arm_idx)) =
+                if let Some((switch_kind, switch_values, wildcard_arm_idx)) =
                     self.try_extract_switch_arms(arms, body)
                 {
                     self.lower_match_as_switch(
                         scrutinee_local,
                         &scrutinee_ty,
                         arms,
+                        switch_kind,
                         switch_values,
                         wildcard_arm_idx,
+                        *is_exhaustive,
                         join_block,
                         dest,
                         body,
@@ -954,19 +986,25 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         }
     }
 
-    /// Try to extract integer literal values from arms for switch optimization.
+    /// Try to extract switch values from arms for switch optimization.
     ///
-    /// Returns Some(vec of (value, `arm_index`)) if all non-wildcard arms are integer literals
-    /// without guards, and there's at most one wildcard arm at the end.
+    /// Returns Some((kind, values, wildcard)) if all non-wildcard arms are switchable patterns
+    /// (integer literals or enum variants from the same enum) without guards.
     /// Returns None if the match cannot be optimized as a switch.
-    #[allow(clippy::unused_self, clippy::type_complexity)]
+    #[allow(clippy::type_complexity)]
     fn try_extract_switch_arms(
         &self,
         arms: &[baml_compiler_vir::MatchArm],
         body: &ExprBody,
-    ) -> Option<(Vec<(i64, usize)>, Option<usize>)> {
+    ) -> Option<(SwitchKind, Vec<(i64, usize)>, Option<usize>)> {
+        // TypeTag switch requires at least 4 arms to benefit from jump table optimization.
+        // For fewer arms, the InstanceOf if-else chain is more efficient since
+        // extracting TypeTag has overhead.
+        const MIN_TYPETAG_ARMS: usize = 4;
+
         let mut switch_arms = Vec::new();
         let mut wildcard_arm = None;
+        let mut detected_kind: Option<SwitchKind> = None;
 
         for (i, arm) in arms.iter().enumerate() {
             // Guards prevent switch optimization (need runtime evaluation)
@@ -977,8 +1015,35 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             let pat = body.pattern(arm.pattern);
             match pat {
                 Pattern::Literal(Literal::Int(value)) => {
-                    // Simple integer literal - can be part of switch
+                    // Integer literal - ensure we're in integer mode
+                    match &detected_kind {
+                        None => detected_kind = Some(SwitchKind::Integer),
+                        Some(SwitchKind::Integer) => {}
+                        Some(SwitchKind::EnumDiscriminant(_) | SwitchKind::TypeTag) => return None, // Mixed types
+                    }
                     switch_arms.push((*value, i));
+                }
+                Pattern::EnumVariant { enum_name, variant } => {
+                    // Enum variant - lookup variant index and ensure same enum
+                    let variant_idx = self.lookup_variant_index(enum_name, variant)?;
+                    match &detected_kind {
+                        None => {
+                            detected_kind = Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                        }
+                        Some(SwitchKind::EnumDiscriminant(name)) if name == enum_name => {}
+                        _ => return None, // Mixed types or different enums
+                    }
+                    switch_arms.push((variant_idx, i));
+                }
+                Pattern::TypedBinding { name: _, ty } => {
+                    // TypedBinding - lookup type tag for primitive or class types
+                    let type_tag = self.type_tag_for_vir_ty(ty)?;
+                    match &detected_kind {
+                        None => detected_kind = Some(SwitchKind::TypeTag),
+                        Some(SwitchKind::TypeTag) => {}
+                        _ => return None, // Mixed switch kinds
+                    }
+                    switch_arms.push((type_tag, i));
                 }
                 Pattern::Binding(name) => {
                     // Wildcard/binding pattern - must be the last arm
@@ -994,48 +1059,164 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     }
                 }
                 Pattern::Union(sub_pats) => {
-                    // Union of integer literals - extract each value
+                    // Union of patterns - extract each value
                     for sub_pat_id in sub_pats {
                         let sub_pat = body.pattern(*sub_pat_id);
                         match sub_pat {
                             Pattern::Literal(Literal::Int(value)) => {
+                                match &detected_kind {
+                                    None => detected_kind = Some(SwitchKind::Integer),
+                                    Some(SwitchKind::Integer) => {}
+                                    Some(SwitchKind::EnumDiscriminant(_) | SwitchKind::TypeTag) => {
+                                        return None;
+                                    }
+                                }
                                 switch_arms.push((*value, i));
                             }
-                            _ => return None, // Non-integer in union
+                            Pattern::EnumVariant { enum_name, variant } => {
+                                let variant_idx = self.lookup_variant_index(enum_name, variant)?;
+                                match &detected_kind {
+                                    None => {
+                                        detected_kind =
+                                            Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                                    }
+                                    Some(SwitchKind::EnumDiscriminant(name))
+                                        if name == enum_name => {}
+                                    _ => return None,
+                                }
+                                switch_arms.push((variant_idx, i));
+                            }
+                            Pattern::TypedBinding { name: _, ty } => {
+                                let type_tag = self.type_tag_for_vir_ty(ty)?;
+                                match &detected_kind {
+                                    None => detected_kind = Some(SwitchKind::TypeTag),
+                                    Some(SwitchKind::TypeTag) => {}
+                                    _ => return None,
+                                }
+                                switch_arms.push((type_tag, i));
+                            }
+                            _ => return None, // Non-switchable in union
                         }
                     }
                 }
-                _ => {
-                    // Non-integer pattern (typed binding, enum, etc.) - can't optimize
+                Pattern::Literal(_) => {
+                    // Non-integer literals (strings, bools, null, etc.) - can't optimize as switch
                     return None;
                 }
             }
         }
 
-        // Need at least one integer arm for switch optimization
+        // Need at least one arm and a detected kind for switch optimization
+        let kind = detected_kind?;
         if switch_arms.is_empty() {
             return None;
         }
 
-        Some((switch_arms, wildcard_arm))
+        // Deduplicate switch arms - union patterns like `A | A` can create duplicates.
+        // We keep the first occurrence (earliest arm index) for each value.
+        // This is correct because if a value appears multiple times, they all
+        // map to the same arm anyway.
+        let mut seen_values = std::collections::HashSet::new();
+        switch_arms.retain(|(value, _)| seen_values.insert(*value));
+
+        if matches!(kind, SwitchKind::TypeTag) && switch_arms.len() < MIN_TYPETAG_ARMS {
+            return None;
+        }
+
+        Some((kind, switch_arms, wildcard_arm))
+    }
+
+    /// Look up the index of an enum variant.
+    ///
+    /// Returns the 0-based index of the variant within the enum definition.
+    #[allow(clippy::cast_possible_wrap)]
+    fn lookup_variant_index(&self, enum_name: &Name, variant: &Name) -> Option<i64> {
+        let variants = self.enum_variants.get(enum_name.as_str())?;
+        let index = *variants.get(variant.as_str())?;
+        Some(index as i64)
+    }
+
+    /// Get the type tag for a VIR type (primitive or class).
+    ///
+    /// Returns the type tag for primitives (using `baml_typetags` constants)
+    /// or for classes (using the pre-computed `class_type_tags` map).
+    ///
+    /// # `TypeAlias` handling
+    ///
+    /// `TypeAliases` are looked up by their alias name in `class_type_tags`.
+    /// This has limitations:
+    /// - `TypeAliases` to primitives won't be found and will return `None`
+    /// - `TypeAliases` to classes will only work if the alias name is registered
+    ///
+    /// When `None` is returned, the pattern falls back to non-switch optimization,
+    /// which is safe but may miss optimization opportunities. Full `TypeAlias`
+    /// resolution would require resolving through potentially recursive aliases,
+    /// which is not yet implemented.
+    fn type_tag_for_vir_ty(&self, ty: &baml_compiler_vir::Ty) -> Option<i64> {
+        use baml_compiler_vir::Ty;
+        match ty {
+            Ty::Int => Some(baml_typetags::INT),
+            Ty::String => Some(baml_typetags::STRING),
+            Ty::Bool => Some(baml_typetags::BOOL),
+            Ty::Null => Some(baml_typetags::NULL),
+            Ty::Float => Some(baml_typetags::FLOAT),
+            Ty::Class(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
+            // TypeAliases: look up by alias name. See doc comment for limitations.
+            Ty::TypeAlias(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
+            _ => None, // Not a type with a known tag
+        }
     }
 
     /// Lower a match expression as a Switch terminator.
     ///
-    /// This emits a single Switch instruction with all integer arms,
+    /// This emits a single Switch instruction with all integer or enum variant arms,
     /// enabling jump table or binary search optimization in the codegen.
+    ///
+    /// For enum variants, emits a `Discriminant` instruction first to extract the
+    /// variant index before the switch.
+    ///
+    /// If `is_exhaustive` is true and there's no wildcard arm, the switch is marked
+    /// as exhaustive, allowing the codegen to skip the last arm's comparison.
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     fn lower_match_as_switch(
         &mut self,
         scrutinee_local: Local,
         scrutinee_ty: &Ty,
         arms: &[baml_compiler_vir::MatchArm],
+        switch_kind: SwitchKind,
         switch_values: Vec<(i64, usize)>,
         wildcard_arm_idx: Option<usize>,
+        is_exhaustive: bool,
         join_block: BlockId,
         dest: Place,
         body: &ExprBody,
     ) {
+        // Extract switch discriminant based on kind
+        let switch_discriminant = match switch_kind {
+            SwitchKind::Integer => {
+                // Direct integer comparison - use scrutinee directly
+                Operand::copy_local(scrutinee_local)
+            }
+            SwitchKind::EnumDiscriminant(_) => {
+                // Emit Discriminant to extract variant index
+                let discriminant_local = self.builder.temp(Ty::Int);
+                self.builder.assign(
+                    Place::local(discriminant_local),
+                    Rvalue::Discriminant(Place::local(scrutinee_local)),
+                );
+                Operand::copy_local(discriminant_local)
+            }
+            SwitchKind::TypeTag => {
+                // Emit TypeTag to extract runtime type tag
+                let type_tag_local = self.builder.temp(Ty::Int);
+                self.builder.assign(
+                    Place::local(type_tag_local),
+                    Rvalue::TypeTag(Place::local(scrutinee_local)),
+                );
+                Operand::copy_local(type_tag_local)
+            }
+        };
+
         // Create body blocks for each arm
         let arm_blocks: Vec<BlockId> = arms.iter().map(|_| self.builder.create_block()).collect();
 
@@ -1058,21 +1239,27 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             .map(|(value, arm_idx)| (*value, arm_blocks[*arm_idx]))
             .collect();
 
+        // Switch is exhaustive when all values are explicitly enumerated (no wildcard)
+        // AND the type checker marked the match as exhaustive.
+        // This allows codegen to skip the last arm's comparison.
+        let exhaustive = wildcard_arm_idx.is_none() && is_exhaustive;
+
         // Emit the switch terminator
         self.builder.switch(
-            Operand::copy_local(scrutinee_local),
+            switch_discriminant,
             switch_arms,
             otherwise_block,
+            exhaustive,
         );
 
         // Lower each arm's body
         for (i, arm) in arms.iter().enumerate() {
             self.builder.set_current_block(arm_blocks[i]);
 
-            // If this is a binding arm (wildcard), bind the variable
+            // If this is a binding or typed binding arm, bind the variable
             let pat = body.pattern(arm.pattern);
-            if let Pattern::Binding(name) = pat {
-                if name.as_str() != "_" {
+            match pat {
+                Pattern::Binding(name) if name.as_str() != "_" => {
                     let local = self.builder.declare_local(
                         Some(name.clone()),
                         scrutinee_ty.clone(),
@@ -1084,6 +1271,21 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         Rvalue::Use(Operand::copy_local(scrutinee_local)),
                     );
                     self.locals.insert(name.clone(), local);
+                }
+                Pattern::TypedBinding { name, ty } => {
+                    // Typed binding - bind the variable with its specific type
+                    let pattern_ty = Self::lower_typed_ir_ty(ty);
+                    let local =
+                        self.builder
+                            .declare_local(Some(name.clone()), pattern_ty, None, false);
+                    self.builder.assign(
+                        Place::local(local),
+                        Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                    );
+                    self.locals.insert(name.clone(), local);
+                }
+                _ => {
+                    // No binding needed (e.g., literal patterns, enum variants, wildcards)
                 }
             }
 

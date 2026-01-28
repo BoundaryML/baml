@@ -291,6 +291,7 @@ fn deep_copy_value_recursive(
                 Object::Resource(r) => vm.tlab.alloc(Object::Resource(r)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
+                Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
@@ -517,6 +518,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Resource(r) => Ok(format!("<{r}>")),
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
+            Object::PrimitiveClient(c) => Ok(format!("<client {}:{}>", c.provider, c.name)),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },
