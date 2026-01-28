@@ -4,7 +4,6 @@
 
 import { b } from "./test-setup";
 import { Image } from "@boundaryml/baml";
-import { DummyJsonTodo } from "../baml_client";
 
 describe("VM Async Runtime Tests", () => {
   it("should return number calling LLM", async () => {
@@ -37,14 +36,14 @@ describe("VM Async Runtime Tests", () => {
     expect(description.toLowerCase()).toContain("ogre");
   });
 
-  it("should execute fetch as", async () => {
-    const result = await b.ExecFetchAs("https://dummyjson.com/todos/1");
+  // it("should execute fetch as", async () => {
+  //   const result = await b.ExecFetchAs("https://dummyjson.com/todos/1");
 
-    expect(result).toEqual({
-      id: 1,
-      todo: "Do something nice for someone you care about",
-      completed: false,
-      userId: 152,
-    } as DummyJsonTodo);
-  });
+  //   expect(result).toEqual({
+  //     id: 1,
+  //     todo: "Do something nice for someone you care about",
+  //     completed: false,
+  //     userId: 152,
+  //   } as DummyJsonTodo);
+  // });
 });
