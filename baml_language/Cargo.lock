@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge_cffi"
-version = "0.218.0"
+version = "0.218.1"
 dependencies = [
  "anyhow",
  "baml_base",
@@ -389,6 +389,7 @@ dependencies = [
  "bex_external_types",
  "bex_program",
  "cbindgen",
+ "futures",
  "indexmap 2.13.0",
  "libc",
  "once_cell",

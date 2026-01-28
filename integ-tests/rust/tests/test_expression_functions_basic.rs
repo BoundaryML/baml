@@ -5,6 +5,9 @@
 
 use rust::baml_client::sync_client::B;
 use rust::baml_client::types::*;
+use rust::baml_client::{
+    new_audio_from_url, new_image_from_url, new_pdf_from_url, new_video_from_url,
+};
 use std::collections::HashMap;
 
 // =============================================================================
@@ -269,7 +272,7 @@ fn test_expr_func_map_string_to_class_input() {
 /// Test image input expression function
 #[test]
 fn test_expr_func_image_input() {
-    let img = Image::url("https://example.com/image.png").unwrap();
+    let img = new_image_from_url("https://example.com/image.png", None);
     let result = B.TestImageInputExprFunc.call(&img);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
@@ -279,8 +282,8 @@ fn test_expr_func_image_input() {
 /// Test image list input expression function
 #[test]
 fn test_expr_func_image_list_input() {
-    let img1 = Image::url("https://example.com/image1.png").unwrap();
-    let img2 = Image::url("https://example.com/image2.png").unwrap();
+    let img1 = new_image_from_url("https://example.com/image1.png", None);
+    let img2 = new_image_from_url("https://example.com/image2.png", None);
     let result = B.TestImageListInputExprFunc.call(&[img1, img2]);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
@@ -290,7 +293,7 @@ fn test_expr_func_image_list_input() {
 /// Test audio input expression function
 #[test]
 fn test_expr_func_audio_input() {
-    let aud = Audio::url("https://example.com/audio.mp3").unwrap();
+    let aud = new_audio_from_url("https://example.com/audio.mp3", None);
     let result = B.AudioInputExprFunc.call(&aud);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
@@ -300,7 +303,7 @@ fn test_expr_func_audio_input() {
 /// Test video input expression function
 #[test]
 fn test_expr_func_video_input() {
-    let vid = Video::url("https://example.com/video.mp4").unwrap();
+    let vid = new_video_from_url("https://example.com/video.mp4", None);
     let result = B.VideoInputExprFunc.call(&vid);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
@@ -310,7 +313,7 @@ fn test_expr_func_video_input() {
 /// Test pdf input expression function
 #[test]
 fn test_expr_func_pdf_input() {
-    let pdf = Pdf::url("https://example.com/document.pdf").unwrap();
+    let pdf = new_pdf_from_url("https://example.com/document.pdf", None);
     let result = B.PdfInputExprFunc.call(&pdf);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
@@ -409,25 +412,22 @@ fn test_expr_func_null_literal_class_output() {
     let result = B.NullLiteralClassHelloExprFunc.call("unused");
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
-    assert_eq!(
-        output.a,
-        Some("hi".to_string()),
-        "Expected a to be Some('hi')"
-    );
+    assert_eq!(output.a, "hi", "Expected a to be 'hi'");
 }
 
 /// Test allowed optionals expression function (returns input)
 #[test]
 fn test_expr_func_allowed_optionals() {
     let input = OptionalListAndMap {
-        p: vec!["item1".to_string(), "item2".to_string()],
+        p: Some(vec!["item1".to_string(), "item2".to_string()]),
+        q: None,
     };
     let result = B.AllowedOptionalsExprFunc.call(&input);
     assert!(result.is_ok(), "Expected successful call, got {:?}", result);
     let output = result.unwrap();
     assert_eq!(
         output.p,
-        vec!["item1".to_string(), "item2".to_string()],
+        Some(vec!["item1".to_string(), "item2".to_string()]),
         "Expected same list back"
     );
 }

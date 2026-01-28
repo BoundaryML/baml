@@ -32,10 +32,18 @@ fn main() {
             })
     };
 
+    // Canonicalize the path to get an absolute path
+    let baml_library_path = baml_library_path
+        .canonicalize()
+        .expect("Failed to canonicalize library path");
+
     // Add environment variable before running:
     baml_sys::set_library_path(baml_library_path.clone()).expect("Failed to set library path");
     baml_sys::ensure_library().expect("Failed to ensure library");
 
-    // Embed into the binary
-    println!("cargo:rustc-env=BAML_LIBRARY_PATH={baml_library_path:?}");
+    // Embed into the binary as a string path (not Debug format)
+    println!(
+        "cargo:rustc-env=BAML_LIBRARY_PATH={}",
+        baml_library_path.display()
+    );
 }

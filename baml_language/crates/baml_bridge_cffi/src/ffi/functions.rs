@@ -1,8 +1,10 @@
 //! Function call FFI entry points.
 
 use std::ffi::CStr;
+use std::panic::AssertUnwindSafe;
 
 use anyhow::Result;
+use futures::future::FutureExt;
 use prost::Message;
 
 use crate::Buffer;
@@ -79,17 +81,33 @@ fn call_function_inner(
     // bex_engine.call_function takes &[BexValue], so we need to convert
     let bex_args: Vec<bex_external_types::BexValue> = kwargs.into_values().collect();
 
-    // Spawn async task
+    // Spawn async task with panic catching
     let rt = get_runtime().clone();
     rt.spawn(async move {
-        let result = engine.call_function(&func_name, &bex_args).await;
+        // Wrap the async block with catch_unwind to handle panics
+        let result = AssertUnwindSafe(async {
+            engine.call_function(&func_name, &bex_args).await
+        })
+        .catch_unwind()
+        .await;
 
         match result {
-            Ok(value) => {
+            Ok(Ok(value)) => {
                 send_result_to_callback(id, true, &value);
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 send_error_to_callback(id, &anyhow::anyhow!("{}", e));
+            }
+            Err(panic_info) => {
+                // Extract panic message
+                let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic in async task".to_string()
+                };
+                send_error_to_callback(id, &anyhow::anyhow!("Panic: {}", msg));
             }
         }
     });
