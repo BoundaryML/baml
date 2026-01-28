@@ -1,0 +1,19 @@
+---
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn GetTransform() -> Function { params: [Int], ret: Int } {
+    // Locals:
+    let _0: Function { params: [Int], ret: Int } // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}

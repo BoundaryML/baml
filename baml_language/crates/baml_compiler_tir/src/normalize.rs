@@ -153,6 +153,46 @@ impl StructuralTy {
             (StructuralTy::Literal(LiteralValue::String(_)), StructuralTy::String) => true,
             (StructuralTy::Literal(LiteralValue::Bool(_)), StructuralTy::Bool) => true,
 
+            // Function subtyping: contravariant params, covariant return
+            // (P1) -> R1 <: (P2) -> R2  iff  P2 <: P1 (contravariant) and R1 <: R2 (covariant)
+            (
+                StructuralTy::Function {
+                    params: params1,
+                    ret: ret1,
+                },
+                StructuralTy::Function {
+                    params: params2,
+                    ret: ret2,
+                },
+            ) => {
+                // Return type is covariant: R1 <: R2
+                if !ret1.is_subtype_of(ret2, assumptions) {
+                    return false;
+                }
+
+                // Parameters are contravariant and treated as a "struct-like" tuple:
+                // - () is a supertype of any param list (nullary function accepts anything)
+                // - (T) is a supertype of () if T has a default/is optional (not modeled yet)
+                // - For same-arity, each param is contravariant: P2[i] <: P1[i]
+                //
+                // A function with fewer parameters is more general (supertype) because
+                // it ignores extra arguments. Think of it like a struct with optional fields.
+                if params2.len() > params1.len() {
+                    // sup expects more params than sub provides - sub can't satisfy sup's interface
+                    return false;
+                }
+
+                // For each parameter position that sup expects, check contravariance
+                // params2[i] <: params1[i] (note: reversed direction for contravariance)
+                for (p1, p2) in params1.iter().zip(params2.iter()) {
+                    if !p2.is_subtype_of(p1, assumptions) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+
             _ => false,
         };
 
@@ -536,5 +576,193 @@ mod tests {
 
         // Void should NOT be a subtype of Map
         assert!(!is_subtype_of(&void_ty, &map_ty, &aliases));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FUNCTION SUBTYPING TESTS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Helper to create a function type
+    fn func(params: Vec<Ty>, ret: Ty) -> Ty {
+        Ty::Function {
+            params,
+            ret: Box::new(ret),
+        }
+    }
+
+    #[test]
+    fn test_function_reflexivity() {
+        let aliases = HashMap::new();
+
+        // (int) -> string <: (int) -> string
+        let f = func(vec![Ty::Int], Ty::String);
+        assert!(is_subtype_of(&f, &f, &aliases));
+    }
+
+    #[test]
+    fn test_function_covariant_return() {
+        let aliases = HashMap::new();
+
+        // (int) -> int <: (int) -> float  (because int <: float)
+        let f1 = func(vec![Ty::Int], Ty::Int);
+        let f2 = func(vec![Ty::Int], Ty::Float);
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+
+        // (int) -> float NOT <: (int) -> int
+        assert!(!is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_contravariant_params() {
+        let aliases = HashMap::new();
+
+        // (float) -> string <: (int) -> string  (because int <: float, contravariance)
+        // A function that accepts float can be used where one accepting int is expected
+        let f1 = func(vec![Ty::Float], Ty::String);
+        let f2 = func(vec![Ty::Int], Ty::String);
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+
+        // (int) -> string NOT <: (float) -> string
+        assert!(!is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_unit_supertype_of_params() {
+        let aliases = HashMap::new();
+
+        // () -> string is a supertype of (int) -> string
+        // A nullary function can be used where a unary function is expected
+        // (it just ignores the argument)
+        let nullary = func(vec![], Ty::String);
+        let unary = func(vec![Ty::Int], Ty::String);
+
+        // (int) -> string <: () -> string
+        assert!(is_subtype_of(&unary, &nullary, &aliases));
+
+        // () -> string NOT <: (int) -> string
+        // A nullary function cannot substitute for one that requires an argument
+        assert!(!is_subtype_of(&nullary, &unary, &aliases));
+    }
+
+    #[test]
+    fn test_function_fewer_params_is_supertype() {
+        let aliases = HashMap::new();
+
+        // (int, string) -> bool <: (int) -> bool
+        // A function with more params can be used where fewer are expected
+        let binary = func(vec![Ty::Int, Ty::String], Ty::Bool);
+        let unary = func(vec![Ty::Int], Ty::Bool);
+
+        assert!(is_subtype_of(&binary, &unary, &aliases));
+
+        // (int) -> bool NOT <: (int, string) -> bool
+        assert!(!is_subtype_of(&unary, &binary, &aliases));
+    }
+
+    #[test]
+    fn test_function_combined_variance() {
+        let aliases = HashMap::new();
+
+        // (float) -> int <: (int) -> float
+        // - Param: int <: float (contravariant, so float in sub, int in sup)
+        // - Return: int <: float (covariant)
+        let f1 = func(vec![Ty::Float], Ty::Int);
+        let f2 = func(vec![Ty::Int], Ty::Float);
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+    }
+
+    #[test]
+    fn test_function_multiple_params_contravariance() {
+        let aliases = HashMap::new();
+
+        // (float, string) -> bool <: (int, string) -> bool
+        // First param: int <: float (contravariant)
+        // Second param: string = string
+        let f1 = func(vec![Ty::Float, Ty::String], Ty::Bool);
+        let f2 = func(vec![Ty::Int, Ty::String], Ty::Bool);
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+
+        // (int, string) -> bool NOT <: (float, string) -> bool
+        assert!(!is_subtype_of(&f2, &f1, &aliases));
+    }
+
+    #[test]
+    fn test_function_not_subtype_of_non_function() {
+        let aliases = HashMap::new();
+
+        let f = func(vec![Ty::Int], Ty::String);
+
+        // Function is not a subtype of primitive types
+        assert!(!is_subtype_of(&f, &Ty::Int, &aliases));
+        assert!(!is_subtype_of(&f, &Ty::String, &aliases));
+
+        // Primitive types are not subtypes of functions
+        assert!(!is_subtype_of(&Ty::Int, &f, &aliases));
+    }
+
+    #[test]
+    fn test_function_in_union() {
+        let aliases = HashMap::new();
+
+        let f = func(vec![Ty::Int], Ty::String);
+        let union = Ty::Union(vec![f.clone(), Ty::Null]);
+
+        // (int) -> string <: ((int) -> string) | null
+        assert!(is_subtype_of(&f, &union, &aliases));
+
+        // null <: ((int) -> string) | null
+        assert!(is_subtype_of(&Ty::Null, &union, &aliases));
+    }
+
+    #[test]
+    fn test_higher_order_function() {
+        let aliases = HashMap::new();
+
+        // A function that takes a function as parameter
+        // ((int) -> string) -> bool
+        let inner_fn_int = func(vec![Ty::Int], Ty::String);
+        let higher_order_int = func(vec![inner_fn_int], Ty::Bool);
+
+        // Reflexivity
+        assert!(is_subtype_of(
+            &higher_order_int,
+            &higher_order_int,
+            &aliases
+        ));
+
+        // Higher-order contravariance works like this:
+        // ((float) -> string) -> bool  vs  ((int) -> string) -> bool
+        //
+        // The outer function's param is contravariant, so we need:
+        //   (int) -> string <: (float) -> string
+        //
+        // For (int) -> string <: (float) -> string:
+        //   - params are contravariant: need float <: int (FALSE! float is supertype of int)
+        //
+        // So ((float) -> string) -> bool is NOT <: ((int) -> string) -> bool
+        let inner_fn_float = func(vec![Ty::Float], Ty::String);
+        let higher_order_float = func(vec![inner_fn_float], Ty::Bool);
+        assert!(!is_subtype_of(
+            &higher_order_float,
+            &higher_order_int,
+            &aliases
+        ));
+
+        // The correct direction:
+        // ((int) -> string) -> bool <: ((float) -> string) -> bool
+        //
+        // Outer param is contravariant, so need:
+        //   (float) -> string <: (int) -> string
+        //
+        // For (float) -> string <: (int) -> string:
+        //   - params contravariant: need int <: float (TRUE!)
+        //   - return covariant: string = string (TRUE!)
+        //
+        // So ((int) -> string) -> bool <: ((float) -> string) -> bool
+        assert!(is_subtype_of(
+            &higher_order_int,
+            &higher_order_float,
+            &aliases
+        ));
     }
 }

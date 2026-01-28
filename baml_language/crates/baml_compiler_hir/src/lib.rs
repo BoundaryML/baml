@@ -49,7 +49,7 @@ pub use ids::*;
 pub use item_tree::*;
 pub use loc::*;
 pub use path::*;
-pub use pretty::{body_to_code, expr_to_code, stmt_to_code};
+pub use pretty::{body_to_code, expr_to_code, stmt_to_code, type_ref_to_str};
 pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
 pub use signature::{FunctionSignature, Param};

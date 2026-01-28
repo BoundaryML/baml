@@ -1,0 +1,26 @@
+---
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function GetTransform() -> (x: int) -> int {
+      1
+}
+
+type Complex = (items: int[], lookup: map<string, int>) -> string?
+
+type Curried = (x: int) -> (y: int) -> int
+
+type IntToInt = (x: int) -> int
+
+type Producer = () -> string
+
+type UnionParam = (value: int | string) -> bool
+
+type MixedParams = (x: int, int, z: string) -> bool
+
+type BinaryOp = (a: int, b: int) -> int
+
+type UnnamedParams = (int, int) -> int
+
+type FunctionFactory = (config: string) -> (int) -> int

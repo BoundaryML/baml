@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -71,10 +71,11 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR
       L_PAREN "("
-      TYPE_EXPR "int | string"
-        WORD "int"
-        PIPE "|"
-        WORD "string"
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
       R_PAREN ")"
       L_BRACKET "["
       R_BRACKET "]"

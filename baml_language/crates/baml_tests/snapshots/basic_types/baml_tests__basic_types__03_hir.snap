@@ -18,7 +18,7 @@ class ClassAttributes {
   @@dynamic
 }
 
-function GetMixedMap() -> Map<string, int | string> {
+function GetMixedMap() -> map<string, int | string> {
   client GPT4
   prompt #"
     Get mixed map
@@ -69,7 +69,7 @@ type Role = "user" | "assistant" | "system"
 
 type UnionOfArrays = int[] | string[]
 
-type MixedMap = Map<string, int | string>
+type MixedMap = map<string, int | string>
 
 type OptionalFlag = true?
 

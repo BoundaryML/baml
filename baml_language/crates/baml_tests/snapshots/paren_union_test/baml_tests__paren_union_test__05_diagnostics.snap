@@ -1,0 +1,14 @@
+---
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
+expression: output
+---
+=== DIAGNOSTICS ===
+  [type] Error: These classes form a dependency cycle: Union
+   ╭─[ test.baml:1:7 ]
+   │
+ 1 │ class Union {
+   │       ──┬──  
+   │         ╰──── These classes form a dependency cycle: Union
+   │ 
+   │ Note: Error code: E0069
+───╯

@@ -30,9 +30,10 @@ SOURCE_FILE
       WORD "alias"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "// Unclosed attribute
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "// Unclosed attribute
   field5"
-          WORD "field5"
+            WORD "field5"
         WORD "string"
     R_BRACE "}"
   FUNCTION_DEF

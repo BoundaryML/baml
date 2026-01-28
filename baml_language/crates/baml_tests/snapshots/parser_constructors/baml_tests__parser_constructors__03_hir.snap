@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -50,18 +50,18 @@ class Point {
   y: int
 }
 
-function boolValues() -> Map<string, bool> {
+function boolValues() -> map<string, bool> {
       { "hello": true, "test": false }
 }
 
-function intValues() -> Map<string, int> {
+function intValues() -> map<string, int> {
       { "hello": 1, "test": 2 }
 }
 
-function stringValues() -> Map<string, string> {
+function stringValues() -> map<string, string> {
       { "hello": "world", "test": "test" }
 }
 
-function floatValues() -> Map<string, float> {
+function floatValues() -> map<string, float> {
       { "hello": 1.0, "test": 2.0 }
 }

@@ -1,0 +1,32 @@
+// Test: Function type in type alias with named parameter
+type IntToInt = (x: int) -> int
+
+// Test: Function type with multiple named parameters
+type BinaryOp = (a: int, b: int) -> int
+
+// Test: Function type without parameter names
+type UnnamedParams = (int, int) -> int
+
+// Test: Mixed named and unnamed parameters
+type MixedParams = (x: int, int, z: string) -> bool
+
+// Test: No parameters
+type Producer = () -> string
+
+// Test: Nested function types (curried)
+type Curried = (x: int) -> (y: int) -> int
+
+// Test: Complex parameter types
+type Complex = (items: int[], lookup: map<string, int>) -> string?
+
+// Test: Function type as return type of a function
+function GetTransform() -> (x: int) -> int {
+    // For now just return a placeholder - actual function values come later
+    1
+}
+
+// Test: Function type with union parameter
+type UnionParam = (value: int | string) -> bool
+
+// Test: Function type returning a function
+type FunctionFactory = (config: string) -> (int) -> int

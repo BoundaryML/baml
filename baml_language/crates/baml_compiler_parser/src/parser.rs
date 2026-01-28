@@ -1404,28 +1404,109 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.at(TokenKind::LParen) {
-            // Tuple type or parenthesized type
-            self.bump(); // (
-            self.parse_type();
-            while self.eat(TokenKind::Comma) {
-                self.parse_type();
-            }
-            // Error recovery: if we're not at ')' yet, skip tokens until we find ')' or reach a recovery point
-            if !self.at(TokenKind::RParen) {
-                if let Some(token) = self.current() {
-                    let message = if token.kind == TokenKind::Dot {
-                        "Path identifiers (e.g., 'a.b') are not supported in type expressions"
-                            .to_string()
-                    } else {
-                        format!("Unexpected '{}' in type expression", token.text)
-                    };
-                    self.error(message, token.span);
-                }
-                self.skip_to_balanced_paren();
-            }
-            self.expect(TokenKind::RParen);
+            // Could be:
+            // 1. Parenthesized type: (int | string)
+            // 2. Function type: (x: int, y: int) -> bool  OR  (int, int) -> bool
+            //
+            // We parse the contents as function type parameters (which can be either
+            // `name: type` or just `type`), then check for `->` to determine which case.
+            self.parse_paren_or_function_type();
         } else {
             self.error_unexpected_token("type".to_string());
+        }
+    }
+
+    /// Parse either a parenthesized type or a function type.
+    ///
+    /// Called when we see `(` in a type position. Could be:
+    /// - Parenthesized type: `(int | string)` - single type, no arrow
+    /// - Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`
+    ///
+    /// The key distinguisher is the presence of `->` after the closing `)`.
+    fn parse_paren_or_function_type(&mut self) {
+        // We'll parse the content first, then decide based on whether `->` follows.
+        // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
+
+        self.bump(); // (
+
+        // Track whether any parameter had a name (which would make it invalid as parenthesized type)
+        let mut had_named_param = false;
+
+        // Parse parameters/types inside parens
+        if !self.at(TokenKind::RParen) {
+            had_named_param |= self.parse_function_type_param_inner();
+
+            while self.eat(TokenKind::Comma) {
+                had_named_param |= self.parse_function_type_param_inner();
+            }
+        }
+
+        // Error recovery: if we're not at ')' yet, skip tokens until we find ')' or reach a recovery point
+        if !self.at(TokenKind::RParen) {
+            if let Some(token) = self.current() {
+                let message = if token.kind == TokenKind::Dot {
+                    "Path identifiers (e.g., 'a.b') are not supported in type expressions"
+                        .to_string()
+                } else {
+                    format!("Unexpected '{}' in type expression", token.text)
+                };
+                self.error(message, token.span);
+            }
+            self.skip_to_balanced_paren();
+        }
+
+        self.expect(TokenKind::RParen);
+
+        // Now check for `->` to determine if this is a function type
+        if self.at(TokenKind::Arrow) {
+            // This is a function type: wrap everything in FUNCTION_TYPE node
+            // Note: The tokens are already emitted, we just need to parse the return type
+            self.bump(); // ->
+            self.parse_type(); // return type
+        // The caller's with_node(TYPE_EXPR) will wrap this appropriately
+        } else {
+            // Not a function type - should be a parenthesized type
+            if had_named_param {
+                // Error: named parameters require `->` to form a function type
+                if let Some(token) = self.current() {
+                    self.error(
+                        "Named parameters in type expression require `->` to form a function type"
+                            .to_string(),
+                        token.span,
+                    );
+                }
+            }
+            // Note: We don't emit an error for multiple types without `->` because:
+            // 1. Tuple types might be added in the future
+            // 2. It allows for better error recovery
+            // 3. The type checker will catch invalid types anyway
+            // For single unnamed type, this is just a parenthesized type - that's fine
+        }
+    }
+
+    /// Parse a single function type parameter: either `name: type` or just `type`.
+    ///
+    /// Returns `true` if this parameter had a name.
+    fn parse_function_type_param_inner(&mut self) -> bool {
+        // Check if this is `name: type` by looking ahead
+        // If we see WORD followed by COLON (skipping trivia), it's a named param
+        let is_named =
+            self.at(TokenKind::Word) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
+
+        if is_named {
+            // Named parameter: `name: type`
+            self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
+                p.bump(); // name
+                p.bump(); // :
+                p.parse_type();
+            });
+            true
+        } else {
+            // Unnamed parameter: just `type`
+            self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
+                p.parse_type();
+            });
+            false
         }
     }
 

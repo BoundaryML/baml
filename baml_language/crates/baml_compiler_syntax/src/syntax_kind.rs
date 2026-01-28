@@ -174,6 +174,8 @@ pub enum SyntaxKind {
     MAP_TYPE,
     TYPE_ARGS,
     STRING_LITERAL_TYPE, // "user" | "assistant"
+    FUNCTION_TYPE,       // (x: int, y: int) -> int
+    FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
     ATTRIBUTE,       // @alias("name")

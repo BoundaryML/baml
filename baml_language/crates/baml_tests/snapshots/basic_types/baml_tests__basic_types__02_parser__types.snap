@@ -102,10 +102,11 @@ SOURCE_FILE
     EQUALS "="
     TYPE_EXPR
       L_PAREN "("
-      TYPE_EXPR "int | string"
-        WORD "int"
-        PIPE "|"
-        WORD "string"
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
       R_PAREN ")"
       L_BRACKET "["
       R_BRACKET "]"

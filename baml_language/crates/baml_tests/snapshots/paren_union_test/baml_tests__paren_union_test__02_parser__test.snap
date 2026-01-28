@@ -1,0 +1,28 @@
+---
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Union"
+    L_BRACE "{"
+    FIELD
+      WORD "u"
+      TYPE_EXPR
+        WORD "Union"
+        PIPE "|"
+        WORD "Union"
+        PIPE "|"
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "Union | Union"
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+        R_PAREN ")"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

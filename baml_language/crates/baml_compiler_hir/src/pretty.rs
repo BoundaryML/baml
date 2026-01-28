@@ -440,6 +440,15 @@ fn assign_op_str(op: AssignOp) -> &'static str {
 
 /// Formats a `TypeRef` as code.
 pub fn type_ref_to_str(ty: &TypeRef) -> String {
+    type_ref_to_str_impl(ty, false)
+}
+
+/// Formats a `TypeRef` as code, optionally wrapping unions in parentheses.
+///
+/// The `wrap_union` parameter controls whether union types should be wrapped
+/// in parentheses. This is needed when a union appears inside an `Optional`
+/// or `List` type to ensure correct parsing (e.g., `(int | string)?` vs `int | string?`).
+fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
     match ty {
         TypeRef::Path(path) => path
             .segments
@@ -453,16 +462,27 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
         TypeRef::Media(kind) => kind.to_string(),
-        TypeRef::Optional(inner) => format!("{}?", type_ref_to_str(inner)),
-        TypeRef::List(inner) => format!("{}[]", type_ref_to_str(inner)),
+        TypeRef::Optional(inner) => format!("{}?", type_ref_to_str_impl(inner, true)),
+        TypeRef::List(inner) => format!("{}[]", type_ref_to_str_impl(inner, true)),
         TypeRef::Map { key, value } => {
-            format!("Map<{}, {}>", type_ref_to_str(key), type_ref_to_str(value))
+            format!(
+                "map<{}, {}>",
+                type_ref_to_str_impl(key, false),
+                type_ref_to_str_impl(value, false)
+            )
         }
-        TypeRef::Union(types) => types
-            .iter()
-            .map(type_ref_to_str)
-            .collect::<Vec<_>>()
-            .join(" | "),
+        TypeRef::Union(types) => {
+            let inner = types
+                .iter()
+                .map(|t| type_ref_to_str_impl(t, false))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            if wrap_union {
+                format!("({inner})")
+            } else {
+                inner
+            }
+        }
         TypeRef::StringLiteral(s) => format!("\"{s}\""),
         TypeRef::IntLiteral(n) => n.to_string(),
         TypeRef::FloatLiteral(f) => f.clone(),
@@ -470,12 +490,27 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
         TypeRef::Generic { base, args } => {
             let args_str = args
                 .iter()
-                .map(type_ref_to_str)
+                .map(|t| type_ref_to_str_impl(t, false))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}<{}>", type_ref_to_str(base), args_str)
+            format!("{}<{}>", type_ref_to_str_impl(base, false), args_str)
         }
         TypeRef::TypeParam(name) => name.to_string(),
+        TypeRef::Function { params, ret } => {
+            let params_str = params
+                .iter()
+                .map(|p| {
+                    let ty_str = type_ref_to_str_impl(&p.ty, false);
+                    if let Some(name) = &p.name {
+                        format!("{name}: {ty_str}")
+                    } else {
+                        ty_str
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("({}) -> {}", params_str, type_ref_to_str_impl(ret, false))
+        }
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),
     }

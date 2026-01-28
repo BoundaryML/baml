@@ -2,7 +2,7 @@
 
 use baml_db::{
     Name, SourceFile,
-    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
+    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items, type_ref_to_str},
     baml_workspace::Project,
 };
 use text_size::{TextRange, TextSize};
@@ -172,7 +172,7 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
                     return Some(format!(
                         "type {} = {}",
                         alias.name,
-                        format_type_ref(&alias.type_ref)
+                        type_ref_to_str(&alias.type_ref)
                     ));
                 }
             }
@@ -214,60 +214,15 @@ fn format_function_signature(sig: &baml_compiler_hir::FunctionSignature) -> Stri
     let params: Vec<String> = sig
         .params
         .iter()
-        .map(|p| format!("{}: {}", p.name, format_type_ref(&p.type_ref)))
+        .map(|p| format!("{}: {}", p.name, type_ref_to_str(&p.type_ref)))
         .collect();
 
     format!(
         "function {}({}) -> {}",
         sig.name,
         params.join(", "),
-        format_type_ref(&sig.return_type)
+        type_ref_to_str(&sig.return_type)
     )
-}
-
-/// Format a `TypeRef` for display.
-fn format_type_ref(ty: &baml_compiler_hir::TypeRef) -> String {
-    use baml_compiler_hir::TypeRef;
-
-    match ty {
-        TypeRef::Path(path) => path
-            .segments
-            .iter()
-            .map(smol_str::SmolStr::as_str)
-            .collect::<Vec<_>>()
-            .join("::"),
-        TypeRef::Int => "int".to_string(),
-        TypeRef::Float => "float".to_string(),
-        TypeRef::String => "string".to_string(),
-        TypeRef::Bool => "bool".to_string(),
-        TypeRef::Null => "null".to_string(),
-        TypeRef::Media(kind) => kind.to_string(),
-        TypeRef::Optional(inner) => format!("{}?", format_type_ref(inner)),
-        TypeRef::List(inner) => format!("{}[]", format_type_ref(inner)),
-        TypeRef::Map { key, value } => {
-            format!("map<{}, {}>", format_type_ref(key), format_type_ref(value))
-        }
-        TypeRef::Union(types) => types
-            .iter()
-            .map(format_type_ref)
-            .collect::<Vec<_>>()
-            .join(" | "),
-        TypeRef::StringLiteral(s) => format!("\"{s}\""),
-        TypeRef::IntLiteral(i) => i.to_string(),
-        TypeRef::FloatLiteral(f) => f.clone(),
-        TypeRef::BoolLiteral(b) => b.to_string(),
-        TypeRef::Generic { base, args } => {
-            let args_str = args
-                .iter()
-                .map(format_type_ref)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{}<{}>", format_type_ref(base), args_str)
-        }
-        TypeRef::TypeParam(name) => name.to_string(),
-        TypeRef::Error => "<error>".to_string(),
-        TypeRef::Unknown => "<unknown>".to_string(),
-    }
 }
 
 /// Format a class definition for hover display.
@@ -278,7 +233,7 @@ fn format_class_definition(class: &baml_compiler_hir::Class) -> String {
         lines.push(format!(
             "  {} {}",
             field.name,
-            format_type_ref(&field.type_ref)
+            type_ref_to_str(&field.type_ref)
         ));
     }
 

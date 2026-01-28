@@ -8,6 +8,33 @@ use rowan::ast::AstNode;
 
 use crate::path::Path;
 
+/// A parameter in a function type reference.
+///
+/// Parameter names are optional and for documentation only - they do not
+/// affect type equality or type checking.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionTypeParamRef {
+    /// Optional parameter name (documentation only).
+    pub name: Option<Name>,
+    /// The parameter type.
+    pub ty: TypeRef,
+}
+
+impl FunctionTypeParamRef {
+    /// Create a new function type parameter with a name.
+    pub fn named(name: Name, ty: TypeRef) -> Self {
+        Self {
+            name: Some(name),
+            ty,
+        }
+    }
+
+    /// Create a new function type parameter without a name.
+    pub fn unnamed(ty: TypeRef) -> Self {
+        Self { name: None, ty }
+    }
+}
+
 /// A type reference before name resolution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeRef {
@@ -42,6 +69,15 @@ pub enum TypeRef {
     FloatLiteral(String),
     /// Boolean literal for pattern matching (true/false as types).
     BoolLiteral(bool),
+
+    /// Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`.
+    ///
+    /// Parameter names are optional and for documentation only - they do not
+    /// affect type equality or type checking.
+    Function {
+        params: Vec<FunctionTypeParamRef>,
+        ret: Box<TypeRef>,
+    },
 
     /// Future: Generic type application.
     /// Example: Result<User, string>
@@ -155,9 +191,52 @@ impl TypeRef {
 
     /// Parse the base type (no optional, array, or union modifiers).
     fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle function types like `(x: int, y: int) -> bool`
+        if type_expr.is_function_type() {
+            let params = type_expr
+                .function_type_params()
+                .iter()
+                .map(|p| {
+                    let name = p.name().map(Name::new);
+                    let ty = p
+                        .ty()
+                        .map(|t| Self::from_ast(&t))
+                        .unwrap_or(TypeRef::Unknown);
+                    FunctionTypeParamRef { name, ty }
+                })
+                .collect();
+            let ret = type_expr
+                .function_return_type()
+                .map(|t| Self::from_ast(&t))
+                .unwrap_or(TypeRef::Unknown);
+            return TypeRef::Function {
+                params,
+                ret: Box::new(ret),
+            };
+        }
+
         // Handle parenthesized types like `(int | string)`
         if let Some(inner) = type_expr.inner_type_expr() {
             return Self::from_ast(&inner);
+        }
+
+        // Handle parenthesized unions: `(A | B)` where the union is inside parens
+        // In the new parser structure, each union member is wrapped in FUNCTION_TYPE_PARAM.
+        // If there are multiple FUNCTION_TYPE_PARAMs but no arrow (not a function type),
+        // this is a parenthesized union.
+        if type_expr.is_parenthesized() && !type_expr.is_function_type() {
+            let params = type_expr.function_type_params();
+            if params.len() > 1 {
+                // This is a parenthesized union like `(A | B | C)`
+                let members: Vec<TypeRef> = params
+                    .iter()
+                    .filter_map(baml_compiler_syntax::FunctionTypeParam::ty)
+                    .map(|t| Self::from_ast(&t))
+                    .collect();
+                if !members.is_empty() {
+                    return TypeRef::Union(members);
+                }
+            }
         }
 
         Self::from_ast_base_type(type_expr)
@@ -210,6 +289,22 @@ impl TypeRef {
             let inner = Self::from_ast(&type_expr);
             // Apply array and optional modifiers from tokens
             return Self::apply_modifiers_from_parts(inner, parts);
+        }
+
+        // Check for FUNCTION_TYPE_PARAM child (new parser structure for parenthesized types)
+        // e.g., `(Union | Union)` has L_PAREN, FUNCTION_TYPE_PARAM, R_PAREN as children
+        if let Some(func_param) = parts.function_type_param() {
+            // Get the TYPE_EXPR inside the FUNCTION_TYPE_PARAM
+            if let Some(inner_type_expr) = func_param
+                .children()
+                .find(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+            {
+                if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr)
+                {
+                    let inner = Self::from_ast(&type_expr);
+                    return Self::apply_modifiers_from_parts(inner, parts);
+                }
+            }
         }
 
         // Check for string literal (e.g., `"user"` in `"user" | "admin"`)

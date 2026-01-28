@@ -1,0 +1,18 @@
+---
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
+expression: output
+---
+Class "class"
+Word "Union"
+LBrace "{"
+Word "u"
+Word "Union"
+Pipe "|"
+Word "Union"
+Pipe "|"
+LParen "("
+Word "Union"
+Pipe "|"
+Word "Union"
+RParen ")"
+RBrace "}"

@@ -187,6 +187,17 @@ impl UnionMemberParts {
             .cloned()
     }
 
+    /// Get the `FUNCTION_TYPE_PARAM` child node if present.
+    ///
+    /// This is used for parenthesized types like `(Union | Union)` which have
+    /// `L_PAREN`, `FUNCTION_TYPE_PARAM`, `R_PAREN` as direct children.
+    pub fn function_type_param(&self) -> Option<SyntaxNode> {
+        self.child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .cloned()
+    }
+
     /// Check if this member has an `INTEGER_LITERAL` token.
     pub fn integer_literal(&self) -> Option<i64> {
         self.tokens
@@ -280,15 +291,45 @@ impl TypeExpr {
 
     /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
     ///
-    /// Returns None if this is not a parenthesized type.
+    /// Returns None if this is not a parenthesized type or if it's a function type.
+    /// For function types, use `function_type_params()` and `function_return_type()` instead.
     pub fn inner_type_expr(&self) -> Option<TypeExpr> {
         if !self.is_parenthesized() {
             return None;
         }
-        self.syntax
+        // If this is a function type, don't return the inner type
+        // (use function_type_params/function_return_type instead)
+        if self.is_function_type() {
+            return None;
+        }
+
+        // First, try to find a direct TYPE_EXPR child (legacy structure)
+        if let Some(n) = self
+            .syntax
             .children()
             .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-            .map(|n| TypeExpr { syntax: n })
+        {
+            return Some(TypeExpr { syntax: n });
+        }
+
+        // With the new parser, parenthesized types have FUNCTION_TYPE_PARAM children
+        // that wrap the inner TYPE_EXPR. If there's exactly one FUNCTION_TYPE_PARAM
+        // (and no arrow, which we already checked above), get its inner type.
+        let params: Vec<_> = self
+            .syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .collect();
+
+        if params.len() == 1 {
+            // Get the TYPE_EXPR from inside the FUNCTION_TYPE_PARAM
+            return params[0]
+                .children()
+                .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                .map(|n| TypeExpr { syntax: n });
+        }
+
+        None
     }
 
     /// Get all child `TypeExpr` nodes.
@@ -424,7 +465,127 @@ impl TypeExpr {
     pub fn text_range(&self) -> rowan::TextRange {
         self.syntax.text_range()
     }
+
+    /// Check if this is a function type: `(x: int, y: int) -> bool` or `(int) -> bool`.
+    ///
+    /// A function type has:
+    /// - An `L_PAREN` token
+    /// - Zero or more `FUNCTION_TYPE_PARAM` children
+    /// - An `R_PAREN` token
+    /// - An `ARROW` token
+    /// - A return type `TYPE_EXPR`
+    pub fn is_function_type(&self) -> bool {
+        // Check for ARROW token at the top level (not inside nested TYPE_EXPR)
+        // The arrow must be a direct child token, not inside a child node
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::ARROW)
+    }
+
+    /// Get the parameters of a function type.
+    ///
+    /// Returns an empty vec if this is not a function type.
+    /// Each parameter is wrapped in a `FunctionTypeParam` which provides
+    /// access to the optional name and the type.
+    pub fn function_type_params(&self) -> Vec<FunctionTypeParam> {
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
+            .map(|n| FunctionTypeParam { syntax: n })
+            .collect()
+    }
+
+    /// Get the return type of a function type.
+    ///
+    /// For `(x: int) -> string`, returns the `TypeExpr` for `string`.
+    /// Returns None if this is not a function type or if the return type is missing.
+    pub fn function_return_type(&self) -> Option<TypeExpr> {
+        if !self.is_function_type() {
+            return None;
+        }
+        // The return type is the TYPE_EXPR that comes after the ARROW
+        // We need to find the TYPE_EXPR that is NOT inside a FUNCTION_TYPE_PARAM
+        // Since FUNCTION_TYPE_PARAMs contain their own TYPE_EXPRs, we look for
+        // the direct child TYPE_EXPR (which is the return type)
+        self.syntax
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+            .last() // The return type is typically the last TYPE_EXPR
+    }
 }
+
+/// A parameter in a function type expression.
+///
+/// Can be either:
+/// - Named: `x: int`
+/// - Unnamed: `int`
+///
+/// Parameter names are for documentation only and do not affect type equality.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionTypeParam {
+    syntax: SyntaxNode,
+}
+
+impl BamlAstNode for FunctionTypeParam {}
+
+impl AstNode for FunctionTypeParam {
+    type Language = crate::BamlLanguage;
+
+    fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
+        kind == SyntaxKind::FUNCTION_TYPE_PARAM
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl FunctionTypeParam {
+    /// Get the parameter name if present.
+    ///
+    /// For `x: int`, returns `Some("x")`.
+    /// For just `int`, returns `None`.
+    pub fn name(&self) -> Option<String> {
+        // If there's a COLON, the first WORD before it is the name
+        let has_colon = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::COLON);
+
+        if has_colon {
+            self.syntax
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .find(|t| t.kind() == SyntaxKind::WORD)
+                .map(|t| t.text().to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Get the type of this parameter.
+    ///
+    /// For `x: int`, returns the `TypeExpr` for `int`.
+    /// For just `int`, returns the `TypeExpr` for `int`.
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .map(|n| TypeExpr { syntax: n })
+    }
+}
+
 ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);

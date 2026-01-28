@@ -13,7 +13,7 @@ class StringTorture {
   long: string
 }
 
-function ComplexType() -> Map<string, Map<string, Map<string, int[]?>>> {
+function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
       return;
 }
 

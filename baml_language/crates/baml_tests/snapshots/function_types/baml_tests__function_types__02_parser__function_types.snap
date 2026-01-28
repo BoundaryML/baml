@@ -1,0 +1,218 @@
+---
+source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "IntToInt"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "BinaryOp"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      FUNCTION_TYPE_PARAM
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "UnnamedParams"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MixedParams"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      FUNCTION_TYPE_PARAM
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      FUNCTION_TYPE_PARAM
+        WORD "z"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "bool"
+        WORD "bool"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Producer"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Curried"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "y"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "int"
+          WORD "int"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Complex"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "int[]"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      FUNCTION_TYPE_PARAM
+        WORD "lookup"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "GetTransform"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "int"
+        WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    // For now just return a placeholder - actual function values come later
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "UnionParam"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "int | string"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "bool"
+        WORD "bool"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "FunctionFactory"
+    EQUALS "="
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "config"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "int"
+          WORD "int"
+
+=== ERRORS ===
+None

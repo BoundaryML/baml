@@ -3561,8 +3561,9 @@ SOURCE_FILE
                 WORD "Success"
                 PIPE "|"
                 L_PAREN "("
-                TYPE_EXPR "Failure"
-                  WORD "Failure"
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Failure"
+                    WORD "Failure"
                 R_PAREN ")"
             FAT_ARROW "=>"
             INTEGER_LITERAL "0"

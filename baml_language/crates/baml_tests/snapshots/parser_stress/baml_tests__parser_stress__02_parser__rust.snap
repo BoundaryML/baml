@@ -1114,64 +1114,72 @@ impl SourceFile {
       WORD "Function"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "FunctionDef"
-          WORD "FunctionDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "FunctionDef"
+            WORD "FunctionDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "Class"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "ClassDef"
-          WORD "ClassDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "ClassDef"
+            WORD "ClassDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "Enum"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "EnumDef"
-          WORD "EnumDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "EnumDef"
+            WORD "EnumDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "Client"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "ClientDef"
-          WORD "ClientDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "ClientDef"
+            WORD "ClientDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "Test"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "TestDef"
-          WORD "TestDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "TestDef"
+            WORD "TestDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "RetryPolicy"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "RetryPolicyDef"
-          WORD "RetryPolicyDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "RetryPolicyDef"
+            WORD "RetryPolicyDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "TemplateString"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "TemplateStringDef"
-          WORD "TemplateStringDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "TemplateStringDef"
+            WORD "TemplateStringDef"
         R_PAREN ")"
     COMMA ","
     ENUM_VARIANT
       WORD "TypeAlias"
       TYPE_EXPR
         L_PAREN "("
-        TYPE_EXPR "TypeAliasDef"
-          WORD "TypeAliasDef"
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "TypeAliasDef"
+            WORD "TypeAliasDef"
         R_PAREN ")"
     COMMA ","
     R_BRACE "}"
