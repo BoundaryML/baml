@@ -496,6 +496,57 @@ pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> Project
     ProjectTypeNames::new(db, names)
 }
 
+/// Returns a map of type item names to their spans.
+///
+/// This is a cached query that provides efficient Name -> Span lookups for
+/// type-level error reporting (type aliases and classes). Used by `ErrorLocation::to_span`
+/// to resolve `TypeItem(Name)` locations during diagnostic rendering.
+///
+/// Note: This query recomputes when file contents change (including whitespace),
+/// since spans must be extracted from the syntax tree. The incrementality benefit
+/// comes from storing `ErrorLocation::TypeItem(Name)` in type errors instead of
+/// spans directly - type checking results remain cached even when this query invalidates.
+#[salsa::tracked]
+pub fn project_type_item_spans(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> std::sync::Arc<std::collections::HashMap<Name, Span>> {
+    let items = project_items(db, root);
+    let mut spans = std::collections::HashMap::new();
+
+    for item in items.items(db) {
+        match item {
+            ItemId::Class(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let class = &item_tree[loc.id(db)];
+                let name = class.name.clone();
+
+                if let Some(span) =
+                    get_item_name_span(db, file, "class", name.as_str(), loc.id(db).index())
+                {
+                    spans.insert(name, span);
+                }
+            }
+            ItemId::TypeAlias(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let alias = &item_tree[loc.id(db)];
+                let name = alias.name.clone();
+
+                if let Some(span) =
+                    get_item_name_span(db, file, "type alias", name.as_str(), loc.id(db).index())
+                {
+                    spans.insert(name, span);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    std::sync::Arc::new(spans)
+}
+
 /// Returns the names and spans of all functions defined in the project.
 ///
 /// This is a convenience function for WASM/external consumers that just need

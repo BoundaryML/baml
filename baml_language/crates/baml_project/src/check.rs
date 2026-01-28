@@ -16,14 +16,12 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
-    self, Definition, ErrorLocation, FunctionBody, ItemId, file_items, file_lowering,
-    fqn::FullyQualifiedName, function_body, function_signature, function_signature_source_map,
-    get_item_name_span, symbol_table,
+    self, FunctionBody, HirSourceMap, ItemId, file_items, file_lowering, function_body,
+    function_signature, function_signature_source_map, project_type_item_spans,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
-use baml_db::{FileId, SourceFile, Span, baml_compiler_parser};
+use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_workspace::Project;
-use text_size::TextRange;
 
 use crate::ProjectDatabase;
 
@@ -36,51 +34,6 @@ pub struct CheckResult {
     pub sources: HashMap<FileId, String>,
     /// Maps `FileId` to file path (for URL generation).
     pub file_paths: HashMap<FileId, PathBuf>,
-}
-
-/// Resolve an `ErrorLocation` to a Span for type-level items.
-///
-/// For `ErrorLocation::TypeItem`, this looks up the type alias or class using the cached
-/// `SymbolTable` and returns its name span. For other `ErrorLocation` variants, this should
-/// not be called.
-fn resolve_type_item_location(db: &ProjectDatabase, project: Project, loc: &ErrorLocation) -> Span {
-    match loc {
-        ErrorLocation::TypeItem(name) => {
-            // Use the cached symbol table for efficient lookup
-            let symbols = symbol_table(db, project);
-            let fqn = FullyQualifiedName::local(name.clone());
-
-            if let Some(def) = symbols.lookup_type(db, &fqn) {
-                // Match on the definition type to get the appropriate location
-                match def {
-                    Definition::TypeAlias(alias_loc) => {
-                        let file = alias_loc.file(db);
-                        let local_id = alias_loc.id(db);
-                        get_item_name_span(db, file, "type alias", name.as_str(), local_id.index())
-                            .unwrap_or_else(|| {
-                                Span::new(file.file_id(db), TextRange::empty(0.into()))
-                            })
-                    }
-                    Definition::Class(class_loc) => {
-                        let file = class_loc.file(db);
-                        let local_id = class_loc.id(db);
-                        get_item_name_span(db, file, "class", name.as_str(), local_id.index())
-                            .unwrap_or_else(|| {
-                                Span::new(file.file_id(db), TextRange::empty(0.into()))
-                            })
-                    }
-                    _ => {
-                        // Should not happen - cycle errors are only for type aliases and classes
-                        Span::new(FileId::default(), TextRange::empty(0.into()))
-                    }
-                }
-            } else {
-                // Fallback if not found in symbol table
-                Span::new(FileId::default(), TextRange::empty(0.into()))
-            }
-        }
-        _ => panic!("resolve_type_item_location should only be called with TypeItem locations"),
-    }
 }
 
 /// Collect all diagnostics from a project.
@@ -102,6 +55,9 @@ pub fn collect_diagnostics(
     source_files: &[SourceFile],
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
+
+    // Get cached type item spans for error location resolution
+    let type_spans = project_type_item_spans(db, project);
 
     // 1. Collect parse errors
     for source_file in source_files {
@@ -137,7 +93,8 @@ pub fn collect_diagnostics(
     for error in &alias_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
-                resolve_type_item_location(db, project, loc)
+                // Cycle errors are type-level only, use empty source map
+                loc.to_span(&HirSourceMap::default(), &type_spans)
             }),
         );
     }
@@ -147,7 +104,8 @@ pub fn collect_diagnostics(
     for error in &class_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
-                resolve_type_item_location(db, project, loc)
+                // Cycle errors are type-level only, use empty source map
+                loc.to_span(&HirSourceMap::default(), &type_spans)
             }),
         );
     }
@@ -188,11 +146,9 @@ pub fn collect_diagnostics(
 
                     // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
                     for type_error in &inference_result.errors {
-                        diagnostics.push(
-                            type_error.to_diagnostic(ToString::to_string, |loc| {
-                                loc.to_span(hir_source_map)
-                            }),
-                        );
+                        diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
+                            loc.to_span(hir_source_map, &type_spans)
+                        }));
                     }
                 }
             }

@@ -107,12 +107,12 @@ class Union {
 //     │ 
 //     │ Note: Error code: E0069
 // ────╯
-// Error: These classes form a dependency cycle: Five -> Four -> One -> Three -> Two -> Five
+// Error: These classes form a dependency cycle: Five -> One -> Two -> Three -> Four -> Five
 //     ╭─[ class_dependency_cycle.baml:32:7 ]
 //     │
 //  32 │ class Five {
 //     │       ──┬─  
-//     │         ╰─── These classes form a dependency cycle: Five -> Four -> One -> Three -> Two -> Five
+//     │         ╰─── These classes form a dependency cycle: Five -> One -> Two -> Three -> Four -> Five
 //     │ 
 //     │ Note: Error code: E0069
 // ────╯

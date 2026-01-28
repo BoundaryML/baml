@@ -44,21 +44,34 @@ pub enum ErrorLocation {
 }
 
 impl ErrorLocation {
-    /// Resolve this location to a `Span` using the provided source map.
+    /// Resolve this location to a `Span`.
     ///
-    /// Note: This method doesn't handle `TypeItem` because those require project-level
-    /// context to resolve. Use a custom resolver in check.rs for type-level errors.
-    pub fn to_span(&self, source_map: &HirSourceMap) -> Span {
+    /// For function body locations (Expr, `MatchArm`), uses the `HirSourceMap`.
+    /// For type-level locations (`TypeItem`), looks up the name in the type spans map.
+    ///
+    /// # Parameters
+    /// - `source_map`: Maps expression/statement IDs to spans within a function body
+    /// - `type_spans`: Maps type item names to spans (from `project_type_item_spans` query)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let type_spans = project_type_item_spans(db, project);
+    /// let span = loc.to_span(hir_source_map, &type_spans);
+    /// ```
+    pub fn to_span(
+        &self,
+        source_map: &HirSourceMap,
+        type_spans: &std::collections::HashMap<Name, Span>,
+    ) -> Span {
         match self {
             ErrorLocation::Expr(id) => source_map.expr_span(*id).unwrap_or_default(),
             ErrorLocation::MatchArm(id) => source_map
                 .match_arm_spans(*id)
                 .map(|s| s.arm_span)
                 .unwrap_or_default(),
-            ErrorLocation::TypeItem(_) => {
-                panic!(
-                    "TypeItem locations require project context - use a custom resolver in check.rs"
-                )
+            ErrorLocation::TypeItem(name) => {
+                type_spans.get(name).copied().unwrap_or_else(Span::default)
             }
             ErrorLocation::Span(span) => *span,
         }
