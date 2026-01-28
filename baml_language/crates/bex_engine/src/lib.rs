@@ -234,6 +234,10 @@ pub struct BexEngine {
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
+    /// Resolved client definitions for lookup by name.
+    resolved_client_definitions: HashMap<String, HeapPtr>,
+    /// Maps function names to their global indices (for dynamic function lookup).
+    function_global_indices: HashMap<String, usize>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
     /// System operations provider.
@@ -292,6 +296,17 @@ impl BexEngine {
             })
             .collect();
 
+        // Convert ObjectIndex -> HeapPtr for client definitions.
+        // The options function is looked up by name: `{ClientName}$options`.
+        let resolved_client_definitions: HashMap<String, HeapPtr> = bytecode
+            .resolved_client_definitions
+            .into_iter()
+            .map(|(name, client_def_idx)| {
+                let client_ptr = heap.compile_time_ptr(client_def_idx.into_raw());
+                (name, client_ptr)
+            })
+            .collect();
+
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
         let globals_vec: Vec<Value> = bytecode
@@ -306,6 +321,8 @@ impl BexEngine {
             heap,
             globals,
             resolved_function_names,
+            resolved_client_definitions,
+            function_global_indices: bytecode.function_global_indices,
             env_vars,
             sys_ops,
             // Initialize epoch tracking
@@ -648,9 +665,12 @@ impl BexEngine {
                 kind: m.kind,
             }),
             Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
-            Object::PromptAst(_) => Err(EngineError::CannotConvert {
-                type_name: "prompt_ast".to_string(),
-            }),
+            Object::PromptAst(ast) => {
+                // Convert VM PromptAst to external PromptAst
+                Ok(BexExternalValue::PromptAst(
+                    Self::vm_prompt_ast_to_external(ast),
+                ))
+            }
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
                 type_name: "primitive_client".to_string(),
             }),
@@ -909,14 +929,15 @@ impl BexEngine {
 
         // Look up the function to verify it exists and get its return type
         let function_index = self.lookup_function(function_name)?;
+        // Get return type from schema, or use Null for builtin functions
+        // that only exist in bytecode (like baml.llm.render_prompt).
+        // Using Null as a placeholder since it won't trigger union wrapping.
         let return_type = self
             .snapshot
             .functions
             .get(function_name)
             .map(|f| f.return_type.clone())
-            .ok_or_else(|| EngineError::SchemaInconsistency {
-                message: format!("Function '{function_name}' exists in bytecode but not in schema"),
-            })?;
+            .unwrap_or(Ty::Null);
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -1073,6 +1094,10 @@ impl BexEngine {
                 vm.alloc_client_call_chain(bex_vm_types::ClientCallChain {
                     clients: client_ptrs,
                 })
+            }
+            BexExternalValue::FunctionRef { global_index } => {
+                // Return the function value from the VM's globals array
+                vm.globals[bex_vm_types::GlobalIndex::from_raw(*global_index)]
             }
         }
     }
@@ -1330,6 +1355,18 @@ impl BexEngine {
                 let result = Self::execute_build_primitive_client(&args);
                 SysOpResult::Ready(result)
             }
+            SysOp::LlmGetClientFunction => {
+                // get_client_function(function_name: String) -> fn() -> PrimitiveClient
+                let result = self.execute_get_client_function(&args);
+                SysOpResult::Ready(result)
+            }
+            SysOp::LlmClientDefinitionResolve => {
+                // ClientDefinition.resolve() -> PrimitiveClient
+                // Not implemented yet - ClientDefinition is not currently used
+                SysOpResult::Ready(Err(OpError::Other(
+                    "ClientDefinition.resolve is not yet implemented".to_string(),
+                )))
+            }
         }
     }
 
@@ -1469,9 +1506,15 @@ impl BexEngine {
     /// Arguments: [`function_name`: String]
     /// Returns: `ClientCallChain` (the client chain for the function)
     ///
-    /// TODO: This should return `Array<ClientDefinition>` with unevaluated options.
-    /// The caller would then call `client_def.resolve()` to get a `PrimitiveClient`.
-    /// For now, we return a `ClientCallChain` with already-evaluated `PrimitiveClient`s.
+    /// Get the client chain for a function.
+    ///
+    /// This now uses compiled `ClientDefinition` objects from the bytecode when available.
+    /// For backwards compatibility, falls back to static `snapshot.clients` if the
+    /// compiled definition is not found.
+    ///
+    /// TODO: Currently evaluates options using static snapshot values.
+    /// Full implementation should call the options bytecode function to evaluate
+    /// dynamic options (env vars, expressions, etc.).
     fn execute_get_client_chain(
         &self,
         args: &[BexExternalValue],
@@ -1504,32 +1547,63 @@ impl BexEngine {
             }
         };
 
-        // Look up client definition
-        let client_def = self
-            .snapshot
-            .clients
-            .get(client_name)
-            .ok_or_else(|| OpError::Other(format!("Client not found: {client_name}")))?;
+        // Try to get the compiled ClientDefinition from bytecode
+        let primitive_client =
+            if let Some(&client_ptr) = self.resolved_client_definitions.get(client_name) {
+                // Get the Object from the heap and extract ClientDefinition
+                // SAFETY: client_ptr is valid for the lifetime of the engine
+                let object = unsafe { client_ptr.get() };
+                let Object::ClientDefinition(client_def) = object else {
+                    return Err(OpError::Other(format!(
+                        "Expected ClientDefinition, got {:?}",
+                        bex_vm_types::ObjectType::of(object)
+                    )));
+                };
 
-        // Build a PrimitiveClient from the ClientDef
-        // For now, we create a simple chain with just this one client
-        let primitive_client = bex_external_types::PrimitiveClientValue {
-            name: client_def.name.clone(),
-            provider: client_def.provider.clone(),
-            // TODO: These should come from the client definition or provider defaults
-            default_role: "user".to_string(),
-            allowed_roles: vec![
-                "system".to_string(),
-                "user".to_string(),
-                "assistant".to_string(),
-            ],
-            // Convert options from HashMap<String, String> to IndexMap<String, BexExternalValue>
-            options: client_def
-                .options
-                .iter()
-                .map(|(k, v)| (k.clone(), BexExternalValue::String(v.clone())))
-                .collect(),
-        };
+                // Build PrimitiveClient with info from the compiled ClientDefinition
+                // TODO: Evaluate options function instead of using snapshot
+                // For now, fall back to snapshot options for evaluation
+                let options = if let Some(snapshot_client) = self.snapshot.clients.get(client_name)
+                {
+                    snapshot_client
+                        .options
+                        .iter()
+                        .map(|(k, v)| (k.clone(), BexExternalValue::String(v.clone())))
+                        .collect()
+                } else {
+                    indexmap::IndexMap::new()
+                };
+
+                bex_external_types::PrimitiveClientValue {
+                    name: client_def.name.clone(),
+                    provider: client_def.provider.clone(),
+                    default_role: client_def.default_role.clone(),
+                    allowed_roles: client_def.allowed_roles.clone(),
+                    options,
+                }
+            } else {
+                // Fall back to static snapshot (legacy path)
+                let client_def =
+                    self.snapshot.clients.get(client_name).ok_or_else(|| {
+                        OpError::Other(format!("Client not found: {client_name}"))
+                    })?;
+
+                bex_external_types::PrimitiveClientValue {
+                    name: client_def.name.clone(),
+                    provider: client_def.provider.clone(),
+                    default_role: "user".to_string(),
+                    allowed_roles: vec![
+                        "system".to_string(),
+                        "user".to_string(),
+                        "assistant".to_string(),
+                    ],
+                    options: client_def
+                        .options
+                        .iter()
+                        .map(|(k, v)| (k.clone(), BexExternalValue::String(v.clone())))
+                        .collect(),
+                }
+            };
 
         // Create a ClientCallChain with this single client
         let chain = bex_external_types::ClientCallChainValue {
@@ -1623,6 +1697,64 @@ impl BexEngine {
         };
 
         Ok(BexExternalValue::PrimitiveClient(client))
+    }
+
+    /// Execute the `get_client_function` LLM operation.
+    ///
+    /// Arguments: [`function_name`: String]
+    /// Returns: `FunctionRef` (a callable reference to the client's $options function)
+    ///
+    /// This returns a function reference that, when called, evaluates the client's
+    /// options and returns a `PrimitiveClient`.
+    fn execute_get_client_function(
+        &self,
+        args: &[BexExternalValue],
+    ) -> Result<BexExternalValue, OpError> {
+        // Extract function name
+        let function_name = match &args[0] {
+            BexExternalValue::String(s) => s.as_str(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Look up function definition
+        let function_def = self
+            .snapshot
+            .functions
+            .get(function_name)
+            .ok_or_else(|| OpError::Other(format!("Function not found: {function_name}")))?;
+
+        // Extract client name from LLM function body
+        let client_name = match &function_def.body {
+            bex_program::FunctionBody::Llm { client, .. } => client.as_str(),
+            bex_program::FunctionBody::Expr { .. } => {
+                return Err(OpError::Other(format!(
+                    "Function '{function_name}' is not an LLM function"
+                )));
+            }
+        };
+
+        // Build the $options function name
+        let options_fn_name = format!("{client_name}$options");
+
+        // Look up the global index for the $options function
+        let global_index = self
+            .function_global_indices
+            .get(&options_fn_name)
+            .ok_or_else(|| {
+                OpError::Other(format!(
+                    "Client options function not found: {options_fn_name}"
+                ))
+            })?;
+
+        // Return a FunctionRef that can be called to get the PrimitiveClient
+        Ok(BexExternalValue::FunctionRef {
+            global_index: *global_index,
+        })
     }
 
     /// Convert VM values to `BexExternalValues` for sys ops.
@@ -1769,6 +1901,10 @@ impl BexEngine {
                 vm.alloc_client_call_chain(bex_vm_types::ClientCallChain {
                     clients: client_ptrs,
                 })
+            }
+            BexExternalValue::FunctionRef { global_index } => {
+                // Return the function value from the VM's globals array
+                vm.globals[bex_vm_types::GlobalIndex::from_raw(global_index)]
             }
         }
     }

@@ -228,12 +228,10 @@ macro_rules! with_builtins {
                 }
 
                 // =====================================================================
-                // LLM operations (hidden - internal use only)
+                // LLM operations
                 // =====================================================================
-                #[hide]
                 mod llm {
                     /// Prompt AST - a structured prompt for LLM calls.
-                    /// This is hidden from the type checker as it's for internal use.
                     #[builtin]
                     struct PromptAst {}
 
@@ -287,6 +285,11 @@ macro_rules! with_builtins {
                         allowed_roles: Array<String>,
                         options: Map<String, Any>
                     ) -> PrimitiveClient;
+
+                    /// Get the client $options function for an LLM function.
+                    /// Returns a function reference that, when called, returns a PrimitiveClient.
+                    #[external]
+                    fn get_client_function(function_name: String) -> FunctionRef;
                 }
             }
 
@@ -428,13 +431,30 @@ mod tests {
     }
 
     #[test]
-    fn test_hidden_llm_module() {
-        // The baml.llm module is hidden from the type checker.
-        // It should NOT appear in the builtins list, even though
-        // the VM can still use it internally.
-        assert!(find_builtin_by_path("baml.llm.PromptAst").is_none());
+    fn test_llm_module() {
+        // The baml.llm module contains LLM-related builtins
+        let render_prompt = find_builtin_by_path("baml.llm.PrimitiveClient.render_prompt");
+        assert!(render_prompt.is_some());
+        assert!(render_prompt.unwrap().is_external);
 
-        // Other builtins in the same parent module are still visible
+        let get_client_fn = find_builtin_by_path("baml.llm.get_client_function");
+        assert!(
+            get_client_fn.is_some(),
+            "get_client_function should be found"
+        );
+        assert!(
+            get_client_fn.unwrap().is_external,
+            "get_client_function should be external"
+        );
+
+        let get_jinja = find_builtin_by_path("baml.llm.get_jinja_template");
+        assert!(get_jinja.is_some(), "get_jinja_template should be found");
+        assert!(
+            get_jinja.unwrap().is_external,
+            "get_jinja_template should be external"
+        );
+
+        // Other builtins in the same parent module are also visible
         assert!(find_builtin_by_path("baml.http.Response.text").is_some());
         assert!(find_builtin_by_path("baml.http.fetch").is_some());
     }

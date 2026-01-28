@@ -1,8 +1,54 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 0
-Objects: 37
-Globals: 37
+Functions: 2
+Objects: 66
+Globals: 51
+
+Function OpenRouterMistralSmall3_1_24b$options (arity: 0, kind: Bytecode):
+     0    LOAD_GLOBAL 46      (<fn baml.llm.build_primitive_client>)
+     1    LOAD_CONST 0        ("OpenRouterMistralSmall3_1_24b")
+     2    LOAD_CONST 1        ("unknown")
+     3    LOAD_CONST 2        ("user")
+     4    LOAD_CONST 3        ("user")
+     5    LOAD_CONST 4        ("assistant")
+     6    LOAD_CONST 5        ("system")
+     7    ALLOC_ARRAY 3       
+     8    LOAD_CONST 6        ("https://openrouter.ai/api/v1")
+     9    LOAD_CONST 7        ("OPENROUTER_API_KEY")
+     10   LOAD_CONST 8        ("mistralai/mistral-small-3.1-24b-instruct")
+     11   LOAD_CONST 9        (0.1)
+     12   ALLOC_MAP 0         
+     13   LOAD_CONST 10       ("base_url")
+     14   LOAD_CONST 11       ("api_key")
+     15   LOAD_CONST 12       ("model")
+     16   LOAD_CONST 13       ("temperature")
+     17   LOAD_CONST 14       ("headers")
+     18   ALLOC_MAP 5         
+     19   DISPATCH_FUTURE 5   
+     20   AWAIT               
+     21   RETURN              
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN

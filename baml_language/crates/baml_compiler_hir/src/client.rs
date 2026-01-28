@@ -71,7 +71,10 @@ pub(crate) fn lower_client(
 
     let is_composite = COMPOSITE_PROVIDERS.contains(&provider.as_str());
 
-    // Validate config block fields
+    // Extract and validate config block fields
+    let mut default_role: Option<String> = None;
+    let mut allowed_roles: Vec<String> = Vec::new();
+
     if let Some(config_block) = client_def.config_block() {
         // Check for unknown properties in client config block
         for item in config_block.items() {
@@ -87,7 +90,7 @@ pub(crate) fn lower_client(
             }
         }
 
-        // Find the options block for further validation
+        // Find the options block for further validation and extraction
         if let Some(options_item) = config_block
             .items()
             .find(|item| item.matches_key("options"))
@@ -101,11 +104,42 @@ pub(crate) fn lower_client(
 
                 // Validate allowed_roles and remap_roles
                 validate_roles(ctx, &client_name, &options_block);
+
+                // Extract default_role if present
+                if let Some(role_item) = options_block
+                    .items()
+                    .find(|item| item.matches_key("default_role"))
+                {
+                    default_role = role_item.value_str();
+                }
+
+                // Extract allowed_roles if present
+                if let Some(roles_item) = options_block
+                    .items()
+                    .find(|item| item.matches_key("allowed_roles"))
+                {
+                    if let Some(elements) = roles_item.array_string_elements() {
+                        allowed_roles = elements.into_iter().filter_map(|(s, _)| s).collect();
+                    }
+                }
             }
         }
     }
 
-    Some(Client { name, provider })
+    // Use default allowed_roles if none specified
+    if allowed_roles.is_empty() {
+        allowed_roles = DEFAULT_ALLOWED_ROLES
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+    }
+
+    Some(Client {
+        name,
+        provider,
+        default_role,
+        allowed_roles,
+    })
 }
 
 /// Validate `client_response_type` field.

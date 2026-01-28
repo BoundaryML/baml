@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -11,6 +11,10 @@ function FetchDatax(user_id: string) -> Hi {
             {{ ctx.output_format }}
         
   "#
+}
+
+function VertexGCP$options() -> <unknown> {
+    baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "user", ["user", "assistant", "system"], { "model": "gemini-2" })
 }
 
 class Hi {

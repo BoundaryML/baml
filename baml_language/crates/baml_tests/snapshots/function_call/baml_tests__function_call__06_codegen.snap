@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 6
-Objects: 46
-Globals: 43
+Functions: 7
+Objects: 59
+Globals: 56
 
 Function Bar (arity: 0, kind: Bytecode):
-     0   LOAD_GLOBAL 41   (<fn Foo>)
+     0   LOAD_GLOBAL 53   (<fn Foo>)
      1   LOAD_CONST 0     (1)
      2   CALL 1           
      3   RETURN           
@@ -20,7 +20,7 @@ Function Foo (arity: 1, kind: Bytecode):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Bytecode):
-     0   LOAD_GLOBAL 38     (<fn Greeting>)
+     0   LOAD_GLOBAL 50     (<fn Greeting>)
      1   ALLOC_INSTANCE 0   (<class Baz>)
      2   COPY 0             
      3   LOAD_VAR 1         (n)
@@ -45,6 +45,28 @@ Function array_length (arity: 0, kind: Bytecode):
      4   ALLOC_ARRAY 3   
      5   CALL 1          
      6   RETURN          
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN              
 
 Function param_in_if_statement (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)

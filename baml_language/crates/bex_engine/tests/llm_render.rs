@@ -316,3 +316,123 @@ async fn test_render_prompt_with_enums() {
         _ => panic!("Expected string result"),
     }
 }
+
+mod common;
+
+/// Test the full `render_prompt` flow through the engine.
+///
+/// This test:
+/// 1. Compiles BAML source with an LLM function
+/// 2. Calls a BAML function that internally calls `baml.llm.render_prompt`
+/// 3. Verifies the call succeeds (`PromptAst` is an internal type, can't return it directly)
+#[tokio::test]
+async fn test_render_prompt_e2e() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexExternalValue;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+// Test wrapper that calls render_prompt and returns something we can check
+// Since PromptAst isn't a user-facing type, we just verify the call succeeds
+function test_render() -> int {
+    // Pass an empty map for args - the Greet function expects a 'name' param
+    // but for this test we just want to verify the render_prompt flow works
+    let args = {};
+    let result = baml.llm.render_prompt("Greet", args, 0);
+    // If we got here without crashing, the call worked
+    42
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine.call_function("test_render", &[]).await;
+
+    match result {
+        Ok(value) => {
+            assert_eq!(value, BexExternalValue::Int(42));
+        }
+        Err(e) => {
+            panic!("test_render failed: {e}");
+        }
+    }
+}
+
+/// Test that `render_prompt` returns a `PromptAst` value.
+///
+/// This test calls `render_prompt` and verifies the result is a `PromptAst`
+/// containing the expected rendered content.
+#[tokio::test]
+async fn test_render_prompt_returns_prompt_ast() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexExternalValue;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+// Function that returns the PromptAst type - this should work since
+// PromptAst is now a visible builtin type
+function get_prompt() -> PromptAst {
+    let args = { "name": "World" };
+    baml.llm.render_prompt("Greet", args, 0)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine.call_function("get_prompt", &[]).await;
+
+    match result {
+        Ok(value) => {
+            // Verify it's a PromptAst
+            match &value {
+                BexExternalValue::PromptAst(ast) => {
+                    // The template "Hello, {{ name }}!" with name="World" should render to PromptAst::String
+                    let bex_external_types::PromptAst::String(content) = ast else {
+                        panic!("Expected PromptAst::String, got {ast:?}");
+                    };
+                    assert_eq!(content, "Hello, World!");
+                }
+                other => {
+                    panic!("Expected PromptAst, got {other:?}");
+                }
+            }
+        }
+        Err(e) => {
+            panic!("get_prompt failed: {e}");
+        }
+    }
+}

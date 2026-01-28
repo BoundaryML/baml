@@ -1,8 +1,49 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
+fn TestClient$options() -> Unknown {
+    // Locals:
+    let _0: Unknown // return
+    let _1: Unknown
+    let _2: Unknown
+    let _3: Unknown
+    let _4: Unknown
+    let _5: Unknown
+    let _6: Unknown
+    let _7: Unknown
+    let _8: Unknown
+    let _9: Unknown
+    let _10: Unknown
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "TestClient";
+        _3 = const "baml-openai-chat";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _8 = const "system";
+        _5 = [copy _6, copy _7, copy _8];
+        _9 = {  };
+        _10 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _10 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+}
+
 fn CommentAfterArrow:
   (LLM function - no MIR)
 

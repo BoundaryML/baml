@@ -247,6 +247,10 @@ pub struct TypeAlias {
 pub struct Client {
     pub name: Name,
     pub provider: Name,
+    /// Default role for chat messages (e.g., "user").
+    pub default_role: Option<String>,
+    /// Allowed roles for chat messages.
+    pub allowed_roles: Vec<String>,
 }
 
 /// Test definition.

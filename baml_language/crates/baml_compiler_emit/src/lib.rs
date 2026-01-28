@@ -46,15 +46,20 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 use std::collections::HashMap;
 
-use baml_base::{Name, SourceFile, Span};
+use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_hir::{
     self, ItemId, function_body, function_signature, function_signature_source_map,
 };
+
+/// The path used for the builtin llm.baml file.
+/// Functions from this file are namespaced as `baml.llm.*`.
+pub const BUILTIN_LLM_PATH: &str = "<builtin>/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, Function, FunctionKind, GlobalIndex,
-    Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
+    BinOp, Bytecode, Class, ClientDefinition, CmpOp, ConstValue, Enum, Function, FunctionKind,
+    GlobalIndex, HeapPtr, Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value,
+    type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -78,6 +83,28 @@ pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
 ) -> Result<Program, LoweringError> {
+    // Hidden LLM builtins (not exposed to users but used by compiler-generated code)
+    // These are in the #[hide] mod llm block and not included in builtins()
+    // Format: (path, arity)
+    const HIDDEN_LLM_BUILTINS: &[(&str, usize)] = &[
+        ("baml.llm.get_jinja_template", 1),
+        ("baml.llm.get_client_chain", 1),
+        ("baml.llm.build_primitive_client", 5),
+        ("baml.llm.PrimitiveClient.render_prompt", 3),
+        ("baml.llm.get_client_function", 1),
+    ];
+
+    // Create the builtin llm.baml file and combine with user files
+    let builtin_file = SourceFile::new(
+        db,
+        baml_builtins::baml_sources::LLM.to_string(),
+        BUILTIN_LLM_PATH.into(),
+        FileId::new(u32::MAX - 1), // Use a high ID to avoid conflicts
+    );
+    let mut all_files: Vec<SourceFile> = files.to_vec();
+    all_files.push(builtin_file);
+    let files = &all_files;
+
     let mut program = Program::new();
     let project = db.project();
 
@@ -98,13 +125,26 @@ pub fn compile_files(
         global_idx += 1;
     }
 
-    // Then, add user-defined functions
+    // Add hidden LLM builtins to globals
+    for (path, _) in HIDDEN_LLM_BUILTINS {
+        globals.insert((*path).to_string(), global_idx);
+        global_idx += 1;
+    }
+
+    // Then, add user-defined functions (including builtin BAML files)
     for file in files {
+        let is_builtin_llm = file.path(db).to_string_lossy() == BUILTIN_LLM_PATH;
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
-                globals.insert(signature.name.to_string(), global_idx);
+                // Namespace builtin functions with baml.llm. prefix
+                let func_name = if is_builtin_llm {
+                    format!("baml.llm.{}", signature.name)
+                } else {
+                    signature.name.to_string()
+                };
+                globals.insert(func_name, global_idx);
                 global_idx += 1;
             }
         }
@@ -221,8 +261,27 @@ pub fn compile_files(
         program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
     }
 
+    // Add hidden LLM builtins to globals (these are external functions)
+    for (path, arity) in HIDDEN_LLM_BUILTINS {
+        let sys_op =
+            sys_op_for_builtin_path(path).expect("hidden LLM builtin must have SysOp mapping");
+        let builtin_fn = Function {
+            name: (*path).to_string(),
+            arity: *arity,
+            bytecode: Bytecode::default(),
+            kind: FunctionKind::External(sys_op),
+            locals_in_scope: Vec::new(),
+            span: baml_base::Span::fake(),
+            block_notifications: Vec::new(),
+            viz_nodes: Vec::new(),
+        };
+        let fn_obj_idx = program.add_object(Object::Function(builtin_fn));
+        program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+    }
+
     // Compile each user function using MIR
     for file in files {
+        let is_builtin_llm = file.path(db).to_string_lossy() == BUILTIN_LLM_PATH;
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
@@ -230,8 +289,15 @@ pub fn compile_files(
                 let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
+                // Namespace builtin functions with baml.llm. prefix
+                let func_name = if is_builtin_llm {
+                    format!("baml.llm.{}", signature.name)
+                } else {
+                    signature.name.to_string()
+                };
+
                 // Handle different function body types
-                let compiled_fn = match &*body {
+                let mut compiled_fn = match &*body {
                     baml_compiler_hir::FunctionBody::Llm(_) => {
                         // LLM functions are external operations dispatched by the engine.
                         // TODO: Eventually these should compile to bytecode that calls
@@ -319,16 +385,54 @@ pub fn compile_files(
                     }
                 };
 
+                // Update function name if it's a builtin
+                compiled_fn.name.clone_from(&func_name);
+
                 // Add function object to program
                 let fn_obj_idx = program.add_object(Object::Function(compiled_fn));
 
                 // Register in function indices
                 program
                     .function_indices
-                    .insert(signature.name.to_string(), fn_obj_idx);
+                    .insert(func_name.clone(), fn_obj_idx);
+
+                // Track global index before adding
+                let global_idx = program.globals.len();
+                program
+                    .function_global_indices
+                    .insert(func_name.clone(), global_idx);
 
                 // Add to globals
                 program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+            }
+        }
+    }
+
+    // Create ClientDefinition objects for each client
+    // Note: The client's $options function is already compiled in the main function loop above
+    for file in files {
+        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Client(client_loc) = item {
+                let client = &item_tree[client_loc.id(db)];
+
+                // Create ClientDefinition with client metadata
+                // The options function is called by name: "{client_name}$options"
+                let client_def = ClientDefinition {
+                    name: client.name.to_string(),
+                    provider: client.provider.to_string(),
+                    default_role: client.default_role.clone().unwrap_or_default(),
+                    allowed_roles: client.allowed_roles.clone(),
+                };
+
+                // Add ClientDefinition to program
+                let client_def_idx = program.add_object(Object::ClientDefinition(client_def));
+
+                // Register client in client_definitions map
+                program
+                    .client_definitions
+                    .insert(client.name.to_string(), client_def_idx);
             }
         }
     }
@@ -390,6 +494,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
         "baml.llm.get_client_chain" => Some(SysOp::LlmGetClientChain),
         "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
+        "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
+        "baml.llm.ClientDefinition.resolve" => Some(SysOp::LlmClientDefinitionResolve),
         // System operations
         "baml.fs.open" => Some(SysOp::FsOpen),
         "baml.fs.File.read" => Some(SysOp::FsRead),

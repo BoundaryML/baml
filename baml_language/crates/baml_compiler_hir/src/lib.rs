@@ -281,13 +281,26 @@ fn function_signature_with_source_map<'db>(
     function: FunctionLoc<'db>,
 ) -> (Arc<FunctionSignature>, SignatureSourceMap) {
     let file = function.file(db);
-    let tree = syntax_tree(db, file);
-    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
-
-    // Find the function node by name
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
+
+    // Check if this is a synthetic client options function (e.g., "GPT4$options")
+    if func_name.as_str().ends_with("$options") {
+        // Return a synthetic signature with Unknown return type to skip type checking.
+        // Client options can contain heterogeneous values (strings, ints, bools, arrays, maps).
+        return (
+            Arc::new(FunctionSignature {
+                name: func_name,
+                params: vec![],
+                return_type: TypeRef::Unknown,
+            }),
+            SignatureSourceMap::default(),
+        );
+    }
+
+    let tree = syntax_tree(db, file);
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
     let default_signature = (
         Arc::new(FunctionSignature {
@@ -551,14 +564,95 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
 #[salsa::tracked]
 pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<FunctionBody> {
     let file = function.file(db);
-    let tree = syntax_tree(db, file);
-    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
-
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    // Find the function among the top-level functions and class methods.
+    // Check if this is a synthetic client options function (e.g., "GPT4$options")
+    if let Some(client_name) = func_name.as_str().strip_suffix("$options") {
+        // Find the corresponding client definition in the source tree
+        let tree = syntax_tree(db, file);
+        let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+
+        let client_def = source_file.items().find_map(|item| {
+            if let baml_compiler_syntax::ast::Item::Client(c) = item {
+                if c.name().map(|n| n.text() == client_name).unwrap_or(false) {
+                    return Some(c);
+                }
+            }
+            None
+        });
+
+        if let Some(client) = client_def {
+            // Get client metadata from item_tree
+            let item_tree = file_item_tree(db, file);
+            let client_data = item_tree
+                .clients
+                .values()
+                .find(|c| c.name.as_str() == client_name);
+
+            let (provider, default_role, allowed_roles) = if let Some(c) = client_data {
+                (
+                    c.provider.as_str().to_string(),
+                    c.default_role.clone().unwrap_or_else(|| "user".to_string()),
+                    if c.allowed_roles.is_empty() {
+                        vec![
+                            "system".to_string(),
+                            "user".to_string(),
+                            "assistant".to_string(),
+                        ]
+                    } else {
+                        c.allowed_roles.clone()
+                    },
+                )
+            } else {
+                (
+                    "unknown".to_string(),
+                    "user".to_string(),
+                    vec![
+                        "system".to_string(),
+                        "user".to_string(),
+                        "assistant".to_string(),
+                    ],
+                )
+            };
+
+            // Find the options block within the client's config
+            if let Some(config_block) = client.config_block() {
+                if let Some(options_item) = config_block.items().find(|i| i.matches_key("options"))
+                {
+                    if let Some(options_block) = options_item.nested_block() {
+                        let file_id = file.file_id(db);
+                        let (body, source_map) =
+                            FunctionBody::lower_client_options_to_primitive_client(
+                                &options_block,
+                                file_id,
+                                client_name,
+                                &provider,
+                                &default_role,
+                                &allowed_roles,
+                            );
+                        return Arc::new(FunctionBody::Expr(body, source_map));
+                    }
+                }
+            }
+            // Client has no options block - create empty options and still return PrimitiveClient
+            let file_id = file.file_id(db);
+            let (body, source_map) = body::empty_primitive_client_body(
+                file_id,
+                client_name,
+                &provider,
+                &default_role,
+                &allowed_roles,
+            );
+            return Arc::new(FunctionBody::Expr(body, source_map));
+        }
+    }
+
+    // Regular function - find it in the source file
+    let tree = syntax_tree(db, file);
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+
     let function_def = source_file
         .items()
         .flat_map(|item| match item {
@@ -724,6 +818,14 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
         }
         SyntaxKind::CLIENT_DEF => {
             if let Some(c) = client::lower_client(node, ctx) {
+                // Create a synthetic function for the client options
+                // This function returns a Map of the client's evaluated options
+                let options_fn_name = Name::new(format!("{}$options", c.name));
+                let options_fn = item_tree::Function {
+                    name: options_fn_name,
+                };
+                tree.alloc_function(options_fn);
+
                 tree.alloc_client(c);
             }
         }

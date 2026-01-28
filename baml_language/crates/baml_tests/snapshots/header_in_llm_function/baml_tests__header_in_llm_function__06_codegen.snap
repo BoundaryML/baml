@@ -1,11 +1,49 @@
 ---
-source: target/debug/build/baml_tests-542dd76acbe74598/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 1
-Objects: 39
-Globals: 38
+Functions: 3
+Objects: 62
+Globals: 52
 
-Function FetchDatax (arity: 1, kind: Bytecode):
+Function FetchDatax (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
+
+Function VertexGCP$options (arity: 0, kind: Bytecode):
+     0    LOAD_GLOBAL 46      (<fn baml.llm.build_primitive_client>)
+     1    LOAD_CONST 0        ("VertexGCP")
+     2    LOAD_CONST 1        ("vertex-ai")
+     3    LOAD_CONST 2        ("user")
+     4    LOAD_CONST 3        ("user")
+     5    LOAD_CONST 4        ("assistant")
+     6    LOAD_CONST 5        ("system")
+     7    ALLOC_ARRAY 3       
+     8    LOAD_CONST 6        ("gemini-2")
+     9    LOAD_CONST 7        ("model")
+     10   ALLOC_MAP 1         
+     11   DISPATCH_FUTURE 5   
+     12   AWAIT               
+     13   RETURN              
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN

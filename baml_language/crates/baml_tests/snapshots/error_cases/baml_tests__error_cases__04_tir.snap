@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-50646ef7890fdaa2/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===

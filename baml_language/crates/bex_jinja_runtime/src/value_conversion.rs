@@ -80,5 +80,10 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
             // ClientCallChain shouldn't appear in template arguments
             JinjaValue::from("[ClientCallChain]")
         }
+
+        BexExternalValue::FunctionRef { .. } => {
+            // FunctionRef shouldn't appear in template arguments
+            JinjaValue::from("[Function]")
+        }
     }
 }

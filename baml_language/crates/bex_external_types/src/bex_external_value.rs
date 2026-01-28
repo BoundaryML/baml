@@ -168,6 +168,15 @@ pub enum BexExternalValue {
 
     /// Client call chain (orchestration wrapper).
     ClientCallChain(ClientCallChainValue),
+
+    /// Reference to a function by its global index.
+    ///
+    /// Used to return callable function references from SysOps.
+    /// The global_index corresponds to the function's position in the VM's globals array.
+    FunctionRef {
+        /// Global index of the function.
+        global_index: usize,
+    },
 }
 
 /// Extracted ClientCallChain data (no HeapPtr, fully owned).
@@ -243,6 +252,7 @@ impl BexExternalValue {
             BexExternalValue::PromptAst(_) => "prompt_ast",
             BexExternalValue::PrimitiveClient(_) => "primitive_client",
             BexExternalValue::ClientCallChain(_) => "client_call_chain",
+            BexExternalValue::FunctionRef { .. } => "function",
         }
     }
 }

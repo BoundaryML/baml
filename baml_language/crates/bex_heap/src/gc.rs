@@ -323,9 +323,9 @@ impl BexHeap {
                     worklist.push(*ptr);
                 }
             }
-            Object::ClientDefinition(def) => {
-                // ClientDefinition.options is a heap pointer to a Function
-                worklist.push(def.options);
+            Object::ClientDefinition(_) => {
+                // ClientDefinition.options is an ObjectIndex, not a HeapPtr.
+                // ObjectIndex refers to the object pool, not the heap, so nothing to trace.
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
@@ -434,11 +434,9 @@ impl BexHeap {
                     }
                 }
             }
-            Object::ClientDefinition(def) => {
-                // Update options pointer
-                if let Some(&new_ptr) = forwarding.get(&def.options) {
-                    def.options = new_ptr;
-                }
+            Object::ClientDefinition(_) => {
+                // ClientDefinition.options is an ObjectIndex, not a HeapPtr.
+                // ObjectIndex refers to the object pool, not the heap, so nothing to update.
             }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]

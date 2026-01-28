@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -93,12 +93,32 @@ expression: output
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected LLM function missing 'prompt' field, found '}'
+  [parse] Error: Expected '}', found client
+    ╭─[ invalid_syntax.baml:11:3 ]
+    │
+ 11 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected '}', found client
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected config block, found '}'
     ╭─[ invalid_syntax.baml:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected LLM function missing 'prompt' field, found '}'
+    │ ╰── Expected config block, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+    ╭─[ invalid_syntax.baml:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -252,3 +272,14 @@ expression: output
    │ 
    │ Note: Error code: E0010
 ───╯
+
+  [hir] Error: Missing `provider` field in client. e.g. `provider openai`
+    ╭─[ invalid_syntax.baml:10:20 ]
+    │
+ 10 │ ╭─▶ function Foo() -> {  // Missing return type
+ 11 │ ├─▶   client GPT4
+    │ │                   
+    │ ╰─────────────────── Missing `provider` field in client. e.g. `provider openai`
+    │     
+    │     Note: Error code: E0026
+────╯

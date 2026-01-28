@@ -35,6 +35,13 @@ pub struct Program {
 
     /// Maps function names to their object indices.
     pub function_indices: HashMap<String, usize>,
+
+    /// Maps function names to their global indices.
+    /// Used for dynamic function lookup at runtime.
+    pub function_global_indices: HashMap<String, usize>,
+
+    /// Maps client names to their `ClientDefinition` object indices.
+    pub client_definitions: HashMap<String, usize>,
 }
 
 impl Program {
@@ -104,6 +111,10 @@ pub enum SysOp {
     LlmGetClientChain,
     /// Build a `PrimitiveClient` from evaluated options: `baml.llm.build_primitive_client(...) -> PrimitiveClient`
     LlmBuildPrimitiveClient,
+    /// Get the client function for a function: `baml.llm.get_client_function(function_name) -> fn() -> PrimitiveClient`
+    LlmGetClientFunction,
+    /// Resolve a client definition: `ClientDefinition.resolve() -> PrimitiveClient`
+    LlmClientDefinitionResolve,
 }
 
 impl std::fmt::Display for SysOp {
@@ -126,6 +137,8 @@ impl std::fmt::Display for SysOp {
             SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
             SysOp::LlmGetClientChain => write!(f, "llm.get_client_chain"),
             SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
+            SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
+            SysOp::LlmClientDefinitionResolve => write!(f, "llm.ClientDefinition.resolve"),
         }
     }
 }
@@ -587,10 +600,13 @@ pub struct PrimitiveClient {
 /// An unresolved client definition.
 ///
 /// Unlike `PrimitiveClient`, the options are not yet evaluated. The `options`
-/// field points to a Function that, when called, evaluates the options
-/// expressions (env vars, string concatenation, etc.) and returns a Map.
+/// Client definition with unevaluated options.
 ///
-/// Call `resolve()` to evaluate options and get a `PrimitiveClient`.
+/// The options are evaluated by calling the function `{name}$options()` which
+/// returns a Map of evaluated config values. This function is created during
+/// HIR lowering from the client's options block.
+///
+/// To resolve: call `{name}$options()`, then use the result to build a `PrimitiveClient`.
 #[derive(Clone, Debug)]
 pub struct ClientDefinition {
     /// Client name (e.g., "GPT4").
@@ -601,9 +617,6 @@ pub struct ClientDefinition {
     pub default_role: String,
     /// Allowed roles for chat messages.
     pub allowed_roles: Vec<String>,
-    /// Function that evaluates options and returns a Map.
-    /// Call this function to get the evaluated options.
-    pub options: HeapPtr,
 }
 
 // ============================================================================

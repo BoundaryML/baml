@@ -58,6 +58,25 @@ unsafe impl Send for HeapPtr {}
 unsafe impl Sync for HeapPtr {}
 
 impl HeapPtr {
+    /// Create a null `HeapPtr` (placeholder for compile-time, resolved at runtime).
+    #[cfg(not(feature = "heap_debug"))]
+    #[inline]
+    pub fn null() -> Self {
+        Self {
+            ptr: std::ptr::null_mut(),
+        }
+    }
+
+    /// Create a null `HeapPtr` (placeholder for compile-time, resolved at runtime).
+    #[cfg(feature = "heap_debug")]
+    #[inline]
+    pub fn null() -> Self {
+        Self {
+            ptr: std::ptr::null_mut(),
+            epoch: 0,
+        }
+    }
+
     /// Create a new `HeapPtr` from a raw pointer.
     ///
     /// # Safety

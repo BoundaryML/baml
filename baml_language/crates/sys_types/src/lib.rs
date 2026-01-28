@@ -208,6 +208,16 @@ impl SysOps {
                     operation: SysOp::LlmBuildPrimitiveClient,
                 }))
             },
+            SysOp::LlmGetClientFunction => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmGetClientFunction,
+                }))
+            },
+            SysOp::LlmClientDefinitionResolve => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmClientDefinitionResolve,
+                }))
+            },
         }
     }
 

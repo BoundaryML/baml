@@ -178,13 +178,36 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                     })
                     .collect();
 
+                // Check if this is an LLM function by inspecting its HIR body
+                let hir_body = baml_compiler_hir::function_body(&db, *func_loc);
+                let body = match hir_body.as_ref() {
+                    baml_compiler_hir::FunctionBody::Llm(llm_body) => {
+                        // Extract prompt template and client name from LLM body
+                        let prompt_template = llm_body
+                            .prompt
+                            .as_ref()
+                            .map(|p| p.text.clone())
+                            .unwrap_or_default();
+                        let client = llm_body
+                            .client
+                            .as_ref()
+                            .map(|n| n.to_string())
+                            .unwrap_or_default();
+                        bex_program::FunctionBody::Llm {
+                            prompt_template,
+                            client,
+                        }
+                    }
+                    _ => bex_program::FunctionBody::Expr {
+                        bytecode_index: 0, // Not needed for type checking
+                    },
+                };
+
                 let func_def = bex_program::FunctionDef {
                     name: signature.name.to_string(),
                     params,
                     return_type,
-                    body: bex_program::FunctionBody::Expr {
-                        bytecode_index: 0, // Not needed for type checking
-                    },
+                    body,
                 };
 
                 functions.insert(signature.name.to_string(), func_def);

@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 21
-Objects: 62
-Globals: 58
+Functions: 22
+Objects: 75
+Globals: 71
 
 Function ConditionalLogic (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (age)
@@ -59,6 +59,28 @@ Function assign_in_loop (arity: 0, kind: Bytecode):
      19   BIN_OP +               
      20   STORE_VAR 2            (i)
      21   JUMP -15               (to 6)
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN              
 
 Function block_with_tail (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (1)

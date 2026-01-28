@@ -1,8 +1,12 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+function MyClient$options() -> <unknown> {
+    baml.llm.build_primitive_client("MyClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
 client MyClient {
   provider: openai
 }

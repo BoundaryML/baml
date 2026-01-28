@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 10
-Objects: 57
-Globals: 47
+Functions: 11
+Objects: 70
+Globals: 60
 
 Function ConsecutiveHeaders (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (FirstHeader)
@@ -152,4 +152,26 @@ Function VeryLongHeaderTitle (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader)
      1   NOTIFY_BLOCK 1   (AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890)
      2   LOAD_CONST 0     ("long headers")
-     3   RETURN
+     3   RETURN           
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN

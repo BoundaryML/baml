@@ -278,6 +278,12 @@ pub struct BytecodeProgram {
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
     pub resolved_class_names: HashMap<String, ObjectIndex>,
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
+    /// Maps client names to their `ClientDefinition` indices.
+    /// The options function is looked up by name: `{ClientName}$options`.
+    pub resolved_client_definitions: HashMap<String, ObjectIndex>,
+    /// Maps function names to their global indices.
+    /// Used for dynamic function lookup at runtime.
+    pub function_global_indices: HashMap<String, usize>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -314,12 +320,21 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         }
     }
 
+    // Convert client_definitions indices to ObjectIndex
+    let resolved_client_definitions: HashMap<String, ObjectIndex> = program
+        .client_definitions
+        .into_iter()
+        .map(|(name, client_idx)| (name, ObjectIndex::from_raw(client_idx)))
+        .collect();
+
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
         resolved_class_names,
         resolved_enums_names,
+        resolved_client_definitions,
+        function_global_indices: program.function_global_indices,
     })
 }
 

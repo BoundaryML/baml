@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -31,13 +31,14 @@ SOURCE_FILE
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR
-    LLM_FUNCTION_BODY
-      L_BRACE "{"
-      CLIENT_FIELD "// Missing return type
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{"
+        L_BRACE "{"
+  CLIENT_DEF "// Missing return type
   client GPT4"
-        KW_CLIENT "client"
-        WORD "GPT4"
-      R_BRACE "}"
+    KW_CLIENT "client"
+    WORD "GPT4"
+  R_BRACE "}"
 
 === ERRORS ===
 Error: Expected class name, found integer
@@ -130,12 +131,32 @@ Error: Expected type, found '{'
     │ Note: Error code: E0010
 ────╯
 
-Error: Expected LLM function missing 'prompt' field, found '}'
+Error: Expected '}', found client
+    ╭─[ invalid_syntax.baml:11:3 ]
+    │
+ 11 │   client GPT4
+    │   ───┬──  
+    │      ╰──── Expected '}', found client
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected config block, found '}'
     ╭─[ invalid_syntax.baml:12:1 ]
     │
  12 │ }
     │ ┬  
-    │ ╰── Expected LLM function missing 'prompt' field, found '}'
+    │ ╰── Expected config block, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ invalid_syntax.baml:12:1 ]
+    │
+ 12 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯

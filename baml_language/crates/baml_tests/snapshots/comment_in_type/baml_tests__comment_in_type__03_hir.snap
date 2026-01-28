@@ -1,8 +1,12 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
+function TestClient$options() -> <unknown> {
+    baml.llm.build_primitive_client("TestClient", "baml-openai-chat", "user", ["user", "assistant", "system"], {  })
+}
+
 function CommentAfterArrow() -> string {
   client TestClient
   prompt #"

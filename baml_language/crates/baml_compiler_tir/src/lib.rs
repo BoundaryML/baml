@@ -960,6 +960,22 @@ pub fn infer_function<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
+    // Skip type inference for synthetic client $options functions.
+    // These are created during HIR lowering and contain heterogeneous values
+    // (strings, ints, bools, arrays, maps) that shouldn't be type-checked.
+    if signature.name.as_str().ends_with("$options") {
+        return InferenceResult {
+            return_type: Ty::Unknown,
+            param_types: HashMap::new(),
+            expr_types: HashMap::new(),
+            path_segment_types: HashMap::new(),
+            enum_variant_exprs: HashMap::new(),
+            exhaustive_matches: std::collections::HashSet::new(),
+            errors: Vec::new(),
+            expr_resolutions: ResolutionMap::default(),
+        };
+    }
+
     let project = db.project();
     let type_aliases = type_aliases.unwrap_or_default();
     let type_alias_name_set: HashSet<Name> = type_aliases.keys().cloned().collect();

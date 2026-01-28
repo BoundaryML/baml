@@ -1769,17 +1769,19 @@ impl<'a> Parser<'a> {
                     if text == "client" || text == "prompt" {
                         return true;
                     }
-                    if text == "let"
-                        || text == "return"
-                        || text == "if"
-                        || text == "while"
-                        || text == "for"
-                    {
-                        return false;
-                    }
                 }
                 // Check for Client keyword token (not just Word with text "client")
                 TokenKind::Client if brace_depth == 1 => return true,
+                // Check for expression function keywords
+                TokenKind::Let
+                | TokenKind::Return
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::For
+                    if brace_depth == 1 =>
+                {
+                    return false;
+                }
                 _ => {}
             }
             i += 1;
@@ -3332,16 +3334,12 @@ impl<'a> Parser<'a> {
     fn parse_config_value(&mut self) {
         self.with_node(SyntaxKind::CONFIG_VALUE, |p| {
             // Config values can be:
-            // - Strings: "value"
-            // - Raw strings: #"value"#
+            // - Strings: "value", #"value"#
             // - Arrays: [item1, item2]
-            // - Unquoted strings: gpt-4o, env.OPENAI_API_KEY
+            // - Nested blocks: { key: value }
+            // - Expressions: env.MY_MODEL, "Bearer " + env.FOO_KEY
             // - Numbers: 123, 3.14
-
-            if p.parse_any_string() {
-                // String value
-                return;
-            }
+            // - Unquoted strings (legacy): gpt-4o, path/to/file
 
             // Array in config context: uses config-style parsing for nested objects
             if p.at(TokenKind::LBracket) {
@@ -3355,9 +3353,18 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse unquoted string - consume tokens until newline, comma, or brace/bracket
+            // Check if this looks like an expression that should be parsed as such:
+            // - String literals (quoted)
+            // - Numbers (integer or float literals)
+            // - `env.` prefix (environment variable access)
+            // - `true` / `false` (boolean literals)
+            if p.looks_like_config_expression() {
+                p.parse_expr();
+                return;
+            }
+
+            // Fall back to legacy unquoted string parsing - consume tokens until delimiter
             while !p.at_end() {
-                // Check if we should stop - at brace/bracket/comma OR newline is ahead
                 if p.at(TokenKind::RBrace)
                     || p.at(TokenKind::LBrace)
                     || p.at(TokenKind::RBracket)
@@ -3369,6 +3376,52 @@ impl<'a> Parser<'a> {
                 p.bump();
             }
         });
+    }
+
+    /// Check if the current position looks like an expression that should be parsed
+    /// as such, rather than as a legacy unquoted string.
+    fn looks_like_config_expression(&self) -> bool {
+        // Regular string literals are always expressions
+        if self.at(TokenKind::Quote) {
+            return true;
+        }
+
+        // Block strings start with #" - check for both tokens
+        // (Just # alone like `#helloworld` is a legacy unquoted string)
+        if self.at(TokenKind::Hash) {
+            if let Some(next) = self.peek(1) {
+                if next.kind == TokenKind::Quote {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Number literals
+        if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            return true;
+        }
+
+        // Check for `env.` prefix - environment variable access
+        if self.at(TokenKind::Word) {
+            if let Some(token) = self.current() {
+                let text = token.text.as_str();
+                if text == "env" {
+                    // Check if next token is a dot
+                    if let Some(next) = self.peek(1) {
+                        if next.kind == TokenKind::Dot {
+                            return true;
+                        }
+                    }
+                }
+                // Boolean literals
+                if text == "true" || text == "false" {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Parse an array in config context - uses config-style parsing for nested objects

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-fbd0fe113b2fb574/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -60,6 +60,10 @@ class Messages {
   with_escapes: string
   with_quotes: string
   hello: <unknown>
+}
+
+function GPT4$options() -> <unknown> {
+    baml.llm.build_primitive_client("GPT4", "unknown", "user", ["user", "assistant", "system"], {  })
 }
 
 class UnicodeStrings {

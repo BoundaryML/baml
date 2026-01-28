@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-542dd76acbe74598/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 103
-Objects: 1247
-Globals: 140
+Functions: 104
+Objects: 1260
+Globals: 153
 
 Function BodyTorture (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
@@ -53,302 +53,324 @@ Function DeepExpression (arity: 0, kind: Bytecode):
      18   BIN_OP +       
      19   RETURN         
 
-Function Process1 (arity: 1, kind: Bytecode):
+Function Process1 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process10 (arity: 1, kind: Bytecode):
+Function Process10 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process100 (arity: 1, kind: Bytecode):
+Function Process100 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process11 (arity: 1, kind: Bytecode):
+Function Process11 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process12 (arity: 1, kind: Bytecode):
+Function Process12 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process13 (arity: 1, kind: Bytecode):
+Function Process13 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process14 (arity: 1, kind: Bytecode):
+Function Process14 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process15 (arity: 1, kind: Bytecode):
+Function Process15 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process16 (arity: 1, kind: Bytecode):
+Function Process16 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process17 (arity: 1, kind: Bytecode):
+Function Process17 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process18 (arity: 1, kind: Bytecode):
+Function Process18 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process19 (arity: 1, kind: Bytecode):
+Function Process19 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process2 (arity: 1, kind: Bytecode):
+Function Process2 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process20 (arity: 1, kind: Bytecode):
+Function Process20 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process21 (arity: 1, kind: Bytecode):
+Function Process21 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process22 (arity: 1, kind: Bytecode):
+Function Process22 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process23 (arity: 1, kind: Bytecode):
+Function Process23 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process24 (arity: 1, kind: Bytecode):
+Function Process24 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process25 (arity: 1, kind: Bytecode):
+Function Process25 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process26 (arity: 1, kind: Bytecode):
+Function Process26 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process27 (arity: 1, kind: Bytecode):
+Function Process27 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process28 (arity: 1, kind: Bytecode):
+Function Process28 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process29 (arity: 1, kind: Bytecode):
+Function Process29 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process3 (arity: 1, kind: Bytecode):
+Function Process3 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process30 (arity: 1, kind: Bytecode):
+Function Process30 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process31 (arity: 1, kind: Bytecode):
+Function Process31 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process32 (arity: 1, kind: Bytecode):
+Function Process32 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process33 (arity: 1, kind: Bytecode):
+Function Process33 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process34 (arity: 1, kind: Bytecode):
+Function Process34 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process35 (arity: 1, kind: Bytecode):
+Function Process35 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process36 (arity: 1, kind: Bytecode):
+Function Process36 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process37 (arity: 1, kind: Bytecode):
+Function Process37 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process38 (arity: 1, kind: Bytecode):
+Function Process38 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process39 (arity: 1, kind: Bytecode):
+Function Process39 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process4 (arity: 1, kind: Bytecode):
+Function Process4 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process40 (arity: 1, kind: Bytecode):
+Function Process40 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process41 (arity: 1, kind: Bytecode):
+Function Process41 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process42 (arity: 1, kind: Bytecode):
+Function Process42 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process43 (arity: 1, kind: Bytecode):
+Function Process43 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process44 (arity: 1, kind: Bytecode):
+Function Process44 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process45 (arity: 1, kind: Bytecode):
+Function Process45 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process46 (arity: 1, kind: Bytecode):
+Function Process46 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process47 (arity: 1, kind: Bytecode):
+Function Process47 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process48 (arity: 1, kind: Bytecode):
+Function Process48 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process49 (arity: 1, kind: Bytecode):
+Function Process49 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process5 (arity: 1, kind: Bytecode):
+Function Process5 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process50 (arity: 1, kind: Bytecode):
+Function Process50 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process51 (arity: 1, kind: Bytecode):
+Function Process51 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process52 (arity: 1, kind: Bytecode):
+Function Process52 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process53 (arity: 1, kind: Bytecode):
+Function Process53 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process54 (arity: 1, kind: Bytecode):
+Function Process54 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process55 (arity: 1, kind: Bytecode):
+Function Process55 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process56 (arity: 1, kind: Bytecode):
+Function Process56 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process57 (arity: 1, kind: Bytecode):
+Function Process57 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process58 (arity: 1, kind: Bytecode):
+Function Process58 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process59 (arity: 1, kind: Bytecode):
+Function Process59 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process6 (arity: 1, kind: Bytecode):
+Function Process6 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process60 (arity: 1, kind: Bytecode):
+Function Process60 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process61 (arity: 1, kind: Bytecode):
+Function Process61 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process62 (arity: 1, kind: Bytecode):
+Function Process62 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process63 (arity: 1, kind: Bytecode):
+Function Process63 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process64 (arity: 1, kind: Bytecode):
+Function Process64 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process65 (arity: 1, kind: Bytecode):
+Function Process65 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process66 (arity: 1, kind: Bytecode):
+Function Process66 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process67 (arity: 1, kind: Bytecode):
+Function Process67 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process68 (arity: 1, kind: Bytecode):
+Function Process68 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process69 (arity: 1, kind: Bytecode):
+Function Process69 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process7 (arity: 1, kind: Bytecode):
+Function Process7 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process70 (arity: 1, kind: Bytecode):
+Function Process70 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process71 (arity: 1, kind: Bytecode):
+Function Process71 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process72 (arity: 1, kind: Bytecode):
+Function Process72 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process73 (arity: 1, kind: Bytecode):
+Function Process73 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process74 (arity: 1, kind: Bytecode):
+Function Process74 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process75 (arity: 1, kind: Bytecode):
+Function Process75 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process76 (arity: 1, kind: Bytecode):
+Function Process76 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process77 (arity: 1, kind: Bytecode):
+Function Process77 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process78 (arity: 1, kind: Bytecode):
+Function Process78 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process79 (arity: 1, kind: Bytecode):
+Function Process79 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process8 (arity: 1, kind: Bytecode):
+Function Process8 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process80 (arity: 1, kind: Bytecode):
+Function Process80 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process81 (arity: 1, kind: Bytecode):
+Function Process81 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process82 (arity: 1, kind: Bytecode):
+Function Process82 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process83 (arity: 1, kind: Bytecode):
+Function Process83 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process84 (arity: 1, kind: Bytecode):
+Function Process84 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process85 (arity: 1, kind: Bytecode):
+Function Process85 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process86 (arity: 1, kind: Bytecode):
+Function Process86 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process87 (arity: 1, kind: Bytecode):
+Function Process87 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process88 (arity: 1, kind: Bytecode):
+Function Process88 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process89 (arity: 1, kind: Bytecode):
+Function Process89 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process9 (arity: 1, kind: Bytecode):
+Function Process9 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process90 (arity: 1, kind: Bytecode):
+Function Process90 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process91 (arity: 1, kind: Bytecode):
+Function Process91 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process92 (arity: 1, kind: Bytecode):
+Function Process92 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process93 (arity: 1, kind: Bytecode):
+Function Process93 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process94 (arity: 1, kind: Bytecode):
+Function Process94 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process95 (arity: 1, kind: Bytecode):
+Function Process95 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process96 (arity: 1, kind: Bytecode):
+Function Process96 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process97 (arity: 1, kind: Bytecode):
+Function Process97 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process98 (arity: 1, kind: Bytecode):
+Function Process98 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function Process99 (arity: 1, kind: Bytecode):
+Function Process99 (arity: 1, kind: External(LlmRenderPrompt)):
   (no bytecode)
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN

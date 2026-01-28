@@ -1,5 +1,65 @@
 ---
-source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
+fn OpenRouterMistralSmall3_1_24b$options() -> Unknown {
+    // Locals:
+    let _0: Unknown // return
+    let _1: Unknown
+    let _2: Unknown
+    let _3: Unknown
+    let _4: Unknown
+    let _5: Unknown
+    let _6: Unknown
+    let _7: Unknown
+    let _8: Unknown
+    let _9: Unknown
+    let _10: Unknown
+    let _11: Unknown
+    let _12: Unknown
+    let _13: Unknown
+    let _14: Unknown
+    let _15: Unknown
+    let _16: Unknown
+    let _17: Unknown
+    let _18: Unknown
+    let _19: Unknown
+    let _20: Unknown
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "OpenRouterMistralSmall3_1_24b";
+        _3 = const "unknown";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _8 = const "system";
+        _5 = [copy _6, copy _7, copy _8];
+        _10 = const "base_url";
+        _11 = const "https://openrouter.ai/api/v1";
+        _12 = const "api_key";
+        _13 = const "OPENROUTER_API_KEY";
+        _14 = const "model";
+        _15 = const "mistralai/mistral-small-3.1-24b-instruct";
+        _16 = const "temperature";
+        _17 = const 0.1_f64;
+        _18 = const "headers";
+        _19 = {  };
+        _9 = { copy _10: copy _11, copy _12: copy _13, copy _14: copy _15, copy _16: copy _17, copy _18: copy _19 };
+        _20 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _20 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+}

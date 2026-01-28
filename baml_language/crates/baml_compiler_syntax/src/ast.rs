@@ -913,6 +913,15 @@ impl ConfigItem {
             .unwrap_or(false)
     }
 
+    /// Get the `CONFIG_VALUE` syntax node if present.
+    ///
+    /// This gives access to the raw syntax tree for examining expression structure.
+    pub fn config_value_node(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+    }
+
     /// Get array elements, returning only those that are string literals.
     ///
     /// Returns `None` if this is not an array.

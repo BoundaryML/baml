@@ -1,5 +1,193 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
+fn MyClient$options() -> Unknown {
+    // Locals:
+    let _0: Unknown // return
+    let _1: Unknown
+    let _2: Unknown
+    let _3: Unknown
+    let _4: Unknown
+    let _5: Unknown
+    let _6: Unknown
+    let _7: Unknown
+    let _8: Unknown
+    let _9: Unknown
+    let _10: Unknown
+    let _11: Unknown
+    let _12: Unknown
+    let _13: Unknown
+    let _14: Unknown
+    let _15: Unknown
+    let _16: Unknown
+    let _17: Unknown
+    let _18: Unknown
+    let _19: Unknown
+    let _20: Unknown
+    let _21: Unknown
+    let _22: Unknown
+    let _23: Unknown
+    let _24: Unknown
+    let _25: Unknown
+    let _26: Unknown
+    let _27: Unknown
+    let _28: Unknown
+    let _29: Unknown
+    let _30: Unknown
+    let _31: Unknown
+    let _32: Unknown
+    let _33: Unknown
+    let _34: Unknown
+    let _35: Unknown
+    let _36: Unknown
+    let _37: Unknown
+    let _38: Unknown
+    let _39: Unknown
+    let _40: Unknown
+    let _41: Unknown
+    let _42: Unknown
+    let _43: Unknown
+    let _44: Unknown
+    let _45: Unknown
+    let _46: Unknown
+    let _47: Unknown
+    let _48: Unknown
+    let _49: Unknown
+    let _50: Unknown
+    let _51: Unknown
+    let _52: Unknown
+    let _53: Unknown
+    let _54: Unknown
+    let _55: Unknown
+    let _56: Unknown
+    let _57: Unknown
+    let _58: Unknown
+    let _59: Unknown
+    let _60: Unknown
+    let _61: Unknown
+    let _62: Unknown
+    let _63: Unknown
+    let _64: Unknown
+    let _65: Unknown
+    let _66: Unknown
+    let _67: Unknown
+    let _68: Unknown
+    let _69: Unknown
+    let _70: Unknown
+    let _71: Unknown
+    let _72: Unknown
+    let _73: Unknown
+    let _74: Unknown
+    let _75: Unknown
+    let _76: Unknown
+    let _77: Unknown
+    let _78: Unknown
+    let _79: Unknown
+    let _80: Unknown
+    let _81: Unknown
+    let _82: Unknown
+    let _83: Unknown
+    let _84: Unknown
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "MyClient";
+        _3 = const "baml-openai-chat";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _8 = const "system";
+        _5 = [copy _6, copy _7, copy _8];
+        _10 = const "max_tokens";
+        _11 = const 100_i64;
+        _12 = const "array_key_with_quoted_unquoted";
+        _14 = const "abc";
+        _15 = const "abc";
+        _16 = const "ccc";
+        _13 = [copy _14, copy _15, copy _16];
+        _17 = const "key2";
+        _18 = const "some random value";
+        _19 = const "hello";
+        _20 = const "world";
+        _21 = const "thing";
+        _22 = const "hello";
+        _23 = const "block_string";
+        _24 = const "hello there my frien\n                d";
+        _25 = const "inline_raw_string";
+        _26 = const "inline \"raw\" string,,";
+        _27 = const "keyStringNoSpacesWorksWithoutQuotes";
+        _28 = const "NoQuotes";
+        _29 = const "unquoted_string_whitespace";
+        _30 = const "hello";
+        _31 = const "filePathString";
+        _32 = const "this-is-also-a-string";
+        _33 = const "booleanValue";
+        _34 = const true;
+        _35 = const "stringKey";
+        _36 = const "true";
+        _37 = const "array1";
+        _39 = const "one";
+        _40 = const "two";
+        _38 = [copy _39, copy _40];
+        _41 = const "array2";
+        _43 = const "one";
+        _44 = const "two";
+        _42 = [copy _43, copy _44];
+        _45 = const "array3Numbers";
+        _47 = const 1_i64;
+        _48 = const 2_i64;
+        _49 = const 3_i64;
+        _46 = [copy _47, copy _48, copy _49];
+        _50 = const "nestedKey";
+        _52 = const "key";
+        _53 = const "value";
+        _54 = const "key2";
+        _55 = const "value2";
+        _56 = const "nestedArray";
+        _58 = const "yes";
+        _59 = const "queen";
+        _57 = [copy _58, copy _59];
+        _60 = const "number";
+        _61 = const 10_i64;
+        _51 = { copy _52: copy _53, copy _54: copy _55, copy _56: copy _57, copy _60: copy _61 };
+        _62 = const "oneMoreValueToTestBrokenness";
+        _63 = const "value";
+        _64 = const "myInteger";
+        _65 = const 100_i64;
+        _66 = const "tools";
+        _69 = const "server_label";
+        _70 = const "parallel_web_search";
+        _71 = const "server_url";
+        _72 = const "https://example.com";
+        _73 = const "headers";
+        _75 = const "authorization";
+        _76 = const "Bearer token";
+        _74 = { copy _75: copy _76 };
+        _77 = const "type";
+        _78 = const "mcp";
+        _68 = { copy _69: copy _70, copy _71: copy _72, copy _73: copy _74, copy _77: copy _78 };
+        _80 = const "another_tool";
+        _81 = const "value";
+        _79 = { copy _80: copy _81 };
+        _67 = [copy _68, copy _79];
+        _82 = const "block_string";
+        _83 = const "\n      hello there my friend\n      {# a comment in a prompt #}\n    ";
+        _9 = { copy _10: copy _11, copy _12: copy _13, copy _17: copy _18, copy _19: copy _20, copy _21: copy _22, copy _23: copy _24, copy _25: copy _26, copy _27: copy _28, copy _29: copy _30, copy _31: copy _32, copy _33: copy _34, copy _35: copy _36, copy _37: copy _38, copy _41: copy _42, copy _45: copy _46, copy _50: copy _51, copy _62: copy _63, copy _64: copy _65, copy _66: copy _67, copy _82: copy _83 };
+        _84 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _84 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+
+}

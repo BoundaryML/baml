@@ -1,14 +1,50 @@
 ---
-source: target/debug/build/baml_tests-542dd76acbe74598/out/generated_tests.rs
+source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 2
-Objects: 39
-Globals: 39
+Functions: 4
+Objects: 60
+Globals: 53
 
-Function CommentAfterArrow (arity: 0, kind: Bytecode):
+Function CommentAfterArrow (arity: 0, kind: External(LlmRenderPrompt)):
   (no bytecode)
 
-Function FunctionWithComments (arity: 2, kind: Bytecode):
+Function FunctionWithComments (arity: 2, kind: External(LlmRenderPrompt)):
   (no bytecode)
+
+Function TestClient$options (arity: 0, kind: Bytecode):
+     0    LOAD_GLOBAL 46      (<fn baml.llm.build_primitive_client>)
+     1    LOAD_CONST 0        ("TestClient")
+     2    LOAD_CONST 1        ("baml-openai-chat")
+     3    LOAD_CONST 2        ("user")
+     4    LOAD_CONST 3        ("user")
+     5    LOAD_CONST 4        ("assistant")
+     6    LOAD_CONST 5        ("system")
+     7    ALLOC_ARRAY 3       
+     8    ALLOC_MAP 0         
+     9    DISPATCH_FUTURE 5   
+     10   AWAIT               
+     11   RETURN              
+
+Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
+     0    LOAD_CONST 0        (null)
+     1    LOAD_CONST 0        (null)
+     2    LOAD_GLOBAL 44      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_VAR 1          (function_name)
+     4    DISPATCH_FUTURE 1   
+     5    AWAIT               
+     6    STORE_VAR 4         (jinja_string)
+     7    LOAD_GLOBAL 48      (<fn baml.llm.get_client_function>)
+     8    LOAD_VAR 1          (function_name)
+     9    DISPATCH_FUTURE 1   
+     10   AWAIT               
+     11   CALL 0              
+     12   STORE_VAR 5         (primitive_client)
+     13   LOAD_GLOBAL 47      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_VAR 5          (primitive_client)
+     15   LOAD_VAR 4          (jinja_string)
+     16   LOAD_VAR 2          (args)
+     17   DISPATCH_FUTURE 3   
+     18   AWAIT               
+     19   RETURN

@@ -22,6 +22,92 @@ use crate::{Name, source_map::HirSourceMap, type_ref::TypeRef};
 /// - `#"hello"#` -> `hello`
 /// - `"hello"` -> `hello`
 /// - `hello` -> `hello` (no change if no delimiters)
+///
+/// Create an empty map body for clients with no options.
+#[allow(dead_code)]
+pub fn empty_map_body(_file_id: FileId) -> (ExprBody, HirSourceMap) {
+    let mut exprs: Arena<Expr> = Arena::new();
+    let source_map = HirSourceMap::new();
+
+    // Create empty map expression with a placeholder range
+    let map_expr = exprs.alloc(Expr::Map { entries: vec![] });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        types: Arena::new(),
+        root_expr: Some(map_expr),
+        diagnostics: Vec::new(),
+    };
+
+    (body, source_map)
+}
+
+/// Create a `PrimitiveClient` body for clients with no options block.
+///
+/// Returns: `baml.llm.build_primitive_client(name, provider, default_role, allowed_roles, {})`
+pub fn empty_primitive_client_body(
+    _file_id: FileId,
+    client_name: &str,
+    provider: &str,
+    default_role: &str,
+    allowed_roles: &[String],
+) -> (ExprBody, HirSourceMap) {
+    use crate::Name;
+    let mut exprs: Arena<Expr> = Arena::new();
+    let source_map = HirSourceMap::new();
+
+    // Create empty options map
+    let options_map_expr = exprs.alloc(Expr::Map { entries: vec![] });
+
+    // Create string literal arguments
+    let name_expr = exprs.alloc(Expr::Literal(Literal::String(client_name.to_string())));
+    let provider_expr = exprs.alloc(Expr::Literal(Literal::String(provider.to_string())));
+    let default_role_expr = exprs.alloc(Expr::Literal(Literal::String(default_role.to_string())));
+
+    // Create allowed_roles array
+    let role_elements: Vec<_> = allowed_roles
+        .iter()
+        .map(|role| exprs.alloc(Expr::Literal(Literal::String(role.clone()))))
+        .collect();
+    let allowed_roles_expr = exprs.alloc(Expr::Array {
+        elements: role_elements,
+    });
+
+    // Create the function call path: baml.llm.build_primitive_client
+    let callee_expr = exprs.alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("build_primitive_client"),
+    ]));
+
+    // Create the call expression
+    let call_expr = exprs.alloc(Expr::Call {
+        callee: callee_expr,
+        args: vec![
+            name_expr,
+            provider_expr,
+            default_role_expr,
+            allowed_roles_expr,
+            options_map_expr,
+        ],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        types: Arena::new(),
+        root_expr: Some(call_expr),
+        diagnostics: Vec::new(),
+    };
+
+    (body, source_map)
+}
+
 pub fn strip_string_delimiters(text: &str) -> &str {
     let text = text.trim();
     if text.starts_with("#\"") && text.ends_with("\"#") {
@@ -513,6 +599,120 @@ impl FunctionBody {
             .map(|block| ctx.lower_block_expr(&block));
 
         ctx.finish(root_expr)
+    }
+
+    /// Lower a client options block to a `PrimitiveClient` expression.
+    ///
+    /// Used for client `$options` functions. Takes the options config block
+    /// and client metadata, and creates a `FunctionBody` that returns:
+    /// ```baml
+    /// baml.llm.build_primitive_client(name, provider, default_role, allowed_roles, options_map)
+    /// ```
+    pub fn lower_client_options_to_primitive_client(
+        config_block: &baml_compiler_syntax::ast::ConfigBlock,
+        file_id: FileId,
+        client_name: &str,
+        provider: &str,
+        default_role: &str,
+        allowed_roles: &[String],
+    ) -> (ExprBody, HirSourceMap) {
+        use crate::Name;
+        let mut ctx = LoweringContext::new(file_id);
+        let range = config_block.syntax().text_range();
+
+        // Build the options map expression
+        let options_map_expr = ctx.lower_config_block_to_map_expr(config_block);
+
+        // Create string literal arguments
+        let name_expr = ctx.alloc_expr(
+            Expr::Literal(Literal::String(client_name.to_string())),
+            range,
+        );
+        let provider_expr =
+            ctx.alloc_expr(Expr::Literal(Literal::String(provider.to_string())), range);
+        let default_role_expr = ctx.alloc_expr(
+            Expr::Literal(Literal::String(default_role.to_string())),
+            range,
+        );
+
+        // Create allowed_roles array
+        let role_elements: Vec<ExprId> = allowed_roles
+            .iter()
+            .map(|role| ctx.alloc_expr(Expr::Literal(Literal::String(role.clone())), range))
+            .collect();
+        let allowed_roles_expr = ctx.alloc_expr(
+            Expr::Array {
+                elements: role_elements,
+            },
+            range,
+        );
+
+        // Create the function call path: baml.llm.build_primitive_client
+        let callee_expr = ctx.alloc_expr(
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("build_primitive_client"),
+            ]),
+            range,
+        );
+
+        // Create the call expression
+        let call_expr = ctx.alloc_expr(
+            Expr::Call {
+                callee: callee_expr,
+                args: vec![
+                    name_expr,
+                    provider_expr,
+                    default_role_expr,
+                    allowed_roles_expr,
+                    options_map_expr,
+                ],
+            },
+            range,
+        );
+
+        ctx.finish(Some(call_expr))
+    }
+
+    /// Lower a config block to a map expression (for testing/simple cases).
+    #[allow(dead_code)]
+    pub fn lower_config_block_to_map(
+        config_block: &baml_compiler_syntax::ast::ConfigBlock,
+        file_id: FileId,
+    ) -> (ExprBody, HirSourceMap) {
+        let mut ctx = LoweringContext::new(file_id);
+
+        // Build map entries from config items
+        let entries: Vec<(ExprId, ExprId)> = config_block
+            .items()
+            .filter_map(|item| {
+                let key = item.key()?;
+                let key_text = key.text().to_string();
+
+                // Lower the key as a string literal
+                let key_expr =
+                    ctx.alloc_expr(Expr::Literal(Literal::String(key_text)), key.text_range());
+
+                // Lower the value - find the CONFIG_VALUE node and lower it
+                let value_expr = if let Some(config_value_node) = item.config_value_node() {
+                    ctx.lower_config_value(&config_value_node)
+                } else if let Some(nested_block) = item.nested_block() {
+                    // Nested config block - recursively build a map
+                    ctx.lower_config_block_to_map_expr(&nested_block)
+                } else {
+                    // Missing value - create a missing expr
+                    ctx.alloc_expr(Expr::Missing, key.text_range())
+                };
+
+                Some((key_expr, value_expr))
+            })
+            .collect();
+
+        // Create the map expression
+        let map_expr = ctx.alloc_expr(Expr::Map { entries }, config_block.syntax().text_range());
+
+        ctx.finish(Some(map_expr))
     }
 }
 
@@ -2923,5 +3123,145 @@ impl LoweringContext {
         let name = Name::new(&name);
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
+    }
+
+    /// Lower a `CONFIG_VALUE` node to an expression.
+    ///
+    /// `CONFIG_VALUE` can contain various expression types or legacy unquoted strings.
+    fn lower_config_value(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
+
+        // First check for child expression nodes
+        for child in node.children() {
+            match child.kind() {
+                SyntaxKind::STRING_LITERAL
+                | SyntaxKind::RAW_STRING_LITERAL
+                | SyntaxKind::BINARY_EXPR
+                | SyntaxKind::PATH_EXPR
+                | SyntaxKind::CALL_EXPR
+                | SyntaxKind::MAP_LITERAL => {
+                    return self.lower_expr(&child);
+                }
+                // Config arrays have CONFIG_VALUE or CONFIG_BLOCK children, not expression children
+                SyntaxKind::ARRAY_LITERAL => {
+                    return self.lower_config_array(&child);
+                }
+                // Nested config block becomes a map
+                SyntaxKind::CONFIG_BLOCK => {
+                    if let Some(block) = baml_compiler_syntax::ast::ConfigBlock::cast(child.clone())
+                    {
+                        return self.lower_config_block_to_map_expr(&block);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Check for literal tokens directly under CONFIG_VALUE
+        for item in node.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(token) = item {
+                match token.kind() {
+                    SyntaxKind::INTEGER_LITERAL => {
+                        if let Ok(val) = token.text().parse::<i64>() {
+                            return self
+                                .alloc_expr(Expr::Literal(Literal::Int(val)), token.text_range());
+                        }
+                    }
+                    SyntaxKind::FLOAT_LITERAL => {
+                        return self.alloc_expr(
+                            Expr::Literal(Literal::Float(token.text().to_string())),
+                            token.text_range(),
+                        );
+                    }
+                    SyntaxKind::WORD => {
+                        let text = token.text();
+                        if text == "true" {
+                            return self.alloc_expr(
+                                Expr::Literal(Literal::Bool(true)),
+                                token.text_range(),
+                            );
+                        } else if text == "false" {
+                            return self.alloc_expr(
+                                Expr::Literal(Literal::Bool(false)),
+                                token.text_range(),
+                            );
+                        }
+                        // Single word - treat as string (legacy unquoted string)
+                        return self.alloc_expr(
+                            Expr::Literal(Literal::String(text.to_string())),
+                            token.text_range(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Fall back: collect all text content as a string (legacy unquoted strings)
+        let text: String = node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| {
+                !matches!(
+                    t.kind(),
+                    SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE | SyntaxKind::COMMA
+                )
+            })
+            .map(|t| t.text().to_string())
+            .collect();
+
+        if text.is_empty() {
+            self.alloc_expr(Expr::Missing, node.text_range())
+        } else {
+            self.alloc_expr(Expr::Literal(Literal::String(text)), node.text_range())
+        }
+    }
+
+    /// Lower a config array to an array expression.
+    ///
+    /// Config arrays have `CONFIG_VALUE` or `CONFIG_BLOCK` children (not regular expression children).
+    fn lower_config_array(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
+
+        let elements: Vec<ExprId> = node
+            .children()
+            .filter_map(|child| match child.kind() {
+                SyntaxKind::CONFIG_VALUE => Some(self.lower_config_value(&child)),
+                SyntaxKind::CONFIG_BLOCK => baml_compiler_syntax::ast::ConfigBlock::cast(child)
+                    .map(|block| self.lower_config_block_to_map_expr(&block)),
+                _ => None,
+            })
+            .collect();
+
+        self.alloc_expr(Expr::Array { elements }, node.text_range())
+    }
+
+    /// Lower a config block to a map expression.
+    fn lower_config_block_to_map_expr(
+        &mut self,
+        block: &baml_compiler_syntax::ast::ConfigBlock,
+    ) -> ExprId {
+        let entries: Vec<(ExprId, ExprId)> = block
+            .items()
+            .filter_map(|item| {
+                let key = item.key()?;
+                let key_text = key.text().to_string();
+
+                let key_expr =
+                    self.alloc_expr(Expr::Literal(Literal::String(key_text)), key.text_range());
+
+                let value_expr = if let Some(config_value_node) = item.config_value_node() {
+                    self.lower_config_value(&config_value_node)
+                } else if let Some(nested_block) = item.nested_block() {
+                    self.lower_config_block_to_map_expr(&nested_block)
+                } else {
+                    self.alloc_expr(Expr::Missing, key.text_range())
+                };
+
+                Some((key_expr, value_expr))
+            })
+            .collect();
+
+        self.alloc_expr(Expr::Map { entries }, block.syntax().text_range())
     }
 }
