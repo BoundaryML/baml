@@ -389,6 +389,9 @@ fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
         "baml.llm.PrimitiveClient.render_prompt" => {
             Some(ExternalOp::Llm(bex_vm_types::LlmOp::RenderPrompt))
         }
+        "baml.llm.PrimitiveClient.specialize_prompt" => {
+            Some(ExternalOp::Llm(bex_vm_types::LlmOp::SpecializePrompt))
+        }
         // System operations
         "baml.fs.open" => Some(ExternalOp::Sys(SysOp::FsOpen)),
         "baml.fs.File.read" => Some(ExternalOp::Sys(SysOp::FsRead)),

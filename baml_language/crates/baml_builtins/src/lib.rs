@@ -245,6 +245,12 @@ macro_rules! with_builtins {
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[external]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+
+                        /// Specialize a prompt for this client's provider.
+                        /// Applies provider-specific transformations (message merging, system prompt
+                        /// consolidation, metadata filtering).
+                        #[external]
+                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
                     }
                 }
             }
