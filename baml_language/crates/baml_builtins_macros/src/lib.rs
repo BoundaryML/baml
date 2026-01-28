@@ -25,8 +25,8 @@ struct BuiltinDef {
     params: Vec<(String, TokenStream2)>,
     /// Return type pattern
     returns: TokenStream2,
-    /// Whether this is an external function (runs async outside VM)
-    is_external: bool,
+    /// Whether this is a `sys_op` function (runs async outside VM)
+    is_sys_op: bool,
 }
 
 /// Info for generating native function implementations.
@@ -47,8 +47,8 @@ struct NativeFnDef {
     returns: (String, bool, bool),
     /// Whether this function needs the VM (marked with #[uses(vm)])
     uses_vm: bool,
-    /// Whether this is an external function (runs async outside VM)
-    is_external: bool,
+    /// Whether this is a `sys_op` function (runs async outside VM)
+    is_sys_op: bool,
 }
 
 /// The root input to the macro: a list of modules.
@@ -109,9 +109,9 @@ struct FunctionItem {
     return_type: Type,
     /// Whether this function uses the VM (marked with #[uses(vm)])
     uses_vm: bool,
-    /// Whether this function is external (marked with #[external])
-    /// External functions run asynchronously outside the VM.
-    is_external: bool,
+    /// Whether this function is a `sys_op` (marked with #[`sys_op`])
+    /// `Sys_op` functions run asynchronously outside the VM.
+    is_sys_op: bool,
 }
 
 impl ModuleItem {
@@ -127,7 +127,7 @@ impl ModuleItem {
         let mut items = Vec::new();
         while !content.is_empty() {
             // Peek to determine what kind of item this is
-            // Handle attributes first (for #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod)
+            // Handle attributes first (for #[opaque] struct, #[uses(vm)]/#[sys_op] fn, or #[hide] mod)
             let lookahead = content.lookahead1();
             if lookahead.peek(Token![mod]) {
                 items.push(ModuleContent::Module(ModuleItem::parse_with_attrs(
@@ -137,7 +137,7 @@ impl ModuleItem {
             } else if lookahead.peek(Token![struct]) {
                 items.push(ModuleContent::Struct(content.parse()?));
             } else if lookahead.peek(Token![#]) {
-                // Could be #[opaque] struct, #[uses(vm)]/#[external] fn, or #[hide] mod
+                // Could be #[opaque] struct, #[uses(vm)]/#[sys_op] fn, or #[hide] mod
                 // Parse attributes first, then peek again
                 let attrs = content.call(Attribute::parse_outer)?;
                 let lookahead2 = content.lookahead1();
@@ -220,7 +220,7 @@ impl FunctionItem {
             }
             false
         });
-        let is_external = attrs.iter().any(|attr| attr.path().is_ident("external"));
+        let is_sys_op = attrs.iter().any(|attr| attr.path().is_ident("sys_op"));
 
         // Parse: fn name<Generics>(params...) -> RetType;
         input.parse::<Token![fn]>()?;
@@ -286,14 +286,14 @@ impl FunctionItem {
             params,
             return_type,
             uses_vm,
-            is_external,
+            is_sys_op,
         })
     }
 }
 
 impl Parse for FunctionItem {
     fn parse(input: ParseStream) -> Result<Self> {
-        // Parse attributes like #[uses(vm)] or #[external]
+        // Parse attributes like #[uses(vm)] or #[sys_op]
         let attrs = input.call(Attribute::parse_outer)?;
         Self::parse_with_attrs(input, &attrs)
     }
@@ -660,7 +660,7 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
                 receiver,
                 params,
                 returns,
-                is_external: method.is_external,
+                is_sys_op: method.is_sys_op,
             });
         }
 
@@ -697,7 +697,7 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             params: native_params,
             returns: native_returns,
             uses_vm: method.uses_vm,
-            is_external: method.is_external,
+            is_sys_op: method.is_sys_op,
         });
     }
 }
@@ -752,7 +752,7 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
             receiver,
             params,
             returns,
-            is_external: f.is_external,
+            is_sys_op: f.is_sys_op,
         });
     }
 
@@ -788,7 +788,7 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         params: native_params,
         returns: native_returns,
         uses_vm: f.uses_vm,
-        is_external: f.is_external,
+        is_sys_op: f.is_sys_op,
     });
 }
 
@@ -834,7 +834,7 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
     // Generate const names for the for_native_builtins macro (exclude external functions)
     let native_const_names: Vec<_> = defs
         .iter()
-        .filter(|d| !d.is_external)
+        .filter(|d| !d.is_sys_op)
         .map(|d| &d.const_name)
         .collect();
 
@@ -853,7 +853,7 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
                 .map(|(name, ty)| quote!((#name, #ty)))
                 .collect();
             let returns = &d.returns;
-            let is_external = d.is_external;
+            let is_sys_op = d.is_sys_op;
 
             quote! {
                 BuiltinSignature {
@@ -861,7 +861,7 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
                     receiver: #receiver,
                     params: vec![#(#params),*],
                     returns: #returns,
-                    is_external: #is_external,
+                    is_sys_op: #is_sys_op,
                 }
             }
         })
@@ -1011,7 +1011,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     // Note: External functions are skipped - they're handled by the embedder, not native Rust
     let required_methods: Vec<_> = native_defs
         .iter()
-        .filter(|d| !d.is_external) // Skip external functions
+        .filter(|d| !d.is_sys_op) // Skip external functions
         .map(|d| {
             let fn_name = &d.fn_name;
             let params = generate_clean_params(d);
@@ -1038,7 +1038,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     // Note: External functions are skipped - they're handled by the embedder
     let glue_methods: Vec<_> = native_defs
         .iter()
-        .filter(|d| !d.is_external) // Skip external functions
+        .filter(|d| !d.is_sys_op) // Skip external functions
         .map(|d| {
             let fn_name = &d.fn_name;
             let glue_fn_name = format_ident!("__{}", fn_name);
@@ -1073,7 +1073,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     // Note: External functions are skipped - they don't have native implementations
     let match_arms: Vec<_> = native_defs
         .iter()
-        .filter(|d| !d.is_external) // Skip external functions
+        .filter(|d| !d.is_sys_op) // Skip external functions
         .map(|d| {
             let path = &d.path;
             let glue_fn_name = format_ident!("__{}", d.fn_name);
@@ -1088,7 +1088,7 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     // Note: External functions are skipped - they don't have native implementations
     let public_wrappers: Vec<_> = native_defs
         .iter()
-        .filter(|d| !d.is_external) // Skip external functions
+        .filter(|d| !d.is_sys_op) // Skip external functions
         .map(|d| {
             let fn_name = &d.fn_name;
             let glue_fn_name = format_ident!("__{}", d.fn_name);

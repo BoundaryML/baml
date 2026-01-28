@@ -7,7 +7,7 @@ Functions: 3
 Objects: 47
 Globals: 40
 
-Function Foo (arity: 0, kind: External(Llm(RenderPrompt))):
+Function Foo (arity: 0, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
 Function Incomplete (arity: 1, kind: Bytecode):

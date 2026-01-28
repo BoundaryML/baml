@@ -7,5 +7,5 @@ Functions: 1
 Objects: 39
 Globals: 38
 
-Function GetUser (arity: 0, kind: External(Llm(RenderPrompt))):
+Function GetUser (arity: 0, kind: SysOp(RenderPrompt)):
   (no bytecode)

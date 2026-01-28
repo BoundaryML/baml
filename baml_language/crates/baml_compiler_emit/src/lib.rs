@@ -53,8 +53,8 @@ use baml_compiler_hir::{
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, ExternalOp, Function, FunctionKind,
-    GlobalIndex, Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
+    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, Function, FunctionKind, GlobalIndex,
+    Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -197,12 +197,12 @@ pub fn compile_files(
 
     // Add builtin functions to globals FIRST (stable indices)
     for builtin in builtins {
-        // External builtins (like file I/O) use FunctionKind::External
+        // Sys_op builtins (like file I/O) use FunctionKind::SysOp
         // so the VM knows to dispatch them via DispatchFuture/Await
-        let kind = if builtin.is_external {
-            let external_op = external_op_for_builtin_path(builtin.path)
-                .expect("external builtin must have ExternalOp mapping");
-            FunctionKind::External(external_op)
+        let kind = if builtin.is_sys_op {
+            let sys_op = sys_op_for_builtin_path(builtin.path)
+                .expect("sys_op builtin must have SysOp mapping");
+            FunctionKind::SysOp(sys_op)
         } else {
             FunctionKind::NativeUnresolved
         };
@@ -240,9 +240,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::External(ExternalOp::Llm(
-                                bex_vm_types::LlmOp::RenderPrompt,
-                            )),
+                            kind: FunctionKind::SysOp(SysOp::RenderPrompt),
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -379,33 +377,29 @@ fn build_typing_context(
     context
 }
 
-/// Map a builtin path to its corresponding `ExternalOp`.
+/// Map a builtin path to its corresponding `SysOp`.
 ///
-/// This is used during code generation to set the correct `ExternalOp` variant
-/// for external builtin functions.
-fn external_op_for_builtin_path(path: &str) -> Option<ExternalOp> {
+/// This is used during code generation to set the correct `SysOp` variant
+/// for `sys_op` builtin functions.
+fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
     match path {
         // LLM operations
-        "baml.llm.PrimitiveClient.render_prompt" => {
-            Some(ExternalOp::Llm(bex_vm_types::LlmOp::RenderPrompt))
-        }
-        "baml.llm.PrimitiveClient.specialize_prompt" => {
-            Some(ExternalOp::Llm(bex_vm_types::LlmOp::SpecializePrompt))
-        }
+        "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::RenderPrompt),
+        "baml.llm.PrimitiveClient.specialize_prompt" => Some(SysOp::SpecializePrompt),
         // System operations
-        "baml.fs.open" => Some(ExternalOp::Sys(SysOp::FsOpen)),
-        "baml.fs.File.read" => Some(ExternalOp::Sys(SysOp::FsRead)),
-        "baml.fs.File.close" => Some(ExternalOp::Sys(SysOp::FsClose)),
-        "baml.sys.shell" => Some(ExternalOp::Sys(SysOp::Shell)),
-        "baml.net.connect" => Some(ExternalOp::Sys(SysOp::NetConnect)),
-        "baml.net.Socket.read" => Some(ExternalOp::Sys(SysOp::NetRead)),
-        "baml.net.Socket.close" => Some(ExternalOp::Sys(SysOp::NetClose)),
-        "baml.http.fetch" => Some(ExternalOp::Sys(SysOp::HttpFetch)),
-        "baml.http.Response.text" => Some(ExternalOp::Sys(SysOp::HttpResponseText)),
-        "baml.http.Response.status" => Some(ExternalOp::Sys(SysOp::HttpResponseStatus)),
-        "baml.http.Response.ok" => Some(ExternalOp::Sys(SysOp::HttpResponseOk)),
-        "baml.http.Response.url" => Some(ExternalOp::Sys(SysOp::HttpResponseUrl)),
-        "baml.http.Response.headers" => Some(ExternalOp::Sys(SysOp::HttpResponseHeaders)),
+        "baml.fs.open" => Some(SysOp::FsOpen),
+        "baml.fs.File.read" => Some(SysOp::FsRead),
+        "baml.fs.File.close" => Some(SysOp::FsClose),
+        "baml.sys.shell" => Some(SysOp::Shell),
+        "baml.net.connect" => Some(SysOp::NetConnect),
+        "baml.net.Socket.read" => Some(SysOp::NetRead),
+        "baml.net.Socket.close" => Some(SysOp::NetClose),
+        "baml.http.fetch" => Some(SysOp::HttpFetch),
+        "baml.http.Response.text" => Some(SysOp::HttpResponseText),
+        "baml.http.Response.status" => Some(SysOp::HttpResponseStatus),
+        "baml.http.Response.ok" => Some(SysOp::HttpResponseOk),
+        "baml.http.Response.url" => Some(SysOp::HttpResponseUrl),
+        "baml.http.Response.headers" => Some(SysOp::HttpResponseHeaders),
         _ => None,
     }
 }

@@ -7,12 +7,12 @@ Functions: 3
 Objects: 45
 Globals: 40
 
-Function FormatMessage (arity: 1, kind: External(Llm(RenderPrompt))):
+Function FormatMessage (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
 Function GetRole (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   ("user")
      1   RETURN         
 
-Function ProcessText (arity: 1, kind: External(Llm(RenderPrompt))):
+Function ProcessText (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)

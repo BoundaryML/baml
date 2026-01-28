@@ -7,8 +7,8 @@ Functions: 2
 Objects: 39
 Globals: 39
 
-Function CommentAfterArrow (arity: 0, kind: External(Llm(RenderPrompt))):
+Function CommentAfterArrow (arity: 0, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function FunctionWithComments (arity: 2, kind: External(Llm(RenderPrompt))):
+Function FunctionWithComments (arity: 2, kind: SysOp(RenderPrompt)):
   (no bytecode)

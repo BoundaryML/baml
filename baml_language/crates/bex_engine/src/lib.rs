@@ -12,7 +12,7 @@
 //! # External Operations
 //!
 //! External operations (LLM calls, HTTP requests, file I/O) are dispatched via
-//! the `ExternalOp` enum using static dispatch. This avoids dynamic dispatch
+//! the `SysOp` enum using static dispatch. This avoids dynamic dispatch
 //! overhead and makes the system more macro-friendly.
 //!
 //! # Resources
@@ -67,7 +67,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, LlmOp, Object, Value};
+use bex_vm_types::{GlobalPool, HeapPtr, Object, Value};
 // Re-export sys_types types for convenience
 pub use sys_types::{
     CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
@@ -1168,80 +1168,25 @@ impl BexEngine {
                     // Convert arguments to BexExternalValue
                     let args = Self::vm_args_to_external(vm, &pending.args);
 
-                    match pending.operation {
-                        ExternalOp::Llm(llm_op) => {
-                            match llm_op {
-                                LlmOp::RenderPrompt => {
-                                    // render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst
-                                    // args[0] = PrimitiveClient, args[1] = template, args[2] = args map
-                                    let result = Self::execute_render_prompt(&args)
-                                        .map_err(EngineError::from);
-                                    match result {
-                                        Ok(prompt_ast) => {
-                                            // Convert external PromptAst to VM PromptAst and set future ready
-                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
-                                                vm, prompt_ast,
-                                            );
-                                            let value = vm.alloc_prompt_ast(vm_ast);
-                                            vm.set_future_ready(id, value)?;
-                                        }
-                                        Err(e) => {
-                                            // Send error through the channel
-                                            let pending_futures = pending_futures.clone();
-                                            tokio::spawn(async move {
-                                                let _ = pending_futures
-                                                    .send(FutureResult { id, result: Err(e) });
-                                            });
-                                        }
-                                    }
-                                }
-                                LlmOp::SpecializePrompt => {
-                                    // specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst
-                                    let result = Self::execute_specialize_prompt(&args)
-                                        .map_err(EngineError::from);
-                                    match result {
-                                        Ok(prompt_ast) => {
-                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
-                                                vm, prompt_ast,
-                                            );
-                                            let value = vm.alloc_prompt_ast(vm_ast);
-                                            vm.set_future_ready(id, value)?;
-                                        }
-                                        Err(e) => {
-                                            let pending_futures = pending_futures.clone();
-                                            tokio::spawn(async move {
-                                                let _ = pending_futures
-                                                    .send(FutureResult { id, result: Err(e) });
-                                            });
-                                        }
-                                    }
-                                }
-                            }
+                    match self.execute_sys_op(pending.operation, args) {
+                        SysOpResult::Ready(result) => {
+                            // Sync operation - set future to Ready without touching stack.
+                            // The VM will continue to the Await instruction which will
+                            // extract the value from the Ready future.
+                            let value =
+                                Self::external_to_vm_value(vm, result.map_err(EngineError::from)?);
+                            vm.set_future_ready(id, value)?;
                         }
-                        ExternalOp::Sys(sys_op) => {
-                            match self.execute_sys_op(sys_op, args) {
-                                SysOpResult::Ready(result) => {
-                                    // Sync operation - set future to Ready without touching stack.
-                                    // The VM will continue to the Await instruction which will
-                                    // extract the value from the Ready future.
-                                    let value = Self::external_to_vm_value(
-                                        vm,
-                                        result.map_err(EngineError::from)?,
-                                    );
-                                    vm.set_future_ready(id, value)?;
-                                }
-                                SysOpResult::Async(fut) => {
-                                    // Async operation - spawn task
-                                    let pending_futures = pending_futures.clone();
-                                    tokio::spawn(async move {
-                                        let result = fut.await;
-                                        let _ = pending_futures.send(FutureResult {
-                                            id,
-                                            result: result.map_err(EngineError::from),
-                                        });
-                                    });
-                                }
-                            }
+                        SysOpResult::Async(fut) => {
+                            // Async operation - spawn task
+                            let pending_futures = pending_futures.clone();
+                            tokio::spawn(async move {
+                                let result = fut.await;
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
                         }
                     }
                 }
@@ -1323,7 +1268,7 @@ impl BexEngine {
         }
     }
 
-    /// Execute a system operation using the provider table.
+    /// Execute a system operation.
     fn execute_sys_op(&self, op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
         match op {
             SysOp::FsOpen => (self.sys_ops.fs_open)(args),
@@ -1339,6 +1284,12 @@ impl BexEngine {
             SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(args),
             SysOp::HttpResponseUrl => (self.sys_ops.http_response_url)(args),
             SysOp::HttpResponseHeaders => (self.sys_ops.http_response_headers)(args),
+            SysOp::RenderPrompt => SysOpResult::Ready(
+                Self::execute_render_prompt(&args).map(BexExternalValue::PromptAst),
+            ),
+            SysOp::SpecializePrompt => SysOpResult::Ready(
+                Self::execute_specialize_prompt(&args).map(BexExternalValue::PromptAst),
+            ),
         }
     }
 

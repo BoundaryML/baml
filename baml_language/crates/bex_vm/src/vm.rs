@@ -1915,7 +1915,7 @@ impl BexVm {
                 Instruction::DispatchFuture(arg_count) => {
                     let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
 
-                    let expected_type = FunctionType::External;
+                    let expected_type = FunctionType::SysOp;
 
                     let index =
                         self.as_object_ptr(&self.stack[args_offset], expected_type.into())?;
@@ -1938,10 +1938,10 @@ impl BexVm {
                         }));
                     }
 
-                    // Must be an external operation - extract the ExternalOp.
-                    let FunctionKind::External(external_op) = callable_future.kind else {
+                    // Must be a sys_op - extract the SysOp.
+                    let FunctionKind::SysOp(sys_op) = callable_future.kind else {
                         return Err(VmError::from(InternalError::TypeError {
-                            expected: FunctionType::External.into(),
+                            expected: FunctionType::SysOp.into(),
                             got: FunctionType::from(&callable_future.kind).into(),
                         }));
                     };
@@ -1949,9 +1949,9 @@ impl BexVm {
                     // Collect the function call args and cleanup the call.
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).skip(1).collect();
 
-                    // Create the pending future with the ExternalOp enum.
+                    // Create the pending future with the SysOp enum.
                     let pending_future = PendingFuture {
-                        operation: external_op,
+                        operation: sys_op,
                         args: future_args,
                     };
 
@@ -2203,7 +2203,7 @@ impl BexVm {
                                 .clone();
                         }
 
-                        FunctionKind::External(_) => {
+                        FunctionKind::SysOp(_) => {
                             return Err(InternalError::TypeError {
                                 expected: FunctionType::Callable.into(),
                                 got: FunctionType::from(&callee.kind).into(),

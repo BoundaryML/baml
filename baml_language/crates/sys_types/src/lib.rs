@@ -187,6 +187,16 @@ impl SysOps {
                     operation: SysOp::HttpResponseHeaders,
                 }))
             },
+            SysOp::RenderPrompt => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::RenderPrompt,
+                }))
+            },
+            SysOp::SpecializePrompt => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::SpecializePrompt,
+                }))
+            },
         }
     }
 

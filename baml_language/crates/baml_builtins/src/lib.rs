@@ -64,9 +64,9 @@ pub struct BuiltinSignature {
     /// Return type.
     pub returns: TypePattern,
 
-    /// Whether this is an external function (runs async outside VM).
-    /// External functions use DispatchFuture/Await instead of Call.
-    pub is_external: bool,
+    /// Whether this is a `sys_op` function (runs async outside VM).
+    /// `Sys_op` functions use DispatchFuture/Await instead of Call.
+    pub is_sys_op: bool,
 }
 
 impl BuiltinSignature {
@@ -161,13 +161,13 @@ macro_rules! with_builtins {
                 mod fs {
                     #[builtin]
                     struct File {
-                        #[external]
+                        #[sys_op]
                         fn read(self: File) -> String;
-                        #[external]
+                        #[sys_op]
                         fn close(self: File);
                     }
 
-                    #[external]
+                    #[sys_op]
                     fn open(path: String) -> File;
                 }
 
@@ -176,7 +176,7 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod sys {
                     /// Execute a shell command and return stdout.
-                    #[external]
+                    #[sys_op]
                     fn shell(command: String) -> String;
                 }
 
@@ -187,15 +187,15 @@ macro_rules! with_builtins {
                     #[builtin]
                     struct Socket {
                         /// Read data from the socket as a string.
-                        #[external]
+                        #[sys_op]
                         fn read(self: Socket) -> String;
                         /// Close the socket.
-                        #[external]
+                        #[sys_op]
                         fn close(self: Socket);
                     }
 
                     /// Connect to a TCP address (host:port).
-                    #[external]
+                    #[sys_op]
                     fn connect(addr: String) -> Socket;
                 }
 
@@ -206,24 +206,24 @@ macro_rules! with_builtins {
                     #[builtin]
                     struct Response {
                         /// Get response body as text (consumes body).
-                        #[external]
+                        #[sys_op]
                         fn text(self: Response) -> String;
                         /// Get HTTP status code.
-                        #[external]
+                        #[sys_op]
                         fn status(self: Response) -> i64;
                         /// Check if status is 2xx.
-                        #[external]
+                        #[sys_op]
                         fn ok(self: Response) -> bool;
                         /// Get request URL (may differ if redirected).
-                        #[external]
+                        #[sys_op]
                         fn url(self: Response) -> String;
                         /// Get response headers.
-                        #[external]
+                        #[sys_op]
                         fn headers(self: Response) -> Map<String, String>;
                     }
 
                     /// Fetch a URL via HTTP GET.
-                    #[external]
+                    #[sys_op]
                     fn fetch(url: String) -> Response;
                 }
 
@@ -243,13 +243,13 @@ macro_rules! with_builtins {
                     struct PrimitiveClient {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
-                        #[external]
+                        #[sys_op]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
 
                         /// Specialize a prompt for this client's provider.
                         /// Applies provider-specific transformations (message merging, system prompt
                         /// consolidation, metadata filtering).
-                        #[external]
+                        #[sys_op]
                         fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
                     }
                 }

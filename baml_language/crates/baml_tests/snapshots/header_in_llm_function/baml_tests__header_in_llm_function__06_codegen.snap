@@ -7,5 +7,5 @@ Functions: 1
 Objects: 39
 Globals: 38
 
-Function FetchDatax (arity: 1, kind: External(Llm(RenderPrompt))):
+Function FetchDatax (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)

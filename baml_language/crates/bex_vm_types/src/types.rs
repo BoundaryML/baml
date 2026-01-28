@@ -64,29 +64,6 @@ impl Program {
 // External Operations
 // ============================================================================
 
-/// External operation to be executed by the engine.
-///
-/// This enum enables static dispatch instead of dynamic dispatch via traits.
-/// The engine matches on this enum to execute the appropriate async operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExternalOp {
-    /// LLM operation (render prompt, specialize, build request, etc.).
-    Llm(LlmOp),
-    /// System operation (file I/O, shell, HTTP, etc.).
-    Sys(SysOp),
-}
-
-/// LLM operations that run outside the VM.
-///
-/// These are built-in LLM-related operations provided by the engine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LlmOp {
-    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
-    RenderPrompt,
-    /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
-    SpecializePrompt,
-}
-
 /// System operations that run outside the VM.
 ///
 /// These are built-in async operations provided by the engine.
@@ -119,24 +96,10 @@ pub enum SysOp {
     HttpResponseUrl,
     /// Get response headers: `Response.headers() -> Map<String, String>`
     HttpResponseHeaders,
-}
-
-impl std::fmt::Display for ExternalOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExternalOp::Llm(llm_op) => write!(f, "{llm_op}"),
-            ExternalOp::Sys(sys_op) => write!(f, "{sys_op}"),
-        }
-    }
-}
-
-impl std::fmt::Display for LlmOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LlmOp::RenderPrompt => write!(f, "llm.render_prompt"),
-            LlmOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
-        }
-    }
+    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
+    RenderPrompt,
+    /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
+    SpecializePrompt,
 }
 
 impl std::fmt::Display for SysOp {
@@ -155,6 +118,8 @@ impl std::fmt::Display for SysOp {
             SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
             SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
             SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
+            SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
+            SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
         }
     }
 }
@@ -188,11 +153,11 @@ pub enum FunctionKind {
     /// The VM pushes a call frame onto the call stack and runs the bytecode.
     Bytecode,
 
-    /// External operation (LLM calls, HTTP requests, file I/O, etc.).
+    /// System operation (LLM calls, HTTP requests, file I/O, etc.).
     ///
     /// The VM yields control to the engine which executes the operation
-    /// asynchronously via static dispatch on the `ExternalOp` enum.
-    External(ExternalOp),
+    /// asynchronously via static dispatch on the `SysOp` enum.
+    SysOp(SysOp),
 
     /// Unresolved native function (placeholder).
     ///
@@ -521,8 +486,8 @@ pub enum Future {
 /// LLM calls, HTTP requests, file I/O, or shell commands.
 #[derive(Clone, Debug)]
 pub struct PendingFuture {
-    /// The external operation to execute.
-    pub operation: ExternalOp,
+    /// The system operation to execute.
+    pub operation: SysOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
 }
@@ -744,7 +709,7 @@ pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
     Callable,
-    External,
+    SysOp,
 }
 
 impl std::fmt::Display for FunctionType {
@@ -752,15 +717,15 @@ impl std::fmt::Display for FunctionType {
         match self {
             FunctionType::Any => write!(f, "any"),
             FunctionType::Callable => write!(f, "callable"),
-            FunctionType::External => write!(f, "external"),
+            FunctionType::SysOp => write!(f, "sys_op"),
         }
     }
 }
 
 impl From<&FunctionKind> for FunctionType {
     fn from(value: &FunctionKind) -> Self {
-        if matches!(value, FunctionKind::External(_)) {
-            FunctionType::External
+        if matches!(value, FunctionKind::SysOp(_)) {
+            FunctionType::SysOp
         } else {
             FunctionType::Callable
         }
