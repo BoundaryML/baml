@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
+source: target/debug/build/baml_tests-542dd76acbe74598/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,8 +7,8 @@ Functions: 2
 Objects: 39
 Globals: 39
 
-Function CommentAfterArrow (arity: 0, kind: External(Llm(RenderPrompt))):
+Function CommentAfterArrow (arity: 0, kind: Bytecode):
   (no bytecode)
 
-Function FunctionWithComments (arity: 2, kind: External(Llm(RenderPrompt))):
+Function FunctionWithComments (arity: 2, kind: Bytecode):
   (no bytecode)

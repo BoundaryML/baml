@@ -187,6 +187,22 @@ impl SysOps {
                     operation: SysOp::HttpResponseHeaders,
                 }))
             },
+            // LLM operations are handled directly by the engine, not through SysOps table
+            SysOp::LlmRenderPrompt => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmRenderPrompt,
+                }))
+            },
+            SysOp::LlmGetJinjaTemplate => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmGetJinjaTemplate,
+                }))
+            },
+            SysOp::LlmGetClientFunction => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmGetClientFunction,
+                }))
+            },
         }
     }
 

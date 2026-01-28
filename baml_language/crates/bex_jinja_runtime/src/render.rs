@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bex_external_types::BexExternalValue;
 use bex_llm_types::OutputFormatContent;
 use bex_vm_types::{PromptAst, Value};
@@ -8,6 +10,19 @@ use crate::{
     MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, filters,
     output_format_object::OutputFormatObject, value_conversion::external_value_to_jinja,
 };
+
+/// Enum variant for Jinja rendering.
+#[derive(Clone, Debug)]
+pub struct RenderEnumVariant {
+    pub name: String,
+}
+
+/// Enum definition for Jinja rendering.
+#[derive(Clone, Debug)]
+pub struct RenderEnum {
+    pub name: String,
+    pub variants: Vec<RenderEnumVariant>,
+}
 
 /// Client configuration for rendering.
 #[derive(Clone, Debug)]
@@ -24,6 +39,9 @@ pub struct RenderContext {
     pub client: RenderContextClient,
     pub output_format: OutputFormatContent,
     pub tags: IndexMap<String, BexExternalValue>,
+    /// Enum definitions available in templates.
+    /// Each enum is accessible as a global, e.g., `{{ MyEnum.VALUE }}`.
+    pub enums: HashMap<String, RenderEnum>,
 }
 
 /// Render a Jinja template to a `PromptAst`.
@@ -142,7 +160,26 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) {
         },
     );
 
-    // Add ctx namespace with output_format
+    // Build enums map - each enum is accessible as {{ ctx.enums.EnumName.VARIANT }}
+    let enums_map: minijinja::value::Value = ctx
+        .enums
+        .iter()
+        .map(|(name, def)| {
+            let variants: IndexMap<String, minijinja::value::Value> = def
+                .variants
+                .iter()
+                .map(|v| {
+                    (
+                        v.name.clone(),
+                        minijinja::value::Value::from(v.name.clone()),
+                    )
+                })
+                .collect();
+            (name.clone(), minijinja::value::Value::from_iter(variants))
+        })
+        .collect();
+
+    // Add ctx namespace with output_format and enums
     // Ported from engine/baml-lib/jinja-runtime/src/output_format/mod.rs
     let output_format = OutputFormatObject::new(ctx.output_format.clone());
     env.add_global(
@@ -154,6 +191,7 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) {
             },
             tags => ctx.tags.iter().map(|(k, v)| (k.clone(), external_value_to_jinja(v))).collect::<minijinja::value::Value>(),
             output_format => minijinja::value::Value::from_object(output_format),
+            enums => enums_map,
         },
     );
 }
@@ -277,6 +315,7 @@ mod tests {
             },
             output_format: OutputFormatContent::new(Ty::String),
             tags: IndexMap::new(),
+            enums: HashMap::new(),
         }
     }
 
@@ -441,5 +480,34 @@ mod tests {
             result,
             PromptAst::String("Please respond with: int".to_string())
         );
+    }
+
+    #[test]
+    fn test_enum_access() {
+        let template = "Category: {{ ctx.enums.Category.SPORTS }}";
+        let args = IndexMap::new();
+
+        let mut ctx = test_ctx();
+        ctx.enums.insert(
+            "Category".to_string(),
+            RenderEnum {
+                name: "Category".to_string(),
+                variants: vec![
+                    RenderEnumVariant {
+                        name: "SPORTS".to_string(),
+                    },
+                    RenderEnumVariant {
+                        name: "TECH".to_string(),
+                    },
+                    RenderEnumVariant {
+                        name: "POLITICS".to_string(),
+                    },
+                ],
+            },
+        );
+
+        let result = render_prompt(template, &args, &ctx).unwrap();
+
+        assert_eq!(result, PromptAst::String("Category: SPORTS".to_string()));
     }
 }

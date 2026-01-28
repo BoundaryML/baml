@@ -194,6 +194,23 @@ impl NativeFunctions for VmNatives {
             )))
         })
     }
+
+    // =========================================================================
+    // LLM methods
+    // =========================================================================
+
+    fn baml_llm_client_call_chain_as_list(vm: &mut BexVm, self_value: &Value) -> Vec<Value> {
+        // Get the ClientCallChain from the Value
+        let chain = vm
+            .as_client_call_chain(self_value)
+            .expect("Expected ClientCallChain");
+        // Convert the client HeapPtrs to Values
+        chain
+            .clients
+            .iter()
+            .map(|ptr| Value::Object(*ptr))
+            .collect()
+    }
 }
 
 // =============================================================================
@@ -292,6 +309,7 @@ fn deep_copy_value_recursive(
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
                 Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
+                Object::ClientCallChain(chain) => vm.tlab.alloc(Object::ClientCallChain(chain)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
@@ -519,6 +537,9 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
             Object::PrimitiveClient(c) => Ok(format!("<client {}:{}>", c.provider, c.name)),
+            Object::ClientCallChain(chain) => {
+                Ok(format!("<client_call_chain len={}>", chain.clients.len()))
+            }
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

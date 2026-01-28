@@ -64,27 +64,6 @@ impl Program {
 // External Operations
 // ============================================================================
 
-/// External operation to be executed by the engine.
-///
-/// This enum enables static dispatch instead of dynamic dispatch via traits.
-/// The engine matches on this enum to execute the appropriate async operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExternalOp {
-    /// LLM operation (render prompt, specialize, build request, etc.).
-    Llm(LlmOp),
-    /// System operation (file I/O, shell, HTTP, etc.).
-    Sys(SysOp),
-}
-
-/// LLM operations that run outside the VM.
-///
-/// These are built-in LLM-related operations provided by the engine.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LlmOp {
-    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
-    RenderPrompt,
-}
-
 /// System operations that run outside the VM.
 ///
 /// These are built-in async operations provided by the engine.
@@ -117,23 +96,12 @@ pub enum SysOp {
     HttpResponseUrl,
     /// Get response headers: `Response.headers() -> Map<String, String>`
     HttpResponseHeaders,
-}
-
-impl std::fmt::Display for ExternalOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExternalOp::Llm(llm_op) => write!(f, "{llm_op}"),
-            ExternalOp::Sys(sys_op) => write!(f, "{sys_op}"),
-        }
-    }
-}
-
-impl std::fmt::Display for LlmOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LlmOp::RenderPrompt => write!(f, "llm.render_prompt"),
-        }
-    }
+    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
+    LlmRenderPrompt,
+    /// Get the Jinja template for a function: `baml.llm.get_jinja_template(function_name) -> String`
+    LlmGetJinjaTemplate,
+    /// Get the client resolver function for a function: `baml.llm.get_client_function(function_name) -> fn() -> ClientCallChain`
+    LlmGetClientFunction,
 }
 
 impl std::fmt::Display for SysOp {
@@ -152,6 +120,9 @@ impl std::fmt::Display for SysOp {
             SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
             SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
             SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
+            SysOp::LlmRenderPrompt => write!(f, "llm.render_prompt"),
+            SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
+            SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
         }
     }
 }
@@ -188,8 +159,8 @@ pub enum FunctionKind {
     /// External operation (LLM calls, HTTP requests, file I/O, etc.).
     ///
     /// The VM yields control to the engine which executes the operation
-    /// asynchronously via static dispatch on the `ExternalOp` enum.
-    External(ExternalOp),
+    /// asynchronously via static dispatch on the `SysOp` enum.
+    External(SysOp),
 
     /// Unresolved native function (placeholder).
     ///
@@ -464,6 +435,9 @@ pub enum Object {
     /// LLM primitive client.
     PrimitiveClient(PrimitiveClient),
 
+    /// Client orchestration chain.
+    ClientCallChain(ClientCallChain),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -487,6 +461,9 @@ impl std::fmt::Display for Object {
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::PrimitiveClient(client) => {
                 write!(f, "<client {}:{}>", client.provider, client.name)
+            }
+            Object::ClientCallChain(chain) => {
+                write!(f, "<client_call_chain len={}>", chain.clients.len())
             }
             Object::Future(future) => match future {
                 Future::Pending(future) => {
@@ -519,7 +496,7 @@ pub enum Future {
 #[derive(Clone, Debug)]
 pub struct PendingFuture {
     /// The external operation to execute.
-    pub operation: ExternalOp,
+    pub operation: SysOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
 }
@@ -589,6 +566,22 @@ pub struct PrimitiveClient {
     pub allowed_roles: Vec<String>,
     /// Provider-specific options (heap-allocated map).
     pub options: HeapPtr,
+}
+
+// ============================================================================
+// ClientCallChain - orchestration wrapper for clients
+// ============================================================================
+
+/// A chain of clients for orchestration (fallback, round-robin, etc.).
+///
+/// For primitive clients, this wraps a single client.
+/// For composite clients (fallback/round-robin), this contains multiple clients.
+#[derive(Clone, Debug)]
+pub struct ClientCallChain {
+    /// The list of clients in this chain.
+    /// For a primitive client, this contains a single entry.
+    /// For composite clients, this contains the full strategy.
+    pub clients: Vec<HeapPtr>,
 }
 
 // ============================================================================
@@ -678,6 +671,7 @@ pub enum ObjectType {
     Resource,
     PromptAst,
     PrimitiveClient,
+    ClientCallChain,
 }
 
 impl ObjectType {
@@ -695,6 +689,7 @@ impl ObjectType {
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::PrimitiveClient(_) => Self::PrimitiveClient,
+            Object::ClientCallChain(_) => Self::ClientCallChain,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -732,6 +727,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::PrimitiveClient => write!(f, "primitive_client"),
+            ObjectType::ClientCallChain => write!(f, "client_call_chain"),
         }
     }
 }

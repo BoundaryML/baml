@@ -246,6 +246,24 @@ macro_rules! with_builtins {
                         #[external]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
                     }
+
+                    /// A chain of clients for orchestration (fallback, round-robin, etc.).
+                    /// For primitive clients, this wraps a single client.
+                    #[builtin]
+                    struct ClientCallChain {
+                        /// Get the list of clients in this chain.
+                        #[uses(vm)]
+                        fn as_list(self: ClientCallChain) -> Array<PrimitiveClient>;
+                    }
+
+                    /// Get the Jinja template for an LLM function.
+                    #[external]
+                    fn get_jinja_template(function_name: String) -> String;
+
+                    /// Get the client resolver for an LLM function.
+                    /// Returns a ClientCallChain containing the client(s) configured for this function.
+                    #[external]
+                    fn get_client_function(function_name: String) -> ClientCallChain;
                 }
             }
 
@@ -440,4 +458,61 @@ mod tests {
         assert_eq!(normalize_baml_prefix("bam"), "bam"); // incomplete
         assert_eq!(normalize_baml_prefix("banal"), "banal"); // different word
     }
+}
+
+// ============================================================================
+// Embedded BAML Builtin Files
+// ============================================================================
+
+/// Embedded BAML source files for built-in functions.
+///
+/// These files are compiled together with user code and provide
+/// implementations for builtin namespaces like `baml.llm`.
+///
+/// # Structure
+///
+/// Files are organized by namespace:
+/// - `baml/llm.baml` -> `baml.llm` namespace
+///
+/// # Usage
+///
+/// ```ignore
+/// for (namespace, source) in baml_builtins::baml_sources() {
+///     // Add source to compilation context
+///     compiler.add_builtin(namespace, source);
+/// }
+/// ```
+pub mod baml_sources {
+    /// The BAML source for the `baml.llm` namespace.
+    ///
+    /// Contains the `render_prompt` orchestrator function.
+    pub const LLM: &str = include_str!("../baml/llm.baml");
+
+    /// A builtin BAML source file with its namespace.
+    #[derive(Debug, Clone, Copy)]
+    pub struct BuiltinSource {
+        /// The namespace this file provides (e.g., "baml.llm").
+        pub namespace: &'static str,
+        /// The virtual file path for diagnostics (e.g., "<builtin>/baml/llm.baml").
+        pub path: &'static str,
+        /// The BAML source code.
+        pub source: &'static str,
+    }
+
+    /// All builtin BAML sources.
+    ///
+    /// These should be added to the compilation context before user code.
+    pub const ALL: &[BuiltinSource] = &[BuiltinSource {
+        namespace: "baml.llm",
+        path: "<builtin>/baml/llm.baml",
+        source: LLM,
+    }];
+}
+
+/// Get all builtin BAML sources.
+///
+/// Returns an iterator over all embedded BAML files that should be
+/// compiled as part of the builtin library.
+pub fn baml_sources() -> impl Iterator<Item = &'static baml_sources::BuiltinSource> {
+    baml_sources::ALL.iter()
 }

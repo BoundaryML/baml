@@ -317,6 +317,12 @@ impl BexHeap {
                 // PrimitiveClient.options is a heap pointer to a map
                 worklist.push(client.options);
             }
+            Object::ClientCallChain(chain) => {
+                // ClientCallChain.clients contains heap pointers to PrimitiveClients
+                for ptr in &chain.clients {
+                    worklist.push(*ptr);
+                }
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -414,6 +420,14 @@ impl BexHeap {
                 // Update options pointer
                 if let Some(&new_ptr) = forwarding.get(&client.options) {
                     client.options = new_ptr;
+                }
+            }
+            Object::ClientCallChain(chain) => {
+                // Update client pointers
+                for ptr in &mut chain.clients {
+                    if let Some(&new_ptr) = forwarding.get(ptr) {
+                        *ptr = new_ptr;
+                    }
                 }
             }
             // Primitives have no references

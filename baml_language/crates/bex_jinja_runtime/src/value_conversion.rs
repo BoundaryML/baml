@@ -75,5 +75,10 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
             // PrimitiveClient shouldn't appear in template arguments
             JinjaValue::from("[PrimitiveClient]")
         }
+
+        BexExternalValue::ClientCallChain(_) => {
+            // ClientCallChain shouldn't appear in template arguments
+            JinjaValue::from("[ClientCallChain]")
+        }
     }
 }

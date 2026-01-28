@@ -165,6 +165,16 @@ pub enum BexExternalValue {
 
     /// Primitive LLM client.
     PrimitiveClient(PrimitiveClientValue),
+
+    /// Client call chain (orchestration wrapper).
+    ClientCallChain(ClientCallChainValue),
+}
+
+/// Extracted ClientCallChain data (no HeapPtr, fully owned).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClientCallChainValue {
+    /// List of clients in this chain (extracted PrimitiveClientValues).
+    pub clients: Vec<PrimitiveClientValue>,
 }
 
 /// Extracted PrimitiveClient data (no HeapPtr, fully owned).
@@ -232,6 +242,7 @@ impl BexExternalValue {
             },
             BexExternalValue::PromptAst(_) => "prompt_ast",
             BexExternalValue::PrimitiveClient(_) => "primitive_client",
+            BexExternalValue::ClientCallChain(_) => "client_call_chain",
         }
     }
 }

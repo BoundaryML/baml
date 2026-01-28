@@ -350,6 +350,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
+                Object::ClientCallChain(_) => type_tags::CLIENT_CALL_CHAIN,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -763,6 +764,27 @@ impl BexVm {
             Object::PrimitiveClient(client) => Ok(client),
             _ => Err(InternalError::TypeError {
                 expected: ObjectType::PrimitiveClient.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Allocate a client call chain object on the heap.
+    pub fn alloc_client_call_chain(&mut self, chain: bex_vm_types::ClientCallChain) -> Value {
+        Value::Object(self.tlab.alloc(Object::ClientCallChain(chain)))
+    }
+
+    /// Get client call chain from a Value.
+    pub fn as_client_call_chain(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::ClientCallChain, InternalError> {
+        let index = self.as_object_ptr(value, ObjectType::ClientCallChain)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::ClientCallChain(chain) => Ok(chain),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::ClientCallChain.into(),
                 got: ObjectType::of(obj).into(),
             }),
         }
@@ -1938,8 +1960,8 @@ impl BexVm {
                         }));
                     }
 
-                    // Must be an external operation - extract the ExternalOp.
-                    let FunctionKind::External(external_op) = callable_future.kind else {
+                    // Must be an external operation - extract the SysOp.
+                    let FunctionKind::External(sys_op) = callable_future.kind else {
                         return Err(VmError::from(InternalError::TypeError {
                             expected: FunctionType::External.into(),
                             got: FunctionType::from(&callable_future.kind).into(),
@@ -1949,9 +1971,9 @@ impl BexVm {
                     // Collect the function call args and cleanup the call.
                     let future_args: Vec<Value> = self.stack.drain(args_offset..).skip(1).collect();
 
-                    // Create the pending future with the ExternalOp enum.
+                    // Create the pending future with the SysOp enum.
                     let pending_future = PendingFuture {
-                        operation: external_op,
+                        operation: sys_op,
                         args: future_args,
                     };
 

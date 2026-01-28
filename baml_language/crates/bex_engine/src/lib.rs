@@ -12,7 +12,7 @@
 //! # External Operations
 //!
 //! External operations (LLM calls, HTTP requests, file I/O) are dispatched via
-//! the `ExternalOp` enum using static dispatch. This avoids dynamic dispatch
+//! the `SysOp` enum using static dispatch. This avoids dynamic dispatch
 //! overhead and makes the system more macro-friendly.
 //!
 //! # Resources
@@ -67,7 +67,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, LlmOp, Object, Value};
+use bex_vm_types::{GlobalPool, HeapPtr, Object, Value};
 // Re-export sys_types types for convenience
 pub use sys_types::{
     CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
@@ -654,6 +654,9 @@ impl BexEngine {
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
                 type_name: "primitive_client".to_string(),
             }),
+            Object::ClientCallChain(_) => Err(EngineError::CannotConvert {
+                type_name: "client_call_chain".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1050,6 +1053,24 @@ impl BexEngine {
                     options: options_heap_ptr,
                 })
             }
+            BexExternalValue::ClientCallChain(chain) => {
+                // Allocate each client in the chain and collect their heap pointers
+                let mut client_ptrs = Vec::with_capacity(chain.clients.len());
+                for client in &chain.clients {
+                    let client_value = Self::allocate_from_external(
+                        vm,
+                        &BexExternalValue::PrimitiveClient(client.clone()),
+                        guard,
+                    );
+                    let Value::Object(ptr) = client_value else {
+                        panic!("allocate_from_external should return Object for PrimitiveClient");
+                    };
+                    client_ptrs.push(ptr);
+                }
+                vm.alloc_client_call_chain(bex_vm_types::ClientCallChain {
+                    clients: client_ptrs,
+                })
+            }
         }
     }
 
@@ -1168,59 +1189,25 @@ impl BexEngine {
                     // Convert arguments to BexExternalValue
                     let args = Self::vm_args_to_external(vm, &pending.args);
 
-                    match pending.operation {
-                        ExternalOp::Llm(llm_op) => {
-                            match llm_op {
-                                LlmOp::RenderPrompt => {
-                                    // render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst
-                                    // args[0] = PrimitiveClient, args[1] = template, args[2] = args map
-                                    let result = Self::execute_render_prompt(&args)
-                                        .map_err(EngineError::from);
-                                    match result {
-                                        Ok(prompt_ast) => {
-                                            // Convert external PromptAst to VM PromptAst and set future ready
-                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
-                                                vm, prompt_ast,
-                                            );
-                                            let value = vm.alloc_prompt_ast(vm_ast);
-                                            vm.set_future_ready(id, value)?;
-                                        }
-                                        Err(e) => {
-                                            // Send error through the channel
-                                            let pending_futures = pending_futures.clone();
-                                            tokio::spawn(async move {
-                                                let _ = pending_futures
-                                                    .send(FutureResult { id, result: Err(e) });
-                                            });
-                                        }
-                                    }
-                                }
-                            }
+                    match self.execute_sys_op(pending.operation, args) {
+                        SysOpResult::Ready(result) => {
+                            // Sync operation - set future to Ready without touching stack.
+                            // The VM will continue to the Await instruction which will
+                            // extract the value from the Ready future.
+                            let value =
+                                Self::external_to_vm_value(vm, result.map_err(EngineError::from)?);
+                            vm.set_future_ready(id, value)?;
                         }
-                        ExternalOp::Sys(sys_op) => {
-                            match self.execute_sys_op(sys_op, args) {
-                                SysOpResult::Ready(result) => {
-                                    // Sync operation - set future to Ready without touching stack.
-                                    // The VM will continue to the Await instruction which will
-                                    // extract the value from the Ready future.
-                                    let value = Self::external_to_vm_value(
-                                        vm,
-                                        result.map_err(EngineError::from)?,
-                                    );
-                                    vm.set_future_ready(id, value)?;
-                                }
-                                SysOpResult::Async(fut) => {
-                                    // Async operation - spawn task
-                                    let pending_futures = pending_futures.clone();
-                                    tokio::spawn(async move {
-                                        let result = fut.await;
-                                        let _ = pending_futures.send(FutureResult {
-                                            id,
-                                            result: result.map_err(EngineError::from),
-                                        });
-                                    });
-                                }
-                            }
+                        SysOpResult::Async(fut) => {
+                            // Async operation - spawn task
+                            let pending_futures = pending_futures.clone();
+                            tokio::spawn(async move {
+                                let result = fut.await;
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
                         }
                     }
                 }
@@ -1318,6 +1305,22 @@ impl BexEngine {
             SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(args),
             SysOp::HttpResponseUrl => (self.sys_ops.http_response_url)(args),
             SysOp::HttpResponseHeaders => (self.sys_ops.http_response_headers)(args),
+            SysOp::LlmRenderPrompt => {
+                // render_prompt is synchronous - execute and return Ready
+                let result = Self::execute_render_prompt(&args).map(BexExternalValue::PromptAst);
+                SysOpResult::Ready(result)
+            }
+            SysOp::LlmGetJinjaTemplate => {
+                // get_jinja_template(function_name: String) -> String
+                let result = self.execute_get_jinja_template(&args);
+                SysOpResult::Ready(result)
+            }
+            SysOp::LlmGetClientFunction => {
+                // get_client_function(function_name: String) -> ClientCallChain
+                // For now, returns the client chain directly instead of a function
+                let result = self.execute_get_client_function(&args);
+                SysOpResult::Ready(result)
+            }
         }
     }
 
@@ -1373,6 +1376,8 @@ impl BexEngine {
             // TODO: output_format should come from somewhere (function return type?)
             output_format: bex_llm_types::OutputFormatContent::new(bex_program::Ty::String),
             tags: indexmap::IndexMap::new(),
+            // TODO: enums should be passed from the orchestrator or looked up from snapshot
+            enums: std::collections::HashMap::new(),
         };
 
         // Call the Jinja runtime - RenderPromptError converts to OpError via From
@@ -1411,6 +1416,118 @@ impl BexEngine {
                 bex_external_types::PromptAst::Vec(ext_items)
             }
         }
+    }
+
+    /// Execute the `get_jinja_template` LLM operation.
+    ///
+    /// Arguments: [`function_name`: String]
+    /// Returns: String (the Jinja template for the function's prompt)
+    fn execute_get_jinja_template(
+        &self,
+        args: &[BexExternalValue],
+    ) -> Result<BexExternalValue, OpError> {
+        // Extract function name
+        let function_name = match &args[0] {
+            BexExternalValue::String(s) => s.as_str(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Look up function definition
+        let function_def = self
+            .snapshot
+            .functions
+            .get(function_name)
+            .ok_or_else(|| OpError::Other(format!("Function not found: {function_name}")))?;
+
+        // Extract prompt template from LLM function body
+        match &function_def.body {
+            bex_program::FunctionBody::Llm {
+                prompt_template, ..
+            } => Ok(BexExternalValue::String(prompt_template.clone())),
+            bex_program::FunctionBody::Expr { .. } => Err(OpError::Other(format!(
+                "Function '{function_name}' is not an LLM function"
+            ))),
+        }
+    }
+
+    /// Execute the `get_client_function` LLM operation.
+    ///
+    /// Arguments: [`function_name`: String]
+    /// Returns: `ClientCallChain` (the client chain for the function)
+    ///
+    /// Note: In the future, this should return a function that resolves to
+    /// a `ClientCallChain` (for dynamic client resolution). For now, we return
+    /// the chain directly with a simple lookup.
+    fn execute_get_client_function(
+        &self,
+        args: &[BexExternalValue],
+    ) -> Result<BexExternalValue, OpError> {
+        // Extract function name
+        let function_name = match &args[0] {
+            BexExternalValue::String(s) => s.as_str(),
+            other => {
+                return Err(OpError::TypeError {
+                    expected: "String",
+                    actual: other.type_name().to_string(),
+                });
+            }
+        };
+
+        // Look up function definition
+        let function_def = self
+            .snapshot
+            .functions
+            .get(function_name)
+            .ok_or_else(|| OpError::Other(format!("Function not found: {function_name}")))?;
+
+        // Extract client name from LLM function body
+        let client_name = match &function_def.body {
+            bex_program::FunctionBody::Llm { client, .. } => client.as_str(),
+            bex_program::FunctionBody::Expr { .. } => {
+                return Err(OpError::Other(format!(
+                    "Function '{function_name}' is not an LLM function"
+                )));
+            }
+        };
+
+        // Look up client definition
+        let client_def = self
+            .snapshot
+            .clients
+            .get(client_name)
+            .ok_or_else(|| OpError::Other(format!("Client not found: {client_name}")))?;
+
+        // Build a PrimitiveClient from the ClientDef
+        // For now, we create a simple chain with just this one client
+        let primitive_client = bex_external_types::PrimitiveClientValue {
+            name: client_def.name.clone(),
+            provider: client_def.provider.clone(),
+            // TODO: These should come from the client definition or provider defaults
+            default_role: "user".to_string(),
+            allowed_roles: vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ],
+            // Convert options from HashMap<String, String> to IndexMap<String, BexExternalValue>
+            options: client_def
+                .options
+                .iter()
+                .map(|(k, v)| (k.clone(), BexExternalValue::String(v.clone())))
+                .collect(),
+        };
+
+        // Create a ClientCallChain with this single client
+        let chain = bex_external_types::ClientCallChainValue {
+            clients: vec![primitive_client],
+        };
+
+        Ok(BexExternalValue::ClientCallChain(chain))
     }
 
     /// Convert VM values to `BexExternalValues` for sys ops.
@@ -1541,6 +1658,21 @@ impl BexEngine {
                     default_role: client.default_role,
                     allowed_roles: client.allowed_roles,
                     options: options_heap_ptr,
+                })
+            }
+            BexExternalValue::ClientCallChain(chain) => {
+                // Allocate each client in the chain and collect their heap pointers
+                let mut client_ptrs = Vec::with_capacity(chain.clients.len());
+                for client in chain.clients {
+                    let client_value =
+                        Self::external_to_vm_value(vm, BexExternalValue::PrimitiveClient(client));
+                    let Value::Object(ptr) = client_value else {
+                        panic!("external_to_vm_value should return Object for PrimitiveClient");
+                    };
+                    client_ptrs.push(ptr);
+                }
+                vm.alloc_client_call_chain(bex_vm_types::ClientCallChain {
+                    clients: client_ptrs,
                 })
             }
         }

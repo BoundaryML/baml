@@ -352,6 +352,12 @@ impl BexHeap {
                 // Validate the options map reference
                 self.debug_assert_valid_index(client.options);
             }
+            Object::ClientCallChain(chain) => {
+                // Validate all client pointers in the chain
+                for client_ptr in &chain.clients {
+                    self.debug_assert_valid_index(*client_ptr);
+                }
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)
