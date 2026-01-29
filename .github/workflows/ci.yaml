@@ -235,14 +235,11 @@ jobs:
           workspaces: "baml_language -> target"
 
       - name: "Install Rust toolchain"
-        run: rustup show
+        run: rustup toolchain install
         working-directory: baml_language
 
-      - name: "Install clippy and wasm target"
+      - name: "Install cargo-binstall"
         run: |
-          rustup component add clippy
-          rustup target add wasm32-unknown-unknown
-          # install cargo binstall
           curl -L --proto '=https' --tlsv1.2 -sSf \
             https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
             | bash
