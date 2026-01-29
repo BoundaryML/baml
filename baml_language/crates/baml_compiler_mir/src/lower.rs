@@ -1954,7 +1954,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Extract class name from a Ty.
     ///
-    /// For builtin classes, returns the full path (e.g., "baml.http.Response").
+    /// For builtin classes, returns the full path (e.g., "baml.http.HttpResponse").
     /// For user classes, returns just the name (e.g., "`MyClass`").
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {

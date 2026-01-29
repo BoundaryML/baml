@@ -438,8 +438,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.net.Socket.read" => Some(SysOp::NetRead),
         "baml.net.Socket.close" => Some(SysOp::NetClose),
         "baml.http.fetch" => Some(SysOp::HttpFetch),
-        "baml.http.Response.text" => Some(SysOp::ResponseText),
-        "baml.http.Response.ok" => Some(SysOp::ResponseOk),
+        "baml.http.HttpResponse.text" => Some(SysOp::ResponseText),
+        "baml.http.HttpResponse.ok" => Some(SysOp::ResponseOk),
         _ => None,
     }
 }

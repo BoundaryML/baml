@@ -11,7 +11,7 @@ use baml_compiler_hir::FullyQualifiedName;
 
 use crate::Ty;
 
-/// Parse a builtin path string like "baml.http.Response" into an FQN.
+/// Parse a builtin path string like "baml.http.HttpResponse" into an FQN.
 ///
 /// The path is expected to start with "baml." and have at least one segment after.
 pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {

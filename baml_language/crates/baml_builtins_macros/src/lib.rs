@@ -31,7 +31,7 @@ struct BuiltinDef {
 
 /// A collected builtin type definition (struct marked with #[builtin]).
 struct BuiltinTypeDef {
-    /// Full path like "baml.http.Response"
+    /// Full path like "baml.http.HttpResponse"
     path: String,
     /// Field definitions
     fields: Vec<BuiltinFieldDef>,

@@ -62,7 +62,7 @@ impl ResponseRef {
                         return Err(OpError::Other("bad class ptr".into()));
                     };
 
-                    if class.name != "baml.http.Response" {
+                    if class.name != "baml.http.HttpResponse" {
                         return Err(OpError::TypeError {
                             expected: "Response instance",
                             actual: format!("Instance of {}", class.name),
@@ -93,7 +93,7 @@ impl ResponseRef {
             }
             BexValue::External(BexExternalValue::Instance { class_name, fields }) => {
                 // Already copied out - extract directly
-                if class_name != "baml.http.Response" {
+                if class_name != "baml.http.HttpResponse" {
                     return Err(OpError::TypeError {
                         expected: "Response instance",
                         actual: format!("Instance of {class_name}"),

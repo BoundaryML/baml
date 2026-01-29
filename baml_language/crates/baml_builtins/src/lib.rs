@@ -52,7 +52,7 @@ pub struct BuiltinField {
 /// A builtin type definition (struct with fields).
 #[derive(Debug, Clone)]
 pub struct BuiltinTypeDefinition {
-    /// Full path (e.g., "baml.http.Response").
+    /// Full path (e.g., "baml.http.HttpResponse").
     pub path: &'static str,
     /// All fields (public and private) in runtime order.
     pub fields: Vec<BuiltinField>,
@@ -228,22 +228,22 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod http {
                     #[builtin]
-                    struct Response {
+                    struct HttpResponse {
                         private _handle: ResourceHandle,
                         status_code: i64,
                         headers: Map<String, String>,
                         url: String,
                         /// Get response body as text (consumes body).
                         #[sys_op]
-                        fn text(self: Response) -> String;
+                        fn text(self: HttpResponse) -> String;
                         /// Check if status is 2xx.
                         #[sys_op]
-                        fn ok(self: Response) -> bool;
+                        fn ok(self: HttpResponse) -> bool;
                     }
 
                     /// Fetch a URL via HTTP GET.
                     #[sys_op]
-                    fn fetch(url: String) -> Response;
+                    fn fetch(url: String) -> HttpResponse;
                 }
 
                 // =====================================================================
@@ -435,7 +435,7 @@ mod tests {
         assert!(find_builtin_by_path("baml.llm.PromptAst").is_none());
 
         // Other builtins in the same parent module are still visible
-        assert!(find_builtin_by_path("baml.http.Response.text").is_some());
+        assert!(find_builtin_by_path("baml.http.HttpResponse.text").is_some());
         assert!(find_builtin_by_path("baml.http.fetch").is_some());
     }
 
@@ -493,7 +493,7 @@ mod tests {
         );
 
         // Find Response type
-        let response = find_builtin_type("baml.http.Response");
+        let response = find_builtin_type("baml.http.HttpResponse");
         assert!(response.is_some(), "Response type should exist");
         let response = response.unwrap();
 
@@ -516,14 +516,14 @@ mod tests {
         );
 
         // Check status_code is public
-        let status_field = find_field("baml.http.Response", "status_code");
+        let status_field = find_field("baml.http.HttpResponse", "status_code");
         assert!(status_field.is_some(), "status_code field should exist");
         let status_field = status_field.unwrap();
         assert!(!status_field.is_private, "status_code should be public");
         assert!(matches!(status_field.ty, Some(TypePattern::Int)));
 
         // Check headers field type is Map<String, String>
-        let headers_field = find_field("baml.http.Response", "headers");
+        let headers_field = find_field("baml.http.HttpResponse", "headers");
         assert!(headers_field.is_some(), "headers field should exist");
         let headers_field = headers_field.unwrap();
         assert!(matches!(headers_field.ty, Some(TypePattern::Map { .. })));

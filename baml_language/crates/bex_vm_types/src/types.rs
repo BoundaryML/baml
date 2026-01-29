@@ -107,8 +107,8 @@ impl std::fmt::Display for SysOp {
             SysOp::NetRead => write!(f, "net.read"),
             SysOp::NetClose => write!(f, "net.close"),
             SysOp::HttpFetch => write!(f, "http.fetch"),
-            SysOp::ResponseText => write!(f, "http.Response.text"),
-            SysOp::ResponseOk => write!(f, "http.Response.ok"),
+            SysOp::ResponseText => write!(f, "http.HttpResponse.text"),
+            SysOp::ResponseOk => write!(f, "http.HttpResponse.ok"),
             SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
             SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
         }

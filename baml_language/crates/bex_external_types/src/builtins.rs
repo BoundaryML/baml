@@ -25,7 +25,7 @@ pub fn new_http_response(
     url: String,
 ) -> BexExternalValue {
     BexExternalValue::Instance {
-        class_name: "baml.http.Response".to_string(),
+        class_name: "baml.http.HttpResponse".to_string(),
         fields: indexmap! {
             "_handle".to_string() => BexExternalValue::Resource(handle),
             "status_code".to_string() => BexExternalValue::Int(i64::from(status_code)),
