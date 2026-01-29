@@ -677,6 +677,38 @@ impl BexEngine {
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
                 type_name: "primitive_client".to_string(),
             }),
+            Object::HttpRequest(req) => {
+                // Convert headers from heap map to owned IndexMap
+                let headers_obj = unsafe { req.headers.get() };
+                let headers = if let Object::Map(map) = headers_obj {
+                    map.iter()
+                        .map(|(k, v)| {
+                            let val = match v {
+                                Value::Object(ptr) => {
+                                    let obj = unsafe { ptr.get() };
+                                    if let Object::String(s) = obj {
+                                        s.clone()
+                                    } else {
+                                        String::new()
+                                    }
+                                }
+                                _ => String::new(),
+                            };
+                            (k.clone(), val)
+                        })
+                        .collect()
+                } else {
+                    indexmap::IndexMap::new()
+                };
+                Ok(BexExternalValue::HttpRequest(
+                    bex_external_types::HttpRequestValue {
+                        method: req.method.clone(),
+                        url: req.url.clone(),
+                        headers,
+                        body: req.body.clone(),
+                    },
+                ))
+            }
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -1073,6 +1105,24 @@ impl BexEngine {
                     options: options_heap_ptr,
                 })
             }
+            BexExternalValue::HttpRequest(req) => {
+                // Allocate headers map to heap
+                let headers: indexmap::IndexMap<String, Value> = req
+                    .headers
+                    .iter()
+                    .map(|(k, v)| (k.clone(), vm.alloc_string(v.clone())))
+                    .collect();
+                let headers_ptr = vm.alloc_map(headers);
+                let Value::Object(headers_heap_ptr) = headers_ptr else {
+                    panic!("alloc_map should return an Object");
+                };
+                vm.alloc_http_request(bex_vm_types::HttpRequest {
+                    method: req.method.clone(),
+                    url: req.url.clone(),
+                    headers: headers_heap_ptr,
+                    body: req.body.clone(),
+                })
+            }
         }
     }
 
@@ -1311,6 +1361,7 @@ impl BexEngine {
             SysOp::SpecializePrompt => SysOpResult::Ready(
                 Self::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
             ),
+            SysOp::HttpFetchHttp => (self.sys_ops.http_fetch_http)(args),
         }
     }
 
@@ -1672,6 +1723,24 @@ impl BexEngine {
                     default_role: client.default_role,
                     allowed_roles: client.allowed_roles,
                     options: options_heap_ptr,
+                })
+            }
+            BexExternalValue::HttpRequest(req) => {
+                // Allocate headers map to heap
+                let headers: indexmap::IndexMap<String, Value> = req
+                    .headers
+                    .into_iter()
+                    .map(|(k, v)| (k, vm.alloc_string(v)))
+                    .collect();
+                let headers_ptr = vm.alloc_map(headers);
+                let Value::Object(headers_heap_ptr) = headers_ptr else {
+                    panic!("alloc_map should return an Object");
+                };
+                vm.alloc_http_request(bex_vm_types::HttpRequest {
+                    method: req.method,
+                    url: req.url,
+                    headers: headers_heap_ptr,
+                    body: req.body,
                 })
             }
         }

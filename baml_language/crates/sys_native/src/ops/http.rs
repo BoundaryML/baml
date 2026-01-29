@@ -171,6 +171,57 @@ async fn fetch_async(url: String) -> Result<BexExternalValue, OpError> {
     ))
 }
 
+/// Fetches using a full `HttpRequest` object and returns an `HttpResponse` resource.
+///
+/// Signature: `fn fetch_http(request: HttpRequest) -> HttpResponse`
+pub(crate) fn fetch_http(args: Vec<BexExternalValue>) -> SysOpResult {
+    SysOpResult::Async(Box::pin(fetch_http_async(args)))
+}
+
+async fn fetch_http_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
+    let req = match args.into_iter().next() {
+        Some(BexExternalValue::HttpRequest(r)) => r,
+        other => {
+            return Err(OpError::TypeError {
+                expected: "HttpRequest",
+                actual: format!("{other:?}"),
+            });
+        }
+    };
+
+    let method = req
+        .method
+        .parse::<reqwest::Method>()
+        .map_err(|e| OpError::Other(format!("Invalid HTTP method '{}': {e}", req.method)))?;
+
+    let mut builder = HTTP_CLIENT.request(method, &req.url);
+
+    for (key, value) in &req.headers {
+        builder = builder.header(key.as_str(), value.as_str());
+    }
+
+    if let Some(body) = req.body {
+        builder = builder.body(body);
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|e| OpError::Other(format!("HTTP request failed for '{}': {e}", req.url)))?;
+
+    // Capture metadata before storing
+    let status = response.status().as_u16();
+    let headers: HashMap<String, String> = response
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+    let final_url = response.url().to_string();
+
+    let handle = REGISTRY.register_http_response(response, status, headers, final_url);
+    Ok(BexExternalValue::Resource(handle))
+}
+
 /// Gets the response body as text (consumes the body).
 ///
 /// Signature: `fn text(self: Response) -> String`

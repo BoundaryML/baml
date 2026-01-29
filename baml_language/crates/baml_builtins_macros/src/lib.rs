@@ -1367,6 +1367,13 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
                 quote!(&PrimitiveClient)
             }
         }
+        "HttpRequest" => {
+            if is_mut {
+                quote!(&mut HttpRequest)
+            } else {
+                quote!(&HttpRequest)
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote!(&mut Vec<Value>)
@@ -1412,6 +1419,7 @@ fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
         "Media" => quote!(MediaValue),
         "PromptAst" => quote!(PromptAst),
         "PrimitiveClient" => quote!(PrimitiveClient),
+        "HttpRequest" => quote!(HttpRequest),
         t if t.starts_with("Array") => quote!(Vec<Value>),
         t if t.starts_with("Map") => quote!(IndexMap<String, Value>),
         t if t.starts_with("Option<") => {
@@ -1574,6 +1582,17 @@ fn generate_single_extraction(
                 }
             }
         }
+        "HttpRequest" => {
+            if is_mut {
+                quote! {
+                    compile_error!("Mutable HttpRequest parameters not yet supported");
+                }
+            } else {
+                quote! {
+                    let #var_name = vm.as_http_request(&args[#idx])?.clone();
+                }
+            }
+        }
         t if t.starts_with("Array") => {
             if is_mut {
                 quote! {
@@ -1653,7 +1672,7 @@ fn needs_reference(type_name: &str, is_generic: bool) -> bool {
 
     matches!(
         type_name,
-        "String" | "Media" | "PromptAst" | "PrimitiveClient"
+        "String" | "Media" | "PromptAst" | "PrimitiveClient" | "HttpRequest"
     ) || type_name.starts_with("Array")
         || type_name.starts_with("Map")
 }
@@ -1688,6 +1707,7 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         t if t.starts_with("Map") => quote!(Ok(vm.alloc_map(result))),
         "PromptAst" => quote!(Ok(vm.alloc_prompt_ast(result))),
         "PrimitiveClient" => quote!(Ok(vm.alloc_primitive_client(result))),
+        "HttpRequest" => quote!(Ok(vm.alloc_http_request(result))),
         _ => quote!(Ok(result)),
     }
 }

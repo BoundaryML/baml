@@ -352,6 +352,9 @@ impl BexHeap {
                 // Validate the options map reference
                 self.debug_assert_valid_index(client.options);
             }
+            Object::HttpRequest(req) => {
+                self.debug_assert_valid_index(req.headers);
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)

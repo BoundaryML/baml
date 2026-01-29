@@ -114,7 +114,9 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             // Resources cannot be serialized across FFI - return null
             None
         }
-        BexExternalValue::PromptAst(_) | BexExternalValue::PrimitiveClient(_) => {
+        BexExternalValue::PromptAst(_)
+        | BexExternalValue::PrimitiveClient(_)
+        | BexExternalValue::HttpRequest(_) => {
             // Internal types cannot be serialized across FFI - return null
             None
         }

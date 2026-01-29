@@ -317,6 +317,10 @@ impl BexHeap {
                 // PrimitiveClient.options is a heap pointer to a map
                 worklist.push(client.options);
             }
+            Object::HttpRequest(req) => {
+                // HttpRequest.headers is a heap pointer to a map
+                worklist.push(req.headers);
+            }
             // Primitives have no references
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
@@ -414,6 +418,12 @@ impl BexHeap {
                 // Update options pointer
                 if let Some(&new_ptr) = forwarding.get(&client.options) {
                     client.options = new_ptr;
+                }
+            }
+            Object::HttpRequest(req) => {
+                // Update headers pointer
+                if let Some(&new_ptr) = forwarding.get(&req.headers) {
+                    req.headers = new_ptr;
                 }
             }
             // Primitives have no references

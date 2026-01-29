@@ -440,6 +440,7 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.http.fetch" => Some(SysOp::HttpFetch),
         "baml.http.HttpResponse.text" => Some(SysOp::ResponseText),
         "baml.http.HttpResponse.ok" => Some(SysOp::ResponseOk),
+        "baml.http.fetch_http" => Some(SysOp::HttpFetchHttp),
         _ => None,
     }
 }

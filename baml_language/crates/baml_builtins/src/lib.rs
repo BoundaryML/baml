@@ -227,6 +227,10 @@ macro_rules! with_builtins {
                 // HTTP operations
                 // =====================================================================
                 mod http {
+                    /// An HTTP request with method, URL, headers, and body.
+                    #[builtin]
+                    struct HttpRequest {}
+
                     #[builtin]
                     struct HttpResponse {
                         private _handle: ResourceHandle,
@@ -244,6 +248,10 @@ macro_rules! with_builtins {
                     /// Fetch a URL via HTTP GET.
                     #[sys_op]
                     fn fetch(url: String) -> HttpResponse;
+
+                    /// Execute a full HTTP request and return the response.
+                    #[sys_op]
+                    fn fetch_http(request: HttpRequest) -> HttpResponse;
                 }
 
                 // =====================================================================

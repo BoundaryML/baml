@@ -350,6 +350,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
+                Object::HttpRequest(_) => type_tags::HTTP_REQUEST,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -763,6 +764,27 @@ impl BexVm {
             Object::PrimitiveClient(client) => Ok(client),
             _ => Err(InternalError::TypeError {
                 expected: ObjectType::PrimitiveClient.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Allocate an HTTP request object on the heap.
+    pub fn alloc_http_request(&mut self, req: bex_vm_types::HttpRequest) -> Value {
+        Value::Object(self.tlab.alloc(Object::HttpRequest(req)))
+    }
+
+    /// Get HTTP request from a Value.
+    pub fn as_http_request(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::HttpRequest, InternalError> {
+        let index = self.as_object_ptr(value, ObjectType::HttpRequest)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::HttpRequest(req) => Ok(req),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::HttpRequest.into(),
                 got: ObjectType::of(obj).into(),
             }),
         }

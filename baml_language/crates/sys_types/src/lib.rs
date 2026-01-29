@@ -102,6 +102,7 @@ pub struct SysOps {
 
     // HTTP operations
     pub http_fetch: SysOpFn,
+    pub http_fetch_http: SysOpFn,
     pub http_response_text: SysOpFn,
     pub http_response_ok: SysOpFn,
 }
@@ -185,6 +186,11 @@ impl SysOps {
                     operation: SysOp::SpecializePrompt,
                 }))
             },
+            SysOp::HttpFetchHttp => |_| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpFetchHttp,
+                }))
+            },
         }
     }
 
@@ -201,6 +207,7 @@ impl SysOps {
             net_close: Self::unsupported(SysOp::NetClose),
             shell: Self::unsupported(SysOp::Shell),
             http_fetch: Self::unsupported(SysOp::HttpFetch),
+            http_fetch_http: Self::unsupported(SysOp::HttpFetchHttp),
             http_response_text: Self::unsupported(SysOp::ResponseText),
             http_response_ok: Self::unsupported(SysOp::ResponseOk),
         }

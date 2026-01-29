@@ -94,6 +94,8 @@ pub enum SysOp {
     RenderPrompt,
     /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
     SpecializePrompt,
+    /// HTTP fetch with full request: `baml.http.fetch_http(request: HttpRequest) -> HttpResponse`
+    HttpFetchHttp,
 }
 
 impl std::fmt::Display for SysOp {
@@ -111,6 +113,7 @@ impl std::fmt::Display for SysOp {
             SysOp::ResponseOk => write!(f, "http.HttpResponse.ok"),
             SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
             SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
+            SysOp::HttpFetchHttp => write!(f, "http.fetch_http"),
         }
     }
 }
@@ -423,6 +426,9 @@ pub enum Object {
     /// LLM primitive client.
     PrimitiveClient(PrimitiveClient),
 
+    /// HTTP request.
+    HttpRequest(HttpRequest),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -446,6 +452,9 @@ impl std::fmt::Display for Object {
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::PrimitiveClient(client) => {
                 write!(f, "<client {}:{}>", client.provider, client.name)
+            }
+            Object::HttpRequest(req) => {
+                write!(f, "<http_request {} {}>", req.method, req.url)
             }
             Object::Future(future) => match future {
                 Future::Pending(future) => {
@@ -551,6 +560,23 @@ pub struct PrimitiveClient {
 }
 
 // ============================================================================
+// HttpRequest - represents an HTTP request value
+// ============================================================================
+
+/// An HTTP request value.
+#[derive(Clone, Debug)]
+pub struct HttpRequest {
+    /// HTTP method (e.g., "GET", "POST").
+    pub method: String,
+    /// Request URL.
+    pub url: String,
+    /// Request headers (heap-allocated map).
+    pub headers: HeapPtr,
+    /// Request body (None for GET, JSON string for POST).
+    pub body: Option<String>,
+}
+
+// ============================================================================
 // PromptAst - represents a structured prompt (recursive tree)
 // ============================================================================
 
@@ -637,6 +663,7 @@ pub enum ObjectType {
     Resource,
     PromptAst,
     PrimitiveClient,
+    HttpRequest,
 }
 
 impl ObjectType {
@@ -654,6 +681,7 @@ impl ObjectType {
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::PrimitiveClient(_) => Self::PrimitiveClient,
+            Object::HttpRequest(_) => Self::HttpRequest,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -691,6 +719,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::PrimitiveClient => write!(f, "primitive_client"),
+            ObjectType::HttpRequest => write!(f, "http_request"),
         }
     }
 }

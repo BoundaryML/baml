@@ -56,6 +56,9 @@ pub const PROMPT_AST: i64 = 12;
 /// `PrimitiveClient` type tag.
 pub const PRIMITIVE_CLIENT: i64 = 13;
 
+/// `HttpRequest` type tag.
+pub const HTTP_REQUEST: i64 = 14;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 

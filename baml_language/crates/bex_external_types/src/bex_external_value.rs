@@ -165,6 +165,22 @@ pub enum BexExternalValue {
 
     /// Primitive LLM client.
     PrimitiveClient(PrimitiveClientValue),
+
+    /// HTTP request.
+    HttpRequest(HttpRequestValue),
+}
+
+/// A fully-owned HTTP request value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HttpRequestValue {
+    /// HTTP method (e.g., "GET", "POST").
+    pub method: String,
+    /// Request URL.
+    pub url: String,
+    /// Request headers.
+    pub headers: indexmap::IndexMap<String, String>,
+    /// Request body (None for GET requests, JSON string for POST).
+    pub body: Option<String>,
 }
 
 /// Extracted PrimitiveClient data (no HeapPtr, fully owned).
@@ -232,6 +248,7 @@ impl BexExternalValue {
             },
             BexExternalValue::PromptAst(_) => "prompt_ast",
             BexExternalValue::PrimitiveClient(_) => "primitive_client",
+            BexExternalValue::HttpRequest(_) => "http_request",
         }
     }
 }
