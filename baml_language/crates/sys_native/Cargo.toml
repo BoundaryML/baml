@@ -13,7 +13,7 @@ bex_vm_types = { workspace = true }
 sys_resource_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"] }
+reqwest = { workspace = true, features = [ "rustls" ] }
 tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util" ] }
 
 [lints]

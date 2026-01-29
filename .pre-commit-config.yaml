@@ -60,7 +60,7 @@ repos:
 
       - id: cargo-stow
         name: cargo stow
-        entry: bash -c 'cd baml_language && cargo run -p cargo-stow -- stow --check'
+        entry: bash -c 'cd baml_language && cargo run -p cargo-stow -- stow --fix'
         language: system
         pass_filenames: false
         files: ^baml_language/(Cargo\.toml|stow\.toml|crates/.*/Cargo\.toml|crates/tools_stow/)

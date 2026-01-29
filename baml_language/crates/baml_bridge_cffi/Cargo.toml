@@ -8,10 +8,9 @@ license.workspace = true
 
 [lib]
 name = "baml_cffi"
-crate-type = ["cdylib"]
+crate-type = [ "cdylib" ]
 
 [dependencies]
-# Internal workspace dependencies
 baml_base = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_compiler_hir = { workspace = true }
@@ -23,8 +22,6 @@ bex_external_types = { workspace = true }
 bex_program = { workspace = true }
 sys_native = { workspace = true }
 sys_types = { workspace = true }
-
-# External dependencies
 futures = { workspace = true }
 indexmap = { workspace = true }
 libc = { workspace = true }
@@ -33,7 +30,7 @@ prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [build-dependencies]
 cbindgen = { workspace = true }
