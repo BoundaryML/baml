@@ -14,14 +14,14 @@
 ///
 /// @param function_name The name of the LLM function to render
 /// @param args The arguments to pass to the template
+/// @param client_index Which client in the chain to use (for fallback/retry) - currently ignored
 /// @return The rendered prompt AST
 // Note: args should be map<string, any> but BAML doesn't have 'any' type yet.
-// Using map<string, string> as a placeholder - the actual type is determined at runtime.
-function render_prompt(function_name: string, args: map<string, string>) -> PromptAst {
+// Using int as a placeholder - the actual type is determined at runtime.
+function render_prompt(function_name: string, args: int, client_index: int) -> PromptAst {
     let jinja_string = baml.llm.get_jinja_template(function_name);
-
-    let resolve_client_fn = baml.llm.get_client_function(function_name);
-    let primitive_client = resolve_client_fn();
-
-    return primitive_client.render_prompt(jinja_string, args);
+    let resolve_fn = baml.llm.get_client_function(function_name);
+    let primitive_client = resolve_fn();
+    let prompt = primitive_client.render_prompt(jinja_string, args);
+    return prompt;
 }

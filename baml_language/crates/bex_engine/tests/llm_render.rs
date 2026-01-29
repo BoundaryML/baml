@@ -353,7 +353,7 @@ function test_render() -> int {
     // Pass an empty map for args - the Greet function expects a 'name' param
     // but for this test we just want to verify the render_prompt flow works
     let args = {};
-    let result = baml.llm.render_prompt("Greet", args);
+    let result = baml.llm.render_prompt("Greet", args, 0);
     // If we got here without crashing, the call worked
     42
 }
@@ -405,7 +405,7 @@ function Greet(name: string) -> string {
 // PromptAst is now a visible builtin type
 function get_prompt() -> PromptAst {
     let args = { "name": "World" };
-    baml.llm.render_prompt("Greet", args)
+    baml.llm.render_prompt("Greet", args, 0)
 }
 "##;
 
