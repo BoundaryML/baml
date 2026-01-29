@@ -1769,8 +1769,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 all_args.extend(self.lower_args(args, body));
 
                 let callee = Operand::Constant(Constant::Function(Name::new(def.path)));
-                if def.is_external {
-                    self.emit_external_call(callee, all_args, dest);
+                if def.is_sys_op {
+                    self.emit_sys_op_call(callee, all_args, dest);
                 } else {
                     self.emit_call(callee, all_args, dest);
                 }
@@ -1799,19 +1799,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
         // Regular function call (not a method)
         // Check if this is an external builtin function (by path)
-        let is_external = Self::is_external_builtin_path(callee_expr, body);
+        let is_sys_op = Self::is_sys_op_builtin_path(callee_expr, body);
         let callee_operand = self.lower_to_operand(callee, body);
         let arg_operands = self.lower_args(args, body);
 
-        if is_external {
-            self.emit_external_call(callee_operand, arg_operands, dest);
+        if is_sys_op {
+            self.emit_sys_op_call(callee_operand, arg_operands, dest);
         } else {
             self.emit_call(callee_operand, arg_operands, dest);
         }
     }
 
-    /// Check if a callee expression refers to an external builtin function.
-    fn is_external_builtin_path(callee_expr: &Expr, body: &ExprBody) -> bool {
+    /// Check if a callee expression refers to a `sys_op` builtin function.
+    fn is_sys_op_builtin_path(callee_expr: &Expr, body: &ExprBody) -> bool {
         // Extract the path from the callee expression
         let path = match callee_expr {
             Expr::Var(name) => name.to_string(),
@@ -1847,9 +1847,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             _ => return false,
         };
 
-        // Look up the builtin by path and check if it's external
+        // Look up the builtin by path and check if it's a sys_op
         baml_compiler_tir::builtins::lookup_builtin_by_path(&path)
-            .map(|def| def.is_external)
+            .map(|def| def.is_sys_op)
             .unwrap_or(false)
     }
 
@@ -1953,9 +1953,15 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     }
 
     /// Extract class name from a Ty.
+    ///
+    /// For builtin classes, returns the full path (e.g., "baml.http.Response").
+    /// For user classes, returns just the name (e.g., "`MyClass`").
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::TypeAlias(fqn) | Ty::Class(fqn) => Some(fqn.name.to_string()),
+            Ty::TypeAlias(fqn) | Ty::Class(fqn) => {
+                // Use display() to get full path for builtins, local name for user classes
+                Some(fqn.display())
+            }
             _ => None,
         }
     }
@@ -1993,7 +1999,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// This emits:
     /// 1. `DispatchFuture`: Start the async operation, get a future handle
     /// 2. Await: Wait for the future and retrieve the result
-    fn emit_external_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
+    fn emit_sys_op_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
         // Create a temp to hold the future handle
         // Future handles are opaque to the VM - we use Unknown type
         let future_local = self.builder.temp(Ty::Unknown);
@@ -2052,7 +2058,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
             }
-            baml_compiler_vir::Ty::Builtin(path) => Ty::Builtin(path.clone()),
         }
     }
 }

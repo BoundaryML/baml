@@ -39,7 +39,7 @@ pub struct ResponseResource {
 pub enum RegistryEntry {
     File(FileResource),
     Socket(SocketResource),
-    HttpResponse(ResponseResource),
+    Response(ResponseResource),
 }
 
 /// Global resource registry.
@@ -139,11 +139,11 @@ impl ResourceRegistry {
         self.entries
             .write()
             .unwrap()
-            .insert(key, RegistryEntry::HttpResponse(resource));
+            .insert(key, RegistryEntry::Response(resource));
 
         ResourceHandle::new(
             key,
-            ResourceType::HttpResponse,
+            ResourceType::Response,
             url,
             Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
         )
@@ -156,9 +156,7 @@ impl ResourceRegistry {
     ) -> Option<(u16, HashMap<String, String>, String)> {
         let entries = self.entries.read().unwrap();
         match entries.get(&key) {
-            Some(RegistryEntry::HttpResponse(r)) => {
-                Some((r.status, r.headers.clone(), r.url.clone()))
-            }
+            Some(RegistryEntry::Response(r)) => Some((r.status, r.headers.clone(), r.url.clone())),
             _ => None,
         }
     }
@@ -170,7 +168,7 @@ impl ResourceRegistry {
     ) -> Option<Arc<TokioMutex<Option<reqwest::Response>>>> {
         let entries = self.entries.read().unwrap();
         match entries.get(&key) {
-            Some(RegistryEntry::HttpResponse(r)) => Some(r.response.clone()),
+            Some(RegistryEntry::Response(r)) => Some(r.response.clone()),
             _ => None,
         }
     }

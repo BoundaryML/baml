@@ -90,12 +90,6 @@ pub enum Ty {
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
     WatchAccessor(Box<Ty>),
-
-    /// Builtin type - matches exactly by path.
-    /// E.g., `Builtin("baml.fs.File")` for file handles.
-    /// These are types defined in the builtins that users can use
-    /// but whose implementation is in the engine (resource-backed).
-    Builtin(std::string::String),
 }
 
 impl Ty {
@@ -228,7 +222,6 @@ impl fmt::Display for Ty {
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
-            Ty::Builtin(path) => write!(f, "{path}"),
         }
     }
 }

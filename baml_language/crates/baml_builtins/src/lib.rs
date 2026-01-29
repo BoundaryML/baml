@@ -36,6 +36,28 @@ pub enum TypePattern {
     Builtin(&'static str),
 }
 
+/// A field in a builtin type definition.
+#[derive(Debug, Clone)]
+pub struct BuiltinField {
+    /// Field name (e.g., "_handle", "`status_code`").
+    pub name: &'static str,
+    /// Field type pattern. None for private fields (not exposed to type checker).
+    pub ty: Option<TypePattern>,
+    /// Whether this field is private (not visible to BAML code).
+    pub is_private: bool,
+    /// Field index in the runtime instance layout.
+    pub index: usize,
+}
+
+/// A builtin type definition (struct with fields).
+#[derive(Debug, Clone)]
+pub struct BuiltinTypeDefinition {
+    /// Full path (e.g., "baml.http.Response").
+    pub path: &'static str,
+    /// All fields (public and private) in runtime order.
+    pub fields: Vec<BuiltinField>,
+}
+
 impl TypePattern {
     #[must_use]
     pub fn optional(self) -> Self {
@@ -64,9 +86,9 @@ pub struct BuiltinSignature {
     /// Return type.
     pub returns: TypePattern,
 
-    /// Whether this is an external function (runs async outside VM).
-    /// External functions use DispatchFuture/Await instead of Call.
-    pub is_external: bool,
+    /// Whether this is a `sys_op` function (runs async outside VM).
+    /// `Sys_op` functions use DispatchFuture/Await instead of Call.
+    pub is_sys_op: bool,
 }
 
 impl BuiltinSignature {
@@ -161,13 +183,14 @@ macro_rules! with_builtins {
                 mod fs {
                     #[builtin]
                     struct File {
-                        #[external]
+                        private _handle: ResourceHandle,
+                        #[sys_op]
                         fn read(self: File) -> String;
-                        #[external]
+                        #[sys_op]
                         fn close(self: File);
                     }
 
-                    #[external]
+                    #[sys_op]
                     fn open(path: String) -> File;
                 }
 
@@ -176,7 +199,7 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod sys {
                     /// Execute a shell command and return stdout.
-                    #[external]
+                    #[sys_op]
                     fn shell(command: String) -> String;
                 }
 
@@ -186,16 +209,17 @@ macro_rules! with_builtins {
                 mod net {
                     #[builtin]
                     struct Socket {
+                        private _handle: ResourceHandle,
                         /// Read data from the socket as a string.
-                        #[external]
+                        #[sys_op]
                         fn read(self: Socket) -> String;
                         /// Close the socket.
-                        #[external]
+                        #[sys_op]
                         fn close(self: Socket);
                     }
 
                     /// Connect to a TCP address (host:port).
-                    #[external]
+                    #[sys_op]
                     fn connect(addr: String) -> Socket;
                 }
 
@@ -205,25 +229,20 @@ macro_rules! with_builtins {
                 mod http {
                     #[builtin]
                     struct Response {
+                        private _handle: ResourceHandle,
+                        status_code: i64,
+                        headers: Map<String, String>,
+                        url: String,
                         /// Get response body as text (consumes body).
-                        #[external]
+                        #[sys_op]
                         fn text(self: Response) -> String;
-                        /// Get HTTP status code.
-                        #[external]
-                        fn status(self: Response) -> i64;
                         /// Check if status is 2xx.
-                        #[external]
+                        #[sys_op]
                         fn ok(self: Response) -> bool;
-                        /// Get request URL (may differ if redirected).
-                        #[external]
-                        fn url(self: Response) -> String;
-                        /// Get response headers.
-                        #[external]
-                        fn headers(self: Response) -> Map<String, String>;
                     }
 
                     /// Fetch a URL via HTTP GET.
-                    #[external]
+                    #[sys_op]
                     fn fetch(url: String) -> Response;
                 }
 
@@ -241,17 +260,23 @@ macro_rules! with_builtins {
                     struct PrimitiveClient {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
-                        #[external]
+                        #[sys_op]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+
+                        /// Specialize a prompt for this client's provider.
+                        /// Applies provider-specific transformations (message merging, system prompt
+                        /// consolidation, metadata filtering).
+                        #[sys_op]
+                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
                     }
 
                     /// Get the Jinja template for an LLM function.
-                    #[external]
+                    #[sys_op]
                     fn get_jinja_template(function_name: String) -> String;
 
                     /// Build a PrimitiveClient from evaluated options.
                     /// Called after options have been evaluated by bytecode.
-                    #[external]
+                    #[sys_op]
                     fn build_primitive_client(
                         name: String,
                         provider: String,
@@ -262,7 +287,7 @@ macro_rules! with_builtins {
 
                     /// Get the client resolve function for an LLM function.
                     /// Returns a function reference that, when called, returns a PrimitiveClient.
-                    #[external]
+                    #[sys_op]
                     fn get_client_function(function_name: String) -> FunctionRef;
                 }
             }
@@ -285,6 +310,22 @@ with_builtins!(baml_builtins_macros::define_builtins);
 /// Get all built-in function signatures.
 pub fn builtins() -> &'static [BuiltinSignature] {
     &BUILTINS
+}
+
+/// Get all built-in type definitions.
+pub fn builtin_types() -> &'static [BuiltinTypeDefinition] {
+    &BUILTIN_TYPES
+}
+
+/// Find a builtin type by path.
+pub fn find_builtin_type(path: &str) -> Option<&'static BuiltinTypeDefinition> {
+    builtin_types().iter().find(|td| td.path == path)
+}
+
+/// Find a field in a builtin type.
+pub fn find_field(type_path: &str, field_name: &str) -> Option<&'static BuiltinField> {
+    let type_def = find_builtin_type(type_path)?;
+    type_def.fields.iter().find(|f| f.name == field_name)
 }
 
 /// Find methods by method name.
@@ -409,7 +450,7 @@ mod tests {
         // The baml.llm module contains LLM-related builtins
         let render_prompt = find_builtin_by_path("baml.llm.PrimitiveClient.render_prompt");
         assert!(render_prompt.is_some());
-        assert!(render_prompt.unwrap().is_external);
+        assert!(render_prompt.unwrap().is_sys_op);
 
         let get_client_fn = find_builtin_by_path("baml.llm.get_client_function");
         assert!(
@@ -417,15 +458,15 @@ mod tests {
             "get_client_function should be found"
         );
         assert!(
-            get_client_fn.unwrap().is_external,
-            "get_client_function should be external"
+            get_client_fn.unwrap().is_sys_op,
+            "get_client_function should be sys_op"
         );
 
         let get_jinja = find_builtin_by_path("baml.llm.get_jinja_template");
         assert!(get_jinja.is_some(), "get_jinja_template should be found");
         assert!(
-            get_jinja.unwrap().is_external,
-            "get_jinja_template should be external"
+            get_jinja.unwrap().is_sys_op,
+            "get_jinja_template should be sys_op"
         );
 
         // Other builtins in the same parent module are also visible
@@ -474,6 +515,53 @@ mod tests {
         assert_eq!(normalize_baml_prefix("ba"), "ba"); // incomplete
         assert_eq!(normalize_baml_prefix("bam"), "bam"); // incomplete
         assert_eq!(normalize_baml_prefix("banal"), "banal"); // different word
+    }
+
+    #[test]
+    fn test_builtin_types() {
+        let types = builtin_types();
+        // Should have at least Response, File, Socket
+        assert!(
+            types.len() >= 3,
+            "Expected at least 3 builtin types, got {}",
+            types.len()
+        );
+
+        // Find Response type
+        let response = find_builtin_type("baml.http.Response");
+        assert!(response.is_some(), "Response type should exist");
+        let response = response.unwrap();
+
+        // Response should have fields: _handle (private), status_code, headers, url
+        assert!(
+            response.fields.len() >= 4,
+            "Response should have at least 4 fields"
+        );
+
+        // Check _handle is private
+        let handle_field = response.fields.iter().find(|f| f.name == "_handle");
+        assert!(handle_field.is_some(), "_handle field should exist");
+        assert!(
+            handle_field.unwrap().is_private,
+            "_handle should be private"
+        );
+        assert!(
+            handle_field.unwrap().ty.is_none(),
+            "private field should have no public type"
+        );
+
+        // Check status_code is public
+        let status_field = find_field("baml.http.Response", "status_code");
+        assert!(status_field.is_some(), "status_code field should exist");
+        let status_field = status_field.unwrap();
+        assert!(!status_field.is_private, "status_code should be public");
+        assert!(matches!(status_field.ty, Some(TypePattern::Int)));
+
+        // Check headers field type is Map<String, String>
+        let headers_field = find_field("baml.http.Response", "headers");
+        assert!(headers_field.is_some(), "headers field should exist");
+        let headers_field = headers_field.unwrap();
+        assert!(matches!(headers_field.ty, Some(TypePattern::Map { .. })));
     }
 }
 

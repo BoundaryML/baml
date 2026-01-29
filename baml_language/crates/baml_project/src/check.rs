@@ -16,8 +16,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
-    self, FunctionBody, ItemId, file_items, file_lowering, function_body, function_signature,
-    function_signature_source_map,
+    self, FunctionBody, HirSourceMap, ItemId, file_items, file_lowering, function_body,
+    function_signature, function_signature_source_map, project_type_item_spans,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -56,6 +56,9 @@ pub fn collect_diagnostics(
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
+    // Get cached type item spans for error location resolution
+    let type_spans = project_type_item_spans(db, project);
+
     // 1. Collect parse errors
     for source_file in source_files {
         let parse_errors = baml_compiler_parser::parse_errors(db, *source_file);
@@ -81,10 +84,34 @@ pub fn collect_diagnostics(
         diagnostics.push(error.to_diagnostic());
     }
 
-    // 4. Collect type errors from function inference
-    let globals = typing_context(db, project).functions(db).clone();
+    // 3.5. Collect TIR validation errors (cycle detection)
+    // This requires resolved types, so it happens after HIR validation but uses TIR data
     let class_fields = class_field_types(db, project).classes(db).clone();
     let type_aliases_map = type_aliases(db, project).aliases(db).clone();
+
+    let alias_cycle_errors = baml_compiler_tir::validate_type_alias_cycles(&type_aliases_map);
+    for error in &alias_cycle_errors {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                // Cycle errors are type-level only, use empty source map
+                loc.to_span(&HirSourceMap::default(), &type_spans)
+            }),
+        );
+    }
+
+    let class_cycle_errors =
+        baml_compiler_tir::validate_class_cycles(&class_fields, &type_aliases_map);
+    for error in &class_cycle_errors {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                // Cycle errors are type-level only, use empty source map
+                loc.to_span(&HirSourceMap::default(), &type_spans)
+            }),
+        );
+    }
+
+    // 4. Collect type errors from function inference
+    let globals = typing_context(db, project).functions(db).clone();
     let enum_variants_struct = enum_variants(db, project);
     let enum_variants_map = enum_variants_struct.enums(db).clone();
 
@@ -119,11 +146,9 @@ pub fn collect_diagnostics(
 
                     // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
                     for type_error in &inference_result.errors {
-                        diagnostics.push(
-                            type_error.to_diagnostic(ToString::to_string, |loc| {
-                                loc.to_span(hir_source_map)
-                            }),
-                        );
+                        diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
+                            loc.to_span(hir_source_map, &type_spans)
+                        }));
                     }
                 }
             }

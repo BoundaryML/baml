@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub enum ResourceType {
     File,
     Socket,
-    HttpResponse,
+    Response,
 }
 
 /// Trait for releasing resource handles back to the registry.
@@ -122,7 +122,7 @@ impl std::fmt::Display for ResourceHandle {
         match self.kind() {
             ResourceType::File => write!(f, "file:{}", self.display_name()),
             ResourceType::Socket => write!(f, "socket:{}", self.display_name()),
-            ResourceType::HttpResponse => write!(f, "http-response:{}", self.display_name()),
+            ResourceType::Response => write!(f, "http-response:{}", self.display_name()),
         }
     }
 }

@@ -1,34 +1,154 @@
 //! HTTP operations.
+//!
+//! # Safety
+//! This module uses `unsafe` for GC-protected heap access. All unsafe blocks
+//! are guarded by `with_gc_protection` which ensures heap stability.
+#![allow(
+    unsafe_code,
+    clippy::needless_pass_by_value,
+    clippy::match_wildcard_for_single_variants
+)]
 
-use std::{collections::HashMap, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
-use bex_external_types::BexExternalValue;
-use indexmap::IndexMap;
-use sys_types::{OpError, SysOpResult};
+use bex_heap::BexHeap;
+use bex_vm_types::{Object, Value};
+use sys_resource_types::ResourceHandle;
+use sys_types::{BexExternalValue, BexValue, OpError, SysOpResult};
 
 use crate::registry::REGISTRY;
 
 /// Shared HTTP client with connection pooling.
 pub(crate) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
+// ============================================================================
+// Wrapper Types for GC-Safe Instance Access
+// ============================================================================
+
+/// Wrapper for Response instance that provides GC-safe access to fields.
+struct ResponseRef {
+    /// The resource handle extracted from the `_handle` field.
+    resource_handle: ResourceHandle,
+}
+
+impl ResponseRef {
+    /// Extract a `ResponseRef` from a `BexValue` that should be a Response instance.
+    ///
+    /// For opaque handles (heap objects), uses GC-protected access.
+    /// For external values (already copied), extracts directly.
+    fn from_value(heap: &Arc<BexHeap>, value: &BexValue) -> Result<Self, OpError> {
+        match value {
+            BexValue::Opaque(handle) => {
+                // Access heap object with GC protection
+                heap.with_gc_protection(|protected| {
+                    let ptr = protected
+                        .resolve_handle(handle.slab_key())
+                        .ok_or_else(|| OpError::Other("invalid handle".into()))?;
+
+                    // SAFETY: GC protection held, pointer is valid
+                    let obj = unsafe { ptr.get() };
+                    let Object::Instance(inst) = obj else {
+                        return Err(OpError::TypeError {
+                            expected: "Response instance",
+                            actual: format!("{obj:?}"),
+                        });
+                    };
+
+                    // Get class to verify type and find field index
+                    let Object::Class(class) = (unsafe { inst.class.get() }) else {
+                        return Err(OpError::Other("bad class ptr".into()));
+                    };
+
+                    if class.name != "baml.http.Response" {
+                        return Err(OpError::TypeError {
+                            expected: "Response instance",
+                            actual: format!("Instance of {}", class.name),
+                        });
+                    }
+
+                    // Find _handle field
+                    let idx = class
+                        .field_names
+                        .iter()
+                        .position(|n| n == "_handle")
+                        .ok_or_else(|| OpError::Other("missing _handle field".into()))?;
+
+                    // Extract resource handle from _handle field
+                    match inst.fields.get(idx) {
+                        Some(Value::Object(h)) => match unsafe { h.get() } {
+                            Object::Resource(rh) => Ok(Self {
+                                resource_handle: rh.clone(),
+                            }),
+                            other => Err(OpError::TypeError {
+                                expected: "Resource",
+                                actual: format!("{other:?}"),
+                            }),
+                        },
+                        other => Err(OpError::Other(format!("invalid _handle field: {other:?}"))),
+                    }
+                })
+            }
+            BexValue::External(BexExternalValue::Instance { class_name, fields }) => {
+                // Already copied out - extract directly
+                if class_name != "baml.http.Response" {
+                    return Err(OpError::TypeError {
+                        expected: "Response instance",
+                        actual: format!("Instance of {class_name}"),
+                    });
+                }
+                match fields.get("_handle") {
+                    Some(BexExternalValue::Resource(h)) => Ok(Self {
+                        resource_handle: h.clone(),
+                    }),
+                    _ => Err(OpError::TypeError {
+                        expected: "Resource in _handle field",
+                        actual: "missing or invalid _handle".to_string(),
+                    }),
+                }
+            }
+            other => Err(OpError::TypeError {
+                expected: "Response instance",
+                actual: format!("{other:?}"),
+            }),
+        }
+    }
+
+    /// Get the registry key for the underlying response.
+    fn key(&self) -> usize {
+        self.resource_handle.key()
+    }
+}
+
+// ============================================================================
+// HTTP Operations
+// ============================================================================
+
 /// Fetches a URL and returns a Response resource.
 ///
 /// Signature: `fn fetch(url: String) -> Response`
-pub(crate) fn fetch(args: Vec<BexExternalValue>) -> SysOpResult {
-    SysOpResult::Async(Box::pin(fetch_async(args)))
+pub(crate) fn fetch(_heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult {
+    // Clone the string argument for the async block
+    let url = match extract_string(&args.first().cloned().unwrap_or_default()) {
+        Ok(u) => u,
+        Err(e) => return SysOpResult::Ready(Err(e)),
+    };
+    SysOpResult::Async(Box::pin(fetch_async(url)))
 }
 
-async fn fetch_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let url = match args.into_iter().next() {
-        Some(BexExternalValue::String(s)) => s,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "string URL",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
+fn extract_string(value: &BexValue) -> Result<String, OpError> {
+    match value {
+        BexValue::External(BexExternalValue::String(s)) => Ok(s.clone()),
+        other => Err(OpError::TypeError {
+            expected: "string URL",
+            actual: format!("{other:?}"),
+        }),
+    }
+}
 
+async fn fetch_async(url: String) -> Result<BexExternalValue, OpError> {
     let response = HTTP_CLIENT
         .get(&url)
         .send()
@@ -44,30 +164,38 @@ async fn fetch_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, Op
         .collect();
     let final_url = response.url().to_string();
 
-    let handle = REGISTRY.register_http_response(response, status, headers, final_url);
-    Ok(BexExternalValue::Resource(handle))
+    let handle =
+        REGISTRY.register_http_response(response, status, headers.clone(), final_url.clone());
+    Ok(bex_external_types::builtins::new_http_response(
+        handle, status, headers, final_url,
+    ))
 }
 
 /// Gets the response body as text (consumes the body).
 ///
 /// Signature: `fn text(self: Response) -> String`
-pub(crate) fn text(args: Vec<BexExternalValue>) -> SysOpResult {
-    SysOpResult::Async(Box::pin(text_async(args)))
-}
-
-async fn text_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let handle = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(h)) => h,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "Response resource",
-                actual: format!("{other:?}"),
-            });
+pub(crate) fn text(heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult {
+    // Extract key synchronously with GC protection, then run async
+    let response_ref = match args.first() {
+        Some(value) => match ResponseRef::from_value(&heap, value) {
+            Ok(r) => r,
+            Err(e) => return SysOpResult::Ready(Err(e)),
+        },
+        None => {
+            return SysOpResult::Ready(Err(OpError::TypeError {
+                expected: "Response instance",
+                actual: "no arguments".to_string(),
+            }));
         }
     };
 
+    let key = response_ref.key();
+    SysOpResult::Async(Box::pin(text_async(key)))
+}
+
+async fn text_async(key: usize) -> Result<BexExternalValue, OpError> {
     let response_mutex = REGISTRY
-        .get_http_response_body(handle.key())
+        .get_http_response_body(key)
         .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
 
     let mut guard = response_mutex.lock().await;
@@ -83,115 +211,28 @@ async fn text_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpE
     Ok(BexExternalValue::String(text))
 }
 
-/// Gets the response status code.
-///
-/// Signature: `fn status(self: Response) -> i64`
-pub(crate) fn status(args: Vec<BexExternalValue>) -> SysOpResult {
-    let result = status_sync(args);
-    SysOpResult::Ready(result)
-}
-
-fn status_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let handle = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(h)) => h,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "Response resource",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
-
-    let (status, _, _) = REGISTRY
-        .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
-
-    Ok(BexExternalValue::Int(i64::from(status)))
-}
-
 /// Checks if the response status is OK (2xx).
 ///
 /// Signature: `fn ok(self: Response) -> bool`
-pub(crate) fn ok(args: Vec<BexExternalValue>) -> SysOpResult {
-    let result = ok_sync(args);
+pub(crate) fn ok(heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult {
+    let result = ok_sync(&heap, args);
     SysOpResult::Ready(result)
 }
 
-fn ok_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let handle = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(h)) => h,
-        other => {
+fn ok_sync(heap: &Arc<BexHeap>, args: &[BexValue]) -> Result<BexExternalValue, OpError> {
+    let response_ref = match args.first() {
+        Some(value) => ResponseRef::from_value(heap, value)?,
+        None => {
             return Err(OpError::TypeError {
-                expected: "Response resource",
-                actual: format!("{other:?}"),
+                expected: "Response instance",
+                actual: "no arguments".to_string(),
             });
         }
     };
 
     let (status, _, _) = REGISTRY
-        .get_http_response_metadata(handle.key())
+        .get_http_response_metadata(response_ref.key())
         .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
 
     Ok(BexExternalValue::Bool((200..300).contains(&status)))
-}
-
-/// Gets the request URL (may differ from original if redirected).
-///
-/// Signature: `fn url(self: Response) -> String`
-pub(crate) fn url(args: Vec<BexExternalValue>) -> SysOpResult {
-    let result = url_sync(args);
-    SysOpResult::Ready(result)
-}
-
-fn url_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let handle = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(h)) => h,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "Response resource",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
-
-    let (_, _, url) = REGISTRY
-        .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
-
-    Ok(BexExternalValue::String(url))
-}
-
-/// Gets the response headers as a map.
-///
-/// Signature: `fn headers(self: Response) -> Map<String, String>`
-pub(crate) fn headers(args: Vec<BexExternalValue>) -> SysOpResult {
-    let result = headers_sync(args);
-    SysOpResult::Ready(result)
-}
-
-fn headers_sync(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let handle = match args.into_iter().next() {
-        Some(BexExternalValue::Resource(h)) => h,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "Response resource",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
-
-    let (_, headers, _) = REGISTRY
-        .get_http_response_metadata(handle.key())
-        .ok_or_else(|| OpError::Other("Response handle is invalid".into()))?;
-
-    let entries: IndexMap<String, BexExternalValue> = headers
-        .into_iter()
-        .map(|(k, v)| (k, BexExternalValue::String(v)))
-        .collect();
-
-    Ok(BexExternalValue::Map {
-        key_type: bex_external_types::Ty::String,
-        value_type: bex_external_types::Ty::String,
-        entries,
-    })
 }

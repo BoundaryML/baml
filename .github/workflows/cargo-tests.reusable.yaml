@@ -166,8 +166,7 @@ jobs:
 
       - name: "Build for WASM"
         run: |
-          cargo build --workspace --target wasm32-unknown-unknown --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --no-default-features
-          cargo build --workspace --target wasm32-unknown-unknown --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --no-default-features --release
+          cargo build --workspace --target wasm32-unknown-unknown --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --exclude baml_bridge_cffi --no-default-features --release
         working-directory: baml_language
 
       - name: "Check WASM size"

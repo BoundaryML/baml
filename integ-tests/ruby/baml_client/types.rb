@@ -207,7 +207,7 @@ module BamlClient
   end
 
   # #########################################################################
-  # Generated classes (109)
+  # Generated classes (108)
   # #########################################################################
 
 
@@ -391,14 +391,6 @@ module BamlClient
   class DummyJsonTodo < T::Struct
       include Baml::Sorbet::Struct
       const :id, Integer
-      const :todo, String
-      const :completed, T::Boolean
-      const :userId, Integer
-  end
-
-
-  class DummyJsonTodoUpdate < T::Struct
-      include Baml::Sorbet::Struct
       const :todo, String
       const :completed, T::Boolean
       const :userId, Integer

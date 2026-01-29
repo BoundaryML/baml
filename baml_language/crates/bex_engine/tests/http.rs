@@ -1,4 +1,4 @@
-//! Tests for HTTP operations (baml.http.fetch, Response methods).
+//! Tests for HTTP operations (baml.http.fetch, `Response` methods).
 
 mod common;
 
@@ -41,7 +41,7 @@ async fn http_fetch_and_text() -> anyhow::Result<()> {
     .await
 }
 
-/// Test status code access.
+/// Test status code access (now a field, not a method).
 #[tokio::test]
 async fn http_response_status() -> anyhow::Result<()> {
     let mock_server = MockServer::start().await;
@@ -56,7 +56,7 @@ async fn http_response_status() -> anyhow::Result<()> {
         r#"
         function main() -> int {{
             let response = baml.http.fetch("{}/status");
-            response.status()
+            response.status_code
         }}
     "#,
         mock_server.uri()
@@ -134,7 +134,7 @@ async fn http_response_ok_false() -> anyhow::Result<()> {
     .await
 }
 
-/// Test `url()` returns the request URL.
+/// Test `url` field returns the request URL.
 #[tokio::test]
 async fn http_response_url() -> anyhow::Result<()> {
     let mock_server = MockServer::start().await;
@@ -150,7 +150,7 @@ async fn http_response_url() -> anyhow::Result<()> {
         r#"
         function main() -> string {{
             let response = baml.http.fetch("{}/endpoint");
-            response.url()
+            response.url
         }}
     "#,
         mock_server.uri()

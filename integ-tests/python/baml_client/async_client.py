@@ -3652,6 +3652,21 @@ class BamlAsyncClient:
                 "vid": vid,
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def AllowedOptionalsExprFunc(self, optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> types.OptionalListAndMap:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.AllowedOptionalsExprFunc(optionals=optionals,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="AllowedOptionalsExprFunc", args={
+                "optionals": optionals,
+            })
+            return typing.cast(types.OptionalListAndMap, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def AnotherTakedown(self, xs: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3682,6 +3697,21 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def AudioInputExprFunc(self, aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.AudioInputExprFunc(aud=aud,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="AudioInputExprFunc", args={
+                "aud": aud,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def BoolToIntWithIfElse(self, b: bool,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3772,66 +3802,156 @@ class BamlAsyncClient:
                 
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAs(self, url: str,
+    async def FnLiteralClassInputOutputExprFunc(self, input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
+    ) -> types.LiteralClassHello:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAs(url=url,
+            __stream__ = self.stream.FnLiteralClassInputOutputExprFunc(input=input,
                 baml_options=baml_options)
             return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAs", args={
-                "url": url,
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnLiteralClassInputOutputExprFunc", args={
+                "input": input,
             })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAsWithHttpPostRequest(self, 
+            return typing.cast(types.LiteralClassHello, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnLiteralUnionClassInputOutputExprFunc(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
         baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
+    ) -> typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAsWithHttpPostRequest(
+            __stream__ = self.stream.FnLiteralUnionClassInputOutputExprFunc(input=input,
                 baml_options=baml_options)
             return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-                
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnLiteralUnionClassInputOutputExprFunc", args={
+                "input": input,
             })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+            return typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnNamedArgsSingleStringOptionalExprFunc(self, myString: typing.Optional[str] = None,
         baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
+    ) -> str:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+            __stream__ = self.stream.FnNamedArgsSingleStringOptionalExprFunc(myString=myString,
                 baml_options=baml_options)
             return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-                
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnNamedArgsSingleStringOptionalExprFunc", args={
+                "myString": myString,
             })
-            return typing.cast(types.DummyJsonTodo, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def HomeEnvVarIsEmpty(self, 
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputBoolExprFunc(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.HomeEnvVarIsEmpty(
+            __stream__ = self.stream.FnOutputBoolExprFunc(input=input,
                 baml_options=baml_options)
             return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="HomeEnvVarIsEmpty", args={
-                
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputBoolExprFunc", args={
+                "input": input,
             })
             return typing.cast(bool, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputClassExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestOutputClass:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnOutputClassExprFunc(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputClassExprFunc", args={
+                "input": input,
+            })
+            return typing.cast(types.TestOutputClass, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputClassListExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing.List["types.TestOutputClass"]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnOutputClassListExprFunc(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputClassListExprFunc", args={
+                "input": input,
+            })
+            return typing.cast(typing.List["types.TestOutputClass"], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputClassNestedExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestClassNested:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnOutputClassNestedExprFunc(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputClassNestedExprFunc", args={
+                "input": input,
+            })
+            return typing.cast(types.TestClassNested, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputIntExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnOutputIntExprFunc(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputIntExprFunc", args={
+                "input": input,
+            })
+            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnOutputLiteralStringExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> typing_extensions.Literal['example output']:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnOutputLiteralStringExprFunc(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnOutputLiteralStringExprFunc", args={
+                "input": input,
+            })
+            return typing.cast(typing_extensions.Literal['example output'], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def FnTestNamedArgsSingleEnumExprFunc(self, myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.FnTestNamedArgsSingleEnumExprFunc(myArg=myArg,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="FnTestNamedArgsSingleEnumExprFunc", args={
+                "myArg": myArg,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def IsTargetWord(self, word: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
@@ -3907,6 +4027,36 @@ class BamlAsyncClient:
                 "value": value,
             })
             return typing.cast(bool, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def NullLiteralClassHelloExprFunc(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassForNullLiteral:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.NullLiteralClassHelloExprFunc(s=s,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="NullLiteralClassHelloExprFunc", args={
+                "s": s,
+            })
+            return typing.cast(types.ClassForNullLiteral, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def PdfInputExprFunc(self, doc: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.PdfInputExprFunc(doc=doc,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="PdfInputExprFunc", args={
+                "doc": doc,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnCategory(self, category: types.Category,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -3937,21 +4087,6 @@ class BamlAsyncClient:
                 "a": a,"b": b,
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.Image:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.ReturnImageFromUrl(url=url,
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnImageFromUrl", args={
-                "url": url,
-            })
-            return typing.cast(baml_py.Image, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def ReturnNumber(self, n: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -3994,21 +4129,6 @@ class BamlAsyncClient:
         else:
             # Original non-streaming code
             __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="ReturnOne", args={
-                
-            })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.SimpleWatchWithFilter(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="SimpleWatchWithFilter", args={
                 
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
@@ -4072,21 +4192,261 @@ class BamlAsyncClient:
                 "x": x,"y": y,
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def WorkflowWatch(self, 
+    async def TestFnNamedArgsLiteralBoolExprFunc(self, myBool: typing_extensions.Literal[True],
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> str:
         # Check if on_tick is provided
         if 'on_tick' in baml_options:
             # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.WorkflowWatch(
+            __stream__ = self.stream.TestFnNamedArgsLiteralBoolExprFunc(myBool=myBool,
                 baml_options=baml_options)
             return await __stream__.get_final_response()
         else:
             # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatch", args={
-                
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsLiteralBoolExprFunc", args={
+                "myBool": myBool,
             })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsLiteralIntExprFunc(self, myInt: typing_extensions.Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsLiteralIntExprFunc(myInt=myInt,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsLiteralIntExprFunc", args={
+                "myInt": myInt,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsLiteralStringExprFunc(self, myString: typing_extensions.Literal['My String'],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsLiteralStringExprFunc(myString=myString,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsLiteralStringExprFunc", args={
+                "myString": myString,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleBoolExprFunc(self, myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleBoolExprFunc(myBool=myBool,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleBoolExprFunc", args={
+                "myBool": myBool,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleClassExprFunc(self, myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleClassExprFunc(myArg=myArg,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleClassExprFunc", args={
+                "myArg": myArg,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleEnumListExprFunc(self, myArg: typing.List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleEnumListExprFunc(myArg=myArg,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleEnumListExprFunc", args={
+                "myArg": myArg,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleFloatExprFunc(self, myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleFloatExprFunc(myFloat=myFloat,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleFloatExprFunc", args={
+                "myFloat": myFloat,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleIntExprFunc(self, myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleIntExprFunc(myInt=myInt,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleIntExprFunc", args={
+                "myInt": myInt,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleMapStringToClassExprFunc(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, "types.StringToClassEntry"]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleMapStringToClassExprFunc(myMap=myMap,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", args={
+                "myMap": myMap,
+            })
+            return typing.cast(typing.Dict[str, "types.StringToClassEntry"], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleMapStringToMapExprFunc(self, myMap: typing.Dict[str, typing.Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.Dict[str, str]]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleMapStringToMapExprFunc(myMap=myMap,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", args={
+                "myMap": myMap,
+            })
+            return typing.cast(typing.Dict[str, typing.Dict[str, str]], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleMapStringToStringExprFunc(self, myMap: typing.Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, str]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleMapStringToStringExprFunc(myMap=myMap,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", args={
+                "myMap": myMap,
+            })
+            return typing.cast(typing.Dict[str, str], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleStringArrayExprFunc(self, myStringArray: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleStringArrayExprFunc(myStringArray=myStringArray,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleStringArrayExprFunc", args={
+                "myStringArray": myStringArray,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleStringExprFunc(self, myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleStringExprFunc(myString=myString,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleStringExprFunc", args={
+                "myString": myString,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestFnNamedArgsSingleStringListExprFunc(self, myArg: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> typing.List[str]:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestFnNamedArgsSingleStringListExprFunc(myArg=myArg,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestFnNamedArgsSingleStringListExprFunc", args={
+                "myArg": myArg,
+            })
+            return typing.cast(typing.List[str], __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestImageInputExprFunc(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestImageInputExprFunc(img=img,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestImageInputExprFunc", args={
+                "img": img,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestImageListInputExprFunc(self, imgs: typing.List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestImageListInputExprFunc(imgs=imgs,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestImageListInputExprFunc", args={
+                "imgs": imgs,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def VideoInputExprFunc(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.VideoInputExprFunc(vid=vid,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="VideoInputExprFunc", args={
+                "vid": vid,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> int:
@@ -4099,21 +4459,6 @@ class BamlAsyncClient:
         else:
             # Original non-streaming code
             __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatchChild", args={
-                
-            })
-            return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> int:
-        # Check if on_tick is provided
-        if 'on_tick' in baml_options:
-            # Use streaming internally when on_tick is provided
-            __stream__ = self.stream.WorkflowWatchWithFilter(
-                baml_options=baml_options)
-            return await __stream__.get_final_response()
-        else:
-            # Original non-streaming code
-            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="WorkflowWatchWithFilter", args={
                 
             })
             return typing.cast(int, __result__.cast_to(types, types, stream_types, False, __runtime__))
@@ -6982,6 +7327,18 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def AllowedOptionalsExprFunc(self, optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.OptionalListAndMap"], types.OptionalListAndMap]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="AllowedOptionalsExprFunc", args={
+            "optionals": optionals,
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.OptionalListAndMap"], types.OptionalListAndMap](
+          __result__,
+          lambda x: typing.cast(typing.Optional["stream_types.OptionalListAndMap"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.OptionalListAndMap, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def AnotherTakedown(self, xs: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
@@ -7004,6 +7361,18 @@ class BamlStreamClient:
           __result__,
           lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def AudioInputExprFunc(self, aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="AudioInputExprFunc", args={
+            "aud": aud,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def BoolToIntWithIfElse(self, b: bool,
@@ -7078,52 +7447,124 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def ExecFetchAs(self, url: str,
+    def FnLiteralClassInputOutputExprFunc(self, input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAs", args={
-            "url": url,
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.LiteralClassHello"], types.LiteralClassHello]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnLiteralClassInputOutputExprFunc", args={
+            "input": input,
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+        return baml_py.BamlStream[typing.Optional["stream_types.LiteralClassHello"], types.LiteralClassHello](
           __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional["stream_types.LiteralClassHello"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.LiteralClassHello, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def ExecFetchAsWithHttpPostRequest(self, 
+    def FnLiteralUnionClassInputOutputExprFunc(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
+    ) -> baml_py.BamlStream[typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]], typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnLiteralUnionClassInputOutputExprFunc", args={
+            "input": input,
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+        return baml_py.BamlStream[typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]], typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]](
           __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+    def FnNamedArgsSingleStringOptionalExprFunc(self, myString: typing.Optional[str] = None,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnNamedArgsSingleStringOptionalExprFunc", args={
+            "myString": myString,
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.DummyJsonTodo"], types.DummyJsonTodo](
+        return baml_py.BamlStream[typing.Optional[str], str](
           __result__,
-          lambda x: typing.cast(typing.Optional["stream_types.DummyJsonTodo"], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(types.DummyJsonTodo, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def HomeEnvVarIsEmpty(self, 
+    def FnOutputBoolExprFunc(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[bool], bool]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="HomeEnvVarIsEmpty", args={
-            
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputBoolExprFunc", args={
+            "input": input,
         })
         return baml_py.BamlStream[typing.Optional[bool], bool](
           __result__,
           lambda x: typing.cast(typing.Optional[bool], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnOutputClassExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.TestOutputClass"], types.TestOutputClass]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputClassExprFunc", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.TestOutputClass"], types.TestOutputClass](
+          __result__,
+          lambda x: typing.cast(typing.Optional["stream_types.TestOutputClass"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestOutputClass, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnOutputClassListExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.List["stream_types.TestOutputClass"], typing.List["types.TestOutputClass"]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputClassListExprFunc", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.List["stream_types.TestOutputClass"], typing.List["types.TestOutputClass"]](
+          __result__,
+          lambda x: typing.cast(typing.List["stream_types.TestOutputClass"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List["types.TestOutputClass"], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnOutputClassNestedExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.TestClassNested"], types.TestClassNested]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputClassNestedExprFunc", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.TestClassNested"], types.TestClassNested](
+          __result__,
+          lambda x: typing.cast(typing.Optional["stream_types.TestClassNested"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.TestClassNested, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnOutputIntExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[int], int]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputIntExprFunc", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.Optional[int], int](
+          __result__,
+          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnOutputLiteralStringExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[typing_extensions.Literal['example output']], typing_extensions.Literal['example output']]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnOutputLiteralStringExprFunc", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[typing.Optional[typing_extensions.Literal['example output']], typing_extensions.Literal['example output']](
+          __result__,
+          lambda x: typing.cast(typing.Optional[typing_extensions.Literal['example output']], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing_extensions.Literal['example output'], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def FnTestNamedArgsSingleEnumExprFunc(self, myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="FnTestNamedArgsSingleEnumExprFunc", args={
+            "myArg": myArg,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def IsTargetWord(self, word: str,
@@ -7186,6 +7627,30 @@ class BamlStreamClient:
           lambda x: typing.cast(bool, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def NullLiteralClassHelloExprFunc(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional["stream_types.ClassForNullLiteral"], types.ClassForNullLiteral]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="NullLiteralClassHelloExprFunc", args={
+            "s": s,
+        })
+        return baml_py.BamlStream[typing.Optional["stream_types.ClassForNullLiteral"], types.ClassForNullLiteral](
+          __result__,
+          lambda x: typing.cast(typing.Optional["stream_types.ClassForNullLiteral"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.ClassForNullLiteral, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def PdfInputExprFunc(self, doc: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="PdfInputExprFunc", args={
+            "doc": doc,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def ReturnCategory(self, category: types.Category,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[types.Category], types.Category]:
@@ -7208,18 +7673,6 @@ class BamlStreamClient:
           __result__,
           lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[baml_py.Image], baml_py.Image]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnImageFromUrl", args={
-            "url": url,
-        })
-        return baml_py.BamlStream[typing.Optional[baml_py.Image], baml_py.Image](
-          __result__,
-          lambda x: typing.cast(typing.Optional[baml_py.Image], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(baml_py.Image, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def ReturnNumber(self, n: int,
@@ -7250,18 +7703,6 @@ class BamlStreamClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="ReturnOne", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="SimpleWatchWithFilter", args={
             
         })
         return baml_py.BamlStream[typing.Optional[int], int](
@@ -7318,34 +7759,214 @@ class BamlStreamClient:
           lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
-    def WorkflowWatch(self, 
+    def TestFnNamedArgsLiteralBoolExprFunc(self, myBool: typing_extensions.Literal[True],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatch", args={
-            
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsLiteralBoolExprFunc", args={
+            "myBool": myBool,
         })
-        return baml_py.BamlStream[typing.Optional[int], int](
+        return baml_py.BamlStream[typing.Optional[str], str](
           __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsLiteralIntExprFunc(self, myInt: typing_extensions.Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsLiteralIntExprFunc", args={
+            "myInt": myInt,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsLiteralStringExprFunc(self, myString: typing_extensions.Literal['My String'],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsLiteralStringExprFunc", args={
+            "myString": myString,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleBoolExprFunc(self, myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleBoolExprFunc", args={
+            "myBool": myBool,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleClassExprFunc(self, myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleClassExprFunc", args={
+            "myArg": myArg,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleEnumListExprFunc(self, myArg: typing.List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleEnumListExprFunc", args={
+            "myArg": myArg,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleFloatExprFunc(self, myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleFloatExprFunc", args={
+            "myFloat": myFloat,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleIntExprFunc(self, myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleIntExprFunc", args={
+            "myInt": myInt,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleMapStringToClassExprFunc(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Dict[str, "stream_types.StringToClassEntry"], typing.Dict[str, "types.StringToClassEntry"]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", args={
+            "myMap": myMap,
+        })
+        return baml_py.BamlStream[typing.Dict[str, "stream_types.StringToClassEntry"], typing.Dict[str, "types.StringToClassEntry"]](
+          __result__,
+          lambda x: typing.cast(typing.Dict[str, "stream_types.StringToClassEntry"], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, "types.StringToClassEntry"], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleMapStringToMapExprFunc(self, myMap: typing.Dict[str, typing.Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Dict[str, typing.Dict[str, str]], typing.Dict[str, typing.Dict[str, str]]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", args={
+            "myMap": myMap,
+        })
+        return baml_py.BamlStream[typing.Dict[str, typing.Dict[str, str]], typing.Dict[str, typing.Dict[str, str]]](
+          __result__,
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, typing.Dict[str, str]], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleMapStringToStringExprFunc(self, myMap: typing.Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Dict[str, str], typing.Dict[str, str]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", args={
+            "myMap": myMap,
+        })
+        return baml_py.BamlStream[typing.Dict[str, str], typing.Dict[str, str]](
+          __result__,
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.Dict[str, str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleStringArrayExprFunc(self, myStringArray: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleStringArrayExprFunc", args={
+            "myStringArray": myStringArray,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleStringExprFunc(self, myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleStringExprFunc", args={
+            "myString": myString,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestFnNamedArgsSingleStringListExprFunc(self, myArg: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.List[str], typing.List[str]]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestFnNamedArgsSingleStringListExprFunc", args={
+            "myArg": myArg,
+        })
+        return baml_py.BamlStream[typing.List[str], typing.List[str]](
+          __result__,
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(typing.List[str], x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestImageInputExprFunc(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestImageInputExprFunc", args={
+            "img": img,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestImageListInputExprFunc(self, imgs: typing.List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestImageListInputExprFunc", args={
+            "imgs": imgs,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def VideoInputExprFunc(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[typing.Optional[str], str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="VideoInputExprFunc", args={
+            "vid": vid,
+        })
+        return baml_py.BamlStream[typing.Optional[str], str](
+          __result__,
+          lambda x: typing.cast(typing.Optional[str], x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
     def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[typing.Optional[int], int]:
         __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatchChild", args={
-            
-        })
-        return baml_py.BamlStream[typing.Optional[int], int](
-          __result__,
-          lambda x: typing.cast(typing.Optional[int], x.cast_to(types, types, stream_types, True, __runtime__)),
-          lambda x: typing.cast(int, x.cast_to(types, types, stream_types, False, __runtime__)),
-          __ctx__,
-        )
-    def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[int], int]:
-        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="WorkflowWatchWithFilter", args={
             
         })
         return baml_py.BamlStream[typing.Optional[int], int](
@@ -9028,6 +9649,13 @@ class BamlHttpRequestClient:
             "vid": vid,
         }, mode="request")
         return __result__
+    async def AllowedOptionalsExprFunc(self, optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AllowedOptionalsExprFunc", args={
+            "optionals": optionals,
+        }, mode="request")
+        return __result__
     async def AnotherTakedown(self, xs: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9040,6 +9668,13 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
             "a": a,"b": b,
+        }, mode="request")
+        return __result__
+    async def AudioInputExprFunc(self, aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AudioInputExprFunc", args={
+            "aud": aud,
         }, mode="request")
         return __result__
     async def BoolToIntWithIfElse(self, b: bool,
@@ -9084,32 +9719,74 @@ class BamlHttpRequestClient:
             
         }, mode="request")
         return __result__
-    async def ExecFetchAs(self, url: str,
+    async def FnLiteralClassInputOutputExprFunc(self, input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
-            "url": url,
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnLiteralClassInputOutputExprFunc", args={
+            "input": input,
         }, mode="request")
         return __result__
-    async def ExecFetchAsWithHttpPostRequest(self, 
+    async def FnLiteralUnionClassInputOutputExprFunc(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnLiteralUnionClassInputOutputExprFunc", args={
+            "input": input,
         }, mode="request")
         return __result__
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+    async def FnNamedArgsSingleStringOptionalExprFunc(self, myString: typing.Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnNamedArgsSingleStringOptionalExprFunc", args={
+            "myString": myString,
         }, mode="request")
         return __result__
-    async def HomeEnvVarIsEmpty(self, 
+    async def FnOutputBoolExprFunc(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="HomeEnvVarIsEmpty", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputBoolExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnOutputClassExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnOutputClassListExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassListExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnOutputClassNestedExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassNestedExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnOutputIntExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputIntExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnOutputLiteralStringExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputLiteralStringExprFunc", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def FnTestNamedArgsSingleEnumExprFunc(self, myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestNamedArgsSingleEnumExprFunc", args={
+            "myArg": myArg,
         }, mode="request")
         return __result__
     async def IsTargetWord(self, word: str,
@@ -9147,6 +9824,20 @@ class BamlHttpRequestClient:
             "value": value,
         }, mode="request")
         return __result__
+    async def NullLiteralClassHelloExprFunc(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NullLiteralClassHelloExprFunc", args={
+            "s": s,
+        }, mode="request")
+        return __result__
+    async def PdfInputExprFunc(self, doc: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputExprFunc", args={
+            "doc": doc,
+        }, mode="request")
+        return __result__
     async def ReturnCategory(self, category: types.Category,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -9159,13 +9850,6 @@ class BamlHttpRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
             "a": a,"b": b,
-        }, mode="request")
-        return __result__
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnImageFromUrl", args={
-            "url": url,
         }, mode="request")
         return __result__
     async def ReturnNumber(self, n: int,
@@ -9186,13 +9870,6 @@ class BamlHttpRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
-            
-        }, mode="request")
-        return __result__
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleWatchWithFilter", args={
             
         }, mode="request")
         return __result__
@@ -9224,24 +9901,129 @@ class BamlHttpRequestClient:
             "x": x,"y": y,
         }, mode="request")
         return __result__
-    async def WorkflowWatch(self, 
+    async def TestFnNamedArgsLiteralBoolExprFunc(self, myBool: typing_extensions.Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatch", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralBoolExprFunc", args={
+            "myBool": myBool,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsLiteralIntExprFunc(self, myInt: typing_extensions.Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralIntExprFunc", args={
+            "myInt": myInt,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsLiteralStringExprFunc(self, myString: typing_extensions.Literal['My String'],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralStringExprFunc", args={
+            "myString": myString,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleBoolExprFunc(self, myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleBoolExprFunc", args={
+            "myBool": myBool,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleClassExprFunc(self, myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleClassExprFunc", args={
+            "myArg": myArg,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleEnumListExprFunc(self, myArg: typing.List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleEnumListExprFunc", args={
+            "myArg": myArg,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleFloatExprFunc(self, myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleFloatExprFunc", args={
+            "myFloat": myFloat,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleIntExprFunc(self, myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleIntExprFunc", args={
+            "myInt": myInt,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToClassExprFunc(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", args={
+            "myMap": myMap,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToMapExprFunc(self, myMap: typing.Dict[str, typing.Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", args={
+            "myMap": myMap,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToStringExprFunc(self, myMap: typing.Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", args={
+            "myMap": myMap,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleStringArrayExprFunc(self, myStringArray: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringArrayExprFunc", args={
+            "myStringArray": myStringArray,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleStringExprFunc(self, myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringExprFunc", args={
+            "myString": myString,
+        }, mode="request")
+        return __result__
+    async def TestFnNamedArgsSingleStringListExprFunc(self, myArg: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringListExprFunc", args={
+            "myArg": myArg,
+        }, mode="request")
+        return __result__
+    async def TestImageInputExprFunc(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestImageInputExprFunc", args={
+            "img": img,
+        }, mode="request")
+        return __result__
+    async def TestImageListInputExprFunc(self, imgs: typing.List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestImageListInputExprFunc", args={
+            "imgs": imgs,
+        }, mode="request")
+        return __result__
+    async def VideoInputExprFunc(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputExprFunc", args={
+            "vid": vid,
         }, mode="request")
         return __result__
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchChild", args={
-            
-        }, mode="request")
-        return __result__
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchWithFilter", args={
             
         }, mode="request")
         return __result__
@@ -10919,6 +11701,13 @@ class BamlHttpStreamRequestClient:
             "vid": vid,
         }, mode="stream")
         return __result__
+    async def AllowedOptionalsExprFunc(self, optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AllowedOptionalsExprFunc", args={
+            "optionals": optionals,
+        }, mode="stream")
+        return __result__
     async def AnotherTakedown(self, xs: typing.List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -10931,6 +11720,13 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AssignElseIfExpr", args={
             "a": a,"b": b,
+        }, mode="stream")
+        return __result__
+    async def AudioInputExprFunc(self, aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AudioInputExprFunc", args={
+            "aud": aud,
         }, mode="stream")
         return __result__
     async def BoolToIntWithIfElse(self, b: bool,
@@ -10975,32 +11771,74 @@ class BamlHttpStreamRequestClient:
             
         }, mode="stream")
         return __result__
-    async def ExecFetchAs(self, url: str,
+    async def FnLiteralClassInputOutputExprFunc(self, input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAs", args={
-            "url": url,
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnLiteralClassInputOutputExprFunc", args={
+            "input": input,
         }, mode="stream")
         return __result__
-    async def ExecFetchAsWithHttpPostRequest(self, 
+    async def FnLiteralUnionClassInputOutputExprFunc(self, input: typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPostRequest", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnLiteralUnionClassInputOutputExprFunc", args={
+            "input": input,
         }, mode="stream")
         return __result__
-    async def ExecFetchAsWithHttpPutRequestAndClassJson(self, 
+    async def FnNamedArgsSingleStringOptionalExprFunc(self, myString: typing.Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnNamedArgsSingleStringOptionalExprFunc", args={
+            "myString": myString,
         }, mode="stream")
         return __result__
-    async def HomeEnvVarIsEmpty(self, 
+    async def FnOutputBoolExprFunc(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="HomeEnvVarIsEmpty", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputBoolExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnOutputClassExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnOutputClassListExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassListExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnOutputClassNestedExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputClassNestedExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnOutputIntExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputIntExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnOutputLiteralStringExprFunc(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnOutputLiteralStringExprFunc", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def FnTestNamedArgsSingleEnumExprFunc(self, myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="FnTestNamedArgsSingleEnumExprFunc", args={
+            "myArg": myArg,
         }, mode="stream")
         return __result__
     async def IsTargetWord(self, word: str,
@@ -11038,6 +11876,20 @@ class BamlHttpStreamRequestClient:
             "value": value,
         }, mode="stream")
         return __result__
+    async def NullLiteralClassHelloExprFunc(self, s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="NullLiteralClassHelloExprFunc", args={
+            "s": s,
+        }, mode="stream")
+        return __result__
+    async def PdfInputExprFunc(self, doc: baml_py.Pdf,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="PdfInputExprFunc", args={
+            "doc": doc,
+        }, mode="stream")
+        return __result__
     async def ReturnCategory(self, category: types.Category,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -11050,13 +11902,6 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnElseIfExpr", args={
             "a": a,"b": b,
-        }, mode="stream")
-        return __result__
-    async def ReturnImageFromUrl(self, url: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnImageFromUrl", args={
-            "url": url,
         }, mode="stream")
         return __result__
     async def ReturnNumber(self, n: int,
@@ -11077,13 +11922,6 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="ReturnOne", args={
-            
-        }, mode="stream")
-        return __result__
-    async def SimpleWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="SimpleWatchWithFilter", args={
             
         }, mode="stream")
         return __result__
@@ -11115,24 +11953,129 @@ class BamlHttpStreamRequestClient:
             "x": x,"y": y,
         }, mode="stream")
         return __result__
-    async def WorkflowWatch(self, 
+    async def TestFnNamedArgsLiteralBoolExprFunc(self, myBool: typing_extensions.Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatch", args={
-            
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralBoolExprFunc", args={
+            "myBool": myBool,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsLiteralIntExprFunc(self, myInt: typing_extensions.Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralIntExprFunc", args={
+            "myInt": myInt,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsLiteralStringExprFunc(self, myString: typing_extensions.Literal['My String'],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsLiteralStringExprFunc", args={
+            "myString": myString,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleBoolExprFunc(self, myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleBoolExprFunc", args={
+            "myBool": myBool,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleClassExprFunc(self, myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleClassExprFunc", args={
+            "myArg": myArg,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleEnumListExprFunc(self, myArg: typing.List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleEnumListExprFunc", args={
+            "myArg": myArg,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleFloatExprFunc(self, myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleFloatExprFunc", args={
+            "myFloat": myFloat,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleIntExprFunc(self, myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleIntExprFunc", args={
+            "myInt": myInt,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToClassExprFunc(self, myMap: typing.Dict[str, "types.StringToClassEntry"],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", args={
+            "myMap": myMap,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToMapExprFunc(self, myMap: typing.Dict[str, typing.Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", args={
+            "myMap": myMap,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleMapStringToStringExprFunc(self, myMap: typing.Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", args={
+            "myMap": myMap,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleStringArrayExprFunc(self, myStringArray: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringArrayExprFunc", args={
+            "myStringArray": myStringArray,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleStringExprFunc(self, myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringExprFunc", args={
+            "myString": myString,
+        }, mode="stream")
+        return __result__
+    async def TestFnNamedArgsSingleStringListExprFunc(self, myArg: typing.List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestFnNamedArgsSingleStringListExprFunc", args={
+            "myArg": myArg,
+        }, mode="stream")
+        return __result__
+    async def TestImageInputExprFunc(self, img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestImageInputExprFunc", args={
+            "img": img,
+        }, mode="stream")
+        return __result__
+    async def TestImageListInputExprFunc(self, imgs: typing.List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestImageListInputExprFunc", args={
+            "imgs": imgs,
+        }, mode="stream")
+        return __result__
+    async def VideoInputExprFunc(self, vid: baml_py.Video,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="VideoInputExprFunc", args={
+            "vid": vid,
         }, mode="stream")
         return __result__
     async def WorkflowWatchChild(self, 
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchChild", args={
-            
-        }, mode="stream")
-        return __result__
-    async def WorkflowWatchWithFilter(self, 
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.baml_py.HTTPRequest:
-        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="WorkflowWatchWithFilter", args={
             
         }, mode="stream")
         return __result__

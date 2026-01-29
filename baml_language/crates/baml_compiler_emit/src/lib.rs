@@ -57,7 +57,7 @@ pub const BUILTIN_LLM_PATH: &str = "<builtin>/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, Function, FunctionKind, GlobalIndex, HeapPtr,
+    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, Function, FunctionKind, GlobalIndex,
     Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
 };
 
@@ -157,6 +157,48 @@ pub fn compile_files(
     let mut class_type_tags: HashMap<String, i64> = HashMap::new();
     let mut class_type_tag_counter = 0i64;
 
+    // Inject builtin classes BEFORE user classes for stable indices
+    for builtin in baml_builtins::builtin_types() {
+        let mut field_names = Vec::new();
+        let mut field_indices = HashMap::new();
+        let mut field_types = HashMap::new();
+
+        // Include ALL fields (public and private) in runtime field order
+        for field in &builtin.fields {
+            let idx = field_names.len();
+            field_indices.insert(field.name.to_string(), idx);
+            field_names.push(field.name.to_string());
+
+            // Only add public fields to field_types (for type checking)
+            if !field.is_private {
+                if let Some(ref ty_pattern) = field.ty {
+                    field_types.insert(
+                        Name::new(field.name),
+                        baml_compiler_tir::builtins::substitute_unknown(ty_pattern),
+                    );
+                }
+            }
+        }
+
+        // Compute type tag for this builtin class
+        let type_tag = type_tags::CLASS_BASE + class_type_tag_counter;
+        class_type_tags.insert(builtin.path.to_string(), type_tag);
+
+        // Add Class object to program and record its index
+        let class_obj = Object::Class(Class {
+            name: builtin.path.to_string(),
+            field_names,
+            type_tag,
+        });
+        class_type_tag_counter += 1;
+        let class_obj_idx = program.add_object(class_obj);
+        class_object_indices.insert(builtin.path.to_string(), class_obj_idx);
+
+        classes.insert(builtin.path.to_string(), field_indices);
+        class_field_types.insert(Name::new(builtin.path), field_types);
+    }
+
+    // Now add user-defined classes
     for file in files {
         let item_tree = baml_compiler_hir::file_item_tree(db, *file);
         let items_struct = baml_compiler_hir::file_items(db, *file);
@@ -235,12 +277,12 @@ pub fn compile_files(
 
     // Add builtin functions to globals FIRST (stable indices)
     for builtin in builtins {
-        // External builtins (like file I/O) use FunctionKind::External
+        // Sys_op builtins (like file I/O) use FunctionKind::SysOp
         // so the VM knows to dispatch them via DispatchFuture/Await
-        let kind = if builtin.is_external {
+        let kind = if builtin.is_sys_op {
             let sys_op = sys_op_for_builtin_path(builtin.path)
-                .expect("external builtin must have SysOp mapping");
-            FunctionKind::External(sys_op)
+                .expect("sys_op builtin must have SysOp mapping");
+            FunctionKind::SysOp(sys_op)
         } else {
             FunctionKind::NativeUnresolved
         };
@@ -267,7 +309,7 @@ pub fn compile_files(
             name: (*path).to_string(),
             arity: *arity,
             bytecode: Bytecode::default(),
-            kind: FunctionKind::External(sys_op),
+            kind: FunctionKind::SysOp(sys_op),
             locals_in_scope: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
@@ -306,7 +348,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::External(SysOp::LlmRenderPrompt),
+                            kind: FunctionKind::SysOp(SysOp::RenderPrompt),
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -359,7 +401,8 @@ pub fn compile_files(
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
                         let vir =
-                            baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx)?;
+                            baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx)
+                                .map_err(|e| e.in_function(signature.name.to_string()))?;
                         let mir = baml_compiler_mir::lower(
                             &signature,
                             &vir,
@@ -455,11 +498,12 @@ fn build_typing_context(
 /// Map a builtin path to its corresponding `SysOp`.
 ///
 /// This is used during code generation to set the correct `SysOp` variant
-/// for external builtin functions.
+/// for `sys_op` builtin functions.
 fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
     match path {
         // LLM operations
-        "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::LlmRenderPrompt),
+        "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::RenderPrompt),
+        "baml.llm.PrimitiveClient.specialize_prompt" => Some(SysOp::SpecializePrompt),
         "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
         "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
         "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
@@ -472,11 +516,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.net.Socket.read" => Some(SysOp::NetRead),
         "baml.net.Socket.close" => Some(SysOp::NetClose),
         "baml.http.fetch" => Some(SysOp::HttpFetch),
-        "baml.http.Response.text" => Some(SysOp::HttpResponseText),
-        "baml.http.Response.status" => Some(SysOp::HttpResponseStatus),
-        "baml.http.Response.ok" => Some(SysOp::HttpResponseOk),
-        "baml.http.Response.url" => Some(SysOp::HttpResponseUrl),
-        "baml.http.Response.headers" => Some(SysOp::HttpResponseHeaders),
+        "baml.http.Response.text" => Some(SysOp::ResponseText),
+        "baml.http.Response.ok" => Some(SysOp::ResponseOk),
         _ => None,
     }
 }

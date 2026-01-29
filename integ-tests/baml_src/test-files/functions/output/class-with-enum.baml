@@ -19,6 +19,14 @@ function FnOutputClassWithEnum(input: string) -> TestClassWithEnum {
   "#
 }
 
+// TODO:
+// function FnOutputClassWithEnumExprFunc(input: string) -> TestClassWithEnum {
+//   return TestClassWithEnum {
+//     prop1: "example string",
+//     prop2: EnumInClass.ONE
+//   };
+// }
+
 test FnOutputClassWithEnum {
   functions [FnOutputClassWithEnum]
   args {

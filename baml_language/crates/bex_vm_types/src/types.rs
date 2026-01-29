@@ -91,17 +91,13 @@ pub enum SysOp {
     /// HTTP fetch: `baml.http.fetch(url: String) -> Response`
     HttpFetch,
     /// Get response body as text: `Response.text() -> String`
-    HttpResponseText,
-    /// Get response status code: `Response.status() -> i64`
-    HttpResponseStatus,
+    ResponseText,
     /// Check if response is OK (2xx): `Response.ok() -> bool`
-    HttpResponseOk,
-    /// Get request URL: `Response.url() -> String`
-    HttpResponseUrl,
-    /// Get response headers: `Response.headers() -> Map<String, String>`
-    HttpResponseHeaders,
+    ResponseOk,
     /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
-    LlmRenderPrompt,
+    RenderPrompt,
+    /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
+    SpecializePrompt,
     /// Get the Jinja template for a function: `baml.llm.get_jinja_template(function_name) -> String`
     LlmGetJinjaTemplate,
     /// Build a `PrimitiveClient` from evaluated options: `baml.llm.build_primitive_client(...) -> PrimitiveClient`
@@ -121,12 +117,10 @@ impl std::fmt::Display for SysOp {
             SysOp::NetRead => write!(f, "net.read"),
             SysOp::NetClose => write!(f, "net.close"),
             SysOp::HttpFetch => write!(f, "http.fetch"),
-            SysOp::HttpResponseText => write!(f, "http.Response.text"),
-            SysOp::HttpResponseStatus => write!(f, "http.Response.status"),
-            SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
-            SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
-            SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
-            SysOp::LlmRenderPrompt => write!(f, "llm.render_prompt"),
+            SysOp::ResponseText => write!(f, "http.Response.text"),
+            SysOp::ResponseOk => write!(f, "http.Response.ok"),
+            SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
+            SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
             SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
             SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
             SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
@@ -163,11 +157,11 @@ pub enum FunctionKind {
     /// The VM pushes a call frame onto the call stack and runs the bytecode.
     Bytecode,
 
-    /// External operation (LLM calls, HTTP requests, file I/O, etc.).
+    /// System operation (LLM calls, HTTP requests, file I/O, etc.).
     ///
     /// The VM yields control to the engine which executes the operation
     /// asynchronously via static dispatch on the `SysOp` enum.
-    External(SysOp),
+    SysOp(SysOp),
 
     /// Unresolved native function (placeholder).
     ///
@@ -496,7 +490,7 @@ pub enum Future {
 /// LLM calls, HTTP requests, file I/O, or shell commands.
 #[derive(Clone, Debug)]
 pub struct PendingFuture {
-    /// The external operation to execute.
+    /// The system operation to execute.
     pub operation: SysOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
@@ -722,7 +716,7 @@ pub enum FunctionType {
     /// Top of function type lattice: represents all function types.
     Any,
     Callable,
-    External,
+    SysOp,
 }
 
 impl std::fmt::Display for FunctionType {
@@ -730,15 +724,15 @@ impl std::fmt::Display for FunctionType {
         match self {
             FunctionType::Any => write!(f, "any"),
             FunctionType::Callable => write!(f, "callable"),
-            FunctionType::External => write!(f, "external"),
+            FunctionType::SysOp => write!(f, "sys_op"),
         }
     }
 }
 
 impl From<&FunctionKind> for FunctionType {
     fn from(value: &FunctionKind) -> Self {
-        if matches!(value, FunctionKind::External(_)) {
-            FunctionType::External
+        if matches!(value, FunctionKind::SysOp(_)) {
+            FunctionType::SysOp
         } else {
             FunctionType::Callable
         }

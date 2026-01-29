@@ -34,6 +34,7 @@ use baml_workspace::Project;
 pub type TirTypeError = TypeError<TirContext<Ty>>;
 
 pub mod builtins;
+mod cycles;
 mod exhaustiveness;
 mod lower;
 mod normalize;
@@ -43,8 +44,9 @@ mod types;
 
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
-    method_return_type, substitute,
+    method_return_type, parse_builtin_path, substitute,
 };
+pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
 pub use normalize::find_invalid_map_keys;
@@ -76,7 +78,7 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
         TypePattern::Optional(inner) => {
             Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
         }
-        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
+        TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path)),
     }
 }
 
@@ -274,7 +276,7 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from fields
 
-    let classes = hir_fields
+    let mut classes: HashMap<Name, HashMap<Name, Ty>> = hir_fields
         .classes(db)
         .iter()
         .map(|(class_name, fields)| {
@@ -290,6 +292,22 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
             (class_name.clone(), lowered_fields)
         })
         .collect();
+
+    // Add builtin class public fields
+    for builtin in baml_builtins::builtin_types() {
+        let public_fields: HashMap<Name, Ty> = builtin
+            .fields
+            .iter()
+            .filter(|f| !f.is_private)
+            .map(|f| {
+                (
+                    Name::new(f.name),
+                    builtins::substitute_unknown(f.ty.as_ref().unwrap()),
+                )
+            })
+            .collect();
+        classes.insert(Name::new(builtin.path), public_fields);
+    }
 
     ClassFieldTypesMap::new(db, classes)
 }
@@ -324,6 +342,12 @@ pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
     let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
+    // Add builtin class names
+    for builtin in baml_builtins::builtin_types() {
+        names.insert(Name::new(builtin.path));
+    }
+
+    // Add user-defined class names
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::Class(class_loc) = item {
             let file = class_loc.file(db);
@@ -1233,7 +1257,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             },
                         );
                     }
-                    ty = infer_field_access(ctx, &ty, field, location);
+                    ty = infer_field_access(ctx, &ty, field, location.clone());
                     segment_types.push(ty.clone());
                 }
 
@@ -1272,11 +1296,33 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             let (callee_ty, effective_args): (Ty, Vec<(Ty, Option<ErrorLocation>)>) = match &body
                 .exprs[*callee]
             {
-                Expr::FieldAccess { base, field: _ } => {
+                Expr::FieldAccess { base, field } => {
                     // Method call: receiver.method(args) -> Type.method(receiver, args)
                     // This handles complex expressions like `f().method()` or `arr[0].method()`
                     let receiver_ty = infer_expr(ctx, *base, body);
-                    let callee_ty = infer_expr(ctx, *callee, body);
+
+                    // Try builtin method lookup first to handle cases where a field name
+                    // collides with a method name (e.g., Response.headers field vs headers() method)
+                    let callee_ty = if let Some((def, bindings)) =
+                        builtins::lookup_method(&receiver_ty, field.as_str())
+                    {
+                        // Build the function type from the builtin definition
+                        let mut param_types: Vec<Ty> = Vec::new();
+                        if def.receiver.is_some() {
+                            param_types.push(receiver_ty.clone());
+                        }
+                        for (_, pattern) in &def.params {
+                            param_types.push(builtins::substitute(pattern, &bindings));
+                        }
+                        let return_type = builtins::substitute(&def.returns, &bindings);
+                        Ty::Function {
+                            params: param_types,
+                            ret: Box::new(return_type),
+                        }
+                    } else {
+                        // Fall back to normal field access inference (which may find a class field)
+                        infer_expr(ctx, *callee, body)
+                    };
 
                     // Build effective args: [(receiver_type, None), ...explicit_args with spans]
                     let mut effective_args = vec![(receiver_ty, None)];
@@ -1377,7 +1423,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             let first = &receiver_segments[0];
                             let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
                             for field in &receiver_segments[1..] {
-                                ty = infer_field_access(ctx, &ty, field, location);
+                                ty = infer_field_access(ctx, &ty, field, location.clone());
                             }
                             ty
                         };
@@ -1417,7 +1463,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
                             found: effective_args.len(),
-                            location,
+                            location: location.clone(),
                         });
                     }
 
@@ -1427,7 +1473,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     {
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
                             // Use the argument's location if available, otherwise fall back to call location
-                            let error_location = arg_location.unwrap_or(location);
+                            let error_location =
+                                arg_location.clone().unwrap_or_else(|| location.clone());
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: param_ty.clone(),
                                 found: generalize_for_error(param_ty, arg_ty),
@@ -1463,13 +1510,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         if !ctx.is_watched(var_name) {
                             ctx.push_error(TypeError::WatchOnUnwatchedVariable {
                                 name: var_name.to_string(),
-                                location,
+                                location: location.clone(),
                             });
                         }
                     }
                     _ => {
                         // Not a simple variable (e.g., arr[0].$watch, obj.field.$watch)
-                        ctx.push_error(TypeError::WatchOnNonVariable { location });
+                        ctx.push_error(TypeError::WatchOnNonVariable {
+                            location: location.clone(),
+                        });
                     }
                 }
             }
@@ -1500,7 +1549,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: elem_ty.clone(),
                             found: other_ty,
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1545,7 +1594,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: obj_ty.clone(),
                         found: spread_ty,
-                        location,
+                        location: location.clone(),
                         info_location: None,
                     });
                 }
@@ -1576,7 +1625,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: key_ty.clone(),
                             found: generalize_for_error(&key_ty, &other_key_ty),
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1584,7 +1633,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ctx.push_error(TypeError::TypeMismatch {
                             expected: value_ty.clone(),
                             found: generalize_for_error(&value_ty, &other_value_ty),
-                            location,
+                            location: location.clone(),
                             info_location: None,
                         });
                     }
@@ -1715,7 +1764,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 ctx.push_error(TypeError::TypeMismatch {
                                     expected: Ty::Bool,
                                     found: guard_ty,
-                                    location,
+                                    location: location.clone(),
                                     info_location: None,
                                 });
                             }
@@ -1835,7 +1884,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_elem).clone(),
                                 found: generalize_for_error(expected_elem, &elem_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }
@@ -1960,7 +2009,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_key).clone(),
                                 found: generalize_for_error(expected_key, &key_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }
@@ -1969,7 +2018,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                             ctx.push_error(TypeError::TypeMismatch {
                                 expected: (**expected_value).clone(),
                                 found: generalize_for_error(expected_value, &value_ty),
-                                location,
+                                location: location.clone(),
                                 info_location: None,
                             });
                         }

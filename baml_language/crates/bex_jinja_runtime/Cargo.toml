@@ -10,7 +10,6 @@ license.workspace = true
 bex_external_types = { workspace = true }
 bex_llm_types = { workspace = true }
 bex_vm_types = { workspace = true }
-
 indexmap = { workspace = true }
 minijinja = { workspace = true }
 regex = { workspace = true }
@@ -20,7 +19,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 bex_program = { workspace = true }
-
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 

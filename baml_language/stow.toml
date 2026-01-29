@@ -47,19 +47,20 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "playground", "codegen"]
+approved_prefixes = ["compiler", "builtins", "playground", "codegen", "bridge"]
 test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler"]
-allowed_crates = ["baml_db", "baml_project"]
+allowed_crates = ["baml_db", "baml_project", "baml_bridge_cffi"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
+allowed_crates = ["baml_bridge_cffi"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]

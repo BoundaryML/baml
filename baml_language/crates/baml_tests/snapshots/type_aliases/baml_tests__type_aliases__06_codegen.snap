@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-b605630ce3acfe9e/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 6
-Objects: 54
-Globals: 51
+Objects: 55
+Globals: 49
 
 Function Bar (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (true)
@@ -16,7 +16,7 @@ Function Baz (arity: 0, kind: Bytecode):
      1   RETURN         
 
 Function EchoJSON (arity: 1, kind: Bytecode):
-     0   ALLOC_INSTANCE 0   (<class NotJSON>)
+     0   ALLOC_INSTANCE 3   (<class NotJSON>)
      1   COPY 0             
      2   LOAD_CONST 0       ("Whoops")
      3   STORE_FIELD 0      
@@ -34,18 +34,18 @@ Function MakeJSON (arity: 1, kind: Bytecode):
 Function baml.llm.render_prompt (arity: 3, kind: Bytecode):
      0    LOAD_CONST 0        (null)
      1    LOAD_CONST 0        (null)
-     2    LOAD_GLOBAL 41      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_GLOBAL 39      (<fn baml.llm.get_jinja_template>)
      3    LOAD_VAR 1          (function_name)
      4    DISPATCH_FUTURE 1   
      5    AWAIT               
      6    STORE_VAR 4         (jinja_string)
-     7    LOAD_GLOBAL 44      (<fn baml.llm.get_client_function>)
+     7    LOAD_GLOBAL 42      (<fn baml.llm.get_client_function>)
      8    LOAD_VAR 1          (function_name)
      9    DISPATCH_FUTURE 1   
      10   AWAIT               
      11   CALL 0              
      12   STORE_VAR 5         (primitive_client)
-     13   LOAD_GLOBAL 43      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_GLOBAL 41      (<fn baml.llm.PrimitiveClient.render_prompt>)
      14   LOAD_VAR 5          (primitive_client)
      15   LOAD_VAR 4          (jinja_string)
      16   LOAD_VAR 2          (args)

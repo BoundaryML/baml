@@ -13,7 +13,6 @@
 import typing
 import typing_extensions
 
-import baml_py
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -1452,6 +1451,12 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
+    def AllowedOptionalsExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.OptionalListAndMap:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AllowedOptionalsExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(types.OptionalListAndMap, __result__)
+
     def AnotherTakedown(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
@@ -1463,6 +1468,12 @@ class LlmResponseParser:
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
+
+    def AudioInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AudioInputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
 
     def BoolToIntWithIfElse(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1500,29 +1511,65 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="request")
         return typing.cast(str, __result__)
 
-    def ExecFetchAs(
+    def FnLiteralClassInputOutputExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
+    ) -> types.LiteralClassHello:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralClassInputOutputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(types.LiteralClassHello, __result__)
 
-    def ExecFetchAsWithHttpPostRequest(
+    def FnLiteralUnionClassInputOutputExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
+    ) -> typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralUnionClassInputOutputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Union["types.LiteralClassOne", "types.LiteralClassTwo"], __result__)
 
-    def ExecFetchAsWithHttpPutRequestAndClassJson(
+    def FnNamedArgsSingleStringOptionalExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> types.DummyJsonTodo:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="request")
-        return typing.cast(types.DummyJsonTodo, __result__)
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnNamedArgsSingleStringOptionalExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
 
-    def HomeEnvVarIsEmpty(
+    def FnOutputBoolExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> bool:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="request")
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputBoolExprFunc", llm_response=llm_response, mode="request")
         return typing.cast(bool, __result__)
+
+    def FnOutputClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.TestOutputClass:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(types.TestOutputClass, __result__)
+
+    def FnOutputClassListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List["types.TestOutputClass"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassListExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List["types.TestOutputClass"], __result__)
+
+    def FnOutputClassNestedExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.TestClassNested:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassNestedExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(types.TestClassNested, __result__)
+
+    def FnOutputIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> int:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputIntExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(int, __result__)
+
+    def FnOutputLiteralStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing_extensions.Literal['example output']:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralStringExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing_extensions.Literal['example output'], __result__)
+
+    def FnTestNamedArgsSingleEnumExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnTestNamedArgsSingleEnumExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
 
     def IsTargetWord(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1554,6 +1601,18 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="request")
         return typing.cast(bool, __result__)
 
+    def NullLiteralClassHelloExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.ClassForNullLiteral:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHelloExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(types.ClassForNullLiteral, __result__)
+
+    def PdfInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.Category:
@@ -1565,12 +1624,6 @@ class LlmResponseParser:
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
-
-    def ReturnImageFromUrl(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> baml_py.Image:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="request")
-        return typing.cast(baml_py.Image, __result__)
 
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1588,12 +1641,6 @@ class LlmResponseParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
-
-    def SimpleWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
     def StoreFnCallInLocalVar(
@@ -1620,22 +1667,112 @@ class LlmResponseParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
-    def WorkflowWatch(
+    def TestFnNamedArgsLiteralBoolExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralBoolExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsLiteralIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralIntExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsLiteralStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralStringExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleBoolExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleBoolExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleClassExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleEnumListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleEnumListExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleFloatExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleFloatExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleIntExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleMapStringToClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, "types.StringToClassEntry"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, "types.StringToClassEntry"], __result__)
+
+    def TestFnNamedArgsSingleMapStringToMapExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.Dict[str, str]]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], __result__)
+
+    def TestFnNamedArgsSingleMapStringToStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.Dict[str, str], __result__)
+
+    def TestFnNamedArgsSingleStringArrayExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringArrayExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestFnNamedArgsSingleStringListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringListExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(typing.List[str], __result__)
+
+    def TestImageInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestImageInputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def TestImageListInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestImageListInputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
+
+    def VideoInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> str:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputExprFunc", llm_response=llm_response, mode="request")
+        return typing.cast(str, __result__)
 
     def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> int:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="request")
-        return typing.cast(int, __result__)
-
-    def WorkflowWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> int:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="request")
         return typing.cast(int, __result__)
 
     
@@ -3074,6 +3211,12 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputVertex", llm_response=llm_response, mode="stream")
         return typing.cast(str, __result__)
 
+    def AllowedOptionalsExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.OptionalListAndMap"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AllowedOptionalsExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.OptionalListAndMap"], __result__)
+
     def AnotherTakedown(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
@@ -3085,6 +3228,12 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AssignElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
+
+    def AudioInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="AudioInputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
 
     def BoolToIntWithIfElse(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -3122,29 +3271,65 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="EchoWorkflow", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[str], __result__)
 
-    def ExecFetchAs(
+    def FnLiteralClassInputOutputExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAs", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
+    ) -> typing.Optional["stream_types.LiteralClassHello"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralClassInputOutputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.LiteralClassHello"], __result__)
 
-    def ExecFetchAsWithHttpPostRequest(
+    def FnLiteralUnionClassInputOutputExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPostRequest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
+    ) -> typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralUnionClassInputOutputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]], __result__)
 
-    def ExecFetchAsWithHttpPutRequestAndClassJson(
+    def FnNamedArgsSingleStringOptionalExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyJsonTodo"]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ExecFetchAsWithHttpPutRequestAndClassJson", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyJsonTodo"], __result__)
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnNamedArgsSingleStringOptionalExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
 
-    def HomeEnvVarIsEmpty(
+    def FnOutputBoolExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[bool]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="HomeEnvVarIsEmpty", llm_response=llm_response, mode="stream")
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputBoolExprFunc", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[bool], __result__)
+
+    def FnOutputClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.TestOutputClass"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.TestOutputClass"], __result__)
+
+    def FnOutputClassListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List["stream_types.TestOutputClass"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassListExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List["stream_types.TestOutputClass"], __result__)
+
+    def FnOutputClassNestedExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.TestClassNested"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassNestedExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.TestClassNested"], __result__)
+
+    def FnOutputIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[int]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputIntExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[int], __result__)
+
+    def FnOutputLiteralStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[typing_extensions.Literal['example output']]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralStringExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[typing_extensions.Literal['example output']], __result__)
+
+    def FnTestNamedArgsSingleEnumExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="FnTestNamedArgsSingleEnumExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
 
     def IsTargetWord(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -3176,6 +3361,18 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="NotEmpty", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[bool], __result__)
 
+    def NullLiteralClassHelloExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional["stream_types.ClassForNullLiteral"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHelloExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional["stream_types.ClassForNullLiteral"], __result__)
+
+    def PdfInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="PdfInputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
     def ReturnCategory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[types.Category]:
@@ -3187,12 +3384,6 @@ class LlmStreamParser:
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnElseIfExpr", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
-
-    def ReturnImageFromUrl(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[baml_py.Image]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnImageFromUrl", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[baml_py.Image], __result__)
 
     def ReturnNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -3210,12 +3401,6 @@ class LlmStreamParser:
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="ReturnOne", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
-
-    def SimpleWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SimpleWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
     def StoreFnCallInLocalVar(
@@ -3242,22 +3427,112 @@ class LlmStreamParser:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="SumFromTo", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
-    def WorkflowWatch(
+    def TestFnNamedArgsLiteralBoolExprFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatch", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralBoolExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsLiteralIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralIntExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsLiteralStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsLiteralStringExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleBoolExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleBoolExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleClassExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleEnumListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleEnumListExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleFloatExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleFloatExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleIntExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleIntExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleMapStringToClassExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, "stream_types.StringToClassEntry"]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToClassExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, "stream_types.StringToClassEntry"], __result__)
+
+    def TestFnNamedArgsSingleMapStringToMapExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, typing.Dict[str, str]]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToMapExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], __result__)
+
+    def TestFnNamedArgsSingleMapStringToStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Dict[str, str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToStringExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Dict[str, str], __result__)
+
+    def TestFnNamedArgsSingleStringArrayExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringArrayExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleStringExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestFnNamedArgsSingleStringListExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.List[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringListExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.List[str], __result__)
+
+    def TestImageInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestImageInputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def TestImageListInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="TestImageListInputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
+
+    def VideoInputExprFunc(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> typing.Optional[str]:
+        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="VideoInputExprFunc", llm_response=llm_response, mode="stream")
+        return typing.cast(typing.Optional[str], __result__)
 
     def WorkflowWatchChild(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> typing.Optional[int]:
         __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchChild", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], __result__)
-
-    def WorkflowWatchWithFilter(
-        self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
-        __result__ = self.__options.merge_options(baml_options).parse_response(function_name="WorkflowWatchWithFilter", llm_response=llm_response, mode="stream")
         return typing.cast(typing.Optional[int], __result__)
 
     

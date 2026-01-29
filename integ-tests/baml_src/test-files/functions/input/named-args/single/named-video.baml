@@ -9,6 +9,10 @@ function VideoInputGemini(vid: video) -> string{
   "#   
 }  
 
+function VideoInputExprFunc(vid: video) -> string {
+  return "Hello, world!";
+}
+
 function VideoInputVertex(vid: video) -> string{
   client Vertex
   prompt #"

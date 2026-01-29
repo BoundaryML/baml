@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -4582,6 +4582,25 @@ export const VideoInputVertex = async (
 };
 
 /**
+ * Executes the streaming variant of the "AllowedOptionalsExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { types.OptionalListAndMap } optionals - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const AllowedOptionalsExprFunc = async (
+  optionals: types.OptionalListAndMap,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.AllowedOptionalsExprFunc(
+    optionals,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "AnotherTakedown" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4618,6 +4637,25 @@ export const AssignElseIfExpr = async (
   const __stream__ = b.stream.AssignElseIfExpr(
     a,
     b,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "AudioInputExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Audio } aud - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const AudioInputExprFunc = async (
+  aud: Audio,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.AudioInputExprFunc(
+    aud,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
@@ -4728,68 +4766,191 @@ export const EchoWorkflow = async (
 };
 
 /**
- * Executes the streaming variant of the "ExecFetchAs" BAML action.
+ * Executes the streaming variant of the "FnLiteralClassInputOutputExprFunc" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } url - Input parameter.
+ * @param { types.LiteralClassHello } input - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const ExecFetchAs = async (
-  url: string,
+export const FnLiteralClassInputOutputExprFunc = async (
+  input: types.LiteralClassHello,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.ExecFetchAs(
-    url,
+  const __stream__ = b.stream.FnLiteralClassInputOutputExprFunc(
+    input,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
- * Executes the streaming variant of the "ExecFetchAsWithHttpPostRequest" BAML action.
+ * Executes the streaming variant of the "FnLiteralUnionClassInputOutputExprFunc" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
+ * @param { types.LiteralClassOne | types.LiteralClassTwo } input - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const ExecFetchAsWithHttpPostRequest = async (
+export const FnLiteralUnionClassInputOutputExprFunc = async (
+  input: types.LiteralClassOne | types.LiteralClassTwo,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.ExecFetchAsWithHttpPostRequest(
+  const __stream__ = b.stream.FnLiteralUnionClassInputOutputExprFunc(
+    input,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
- * Executes the streaming variant of the "ExecFetchAsWithHttpPutRequestAndClassJson" BAML action.
+ * Executes the streaming variant of the "FnNamedArgsSingleStringOptionalExprFunc" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
+ * @param { string | null } myString (optional) - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const ExecFetchAsWithHttpPutRequestAndClassJson = async (
+export const FnNamedArgsSingleStringOptionalExprFunc = async (
+  myString?: string | null,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.ExecFetchAsWithHttpPutRequestAndClassJson(
+  const __stream__ = b.stream.FnNamedArgsSingleStringOptionalExprFunc(
+    myString,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
 
 /**
- * Executes the streaming variant of the "HomeEnvVarIsEmpty" BAML action.
+ * Executes the streaming variant of the "FnOutputBoolExprFunc" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
+ * @param { string } input - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const HomeEnvVarIsEmpty = async (
+export const FnOutputBoolExprFunc = async (
+  input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.HomeEnvVarIsEmpty(
+  const __stream__ = b.stream.FnOutputBoolExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnOutputClassExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnOutputClassExprFunc = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnOutputClassExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnOutputClassListExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnOutputClassListExprFunc = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnOutputClassListExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnOutputClassNestedExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnOutputClassNestedExprFunc = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnOutputClassNestedExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnOutputIntExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnOutputIntExprFunc = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnOutputIntExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnOutputLiteralStringExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnOutputLiteralStringExprFunc = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnOutputLiteralStringExprFunc(
+    input,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "FnTestNamedArgsSingleEnumExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { types.NamedArgsSingleEnum } myArg - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const FnTestNamedArgsSingleEnumExprFunc = async (
+  myArg: types.NamedArgsSingleEnum,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.FnTestNamedArgsSingleEnumExprFunc(
+    myArg,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
@@ -4893,6 +5054,44 @@ export const NotEmpty = async (
 };
 
 /**
+ * Executes the streaming variant of the "NullLiteralClassHelloExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } s - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const NullLiteralClassHelloExprFunc = async (
+  s: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.NullLiteralClassHelloExprFunc(
+    s,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "PdfInputExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Pdf } doc - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const PdfInputExprFunc = async (
+  doc: Pdf,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.PdfInputExprFunc(
+    doc,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "ReturnCategory" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -4929,25 +5128,6 @@ export const ReturnElseIfExpr = async (
   const __stream__ = b.stream.ReturnElseIfExpr(
     a,
     b,
-  );
-  return Promise.resolve(__stream__.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "ReturnImageFromUrl" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { string } url - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const ReturnImageFromUrl = async (
-  url: string,
-): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.ReturnImageFromUrl(
-    url,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
@@ -5002,22 +5182,6 @@ export const ReturnNumberCallingLlm = async (
 export const ReturnOne = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const __stream__ = b.stream.ReturnOne(
-  );
-  return Promise.resolve(__stream__.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "SimpleWatchWithFilter" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const SimpleWatchWithFilter = async (
-): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.SimpleWatchWithFilter(
   );
   return Promise.resolve(__stream__.toStreamable());
 };
@@ -5102,17 +5266,324 @@ export const SumFromTo = async (
 };
 
 /**
- * Executes the streaming variant of the "WorkflowWatch" BAML action.
+ * Executes the streaming variant of the "TestFnNamedArgsLiteralBoolExprFunc" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
+ * @param { true } myBool - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
-export const WorkflowWatch = async (
+export const TestFnNamedArgsLiteralBoolExprFunc = async (
+  myBool: true,
 ): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.WorkflowWatch(
+  const __stream__ = b.stream.TestFnNamedArgsLiteralBoolExprFunc(
+    myBool,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsLiteralIntExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { 1 } myInt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsLiteralIntExprFunc = async (
+  myInt: 1,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsLiteralIntExprFunc(
+    myInt,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsLiteralStringExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { "My String" } myString - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsLiteralStringExprFunc = async (
+  myString: "My String",
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsLiteralStringExprFunc(
+    myString,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleBoolExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { boolean } myBool - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleBoolExprFunc = async (
+  myBool: boolean,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleBoolExprFunc(
+    myBool,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleClassExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { types.NamedArgsSingleClass } myArg - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleClassExprFunc = async (
+  myArg: types.NamedArgsSingleClass,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleClassExprFunc(
+    myArg,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleEnumListExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { types.NamedArgsSingleEnumList[] } myArg - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleEnumListExprFunc = async (
+  myArg: types.NamedArgsSingleEnumList[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleEnumListExprFunc(
+    myArg,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleFloatExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } myFloat - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleFloatExprFunc = async (
+  myFloat: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleFloatExprFunc(
+    myFloat,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleIntExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { number } myInt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleIntExprFunc = async (
+  myInt: number,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleIntExprFunc(
+    myInt,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleMapStringToClassExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Record<string, types.StringToClassEntry> } myMap - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleMapStringToClassExprFunc = async (
+  myMap: Record<string, types.StringToClassEntry>,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToClassExprFunc(
+    myMap,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleMapStringToMapExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Record<string, Record<string, string>> } myMap - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleMapStringToMapExprFunc = async (
+  myMap: Record<string, Record<string, string>>,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToMapExprFunc(
+    myMap,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleMapStringToStringExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Record<string, string> } myMap - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleMapStringToStringExprFunc = async (
+  myMap: Record<string, string>,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleMapStringToStringExprFunc(
+    myMap,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleStringArrayExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string[] } myStringArray - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleStringArrayExprFunc = async (
+  myStringArray: string[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleStringArrayExprFunc(
+    myStringArray,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleStringExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } myString - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleStringExprFunc = async (
+  myString: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleStringExprFunc(
+    myString,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFnNamedArgsSingleStringListExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string[] } myArg - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFnNamedArgsSingleStringListExprFunc = async (
+  myArg: string[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestFnNamedArgsSingleStringListExprFunc(
+    myArg,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestImageInputExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } img - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestImageInputExprFunc = async (
+  img: Image,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestImageInputExprFunc(
+    img,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestImageListInputExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image[] } imgs - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestImageListInputExprFunc = async (
+  imgs: Image[],
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestImageListInputExprFunc(
+    imgs,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "VideoInputExprFunc" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Video } vid - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const VideoInputExprFunc = async (
+  vid: Video,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.VideoInputExprFunc(
+    vid,
   );
   return Promise.resolve(__stream__.toStreamable());
 };
@@ -5129,22 +5600,6 @@ export const WorkflowWatch = async (
 export const WorkflowWatchChild = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const __stream__ = b.stream.WorkflowWatchChild(
-  );
-  return Promise.resolve(__stream__.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "WorkflowWatchWithFilter" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const WorkflowWatchWithFilter = async (
-): Promise<ReadableStream<Uint8Array>> => {
-  const __stream__ = b.stream.WorkflowWatchWithFilter(
   );
   return Promise.resolve(__stream__.toStreamable());
 };

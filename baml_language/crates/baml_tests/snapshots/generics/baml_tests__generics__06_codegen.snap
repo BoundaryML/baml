@@ -1,6 +1,6 @@
 ---
-source: target/debug/build/baml_tests-50646ef7890fdaa2/out/generated_tests.rs
+source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
 expression: output
 ---
 === NO CODEGEN DUE TO ERRORS ===
-Error: MissingExpression
+Error: InFunction { function_name: "GetTodo", error: MissingExpression { span: Span { file_id: FileId(0), range: 106..130 } } }

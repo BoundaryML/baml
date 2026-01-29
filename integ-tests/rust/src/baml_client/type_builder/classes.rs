@@ -1211,57 +1211,6 @@ impl DummyJsonTodoClassBuilder {
     }
 }
 
-/// Wrapper for the `DummyJsonTodoUpdate` class builder.
-///
-/// Provides type-safe method access to fields defined in the schema.
-/// Access fields via methods: `builder.field_name()`
-
-pub struct DummyJsonTodoUpdateClassBuilder {
-    inner: baml::ClassBuilder,
-}
-
-impl DummyJsonTodoUpdateClassBuilder {
-    /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
-        Self { inner }
-    }
-
-    /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
-        &self.inner
-    }
-
-    /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
-        self.inner.as_type().expect(
-            "DummyJsonTodoUpdate is statically defined in .baml and should always have a type",
-        )
-    }
-
-    // =========================================================================
-    // Field Accessors (1:1 with schema field names)
-    // =========================================================================
-
-    /// Access the `todo` field builder.
-    pub fn property_todo(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("todo").expect(
-            "DummyJsonTodoUpdate.todo is statically defined in .baml and should always be present",
-        )
-    }
-
-    /// Access the `completed` field builder.
-    pub fn property_completed(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("completed")
-            .expect("DummyJsonTodoUpdate.completed is statically defined in .baml and should always be present")
-    }
-
-    /// Access the `userId` field builder.
-    pub fn property_userId(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("userId")
-            .expect("DummyJsonTodoUpdate.userId is statically defined in .baml and should always be present")
-    }
-}
-
 /// Wrapper for the `DummyOutput` class builder.
 ///
 /// Provides type-safe method access to fields defined in the schema.

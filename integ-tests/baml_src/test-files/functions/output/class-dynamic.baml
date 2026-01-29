@@ -50,3 +50,5 @@ function ExtractHobby(text: string) -> Hobby[] {
      {{text}}
    "#
 }
+
+// TODO: expr func

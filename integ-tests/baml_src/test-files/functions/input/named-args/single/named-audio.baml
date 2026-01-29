@@ -8,6 +8,11 @@ function AudioInput(aud: audio) -> string{
     {{ aud }}
   "#   
 }  
+
+function AudioInputExprFunc(aud: audio) -> string{
+  return "Hello, world!";
+}
+
 //        
 
 client GPT4Audio {

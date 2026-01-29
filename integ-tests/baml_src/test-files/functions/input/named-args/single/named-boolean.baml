@@ -6,7 +6,11 @@ function TestFnNamedArgsSingleBool(myBool: bool) -> string{
     Return this value back to me: {{myBool}}
   "#
 } 
- 
+
+function TestFnNamedArgsSingleBoolExprFunc(myBool: bool) -> string{
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleBool {
   functions [TestFnNamedArgsSingleBool]
   args {

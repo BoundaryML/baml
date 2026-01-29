@@ -71,8 +71,6 @@ pub enum Types {
 
     DummyJsonTodo(DummyJsonTodo),
 
-    DummyJsonTodoUpdate(DummyJsonTodoUpdate),
-
     DummyOutput(DummyOutput),
 
     DynInputOutput(DynInputOutput),
@@ -402,8 +400,6 @@ impl baml::KnownTypes for Types {
             Types::Document1559(_) => "Document1559",
 
             Types::DummyJsonTodo(_) => "DummyJsonTodo",
-
-            Types::DummyJsonTodoUpdate(_) => "DummyJsonTodoUpdate",
 
             Types::DummyOutput(_) => "DummyOutput",
 

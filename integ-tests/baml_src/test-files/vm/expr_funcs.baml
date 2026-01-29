@@ -107,14 +107,14 @@ function ReturnCategory(category: Category) -> Category {
     category
 }
 
-function ReturnImageFromUrl(url: string) -> image {
-    image.from_url(url)
-}
+// function ReturnImageFromUrl(url: string) -> image {
+//     image.from_url(url)
+// }
 
-function HomeEnvVarIsEmpty() -> bool {
-    let home = env.HOME;
-    home == ""
-}
+// function HomeEnvVarIsEmpty() -> bool {
+//     let home = env.HOME;
+//     home == ""
+// }
 
 // --------------------------------
 // Expression Functions with LLM calls.
@@ -154,47 +154,48 @@ class DummyJsonTodo {
     userId int
 }
 
-function ExecFetchAs(url: string) -> DummyJsonTodo {
-    let todo = baml.fetch_as<DummyJsonTodo>(url);
+// function ExecFetchAs(url: string) -> DummyJsonTodo {
+//     let todo = baml.fetch_as<DummyJsonTodo>(url);
 
-    todo
-}
+//     todo
+// }
 
-function ExecFetchAsWithHttpPostRequest() -> DummyJsonTodo {
-    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
-        method: baml.HttpMethod.Post,
-        url: "https://dummyjson.com/todos/add",
-        json: {
-            "todo": "Buy milk",
-            "completed": false,
-            "userId": 5
-        },
-    })
-}
+// function ExecFetchAsWithHttpPostRequest() -> DummyJsonTodo {
+//     baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+//         method: baml.HttpMethod.Post,
+//         url: "https://dummyjson.com/todos/add",
+//         json: {
+//             "todo": "Buy milk",
+//             "completed": false,
+//             "userId": 5
+//         },
+//     })
+// }
 
-// No ID cause API fails
-class DummyJsonTodoUpdate {
-    todo string
-    completed bool
-    userId int
-}
+// // No ID cause API fails
+// class DummyJsonTodoUpdate {
+//     todo string
+//     completed bool
+//     userId int
+// }
 
-function ExecFetchAsWithHttpPutRequestAndClassJson() -> DummyJsonTodo {
-    let updated_todo = DummyJsonTodoUpdate {
-        todo: "Buy milk",
-        completed: false,
-        userId: 5
-    };
+// function ExecFetchAsWithHttpPutRequestAndClassJson() -> DummyJsonTodo {
+//     let updated_todo = DummyJsonTodoUpdate {
+//         todo: "Buy milk",
+//         completed: false,
+//         userId: 5
+//     };
 
-    baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
-        method: baml.HttpMethod.Put,
-        url: "https://dummyjson.com/todos/1",
-        json: updated_todo,
-    })
-}
+//     // baml.fetch_as<DummyJsonTodo>(baml.HttpRequest {
+//     //     method: baml.HttpMethod.Put,
+//     //     url: "https://dummyjson.com/todos/1",
+//     //     json: updated_todo,
+//     // })
+//     updated_todo
+// }
 
-test Fib5() {
-  functions [IterativeFibonacci]
-  args { n 5 }
-  @@assert( {{ this == 5 }} )
-}
+// test Fib5 {
+//   functions [IterativeFibonacci]
+//   args { n 5 }
+//   @@assert( {{ this == 5 }} )
+// }

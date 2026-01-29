@@ -15,6 +15,13 @@ function FnOutputClass(input: string) -> TestOutputClass {
   "#
 }
 
+function FnOutputClassExprFunc(input: string) -> TestOutputClass {
+  return TestOutputClass {
+    prop1: "example string",
+    prop2: 540
+  };
+}
+
 test TestClass {
   functions [FnOutputClass]
   args {

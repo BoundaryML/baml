@@ -13,3 +13,7 @@ function AllowedOptionals(optionals: OptionalListAndMap) -> OptionalListAndMap {
     {{ctx.output_format}}
   "#
 }
+
+function AllowedOptionalsExprFunc(optionals: OptionalListAndMap) -> OptionalListAndMap {
+  return optionals;
+}

@@ -127,6 +127,10 @@ pub enum DiagnosticId {
     DuplicateTypeBuilderBlock,
     IncompleteDynamicDefinition,
     TypeBuilderSyntaxError,
+
+    // Cycle detection diagnostics (E0068-E0069)
+    AliasCycle,
+    ClassCycle,
 }
 
 impl DiagnosticId {
@@ -213,6 +217,10 @@ impl DiagnosticId {
             DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
             DiagnosticId::IncompleteDynamicDefinition => "E0042",
             DiagnosticId::TypeBuilderSyntaxError => "E0043",
+
+            // Cycle detection diagnostics
+            DiagnosticId::AliasCycle => "E0068",
+            DiagnosticId::ClassCycle => "E0069",
         }
     }
 }

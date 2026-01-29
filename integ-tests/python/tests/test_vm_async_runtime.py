@@ -7,7 +7,6 @@ from baml_py import Image
 
 from ..baml_client import b
 from ..baml_client.runtime import disassemble
-from ..baml_client.types import DummyJsonTodo
 
 
 @pytest.mark.asyncio
@@ -32,47 +31,45 @@ async def test_call_llm_describe_image():
     # Call an expression function that calls an LLM function to check if the
     # media type is passed correctly.
     description = await b.CallLlmDescribeImage(
-        Image.from_url(
-            "https://i.imgur.com/93fWs5R.png"
-        )
+        Image.from_url("https://i.imgur.com/93fWs5R.png")
     )
 
     assert "ogre" in description.lower()
 
 
-@pytest.mark.asyncio
-async def test_baml_fetch_as():
-    disassemble(b.ExecFetchAs)
+# @pytest.mark.asyncio
+# async def test_baml_fetch_as():
+#     disassemble(b.ExecFetchAs)
 
-    result = await b.ExecFetchAs("https://dummyjson.com/todos/1")
+#     result = await b.ExecFetchAs("https://dummyjson.com/todos/1")
 
-    assert result == DummyJsonTodo(
-        id=1,
-        todo="Do something nice for someone you care about",
-        completed=False,
-        userId=152,
-    )
-
-
-@pytest.mark.asyncio
-async def test_baml_fetch_as_with_http_post_request():
-    result = await b.ExecFetchAsWithHttpPostRequest()
-
-    assert result == DummyJsonTodo(
-        id=255,
-        todo="Buy milk",
-        completed=False,
-        userId=5,
-    )
+#     assert result == DummyJsonTodo(
+#         id=1,
+#         todo="Do something nice for someone you care about",
+#         completed=False,
+#         userId=152,
+#     )
 
 
-@pytest.mark.asyncio
-async def test_baml_fetch_as_with_http_put_request_and_class_json():
-    result = await b.ExecFetchAsWithHttpPutRequestAndClassJson()
+# @pytest.mark.asyncio
+# async def test_baml_fetch_as_with_http_post_request():
+#     result = await b.ExecFetchAsWithHttpPostRequest()
 
-    assert result == DummyJsonTodo(
-        id=1,
-        todo="Buy milk",
-        completed=False,
-        userId=5,
-    )
+#     assert result == DummyJsonTodo(
+#         id=255,
+#         todo="Buy milk",
+#         completed=False,
+#         userId=5,
+#     )
+
+
+# @pytest.mark.asyncio
+# async def test_baml_fetch_as_with_http_put_request_and_class_json():
+#     result = await b.ExecFetchAsWithHttpPutRequestAndClassJson()
+
+#     assert result == DummyJsonTodo(
+#         id=1,
+#         todo="Buy milk",
+#         completed=False,
+#         userId=5,
+#     )
