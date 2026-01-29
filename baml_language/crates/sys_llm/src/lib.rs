@@ -31,7 +31,7 @@ pub fn specialize_prompt(client: &PrimitiveClientValue, prompt: PromptAst) -> Pr
 
 /// Execute the `render_prompt` LLM operation.
 ///
-/// Arguments: [`PrimitiveClient`, template: String, args: Map<String, Any>]
+/// Arguments: `[PrimitiveClient, template: String, args: Map<String, Any>]`
 pub fn execute_render_prompt(args: &[BexValue]) -> Result<PromptAst, OpError> {
     use bex_jinja_runtime::RenderPromptError;
     let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
@@ -83,7 +83,7 @@ pub fn execute_render_prompt(args: &[BexValue]) -> Result<PromptAst, OpError> {
 
 /// Execute the `specialize_prompt` LLM `SysOp`.
 ///
-/// Arguments: [`PrimitiveClient`, prompt: `PromptAst`]
+/// Arguments: `[PrimitiveClient, prompt: PromptAst]`
 pub fn execute_specialize_prompt(args: &[BexValue]) -> Result<PromptAst, OpError> {
     let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
         return Err(bex_jinja_runtime::RenderPromptError::InvalidArgument {
@@ -134,7 +134,7 @@ pub fn vm_prompt_ast_to_external(ast: &bex_vm_types::PromptAst) -> PromptAst {
 
 /// Execute the `build_primitive_client` LLM operation.
 ///
-/// Arguments: [name: String, provider: String, `default_role`: String, `allowed_roles`: Array<String>, options: Map]
+/// Arguments: `[name: String, provider: String, default_role: String, allowed_roles: Vec<String>, options: Map]`
 /// Returns: `PrimitiveClient`
 ///
 /// This is a simple constructor that takes already-evaluated values and builds a `PrimitiveClient`.
@@ -218,7 +218,7 @@ pub fn execute_build_primitive_client(args: &[BexValue]) -> Result<BexExternalVa
 
 /// Execute the `build_request` LLM operation.
 ///
-/// Arguments: [`PrimitiveClient`, prompt: `PromptAst`]
+/// Arguments: `[PrimitiveClient, prompt: PromptAst]`
 /// Returns: `HttpRequest` (to be sent via HTTP)
 ///
 /// TODO: Implement this by porting logic from legacy `LLMPrimitiveProvider::build_request`.
@@ -228,7 +228,7 @@ pub fn execute_build_request(_args: &[BexValue]) -> Result<BexExternalValue, OpE
 
 /// Execute the `parse` LLM operation.
 ///
-/// Arguments: [`PrimitiveClient`, response: `Response`, `function_name`: String]
+/// Arguments: `[PrimitiveClient, response: Response, function_name: String]`
 /// Returns: The parsed BAML value
 ///
 /// TODO: Implement this by porting logic from legacy response parsing.
@@ -238,7 +238,7 @@ pub fn execute_parse_response(_args: &[BexValue]) -> Result<BexExternalValue, Op
 
 /// Execute the `http.send` operation.
 ///
-/// Arguments: [request: `Request`]
+/// Arguments: `[request: Request]`
 /// Returns: `Response`
 ///
 /// TODO: Implement this by extending the HTTP client to support full requests.

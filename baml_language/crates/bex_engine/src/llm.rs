@@ -12,7 +12,7 @@ use sys_types::OpError;
 
 /// Execute the `get_jinja_template` LLM operation.
 ///
-/// Arguments: [`function_name`: String]
+/// Arguments: `[function_name: String]`
 /// Returns: String (the Jinja template for the function's prompt)
 pub(crate) fn execute_get_jinja_template(
     snapshot: &BexProgram,
@@ -48,7 +48,7 @@ pub(crate) fn execute_get_jinja_template(
 
 /// Execute the `get_client_function` LLM operation.
 ///
-/// Arguments: [`function_name`: String]
+/// Arguments: `[function_name: String]`
 /// Returns: `FunctionRef` (a callable reference to the client's resolve function)
 ///
 /// This returns a function reference that, when called, evaluates the client's
