@@ -4385,6 +4385,8 @@ name = "sys_native"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "bex_heap",
+ "bex_vm_types",
  "indexmap 2.13.0",
  "reqwest",
  "sys_resource_types",
@@ -4401,6 +4403,7 @@ name = "sys_types"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "bex_heap",
  "bex_jinja_runtime",
  "bex_vm_types",
  "sys_resource_types",

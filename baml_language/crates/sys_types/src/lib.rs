@@ -4,10 +4,11 @@
 //! that the BEX engine can dispatch to. Operations receive and return
 //! `BexExternalValue` directly.
 
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Arc};
 
-// Re-export BexExternalValue for ops
-pub use bex_external_types::BexExternalValue;
+// Re-export BexExternalValue and BexValue for ops
+pub use bex_external_types::{BexExternalValue, BexValue};
+pub use bex_heap::BexHeap;
 // ============================================================================
 // Operation Errors
 // ============================================================================
@@ -62,9 +63,14 @@ pub enum SysOpResult {
 
 /// Function pointer type for system operations.
 ///
-/// Each operation takes a vector of arguments and returns a `SysOpResult`
+/// Each operation takes a heap reference and arguments, returning a `SysOpResult`
 /// which is either an immediate result or a future to await.
-pub type SysOpFn = fn(Vec<BexExternalValue>) -> SysOpResult;
+///
+/// The heap reference allows ops to access instance fields via `with_gc_protection`.
+/// Arguments are `BexValue` which can be either:
+/// - `BexValue::External(...)` for primitives/strings copied from VM
+/// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
+pub type SysOpFn = fn(heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult;
 
 /// Table of system operation implementations.
 ///
@@ -97,10 +103,7 @@ pub struct SysOps {
     // HTTP operations
     pub http_fetch: SysOpFn,
     pub http_response_text: SysOpFn,
-    pub http_response_status: SysOpFn,
     pub http_response_ok: SysOpFn,
-    pub http_response_url: SysOpFn,
-    pub http_response_headers: SysOpFn,
 }
 
 impl SysOps {
@@ -122,69 +125,54 @@ impl SysOps {
         // Match on the enum variant to return the appropriate function pointer.
         // Each closure captures nothing, so they can be coerced to fn pointers.
         match operation {
-            SysOp::FsOpen => |_| {
+            SysOp::FsOpen => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::FsOpen,
                 }))
             },
-            SysOp::FsRead => |_| {
+            SysOp::FsRead => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::FsRead,
                 }))
             },
-            SysOp::FsClose => |_| {
+            SysOp::FsClose => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::FsClose,
                 }))
             },
-            SysOp::NetConnect => |_| {
+            SysOp::NetConnect => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::NetConnect,
                 }))
             },
-            SysOp::NetRead => |_| {
+            SysOp::NetRead => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::NetRead,
                 }))
             },
-            SysOp::NetClose => |_| {
+            SysOp::NetClose => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::NetClose,
                 }))
             },
-            SysOp::Shell => |_| {
+            SysOp::Shell => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::Shell,
                 }))
             },
-            SysOp::HttpFetch => |_| {
+            SysOp::HttpFetch => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::HttpFetch,
                 }))
             },
-            SysOp::HttpResponseText => |_| {
+            SysOp::HttpResponseText => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::HttpResponseText,
                 }))
             },
-            SysOp::HttpResponseStatus => |_| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpResponseStatus,
-                }))
-            },
-            SysOp::HttpResponseOk => |_| {
+            SysOp::HttpResponseOk => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::HttpResponseOk,
-                }))
-            },
-            SysOp::HttpResponseUrl => |_| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpResponseUrl,
-                }))
-            },
-            SysOp::HttpResponseHeaders => |_| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpResponseHeaders,
                 }))
             },
         }
@@ -204,10 +192,7 @@ impl SysOps {
             shell: Self::unsupported(SysOp::Shell),
             http_fetch: Self::unsupported(SysOp::HttpFetch),
             http_response_text: Self::unsupported(SysOp::HttpResponseText),
-            http_response_status: Self::unsupported(SysOp::HttpResponseStatus),
             http_response_ok: Self::unsupported(SysOp::HttpResponseOk),
-            http_response_url: Self::unsupported(SysOp::HttpResponseUrl),
-            http_response_headers: Self::unsupported(SysOp::HttpResponseHeaders),
         }
     }
 }
@@ -293,10 +278,15 @@ mod tests {
 
     use super::*;
 
+    fn test_heap() -> Arc<BexHeap> {
+        BexHeap::new(vec![])
+    }
+
     #[test]
     fn test_unsupported_returns_error() {
+        let heap = test_heap();
         let op = SysOps::unsupported(SysOp::Shell);
-        let result = op(vec![]);
+        let result = op(heap, &[]);
         match result {
             SysOpResult::Ready(Err(OpError::Unsupported { operation })) => {
                 assert_eq!(operation, SysOp::Shell);
@@ -307,10 +297,11 @@ mod tests {
 
     #[test]
     fn test_all_unsupported() {
+        let heap = test_heap();
         let ops = SysOps::all_unsupported();
 
         // Test each operation returns Unsupported
-        let result = (ops.fs_open)(vec![]);
+        let result = (ops.fs_open)(Arc::clone(&heap), &[]);
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError::Unsupported {
@@ -318,7 +309,7 @@ mod tests {
             }))
         ));
 
-        let result = (ops.shell)(vec![]);
+        let result = (ops.shell)(Arc::clone(&heap), &[]);
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError::Unsupported {

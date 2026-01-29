@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 12
 Objects: 66
-Globals: 49
+Globals: 46
 
 Function boolArray (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0    (true)
@@ -60,7 +60,7 @@ Function mixedArray (arity: 0, kind: Bytecode):
      4   RETURN          
 
 Function point (arity: 0, kind: Bytecode):
-     0   ALLOC_INSTANCE 2   (<class Point>)
+     0   ALLOC_INSTANCE 5   (<class Point>)
      1   COPY 0             
      2   LOAD_CONST 0       (1)
      3   STORE_FIELD 0      
@@ -70,21 +70,21 @@ Function point (arity: 0, kind: Bytecode):
      7   RETURN             
 
 Function pointArray (arity: 0, kind: Bytecode):
-     0    ALLOC_INSTANCE 2   (<class Point>)
+     0    ALLOC_INSTANCE 5   (<class Point>)
      1    COPY 0             
      2    LOAD_CONST 0       (1)
      3    STORE_FIELD 0      
      4    COPY 0             
      5    LOAD_CONST 1       (2)
      6    STORE_FIELD 1      
-     7    ALLOC_INSTANCE 2   (<class Point>)
+     7    ALLOC_INSTANCE 5   (<class Point>)
      8    COPY 0             
      9    LOAD_CONST 2       (3)
      10   STORE_FIELD 0      
      11   COPY 0             
      12   LOAD_CONST 3       (4)
      13   STORE_FIELD 1      
-     14   ALLOC_INSTANCE 2   (<class Point>)
+     14   ALLOC_INSTANCE 5   (<class Point>)
      15   COPY 0             
      16   LOAD_CONST 4       (5)
      17   STORE_FIELD 0      
@@ -110,9 +110,9 @@ Function stringValues (arity: 0, kind: Bytecode):
      5   RETURN         
 
 Function vec2d (arity: 0, kind: Bytecode):
-     0    ALLOC_INSTANCE 1   (<class Vec2D>)
+     0    ALLOC_INSTANCE 4   (<class Vec2D>)
      1    COPY 0             
-     2    ALLOC_INSTANCE 2   (<class Point>)
+     2    ALLOC_INSTANCE 5   (<class Point>)
      3    COPY 0             
      4    LOAD_CONST 0       (1)
      5    STORE_FIELD 0      
@@ -121,7 +121,7 @@ Function vec2d (arity: 0, kind: Bytecode):
      8    STORE_FIELD 1      
      9    STORE_FIELD 0      
      10   COPY 0             
-     11   ALLOC_INSTANCE 2   (<class Point>)
+     11   ALLOC_INSTANCE 5   (<class Point>)
      12   COPY 0             
      13   LOAD_CONST 2       (3)
      14   STORE_FIELD 0      

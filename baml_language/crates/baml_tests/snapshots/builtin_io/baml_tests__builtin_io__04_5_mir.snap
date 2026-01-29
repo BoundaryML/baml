@@ -1,20 +1,20 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn ReadAndClose() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.fs.File") // f
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f
     let _2: Unknown
     let _3: String
     let _4: Unknown
     let _5: String // content
-    let _6: Builtin("baml.fs.File")
+    let _6: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _7: Unknown
     let _8: Null
-    let _9: Builtin("baml.fs.File")
+    let _9: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _10: Unknown
 
     bb0: {
@@ -59,19 +59,19 @@ fn ReadAndClose() -> String {
 fn ReadMultipleFiles() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.fs.File") // f1
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f1
     let _2: Unknown
     let _3: String
     let _4: Unknown
-    let _5: Builtin("baml.fs.File") // f2
+    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f2
     let _6: Unknown
     let _7: String
     let _8: Unknown
     let _9: String // content1
-    let _10: Builtin("baml.fs.File")
+    let _10: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _11: Unknown
     let _12: String // content2
-    let _13: Builtin("baml.fs.File")
+    let _13: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _14: Unknown
     let _15: String
     let _16: String
@@ -130,11 +130,11 @@ fn ReadMultipleFiles() -> String {
 fn ReadFile() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.fs.File") // f
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f
     let _2: Unknown
     let _3: String
     let _4: Unknown
-    let _5: Builtin("baml.fs.File")
+    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _6: Unknown
 
     bb0: {
@@ -169,7 +169,7 @@ fn ReadFile() -> String {
 fn ReadFileInline() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.fs.File")
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
     let _2: Unknown
     let _3: String
     let _4: Unknown
@@ -206,19 +206,19 @@ fn ReadFileInline() -> String {
 fn MultipleConnections() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.net.Socket") // s1
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // s1
     let _2: Unknown
     let _3: String
     let _4: Unknown
-    let _5: Builtin("baml.net.Socket") // s2
+    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // s2
     let _6: Unknown
     let _7: String
     let _8: Unknown
     let _9: String // data1
-    let _10: Builtin("baml.net.Socket")
+    let _10: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _11: Unknown
     let _12: String // data2
-    let _13: Builtin("baml.net.Socket")
+    let _13: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _14: Unknown
     let _15: String
     let _16: String
@@ -277,7 +277,7 @@ fn MultipleConnections() -> String {
 fn ConnectAndReadInline() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.net.Socket")
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _2: Unknown
     let _3: String
     let _4: Unknown
@@ -314,11 +314,11 @@ fn ConnectAndReadInline() -> String {
 fn ConnectAndRead() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.net.Socket") // sock
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // sock
     let _2: Unknown
     let _3: String
     let _4: Unknown
-    let _5: Builtin("baml.net.Socket")
+    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _6: Unknown
 
     bb0: {
@@ -353,15 +353,15 @@ fn ConnectAndRead() -> String {
 fn ConnectReadAndClose() -> String {
     // Locals:
     let _0: String // return
-    let _1: Builtin("baml.net.Socket") // sock
+    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // sock
     let _2: Unknown
     let _3: String
     let _4: Unknown
     let _5: String // data
-    let _6: Builtin("baml.net.Socket")
+    let _6: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _7: Unknown
     let _8: Null
-    let _9: Builtin("baml.net.Socket")
+    let _9: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
     let _10: Unknown
 
     bb0: {

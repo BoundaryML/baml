@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 3
 Objects: 40
-Globals: 40
+Globals: 37
 
 Function Bar (arity: 1, kind: Bytecode):
      0   LOAD_CONST 0   (1)

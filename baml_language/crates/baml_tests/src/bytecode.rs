@@ -313,7 +313,6 @@ fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program:
 
         TirTy::Unknown | TirTy::Error | TirTy::Void => SnapTy::Null,
         TirTy::WatchAccessor(inner) => convert_tir_ty_to_snapshot_ty(inner),
-        TirTy::Builtin(path) => SnapTy::Class(path.clone()),
     }
 }
 

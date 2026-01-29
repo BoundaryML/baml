@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 10
 Objects: 57
-Globals: 47
+Globals: 44
 
 Function ConsecutiveHeaders (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (FirstHeader)

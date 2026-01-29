@@ -109,14 +109,8 @@ pub enum SysOp {
     HttpFetch,
     /// Get response body as text: `Response.text() -> String`
     HttpResponseText,
-    /// Get response status code: `Response.status() -> i64`
-    HttpResponseStatus,
     /// Check if response is OK (2xx): `Response.ok() -> bool`
     HttpResponseOk,
-    /// Get request URL: `Response.url() -> String`
-    HttpResponseUrl,
-    /// Get response headers: `Response.headers() -> Map<String, String>`
-    HttpResponseHeaders,
 }
 
 impl std::fmt::Display for ExternalOp {
@@ -148,10 +142,7 @@ impl std::fmt::Display for SysOp {
             SysOp::NetClose => write!(f, "net.close"),
             SysOp::HttpFetch => write!(f, "http.fetch"),
             SysOp::HttpResponseText => write!(f, "http.Response.text"),
-            SysOp::HttpResponseStatus => write!(f, "http.Response.status"),
             SysOp::HttpResponseOk => write!(f, "http.Response.ok"),
-            SysOp::HttpResponseUrl => write!(f, "http.Response.url"),
-            SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
         }
     }
 }

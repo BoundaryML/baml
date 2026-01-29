@@ -5,10 +5,39 @@
 
 use std::collections::HashMap;
 
-use baml_base::baml_debug;
+use baml_base::{Name, baml_debug};
 use baml_builtins::{BuiltinSignature, TypePattern};
+use baml_compiler_hir::FullyQualifiedName;
 
 use crate::Ty;
+
+/// Parse a builtin path string like "baml.http.Response" into an FQN.
+///
+/// The path is expected to start with "baml." and have at least one segment after.
+pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {
+    assert!(
+        path.starts_with("baml."),
+        "builtin path must start with 'baml.'"
+    );
+    // Strip "baml." prefix if present
+    let without_prefix = path.strip_prefix("baml.").unwrap_or(path);
+    let segments: Vec<&str> = without_prefix.split('.').collect();
+
+    assert!(
+        !segments.is_empty(),
+        "builtin path must have at least one segment"
+    );
+
+    if segments.len() == 1 {
+        // Just a name with no path, e.g., "Array"
+        FullyQualifiedName::builtin_primitive(Name::new(segments[0]))
+    } else {
+        // Multiple segments: all but last are path, last is name
+        let (path_segments, name) = segments.split_at(segments.len() - 1);
+        let path: Vec<Name> = path_segments.iter().map(|s| Name::new(*s)).collect();
+        FullyQualifiedName::builtin(path, Name::new(name[0]))
+    }
+}
 
 /// Type variable bindings from pattern matching.
 ///
@@ -82,8 +111,9 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         }
         (TypePattern::Media, Ty::Media(_)) => true,
 
-        // Builtin types match exactly by path
-        (TypePattern::Builtin(pattern_path), Ty::Builtin(ty_path)) => *pattern_path == ty_path,
+        // Builtin types match exactly by path - they are represented as Ty::Class now
+        // Use full display path (e.g., "baml.fs.File") for comparison
+        (TypePattern::Builtin(pattern_path), Ty::Class(fqn)) => *pattern_path == fqn.display(),
 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
@@ -134,7 +164,7 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         },
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
-        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
+        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
     }
 }
 
@@ -157,7 +187,7 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         },
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
-        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
+        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
     }
 }
 

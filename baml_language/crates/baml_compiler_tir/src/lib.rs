@@ -43,7 +43,7 @@ mod types;
 
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
-    method_return_type, substitute,
+    method_return_type, parse_builtin_path, substitute,
 };
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
@@ -76,7 +76,7 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
         TypePattern::Optional(inner) => {
             Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
         }
-        TypePattern::Builtin(path) => Ty::Builtin((*path).to_string()),
+        TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path)),
     }
 }
 
@@ -274,7 +274,7 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
     let resolution_ctx = TypeResolutionContext::new(db, project);
     let span = Span::default(); // TODO: get proper span from fields
 
-    let classes = hir_fields
+    let mut classes: HashMap<Name, HashMap<Name, Ty>> = hir_fields
         .classes(db)
         .iter()
         .map(|(class_name, fields)| {
@@ -290,6 +290,22 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
             (class_name.clone(), lowered_fields)
         })
         .collect();
+
+    // Add builtin class public fields
+    for builtin in baml_builtins::builtin_types() {
+        let public_fields: HashMap<Name, Ty> = builtin
+            .fields
+            .iter()
+            .filter(|f| !f.is_private)
+            .map(|f| {
+                (
+                    Name::new(f.name),
+                    builtins::substitute_unknown(f.ty.as_ref().unwrap()),
+                )
+            })
+            .collect();
+        classes.insert(Name::new(builtin.path), public_fields);
+    }
 
     ClassFieldTypesMap::new(db, classes)
 }
@@ -324,6 +340,12 @@ pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
     let items = baml_compiler_hir::project_items(db, project);
     let mut names = HashSet::new();
 
+    // Add builtin class names
+    for builtin in baml_builtins::builtin_types() {
+        names.insert(Name::new(builtin.path));
+    }
+
+    // Add user-defined class names
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::Class(class_loc) = item {
             let file = class_loc.file(db);
@@ -1255,11 +1277,33 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             let (callee_ty, effective_args): (Ty, Vec<(Ty, Option<ErrorLocation>)>) = match &body
                 .exprs[*callee]
             {
-                Expr::FieldAccess { base, field: _ } => {
+                Expr::FieldAccess { base, field } => {
                     // Method call: receiver.method(args) -> Type.method(receiver, args)
                     // This handles complex expressions like `f().method()` or `arr[0].method()`
                     let receiver_ty = infer_expr(ctx, *base, body);
-                    let callee_ty = infer_expr(ctx, *callee, body);
+
+                    // Try builtin method lookup first to handle cases where a field name
+                    // collides with a method name (e.g., Response.headers field vs headers() method)
+                    let callee_ty = if let Some((def, bindings)) =
+                        builtins::lookup_method(&receiver_ty, field.as_str())
+                    {
+                        // Build the function type from the builtin definition
+                        let mut param_types: Vec<Ty> = Vec::new();
+                        if def.receiver.is_some() {
+                            param_types.push(receiver_ty.clone());
+                        }
+                        for (_, pattern) in &def.params {
+                            param_types.push(builtins::substitute(pattern, &bindings));
+                        }
+                        let return_type = builtins::substitute(&def.returns, &bindings);
+                        Ty::Function {
+                            params: param_types,
+                            ret: Box::new(return_type),
+                        }
+                    } else {
+                        // Fall back to normal field access inference (which may find a class field)
+                        infer_expr(ctx, *callee, body)
+                    };
 
                     // Build effective args: [(receiver_type, None), ...explicit_args with spans]
                     let mut effective_args = vec![(receiver_ty, None)];

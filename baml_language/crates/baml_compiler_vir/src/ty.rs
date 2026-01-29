@@ -32,11 +32,6 @@ pub enum Ty {
     /// Type alias with resolved FQN.
     TypeAlias(FullyQualifiedName),
 
-    /// Builtin type (e.g., baml.fs.File).
-    /// These are types defined in the builtins that users can use
-    /// but whose implementation is in the engine (resource-backed).
-    Builtin(std::string::String),
-
     // Type constructors
     Optional(Box<Ty>),
     List(Box<Ty>),
@@ -157,7 +152,6 @@ impl fmt::Display for Ty {
             Ty::Class(fqn) => write!(f, "{fqn}"),
             Ty::Enum(fqn) => write!(f, "{fqn}"),
             Ty::TypeAlias(fqn) => write!(f, "{fqn}"),
-            Ty::Builtin(path) => write!(f, "{path}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
             Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),

@@ -234,6 +234,8 @@ pub struct BexEngine {
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
+    /// Resolved class names for instance allocation
+    resolved_class_names: HashMap<String, HeapPtr>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
     /// System operations provider.
@@ -278,6 +280,20 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
+        // Pre-compute class indices before moving objects to heap.
+        // This is used for allocating instances from sys-op results.
+        let class_indices: Vec<(String, usize)> = compile_time_objects
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, obj)| {
+                if let Object::Class(class) = obj {
+                    Some((class.name.clone(), idx))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         // Create the unified heap with compile-time objects
         let heap = BexHeap::new(compile_time_objects);
 
@@ -290,6 +306,12 @@ impl BexEngine {
                 let ptr = heap.compile_time_ptr(idx.into_raw());
                 (name, (ptr, kind))
             })
+            .collect();
+
+        // Build class name lookup table from pre-computed indices.
+        let resolved_class_names: HashMap<String, HeapPtr> = class_indices
+            .into_iter()
+            .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
@@ -306,6 +328,7 @@ impl BexEngine {
             heap,
             globals,
             resolved_function_names,
+            resolved_class_names,
             env_vars,
             sys_ops,
             // Initialize epoch tracking
@@ -1179,9 +1202,8 @@ impl BexEngine {
                                     match result {
                                         Ok(prompt_ast) => {
                                             // Convert external PromptAst to VM PromptAst and set future ready
-                                            let vm_ast = Self::external_prompt_ast_to_vm_owned(
-                                                vm, prompt_ast,
-                                            );
+                                            let vm_ast = self
+                                                .external_prompt_ast_to_vm_owned(vm, prompt_ast);
                                             let value = vm.alloc_prompt_ast(vm_ast);
                                             vm.set_future_ready(id, value)?;
                                         }
@@ -1198,12 +1220,14 @@ impl BexEngine {
                             }
                         }
                         ExternalOp::Sys(sys_op) => {
-                            match self.execute_sys_op(sys_op, args) {
+                            // Convert VM args to BexValue (handles for objects, primitives inline)
+                            let bex_args = self.vm_args_to_bex_values(vm, &pending.args);
+                            match self.execute_sys_op(sys_op, &bex_args) {
                                 SysOpResult::Ready(result) => {
                                     // Sync operation - set future to Ready without touching stack.
                                     // The VM will continue to the Await instruction which will
                                     // extract the value from the Ready future.
-                                    let value = Self::external_to_vm_value(
+                                    let value = self.external_to_vm_value(
                                         vm,
                                         result.map_err(EngineError::from)?,
                                     );
@@ -1272,7 +1296,7 @@ impl BexEngine {
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
                         let external = future.result?;
-                        let value = Self::external_to_vm_value(vm, external);
+                        let value = self.external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
                         if future.id == future_id {
                             continue 'vm_exec;
@@ -1287,7 +1311,7 @@ impl BexEngine {
                             .ok_or(EngineError::FutureChannelClosed)?;
 
                         let external = future.result?;
-                        let value = Self::external_to_vm_value(vm, external);
+                        let value = self.external_to_vm_value(vm, external);
                         vm.fulfil_future(future.id, value)?;
                         if future.id == future_id {
                             break;
@@ -1303,21 +1327,19 @@ impl BexEngine {
     }
 
     /// Execute a system operation using the provider table.
-    fn execute_sys_op(&self, op: SysOp, args: Vec<BexExternalValue>) -> SysOpResult {
+    fn execute_sys_op(&self, op: SysOp, args: &[BexValue]) -> SysOpResult {
+        let heap = Arc::clone(&self.heap);
         match op {
-            SysOp::FsOpen => (self.sys_ops.fs_open)(args),
-            SysOp::FsRead => (self.sys_ops.fs_read)(args),
-            SysOp::FsClose => (self.sys_ops.fs_close)(args),
-            SysOp::NetConnect => (self.sys_ops.net_connect)(args),
-            SysOp::NetRead => (self.sys_ops.net_read)(args),
-            SysOp::NetClose => (self.sys_ops.net_close)(args),
-            SysOp::Shell => (self.sys_ops.shell)(args),
-            SysOp::HttpFetch => (self.sys_ops.http_fetch)(args),
-            SysOp::HttpResponseText => (self.sys_ops.http_response_text)(args),
-            SysOp::HttpResponseStatus => (self.sys_ops.http_response_status)(args),
-            SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(args),
-            SysOp::HttpResponseUrl => (self.sys_ops.http_response_url)(args),
-            SysOp::HttpResponseHeaders => (self.sys_ops.http_response_headers)(args),
+            SysOp::FsOpen => (self.sys_ops.fs_open)(heap, args),
+            SysOp::FsRead => (self.sys_ops.fs_read)(heap, args),
+            SysOp::FsClose => (self.sys_ops.fs_close)(heap, args),
+            SysOp::NetConnect => (self.sys_ops.net_connect)(heap, args),
+            SysOp::NetRead => (self.sys_ops.net_read)(heap, args),
+            SysOp::NetClose => (self.sys_ops.net_close)(heap, args),
+            SysOp::Shell => (self.sys_ops.shell)(heap, args),
+            SysOp::HttpFetch => (self.sys_ops.http_fetch)(heap, args),
+            SysOp::HttpResponseText => (self.sys_ops.http_response_text)(heap, args),
+            SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(heap, args),
         }
     }
 
@@ -1413,6 +1435,86 @@ impl BexEngine {
         }
     }
 
+    /// Convert VM values to `BexValue` for sys ops.
+    ///
+    /// For primitive values (null, int, float, bool, string), creates `BexValue::External`.
+    /// For objects (instances, arrays, maps), creates `BexValue::Opaque` with a handle.
+    /// This allows sys ops to access heap objects via GC-protected handle resolution.
+    fn vm_args_to_bex_values(&self, vm: &BexVm, args: &[Value]) -> Vec<BexValue> {
+        args.iter()
+            .map(|v| self.vm_arg_to_bex_value(vm, v))
+            .collect()
+    }
+
+    fn vm_arg_to_bex_value(&self, vm: &BexVm, value: &Value) -> BexValue {
+        match value {
+            Value::Null => BexValue::External(BexExternalValue::Null),
+            Value::Int(i) => BexValue::External(BexExternalValue::Int(*i)),
+            Value::Float(f) => BexValue::External(BexExternalValue::Float(*f)),
+            Value::Bool(b) => BexValue::External(BexExternalValue::Bool(*b)),
+            Value::Object(ptr) => {
+                let obj = vm.get_object(*ptr);
+                match obj {
+                    // Strings are small enough to copy
+                    Object::String(s) => BexValue::External(BexExternalValue::String(s.clone())),
+                    // For instances, create a handle so sys ops can access fields via GC protection
+                    Object::Instance(_) => {
+                        let handle = self.heap.create_handle(*ptr);
+                        BexValue::Opaque(handle)
+                    }
+                    // For arrays and maps used as sys op args, copy them out
+                    Object::Array(arr) => {
+                        let items: Vec<BexExternalValue> = arr
+                            .iter()
+                            .map(|v| Self::vm_arg_to_external(vm, v))
+                            .collect();
+                        BexValue::External(BexExternalValue::Array {
+                            element_type: bex_external_types::Ty::Null,
+                            items,
+                        })
+                    }
+                    Object::Map(map) => {
+                        let entries: indexmap::IndexMap<String, BexExternalValue> = map
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Self::vm_arg_to_external(vm, v)))
+                            .collect();
+                        BexValue::External(BexExternalValue::Map {
+                            key_type: bex_external_types::Ty::String,
+                            value_type: bex_external_types::Ty::Null,
+                            entries,
+                        })
+                    }
+                    Object::Resource(handle) => {
+                        BexValue::External(BexExternalValue::Resource(handle.clone()))
+                    }
+                    // PrimitiveClient needs to be copied out for render_prompt
+                    Object::PrimitiveClient(client) => {
+                        let options_map = vm.get_object(client.options);
+                        let options = if let Object::Map(map) = options_map {
+                            map.iter()
+                                .map(|(k, v)| (k.clone(), Self::vm_arg_to_external(vm, v)))
+                                .collect()
+                        } else {
+                            indexmap::IndexMap::new()
+                        };
+                        BexValue::External(BexExternalValue::PrimitiveClient(
+                            bex_external_types::PrimitiveClientValue {
+                                name: client.name.clone(),
+                                provider: client.provider.clone(),
+                                default_role: client.default_role.clone(),
+                                allowed_roles: client.allowed_roles.clone(),
+                                options,
+                            },
+                        ))
+                    }
+                    other => {
+                        panic!("Cannot convert object type to BexValue for sys op: {other:?}")
+                    }
+                }
+            }
+        }
+    }
+
     /// Convert VM values to `BexExternalValues` for sys ops.
     ///
     /// This is simpler than `vm_value_to_external` because sys ops only receive
@@ -1475,6 +1577,30 @@ impl BexEngine {
                             },
                         )
                     }
+                    Object::Instance(instance) => {
+                        // Get class name from the class object
+                        let class_obj = vm.get_object(instance.class);
+                        let class_name = match class_obj {
+                            Object::Class(class) => class.name.clone(),
+                            _ => panic!("Instance class pointer doesn't point to a Class"),
+                        };
+
+                        // Get field names from class and convert fields
+                        let field_names = match class_obj {
+                            Object::Class(class) => &class.field_names,
+                            _ => panic!("Instance class pointer doesn't point to a Class"),
+                        };
+
+                        let fields: indexmap::IndexMap<String, BexExternalValue> = field_names
+                            .iter()
+                            .zip(instance.fields.iter())
+                            .map(|(name, value)| {
+                                (name.clone(), Self::vm_arg_to_external(vm, value))
+                            })
+                            .collect();
+
+                        BexExternalValue::Instance { class_name, fields }
+                    }
                     other => {
                         panic!(
                             "Cannot convert object type to BexExternalValue for external op: {other:?}"
@@ -1486,7 +1612,7 @@ impl BexEngine {
     }
 
     /// Convert a `BexExternalValue` result from sys ops back to a VM Value.
-    fn external_to_vm_value(vm: &mut BexVm, external: BexExternalValue) -> Value {
+    fn external_to_vm_value(&self, vm: &mut BexVm, external: BexExternalValue) -> Value {
         match external {
             BexExternalValue::Null => Value::Null,
             BexExternalValue::Int(i) => Value::Int(i),
@@ -1496,32 +1622,53 @@ impl BexEngine {
             BexExternalValue::Array { items, .. } => {
                 let values: Vec<Value> = items
                     .into_iter()
-                    .map(|v| Self::external_to_vm_value(vm, v))
+                    .map(|v| self.external_to_vm_value(vm, v))
                     .collect();
                 vm.alloc_array(values)
             }
             BexExternalValue::Map { entries, .. } => {
                 let values: indexmap::IndexMap<String, Value> = entries
                     .into_iter()
-                    .map(|(k, v)| (k, Self::external_to_vm_value(vm, v)))
+                    .map(|(k, v)| (k, self.external_to_vm_value(vm, v)))
                     .collect();
                 vm.alloc_map(values)
             }
             BexExternalValue::Resource(handle) => vm.alloc_resource(handle),
-            // These shouldn't come from sys ops, but handle gracefully
-            BexExternalValue::Instance { .. } => {
-                panic!("Unexpected Instance from sys op")
+            // Allocate instance by looking up class and converting fields
+            BexExternalValue::Instance { class_name, fields } => {
+                let class_ptr = self
+                    .resolved_class_names
+                    .get(&class_name)
+                    .unwrap_or_else(|| {
+                        panic!("Class '{class_name}' not found in resolved_class_names")
+                    });
+
+                // SAFETY: class_ptr points to a compile-time Class object
+                let field_names = match unsafe { class_ptr.get() } {
+                    Object::Class(class) => &class.field_names,
+                    _ => panic!("class_ptr must point to Class"),
+                };
+
+                // Build field values in the order defined by the class
+                let mut values = Vec::with_capacity(field_names.len());
+                for name in field_names {
+                    let ext = fields
+                        .get(name)
+                        .unwrap_or_else(|| panic!("missing field '{name}' in Instance"));
+                    values.push(self.external_to_vm_value(vm, ext.clone()));
+                }
+                vm.alloc_instance(*class_ptr, values)
             }
             BexExternalValue::Variant { .. } => {
                 panic!("Unexpected Variant from sys op")
             }
-            BexExternalValue::Union { value, .. } => Self::external_to_vm_value(vm, *value),
+            BexExternalValue::Union { value, .. } => self.external_to_vm_value(vm, *value),
             BexExternalValue::Media { .. } => {
                 panic!("Unexpected Media from sys op")
             }
             BexExternalValue::PromptAst(ast) => {
                 // Convert external PromptAst to VM PromptAst
-                let vm_ast = Self::external_prompt_ast_to_vm_owned(vm, ast);
+                let vm_ast = self.external_prompt_ast_to_vm_owned(vm, ast);
                 vm.alloc_prompt_ast(vm_ast)
             }
             BexExternalValue::PrimitiveClient(client) => {
@@ -1529,7 +1676,7 @@ impl BexEngine {
                 let options: indexmap::IndexMap<String, Value> = client
                     .options
                     .into_iter()
-                    .map(|(k, v)| (k, Self::external_to_vm_value(vm, v)))
+                    .map(|(k, v)| (k, self.external_to_vm_value(vm, v)))
                     .collect();
                 let options_ptr = vm.alloc_map(options);
                 let Value::Object(options_heap_ptr) = options_ptr else {
@@ -1548,6 +1695,7 @@ impl BexEngine {
 
     /// Convert owned external `PromptAst` to VM `PromptAst`.
     fn external_prompt_ast_to_vm_owned(
+        &self,
         vm: &mut BexVm,
         ast: bex_external_types::PromptAst,
     ) -> bex_vm_types::PromptAst {
@@ -1559,8 +1707,8 @@ impl BexEngine {
                 content,
                 metadata,
             } => {
-                let vm_content = Self::external_prompt_ast_to_vm_owned(vm, *content);
-                let metadata_value = Self::external_to_vm_value(vm, *metadata);
+                let vm_content = self.external_prompt_ast_to_vm_owned(vm, *content);
+                let metadata_value = self.external_to_vm_value(vm, *metadata);
                 bex_vm_types::PromptAst::Message {
                     role,
                     content: Box::new(vm_content),
@@ -1570,7 +1718,7 @@ impl BexEngine {
             bex_external_types::PromptAst::Vec(items) => {
                 let vm_items: Vec<_> = items
                     .into_iter()
-                    .map(|item| Self::external_prompt_ast_to_vm_owned(vm, item))
+                    .map(|item| self.external_prompt_ast_to_vm_owned(vm, item))
                     .collect();
                 bex_vm_types::PromptAst::Vec(vm_items)
             }

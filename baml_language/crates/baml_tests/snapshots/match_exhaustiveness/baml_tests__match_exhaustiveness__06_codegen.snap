@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 86
 Objects: 294
-Globals: 123
+Globals: 120
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)
@@ -419,19 +419,19 @@ Function ExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
 Function ExhaustiveNullableEnum (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
      1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
+     2    ALLOC_VARIANT 6        (<enum Status>)
      3    CMP_OP ==              
      4    POP_JUMP_IF_FALSE +2   (to 6)
      5    JUMP +20               (to 25)
      6    LOAD_VAR 1             (s)
      7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
+     8    ALLOC_VARIANT 6        (<enum Status>)
      9    CMP_OP ==              
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +12               (to 23)
      12   LOAD_VAR 1             (s)
      13   LOAD_CONST 2           (2)
-     14   ALLOC_VARIANT 3        (<enum Status>)
+     14   ALLOC_VARIANT 6        (<enum Status>)
      15   CMP_OP ==              
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   JUMP +4                (to 21)
@@ -601,7 +601,7 @@ Function ExhaustiveWithUnderscore (arity: 1, kind: Bytecode):
 
 Function GetStatus (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0      (0)
-     1   ALLOC_VARIANT 3   (<enum Status>)
+     1   ALLOC_VARIANT 6   (<enum Status>)
      2   RETURN            
 
 Function GuardedOnlyNonExhaustive (arity: 1, kind: Bytecode):
@@ -787,7 +787,7 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
      23   RETURN                 
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
-     0    LOAD_GLOBAL 78         (<fn GetStatus>)
+     0    LOAD_GLOBAL 75         (<fn GetStatus>)
      1    CALL 0                 
      2    DISCRIMINANT           
      3    COPY 0                 
@@ -1280,13 +1280,13 @@ Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
 Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
      1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 3        (<enum Status>)
+     2    ALLOC_VARIANT 6        (<enum Status>)
      3    CMP_OP ==              
      4    POP_JUMP_IF_FALSE +2   (to 6)
      5    JUMP +17               (to 22)
      6    LOAD_VAR 1             (s)
      7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 3        (<enum Status>)
+     8    ALLOC_VARIANT 6        (<enum Status>)
      9    CMP_OP ==              
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +9                (to 20)

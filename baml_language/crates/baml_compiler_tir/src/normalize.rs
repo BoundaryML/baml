@@ -42,8 +42,6 @@ enum StructuralTy {
     // User-defined (resolved by name)
     Class(Name),
     Enum(Name),
-    // Builtin types (e.g., baml.fs.File)
-    Builtin(std::string::String),
     // Constructors
     Optional(Box<StructuralTy>),
     List(Box<StructuralTy>),
@@ -233,7 +231,6 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Unknown => false,
             StructuralTy::Void => false,
             StructuralTy::WatchAccessor(_) => false,
-            StructuralTy::Builtin(_) => false,
         }
     }
     let recursive = find_recursive_aliases(aliases);
@@ -367,9 +364,6 @@ fn normalize_impl(
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
         },
-
-        // Builtin types
-        Ty::Builtin(path) => StructuralTy::Builtin(path.clone()),
     }
 }
 

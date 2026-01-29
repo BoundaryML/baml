@@ -1953,9 +1953,15 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     }
 
     /// Extract class name from a Ty.
+    ///
+    /// For builtin classes, returns the full path (e.g., "baml.http.Response").
+    /// For user classes, returns just the name (e.g., "`MyClass`").
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::TypeAlias(fqn) | Ty::Class(fqn) => Some(fqn.name.to_string()),
+            Ty::TypeAlias(fqn) | Ty::Class(fqn) => {
+                // Use display() to get full path for builtins, local name for user classes
+                Some(fqn.display())
+            }
             _ => None,
         }
     }
@@ -2052,7 +2058,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             baml_compiler_vir::Ty::WatchAccessor(inner) => {
                 Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
             }
-            baml_compiler_vir::Ty::Builtin(path) => Ty::Builtin(path.clone()),
         }
     }
 }

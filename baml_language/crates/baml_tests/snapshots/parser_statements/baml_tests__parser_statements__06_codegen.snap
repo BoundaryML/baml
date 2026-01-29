@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-86d881872effcad8/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 21
 Objects: 62
-Globals: 58
+Globals: 55
 
 Function ConditionalLogic (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (age)
@@ -203,7 +203,7 @@ Function let_statements (arity: 0, kind: Bytecode):
      10   LOAD_CONST 3       (3)
      11   ALLOC_ARRAY 3      
      12   STORE_VAR 3        (z)
-     13   ALLOC_INSTANCE 0   (<class Point>)
+     13   ALLOC_INSTANCE 3   (<class Point>)
      14   COPY 0             
      15   LOAD_CONST 1       (1)
      16   STORE_FIELD 0      

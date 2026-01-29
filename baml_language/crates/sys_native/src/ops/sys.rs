@@ -1,27 +1,33 @@
 //! System operations.
 
-use bex_external_types::BexExternalValue;
-use sys_types::{OpError, SysOpResult};
+use std::sync::Arc;
+
+use bex_heap::BexHeap;
+use sys_types::{BexExternalValue, BexValue, OpError, SysOpResult};
 use tokio::process::Command;
 
 /// Execute a shell command and return stdout.
 ///
 /// Signature: `fn shell(command: String) -> String`
-pub(crate) fn shell(args: Vec<BexExternalValue>) -> SysOpResult {
-    SysOpResult::Async(Box::pin(shell_async(args)))
+pub(crate) fn shell(_heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult {
+    let command = match extract_string(args.first()) {
+        Ok(c) => c,
+        Err(e) => return SysOpResult::Ready(Err(e)),
+    };
+    SysOpResult::Async(Box::pin(shell_async(command)))
 }
 
-async fn shell_async(args: Vec<BexExternalValue>) -> Result<BexExternalValue, OpError> {
-    let command = match args.into_iter().next() {
-        Some(BexExternalValue::String(s)) => s,
-        other => {
-            return Err(OpError::TypeError {
-                expected: "string command",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
+fn extract_string(value: Option<&BexValue>) -> Result<String, OpError> {
+    match value {
+        Some(BexValue::External(BexExternalValue::String(s))) => Ok(s.clone()),
+        other => Err(OpError::TypeError {
+            expected: "string command",
+            actual: format!("{other:?}"),
+        }),
+    }
+}
 
+async fn shell_async(command: String) -> Result<BexExternalValue, OpError> {
     let output = Command::new("sh")
         .arg("-c")
         .arg(&command)

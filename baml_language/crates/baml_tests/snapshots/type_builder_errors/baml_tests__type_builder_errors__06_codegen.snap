@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 1
 Objects: 39
-Globals: 38
+Globals: 35
 
 Function TypeBuilderFn (arity: 1, kind: External(Llm(RenderPrompt))):
   (no bytecode)
