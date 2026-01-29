@@ -29,7 +29,7 @@ fn GetRole() -> Union([Literal(String("admin")), Literal(String("user")), Litera
 
 }
 
-fn GPT4$options() -> Unknown {
+fn GPT4.resolve() -> Unknown {
     // Locals:
     let _0: Unknown // return
     let _1: Unknown

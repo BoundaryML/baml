@@ -57,9 +57,8 @@ pub const BUILTIN_LLM_PATH: &str = "<builtin>/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
-    BinOp, Bytecode, Class, ClientDefinition, CmpOp, ConstValue, Enum, Function, FunctionKind,
-    GlobalIndex, HeapPtr, Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value,
-    type_tags,
+    BinOp, Bytecode, Class, CmpOp, ConstValue, Enum, Function, FunctionKind, GlobalIndex, HeapPtr,
+    Instruction, Object, ObjectIndex, Program, SysOp, UnaryOp, Value, type_tags,
 };
 
 /// Generate bytecode for all functions in a project.
@@ -88,7 +87,6 @@ pub fn compile_files(
     // Format: (path, arity)
     const HIDDEN_LLM_BUILTINS: &[(&str, usize)] = &[
         ("baml.llm.get_jinja_template", 1),
-        ("baml.llm.get_client_chain", 1),
         ("baml.llm.build_primitive_client", 5),
         ("baml.llm.PrimitiveClient.render_prompt", 3),
         ("baml.llm.get_client_function", 1),
@@ -408,35 +406,6 @@ pub fn compile_files(
         }
     }
 
-    // Create ClientDefinition objects for each client
-    // Note: The client's $options function is already compiled in the main function loop above
-    for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
-        let items_struct = baml_compiler_hir::file_items(db, *file);
-        for item in items_struct.items(db) {
-            if let ItemId::Client(client_loc) = item {
-                let client = &item_tree[client_loc.id(db)];
-
-                // Create ClientDefinition with client metadata
-                // The options function is called by name: "{client_name}$options"
-                let client_def = ClientDefinition {
-                    name: client.name.to_string(),
-                    provider: client.provider.to_string(),
-                    default_role: client.default_role.clone().unwrap_or_default(),
-                    allowed_roles: client.allowed_roles.clone(),
-                };
-
-                // Add ClientDefinition to program
-                let client_def_idx = program.add_object(Object::ClientDefinition(client_def));
-
-                // Register client in client_definitions map
-                program
-                    .client_definitions
-                    .insert(client.name.to_string(), client_def_idx);
-            }
-        }
-    }
-
     Ok(program)
 }
 
@@ -492,10 +461,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         // LLM operations
         "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::LlmRenderPrompt),
         "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
-        "baml.llm.get_client_chain" => Some(SysOp::LlmGetClientChain),
         "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
         "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
-        "baml.llm.ClientDefinition.resolve" => Some(SysOp::LlmClientDefinitionResolve),
         // System operations
         "baml.fs.open" => Some(SysOp::FsOpen),
         "baml.fs.File.read" => Some(SysOp::FsRead),

@@ -278,9 +278,6 @@ pub struct BytecodeProgram {
     pub resolved_function_names: HashMap<String, (ObjectIndex, FunctionKind)>,
     pub resolved_class_names: HashMap<String, ObjectIndex>,
     pub resolved_enums_names: HashMap<String, ObjectIndex>,
-    /// Maps client names to their `ClientDefinition` indices.
-    /// The options function is looked up by name: `{ClientName}$options`.
-    pub resolved_client_definitions: HashMap<String, ObjectIndex>,
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
@@ -320,20 +317,12 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         }
     }
 
-    // Convert client_definitions indices to ObjectIndex
-    let resolved_client_definitions: HashMap<String, ObjectIndex> = program
-        .client_definitions
-        .into_iter()
-        .map(|(name, client_idx)| (name, ObjectIndex::from_raw(client_idx)))
-        .collect();
-
     Ok(BytecodeProgram {
         objects: ObjectPool::from_vec(objects),
         globals: program.globals,
         resolved_function_names,
         resolved_class_names,
         resolved_enums_names,
-        resolved_client_definitions,
         function_global_indices: program.function_global_indices,
     })
 }
@@ -365,8 +354,6 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::PrimitiveClient(_) => type_tags::PRIMITIVE_CLIENT,
-                Object::ClientDefinition(_) => type_tags::CLIENT_DEFINITION,
-                Object::ClientCallChain(_) => type_tags::CLIENT_CALL_CHAIN,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -780,27 +767,6 @@ impl BexVm {
             Object::PrimitiveClient(client) => Ok(client),
             _ => Err(InternalError::TypeError {
                 expected: ObjectType::PrimitiveClient.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
-    /// Allocate a client call chain object on the heap.
-    pub fn alloc_client_call_chain(&mut self, chain: bex_vm_types::ClientCallChain) -> Value {
-        Value::Object(self.tlab.alloc(Object::ClientCallChain(chain)))
-    }
-
-    /// Get client call chain from a Value.
-    pub fn as_client_call_chain(
-        &self,
-        value: &Value,
-    ) -> Result<&bex_vm_types::ClientCallChain, InternalError> {
-        let index = self.as_object_ptr(value, ObjectType::ClientCallChain)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::ClientCallChain(chain) => Ok(chain),
-            _ => Err(InternalError::TypeError {
-                expected: ObjectType::ClientCallChain.into(),
                 got: ObjectType::of(obj).into(),
             }),
         }

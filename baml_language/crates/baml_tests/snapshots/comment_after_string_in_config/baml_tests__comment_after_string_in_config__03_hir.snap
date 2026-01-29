@@ -3,7 +3,7 @@ source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function OpenRouterMistralSmall3_1_24b$options() -> <unknown> {
+function OpenRouterMistralSmall3_1_24b.resolve() -> <unknown> {
     baml.llm.build_primitive_client("OpenRouterMistralSmall3_1_24b", "unknown", "user", ["user", "assistant", "system"], { "base_url": "https://openrouter.ai/api/v1", "api_key": "OPENROUTER_API_KEY", "model": "mistralai/mistral-small-3.1-24b-instruct", "temperature": 0.1, "headers": {  } })
 }
 

@@ -285,10 +285,10 @@ fn function_signature_with_source_map<'db>(
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    // Check if this is a synthetic client options function (e.g., "GPT4$options")
-    if func_name.as_str().ends_with("$options") {
+    // Check if this is a compiler-generated function (e.g., client resolve)
+    if func.compiler_generated.is_some() {
         // Return a synthetic signature with Unknown return type to skip type checking.
-        // Client options can contain heterogeneous values (strings, ints, bools, arrays, maps).
+        // Compiler-generated functions may contain heterogeneous values.
         return (
             Arc::new(FunctionSignature {
                 name: func_name,
@@ -568,15 +568,20 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    // Check if this is a synthetic client options function (e.g., "GPT4$options")
-    if let Some(client_name) = func_name.as_str().strip_suffix("$options") {
+    // Check if this is a compiler-generated client resolve function
+    if let Some(item_tree::CompilerGenerated::ClientResolve { client_name }) =
+        &func.compiler_generated
+    {
         // Find the corresponding client definition in the source tree
         let tree = syntax_tree(db, file);
         let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
         let client_def = source_file.items().find_map(|item| {
             if let baml_compiler_syntax::ast::Item::Client(c) = item {
-                if c.name().map(|n| n.text() == client_name).unwrap_or(false) {
+                if c.name()
+                    .map(|n| n.text() == client_name.as_str())
+                    .unwrap_or(false)
+                {
                     return Some(c);
                 }
             }
@@ -586,10 +591,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
         if let Some(client) = client_def {
             // Get client metadata from item_tree
             let item_tree = file_item_tree(db, file);
-            let client_data = item_tree
-                .clients
-                .values()
-                .find(|c| c.name.as_str() == client_name);
+            let client_data = item_tree.clients.values().find(|c| c.name == *client_name);
 
             let (provider, default_role, allowed_roles) = if let Some(c) = client_data {
                 (
@@ -627,7 +629,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                             FunctionBody::lower_client_options_to_primitive_client(
                                 &options_block,
                                 file_id,
-                                client_name,
+                                client_name.as_str(),
                                 &provider,
                                 &default_role,
                                 &allowed_roles,
@@ -640,7 +642,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
             let file_id = file.file_id(db);
             let (body, source_map) = body::empty_primitive_client_body(
                 file_id,
-                client_name,
+                client_name.as_str(),
                 &provider,
                 &default_role,
                 &allowed_roles,
@@ -818,13 +820,17 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
         }
         SyntaxKind::CLIENT_DEF => {
             if let Some(c) = client::lower_client(node, ctx) {
-                // Create a synthetic function for the client options
-                // This function returns a Map of the client's evaluated options
-                let options_fn_name = Name::new(format!("{}$options", c.name));
-                let options_fn = item_tree::Function {
-                    name: options_fn_name,
+                // Create a compiler-generated resolve function for the client
+                // This function evaluates options and returns a PrimitiveClient
+                let client_name = c.name.clone();
+                let resolve_fn_name = Name::new(format!("{client_name}.resolve"));
+                let resolve_fn = item_tree::Function {
+                    name: resolve_fn_name,
+                    compiler_generated: Some(item_tree::CompilerGenerated::ClientResolve {
+                        client_name,
+                    }),
                 };
-                tree.alloc_function(options_fn);
+                tree.alloc_function(resolve_fn);
 
                 tree.alloc_client(c);
             }
@@ -1114,6 +1120,7 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
             // This keeps HIR lowering simple - no type resolution needed
             functions.push(Function {
                 name: method_name.text().into(),
+                compiler_generated: None,
             });
         }
     }
@@ -1330,7 +1337,10 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
     let func = FunctionDef::cast(node.clone())?;
     let name = func.name()?.text().into();
 
-    Some(Function { name })
+    Some(Function {
+        name,
+        compiler_generated: None,
+    })
 }
 
 /// Extract type alias from CST.

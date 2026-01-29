@@ -6,7 +6,7 @@ expression: output
 fn FetchDatax:
   (LLM function - no MIR)
 
-fn VertexGCP$options() -> Unknown {
+fn VertexGCP.resolve() -> Unknown {
     // Locals:
     let _0: Unknown // return
     let _1: Unknown

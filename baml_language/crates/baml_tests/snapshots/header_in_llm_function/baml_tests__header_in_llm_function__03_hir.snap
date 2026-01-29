@@ -13,7 +13,7 @@ function FetchDatax(user_id: string) -> Hi {
   "#
 }
 
-function VertexGCP$options() -> <unknown> {
+function VertexGCP.resolve() -> <unknown> {
     baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "user", ["user", "assistant", "system"], { "model": "gemini-2" })
 }
 

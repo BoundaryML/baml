@@ -39,9 +39,6 @@ pub struct Program {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
-
-    /// Maps client names to their `ClientDefinition` object indices.
-    pub client_definitions: HashMap<String, usize>,
 }
 
 impl Program {
@@ -107,14 +104,10 @@ pub enum SysOp {
     LlmRenderPrompt,
     /// Get the Jinja template for a function: `baml.llm.get_jinja_template(function_name) -> String`
     LlmGetJinjaTemplate,
-    /// Get the client chain for a function: `baml.llm.get_client_chain(function_name) -> Array<ClientDefinition>`
-    LlmGetClientChain,
     /// Build a `PrimitiveClient` from evaluated options: `baml.llm.build_primitive_client(...) -> PrimitiveClient`
     LlmBuildPrimitiveClient,
     /// Get the client function for a function: `baml.llm.get_client_function(function_name) -> fn() -> PrimitiveClient`
     LlmGetClientFunction,
-    /// Resolve a client definition: `ClientDefinition.resolve() -> PrimitiveClient`
-    LlmClientDefinitionResolve,
 }
 
 impl std::fmt::Display for SysOp {
@@ -135,10 +128,8 @@ impl std::fmt::Display for SysOp {
             SysOp::HttpResponseHeaders => write!(f, "http.Response.headers"),
             SysOp::LlmRenderPrompt => write!(f, "llm.render_prompt"),
             SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
-            SysOp::LlmGetClientChain => write!(f, "llm.get_client_chain"),
             SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
             SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
-            SysOp::LlmClientDefinitionResolve => write!(f, "llm.ClientDefinition.resolve"),
         }
     }
 }
@@ -451,12 +442,6 @@ pub enum Object {
     /// LLM primitive client (resolved, options evaluated).
     PrimitiveClient(PrimitiveClient),
 
-    /// LLM client definition (unresolved, options not yet evaluated).
-    ClientDefinition(ClientDefinition),
-
-    /// Client orchestration chain.
-    ClientCallChain(ClientCallChain),
-
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -480,12 +465,6 @@ impl std::fmt::Display for Object {
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::PrimitiveClient(client) => {
                 write!(f, "<client {}:{}>", client.provider, client.name)
-            }
-            Object::ClientDefinition(def) => {
-                write!(f, "<client_def {}:{}>", def.provider, def.name)
-            }
-            Object::ClientCallChain(chain) => {
-                write!(f, "<client_call_chain len={}>", chain.clients.len())
             }
             Object::Future(future) => match future {
                 Future::Pending(future) => {
@@ -594,48 +573,6 @@ pub struct PrimitiveClient {
 }
 
 // ============================================================================
-// ClientDefinition - unresolved client definition
-// ============================================================================
-
-/// An unresolved client definition.
-///
-/// Unlike `PrimitiveClient`, the options are not yet evaluated. The `options`
-/// Client definition with unevaluated options.
-///
-/// The options are evaluated by calling the function `{name}$options()` which
-/// returns a Map of evaluated config values. This function is created during
-/// HIR lowering from the client's options block.
-///
-/// To resolve: call `{name}$options()`, then use the result to build a `PrimitiveClient`.
-#[derive(Clone, Debug)]
-pub struct ClientDefinition {
-    /// Client name (e.g., "GPT4").
-    pub name: String,
-    /// Provider type (e.g., "openai", "anthropic").
-    pub provider: String,
-    /// Default role for chat messages (e.g., "user").
-    pub default_role: String,
-    /// Allowed roles for chat messages.
-    pub allowed_roles: Vec<String>,
-}
-
-// ============================================================================
-// ClientCallChain - orchestration wrapper for clients
-// ============================================================================
-
-/// A chain of clients for orchestration (fallback, round-robin, etc.).
-///
-/// For primitive clients, this wraps a single client.
-/// For composite clients (fallback/round-robin), this contains multiple clients.
-#[derive(Clone, Debug)]
-pub struct ClientCallChain {
-    /// The list of clients in this chain.
-    /// For a primitive client, this contains a single entry.
-    /// For composite clients, this contains the full strategy.
-    pub clients: Vec<HeapPtr>,
-}
-
-// ============================================================================
 // PromptAst - represents a structured prompt (recursive tree)
 // ============================================================================
 
@@ -722,8 +659,6 @@ pub enum ObjectType {
     Resource,
     PromptAst,
     PrimitiveClient,
-    ClientDefinition,
-    ClientCallChain,
 }
 
 impl ObjectType {
@@ -741,8 +676,6 @@ impl ObjectType {
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::PrimitiveClient(_) => Self::PrimitiveClient,
-            Object::ClientDefinition(_) => Self::ClientDefinition,
-            Object::ClientCallChain(_) => Self::ClientCallChain,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -780,8 +713,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::PrimitiveClient => write!(f, "primitive_client"),
-            ObjectType::ClientDefinition => write!(f, "client_definition"),
-            ObjectType::ClientCallChain => write!(f, "client_call_chain"),
         }
     }
 }

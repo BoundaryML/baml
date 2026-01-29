@@ -167,6 +167,17 @@ impl ItemTree {
     }
 }
 
+/// Metadata for compiler-generated functions.
+///
+/// These functions are created by the compiler during HIR lowering,
+/// not by the user. They skip type inference and have special handling.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompilerGenerated {
+    /// Client resolve function - evaluates options and returns `PrimitiveClient`.
+    /// Contains the client name (e.g., "GPT4" for "GPT4.resolve").
+    ClientResolve { client_name: Name },
+}
+
 /// A function definition in the `ItemTree`.
 ///
 /// This is the MINIMAL representation - ONLY the name.
@@ -174,6 +185,9 @@ impl ItemTree {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
     pub name: Name,
+    /// If this function is compiler-generated, contains the metadata.
+    /// `None` for user-defined functions.
+    pub compiler_generated: Option<CompilerGenerated>,
 }
 
 /// A class definition.

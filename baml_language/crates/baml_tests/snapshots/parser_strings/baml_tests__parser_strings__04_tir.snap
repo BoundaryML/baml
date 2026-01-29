@@ -9,5 +9,5 @@ expression: output
     Return: String
   Function GetRole:
     Return: Union([Literal(String("admin")), Literal(String("user")), Literal(String("guest"))])
-  Function GPT4$options:
+  Function GPT4.resolve:
     Return: Unknown

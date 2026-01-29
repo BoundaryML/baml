@@ -960,10 +960,11 @@ pub fn infer_function<'db>(
     enum_variants: Option<HashMap<Name, Vec<Name>>>,
     function_loc: FunctionLoc<'db>,
 ) -> InferenceResult {
-    // Skip type inference for synthetic client $options functions.
-    // These are created during HIR lowering and contain heterogeneous values
-    // (strings, ints, bools, arrays, maps) that shouldn't be type-checked.
-    if signature.name.as_str().ends_with("$options") {
+    // Skip type inference for compiler-generated functions (e.g., client resolve).
+    // These contain heterogeneous values that shouldn't be type-checked.
+    let item_tree = baml_compiler_hir::file_item_tree(db, function_loc.file(db));
+    let func = &item_tree[function_loc.id(db)];
+    if func.compiler_generated.is_some() {
         return InferenceResult {
             return_type: Ty::Unknown,
             param_types: HashMap::new(),

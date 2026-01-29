@@ -198,11 +198,6 @@ impl SysOps {
                     operation: SysOp::LlmGetJinjaTemplate,
                 }))
             },
-            SysOp::LlmGetClientChain => |_| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmGetClientChain,
-                }))
-            },
             SysOp::LlmBuildPrimitiveClient => |_| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::LlmBuildPrimitiveClient,
@@ -211,11 +206,6 @@ impl SysOps {
             SysOp::LlmGetClientFunction => |_| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
                     operation: SysOp::LlmGetClientFunction,
-                }))
-            },
-            SysOp::LlmClientDefinitionResolve => |_| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmClientDefinitionResolve,
                 }))
             },
         }

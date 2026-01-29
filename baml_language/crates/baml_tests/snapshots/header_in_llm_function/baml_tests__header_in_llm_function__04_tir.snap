@@ -5,5 +5,5 @@ expression: output
 === TYPE INFERENCE ===
   Function FetchDatax:
     Return: Class(FullyQualifiedName { namespace: Local, name: "Hi" })
-  Function VertexGCP$options:
+  Function VertexGCP.resolve:
     Return: Unknown

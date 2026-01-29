@@ -13,38 +13,6 @@ use rowan::{TextRange, ast::AstNode};
 
 use crate::{Name, source_map::HirSourceMap, type_ref::TypeRef};
 
-/// Strip quote delimiters from a string literal.
-///
-/// Handles both raw strings (`#"..."#`) and regular strings (`"..."`).
-/// Returns the content without the delimiters.
-///
-/// # Examples
-/// - `#"hello"#` -> `hello`
-/// - `"hello"` -> `hello`
-/// - `hello` -> `hello` (no change if no delimiters)
-///
-/// Create an empty map body for clients with no options.
-#[allow(dead_code)]
-pub fn empty_map_body(_file_id: FileId) -> (ExprBody, HirSourceMap) {
-    let mut exprs: Arena<Expr> = Arena::new();
-    let source_map = HirSourceMap::new();
-
-    // Create empty map expression with a placeholder range
-    let map_expr = exprs.alloc(Expr::Map { entries: vec![] });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        types: Arena::new(),
-        root_expr: Some(map_expr),
-        diagnostics: Vec::new(),
-    };
-
-    (body, source_map)
-}
-
 /// Create a `PrimitiveClient` body for clients with no options block.
 ///
 /// Returns: `baml.llm.build_primitive_client(name, provider, default_role, allowed_roles, {})`
@@ -603,7 +571,7 @@ impl FunctionBody {
 
     /// Lower a client options block to a `PrimitiveClient` expression.
     ///
-    /// Used for client `$options` functions. Takes the options config block
+    /// Used for client `.resolve` functions. Takes the options config block
     /// and client metadata, and creates a `FunctionBody` that returns:
     /// ```baml
     /// baml.llm.build_primitive_client(name, provider, default_role, allowed_roles, options_map)
@@ -673,46 +641,6 @@ impl FunctionBody {
         );
 
         ctx.finish(Some(call_expr))
-    }
-
-    /// Lower a config block to a map expression (for testing/simple cases).
-    #[allow(dead_code)]
-    pub fn lower_config_block_to_map(
-        config_block: &baml_compiler_syntax::ast::ConfigBlock,
-        file_id: FileId,
-    ) -> (ExprBody, HirSourceMap) {
-        let mut ctx = LoweringContext::new(file_id);
-
-        // Build map entries from config items
-        let entries: Vec<(ExprId, ExprId)> = config_block
-            .items()
-            .filter_map(|item| {
-                let key = item.key()?;
-                let key_text = key.text().to_string();
-
-                // Lower the key as a string literal
-                let key_expr =
-                    ctx.alloc_expr(Expr::Literal(Literal::String(key_text)), key.text_range());
-
-                // Lower the value - find the CONFIG_VALUE node and lower it
-                let value_expr = if let Some(config_value_node) = item.config_value_node() {
-                    ctx.lower_config_value(&config_value_node)
-                } else if let Some(nested_block) = item.nested_block() {
-                    // Nested config block - recursively build a map
-                    ctx.lower_config_block_to_map_expr(&nested_block)
-                } else {
-                    // Missing value - create a missing expr
-                    ctx.alloc_expr(Expr::Missing, key.text_range())
-                };
-
-                Some((key_expr, value_expr))
-            })
-            .collect();
-
-        // Create the map expression
-        let map_expr = ctx.alloc_expr(Expr::Map { entries }, config_block.syntax().text_range());
-
-        ctx.finish(Some(map_expr))
     }
 }
 

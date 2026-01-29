@@ -3,7 +3,22 @@ source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn GPT4$options() -> Unknown {
+fn Foo() -> Unknown {
+    // Locals:
+    let _0: Unknown // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn GPT4.resolve() -> Unknown {
     // Locals:
     let _0: Unknown // return
     let _1: Unknown
@@ -40,21 +55,6 @@ fn GPT4$options() -> Unknown {
 
     bb3: {
         goto -> bb1;
-    }
-
-}
-
-fn Foo() -> Unknown {
-    // Locals:
-    let _0: Unknown // return
-
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
     }
 
 }

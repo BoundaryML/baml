@@ -245,35 +245,9 @@ macro_rules! with_builtins {
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
                     }
 
-                    /// An unresolved client definition.
-                    /// Options are stored as a function that evaluates them when called.
-                    /// Call `resolve()` to get a fully evaluated `PrimitiveClient`.
-                    #[builtin]
-                    struct ClientDefinition {
-                        /// Evaluate options and return a resolved PrimitiveClient.
-                        /// This calls the options function to evaluate env vars, expressions, etc.
-                        #[external]
-                        fn resolve(self: ClientDefinition) -> PrimitiveClient;
-                    }
-
-                    /// A chain of clients for orchestration (fallback, round-robin, etc.).
-                    /// For primitive clients, this wraps a single client.
-                    #[builtin]
-                    struct ClientCallChain {
-                        /// Get the list of clients in this chain.
-                        #[uses(vm)]
-                        fn as_list(self: ClientCallChain) -> Array<PrimitiveClient>;
-                    }
-
                     /// Get the Jinja template for an LLM function.
                     #[external]
                     fn get_jinja_template(function_name: String) -> String;
-
-                    /// Get the client chain for an LLM function.
-                    /// Returns an array of ClientDefinition objects for the function.
-                    /// TODO: Currently returns ClientCallChain with evaluated clients.
-                    #[external]
-                    fn get_client_chain(function_name: String) -> ClientCallChain;
 
                     /// Build a PrimitiveClient from evaluated options.
                     /// Called after options have been evaluated by bytecode.
@@ -286,7 +260,7 @@ macro_rules! with_builtins {
                         options: Map<String, Any>
                     ) -> PrimitiveClient;
 
-                    /// Get the client $options function for an LLM function.
+                    /// Get the client resolve function for an LLM function.
                     /// Returns a function reference that, when called, returns a PrimitiveClient.
                     #[external]
                     fn get_client_function(function_name: String) -> FunctionRef;

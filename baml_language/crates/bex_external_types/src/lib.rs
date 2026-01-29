@@ -27,7 +27,7 @@ mod epoch_guard;
 mod handle;
 
 pub use bex_external_value::{
-    BexExternalValue, ClientCallChainValue, PrimitiveClientValue, PromptAst, Ty, UnionMetadata,
+    BexExternalValue, PrimitiveClientValue, PromptAst, Ty, UnionMetadata,
 };
 pub use bex_value::BexValue;
 pub use epoch_guard::EpochGuard;

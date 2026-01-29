@@ -3,7 +3,7 @@ source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn OpenRouterMistralSmall3_1_24b$options() -> Unknown {
+fn OpenRouterMistralSmall3_1_24b.resolve() -> Unknown {
     // Locals:
     let _0: Unknown // return
     let _1: Unknown

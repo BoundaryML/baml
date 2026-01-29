@@ -3,10 +3,6 @@ source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
-function TestClient$options() -> <unknown> {
-    baml.llm.build_primitive_client("TestClient", "baml-openai-chat", "user", ["user", "assistant", "system"], {  })
-}
-
 function CommentAfterArrow() -> string {
   client TestClient
   prompt #"
@@ -19,6 +15,10 @@ function FunctionWithComments(a: string, b: int) -> string {
   prompt #"
     test
   "#
+}
+
+function TestClient.resolve() -> <unknown> {
+    baml.llm.build_primitive_client("TestClient", "baml-openai-chat", "user", ["user", "assistant", "system"], {  })
 }
 
 client TestClient {
