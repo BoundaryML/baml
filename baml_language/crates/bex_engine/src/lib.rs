@@ -791,7 +791,7 @@ impl BexEngine {
             )),
             SysOp::LlmBuildRequest => SysOpResult::Ready(sys_llm::execute_build_request(args)),
             SysOp::LlmParseResponse => SysOpResult::Ready(sys_llm::execute_parse_response(args)),
-            SysOp::HttpSend => SysOpResult::Ready(sys_llm::execute_http_send(args)),
+            SysOp::HttpSend => (self.sys_ops.http_send)(heap, args),
         }
     }
 }

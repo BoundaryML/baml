@@ -104,6 +104,7 @@ pub struct SysOps {
     pub http_fetch: SysOpFn,
     pub http_response_text: SysOpFn,
     pub http_response_ok: SysOpFn,
+    pub http_send: SysOpFn,
 }
 
 impl SysOps {
@@ -234,6 +235,7 @@ impl SysOps {
             http_fetch: Self::unsupported(SysOp::HttpFetch),
             http_response_text: Self::unsupported(SysOp::ResponseText),
             http_response_ok: Self::unsupported(SysOp::ResponseOk),
+            http_send: Self::unsupported(SysOp::HttpSend),
         }
     }
 }

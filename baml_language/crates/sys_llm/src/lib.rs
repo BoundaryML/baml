@@ -235,13 +235,3 @@ pub fn execute_build_request(_args: &[BexValue]) -> Result<BexExternalValue, OpE
 pub fn execute_parse_response(_args: &[BexValue]) -> Result<BexExternalValue, OpError> {
     panic!("LlmParseResponse SysOp not yet implemented - TODO: port from legacy")
 }
-
-/// Execute the `http.send` operation.
-///
-/// Arguments: `[request: Request]`
-/// Returns: `Response`
-///
-/// TODO: Implement this by extending the HTTP client to support full requests.
-pub fn execute_http_send(_args: &[BexValue]) -> Result<BexExternalValue, OpError> {
-    panic!("HttpSend SysOp not yet implemented - TODO: implement HTTP POST support")
-}

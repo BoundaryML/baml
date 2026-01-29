@@ -52,6 +52,29 @@ pub fn new_file(handle: ResourceHandle) -> BexExternalValue {
     }
 }
 
+/// Create a new HTTP Request instance for a GET request.
+///
+/// Field order:
+/// 0. method
+/// 1. url
+/// 2. headers (empty)
+/// 3. body (empty)
+pub fn new_http_request_get(url: String) -> BexExternalValue {
+    BexExternalValue::Instance {
+        class_name: "baml.http.Request".to_string(),
+        fields: indexmap! {
+            "method".to_string() => BexExternalValue::String("GET".to_string()),
+            "url".to_string() => BexExternalValue::String(url),
+            "headers".to_string() => BexExternalValue::Map {
+                key_type: Ty::String,
+                value_type: Ty::String,
+                entries: indexmap::IndexMap::new(),
+            },
+            "body".to_string() => BexExternalValue::String(String::new()),
+        },
+    }
+}
+
 /// Create a new Socket instance.
 ///
 /// Field order:

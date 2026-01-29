@@ -39,6 +39,7 @@ impl SysOpsExt for SysOps {
             http_fetch: ops::http::fetch,
             http_response_text: ops::http::text,
             http_response_ok: ops::http::ok,
+            http_send: ops::http::send,
         }
     }
 }
