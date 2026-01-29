@@ -621,7 +621,7 @@ pub mod baml_sources {
     pub struct BuiltinSource {
         /// The namespace this file provides (e.g., "baml.llm").
         pub namespace: &'static str,
-        /// The virtual file path for diagnostics (e.g., "<builtin>/baml/llm.baml").
+        /// The virtual file path for diagnostics (e.g., `<builtin>/baml/llm.baml`).
         pub path: &'static str,
         /// The BAML source code.
         pub source: &'static str,
