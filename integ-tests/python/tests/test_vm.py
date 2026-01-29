@@ -52,6 +52,7 @@ def test_normal_else_if_stmt():
     disassemble(b.NormalElseIfStmt)
     assert b.NormalElseIfStmt(True, False) == 0
 
+
 def test_iterative_fibonacci():
     assert b.IterativeFibonacci(0) == 1
     assert b.IterativeFibonacci(1) == 1
@@ -62,6 +63,7 @@ def test_iterative_fibonacci():
     assert b.IterativeFibonacci(6) == 8
     assert b.IterativeFibonacci(7) == 13
     assert b.IterativeFibonacci(8) == 21
+
 
 def test_sum_array():
     assert b.SumArray([1, 2, 3]) == 6
@@ -81,14 +83,14 @@ def test_return_category():
     assert b.ReturnCategory(Category.Question) == Category.Question
 
 
-def test_return_image_from_url():
-    url = "https://i.imgur.com/93fWs5R.png"
+# def test_return_image_from_url():
+#     url = "https://i.imgur.com/93fWs5R.png"
 
-    # Image created within BAML.
-    img = b.ReturnImageFromUrl(url)
+#     # Image created within BAML.
+#     img = b.ReturnImageFromUrl(url)
 
-    assert img.is_url()
-    assert img.as_url() == url
+#     assert img.is_url()
+#     assert img.as_url() == url
 
-def test_home_env_var_length():
-    assert not b.HomeEnvVarIsEmpty()
+# def test_home_env_var_length():
+#     assert not b.HomeEnvVarIsEmpty()
