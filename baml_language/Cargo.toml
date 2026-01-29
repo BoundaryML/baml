@@ -163,6 +163,7 @@ walkdir = { version = "2.4" }
 wasm-bindgen = "0.2"
 wasm-bindgen-test = "0.3"
 webbrowser = "1.0.5"
+strum = { version = "0.26", features = [ "derive" ] }
 wee_alloc = "0.4"
 wiremock = "0.6"
 [workspace.lints.rust]

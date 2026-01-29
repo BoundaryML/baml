@@ -437,13 +437,12 @@ function get_prompt() -> PromptAst {
     }
 }
 
-/// Test that `build_request` panics (not yet implemented).
+/// Test that `build_request` succeeds and returns an `int` result.
 ///
 /// This test verifies the `baml.llm.build_request` entry point is callable
-/// but panics because the underlying `LlmBuildRequest` `SysOp` is not implemented.
+/// and the underlying `LlmBuildRequest` `SysOp` is implemented.
 #[tokio::test]
-#[should_panic(expected = "LlmBuildRequest SysOp not yet implemented")]
-async fn test_build_request_panics() {
+async fn test_build_request_returns() {
     use std::collections::HashMap;
 
     use bex_engine::BexEngine;
@@ -475,16 +474,16 @@ function test_build_request() -> int {
     let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
         .expect("Failed to create engine");
 
-    // This should panic with "LlmBuildRequest SysOp not yet implemented"
-    let _ = engine.call_function("test_build_request", &[]).await;
+    let result = engine.call_function("test_build_request", &[]).await;
+    assert!(result.is_ok(), "build_request should succeed: {result:?}");
 }
 
-/// Test that `call_llm_function` panics (not yet implemented).
+/// Test that `call_llm_function` panics (parse response not yet implemented).
 ///
 /// This test verifies the `baml.llm.call_llm_function` entry point is callable
-/// but panics because the underlying `SysOps` are not implemented.
+/// but panics because the underlying `LlmParseResponse` `SysOp` is not implemented.
 #[tokio::test]
-#[should_panic(expected = "LlmBuildRequest SysOp not yet implemented")]
+#[should_panic(expected = "LlmParseResponse SysOp not yet implemented")]
 async fn test_call_llm_function_panics() {
     use std::collections::HashMap;
 
@@ -516,7 +515,7 @@ function test_call_llm() -> string {
     let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
         .expect("Failed to create engine");
 
-    // This should panic with "LlmBuildRequest SysOp not yet implemented"
-    // (build_request is called before http.send and parse)
+    // build_request now succeeds; this should panic at the next unimplemented
+    // step: "LlmParseResponse SysOp not yet implemented"
     let _ = engine.call_function("test_call_llm", &[]).await;
 }

@@ -1,6 +1,8 @@
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
 
+use crate::LlmProvider;
+
 /// Subset of engine's `ModelFeatures` relevant to prompt specialization.
 ///
 /// Derived from provider name + client options at specialization time.
@@ -37,11 +39,14 @@ impl AllowedMetadata {
 }
 
 impl ModelFeatures {
-    /// Build model features from provider name and client options.
+    /// Build model features from provider and client options.
     ///
     /// Uses a hardcoded lookup table for provider defaults, then overrides
     /// with any matching keys in the `options` map.
-    pub fn for_provider(provider: &str, options: &IndexMap<String, BexExternalValue>) -> Self {
+    pub fn for_provider(
+        provider: LlmProvider,
+        options: &IndexMap<String, BexExternalValue>,
+    ) -> Self {
         let mut features = Self::defaults_for_provider(provider);
         features.apply_overrides(options);
         features
@@ -50,36 +55,30 @@ impl ModelFeatures {
     /// Hardcoded defaults per provider.
     ///
     /// Source: engine/baml-runtime/src/internal/llm_client/primitive/*/
-    fn defaults_for_provider(provider: &str) -> Self {
+    fn defaults_for_provider(provider: LlmProvider) -> Self {
         match provider {
             // OpenAI variants: multiple system prompts allowed
-            "openai" | "openai-generic" | "azure" | "ollama" | "openrouter"
-            | "openai-responses" => Self {
+            LlmProvider::OpenAi
+            | LlmProvider::OpenAiGeneric
+            | LlmProvider::AzureOpenAi
+            | LlmProvider::Ollama
+            | LlmProvider::OpenRouter
+            | LlmProvider::OpenAiResponses => Self {
                 max_one_system_prompt: false,
                 allowed_metadata: AllowedMetadata::All,
             },
             // Anthropic: single system prompt only
-            "anthropic" => Self {
+            LlmProvider::Anthropic => Self {
                 max_one_system_prompt: true,
                 allowed_metadata: AllowedMetadata::All,
             },
-            // AWS Bedrock: single system prompt only
-            "aws-bedrock" => Self {
+            // AWS Bedrock, Google AI, Vertex AI: single system prompt only
+            LlmProvider::AwsBedrock | LlmProvider::GoogleAi | LlmProvider::VertexAi => Self {
                 max_one_system_prompt: true,
                 allowed_metadata: AllowedMetadata::All,
             },
-            // Google AI: single system prompt only
-            "google-ai" => Self {
-                max_one_system_prompt: true,
-                allowed_metadata: AllowedMetadata::All,
-            },
-            // Vertex AI: single system prompt only
-            "vertex-ai" => Self {
-                max_one_system_prompt: true,
-                allowed_metadata: AllowedMetadata::All,
-            },
-            // Unknown provider: conservative defaults (single system prompt)
-            _ => Self {
+            // Strategy providers — shouldn't reach here, but conservative defaults
+            LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Self {
                 max_one_system_prompt: true,
                 allowed_metadata: AllowedMetadata::All,
             },

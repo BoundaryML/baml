@@ -9,7 +9,7 @@ use crate::{AllowedMetadata, ModelFeatures};
 /// that share the same role by combining their contents into a `Vec` node.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:89-102
-pub(crate) fn merge_adjacent_messages(prompt: PromptAst) -> PromptAst {
+pub(super) fn merge_adjacent_messages(prompt: PromptAst) -> PromptAst {
     match prompt {
         PromptAst::Vec(messages) => {
             let mut merged: Vec<PromptAst> = Vec::with_capacity(messages.len());
@@ -77,7 +77,7 @@ pub(crate) fn merge_adjacent_messages(prompt: PromptAst) -> PromptAst {
 ///   system messages to "user"
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:280-296
-pub(crate) fn consolidate_system_prompts(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
+pub(super) fn consolidate_system_prompts(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
     if !features.max_one_system_prompt {
         return prompt;
     }
@@ -142,7 +142,7 @@ pub(crate) fn consolidate_system_prompts(prompt: PromptAst, features: &ModelFeat
 /// Walks all Message nodes and removes disallowed metadata keys.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:110-128
-pub(crate) fn filter_metadata(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
+pub(super) fn filter_metadata(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
     if matches!(features.allowed_metadata, AllowedMetadata::All) {
         return prompt;
     }
@@ -207,7 +207,7 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::{AllowedMetadata, ModelFeatures};
+    use crate::{AllowedMetadata, LlmProvider, ModelFeatures};
 
     fn msg(role: &str, text: &str) -> PromptAst {
         PromptAst::Message {
@@ -229,19 +229,19 @@ mod tests {
 
     #[test]
     fn test_openai_defaults() {
-        let features = ModelFeatures::for_provider("openai", &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::OpenAi, &IndexMap::new());
         assert!(!features.max_one_system_prompt);
     }
 
     #[test]
     fn test_anthropic_defaults() {
-        let features = ModelFeatures::for_provider("anthropic", &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
         assert!(features.max_one_system_prompt);
     }
 
     #[test]
-    fn test_unknown_provider_defaults() {
-        let features = ModelFeatures::for_provider("some-new-provider", &IndexMap::new());
+    fn test_strategy_provider_defaults() {
+        let features = ModelFeatures::for_provider(LlmProvider::BamlFallback, &IndexMap::new());
         assert!(features.max_one_system_prompt);
     }
 
@@ -252,7 +252,7 @@ mod tests {
             "max_one_system_prompt".to_string(),
             BexExternalValue::Bool(false),
         );
-        let features = ModelFeatures::for_provider("anthropic", &options);
+        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &options);
         assert!(!features.max_one_system_prompt);
     }
 
@@ -450,7 +450,7 @@ mod tests {
             msg("assistant", "I'm fine"),
         ]);
 
-        let features = ModelFeatures::for_provider("anthropic", &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
 
         let result = merge_adjacent_messages(prompt);
         let result = consolidate_system_prompts(result, &features);

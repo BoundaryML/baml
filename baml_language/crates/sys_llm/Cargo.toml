@@ -13,6 +13,9 @@ bex_llm_types = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 bex_program = { workspace = true }

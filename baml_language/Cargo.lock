@@ -4572,7 +4572,10 @@ dependencies = [
  "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "serde_json",
+ "strum",
  "sys_types",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
