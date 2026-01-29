@@ -8,6 +8,10 @@ license.workspace = true
 
 [dependencies]
 bex_external_types = { workspace = true }
+bex_jinja_runtime = { workspace = true }
+bex_llm_types = { workspace = true }
+bex_vm_types = { workspace = true }
+sys_types = { workspace = true }
 indexmap = { workspace = true }
 
 [dev-dependencies]

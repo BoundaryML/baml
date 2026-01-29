@@ -4567,8 +4567,12 @@ name = "sys_llm"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "bex_jinja_runtime",
+ "bex_llm_types",
  "bex_program",
+ "bex_vm_types",
  "indexmap 2.13.0",
+ "sys_types",
 ]
 
 [[package]]

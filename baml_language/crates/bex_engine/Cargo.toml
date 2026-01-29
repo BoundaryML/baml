@@ -9,8 +9,6 @@ license.workspace = true
 [dependencies]
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
-bex_jinja_runtime = { workspace = true }
-bex_llm_types = { workspace = true }
 bex_program = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
@@ -24,6 +22,8 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 baml_tests = { workspace = true }
+bex_jinja_runtime = { workspace = true }
+bex_llm_types = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
