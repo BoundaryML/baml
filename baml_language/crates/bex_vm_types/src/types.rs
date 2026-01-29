@@ -104,6 +104,12 @@ pub enum SysOp {
     LlmBuildPrimitiveClient,
     /// Get the client function for a function: `baml.llm.get_client_function(function_name) -> fn() -> PrimitiveClient`
     LlmGetClientFunction,
+    /// Build an HTTP request from a prompt: `PrimitiveClient.build_request(prompt: PromptAst) -> HttpRequest`
+    LlmBuildRequest,
+    /// Parse an HTTP response into a BAML value: `PrimitiveClient.parse(response: Response, function_name: String) -> T`
+    LlmParseResponse,
+    /// Send an HTTP request: `baml.http.send(request: Request) -> Response`
+    HttpSend,
 }
 
 impl std::fmt::Display for SysOp {
@@ -124,6 +130,9 @@ impl std::fmt::Display for SysOp {
             SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
             SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
             SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
+            SysOp::LlmBuildRequest => write!(f, "llm.build_request"),
+            SysOp::LlmParseResponse => write!(f, "llm.parse"),
+            SysOp::HttpSend => write!(f, "http.send"),
         }
     }
 }

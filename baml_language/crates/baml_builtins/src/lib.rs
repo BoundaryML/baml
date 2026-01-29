@@ -227,6 +227,15 @@ macro_rules! with_builtins {
                 // HTTP operations
                 // =====================================================================
                 mod http {
+                    /// An HTTP request to be sent.
+                    #[builtin]
+                    struct Request {
+                        method: String,
+                        url: String,
+                        headers: Map<String, String>,
+                        body: String,
+                    }
+
                     #[builtin]
                     struct Response {
                         private _handle: ResourceHandle,
@@ -244,6 +253,10 @@ macro_rules! with_builtins {
                     /// Fetch a URL via HTTP GET.
                     #[sys_op]
                     fn fetch(url: String) -> Response;
+
+                    /// Send an HTTP request and return the response.
+                    #[sys_op]
+                    fn send(request: Request) -> Response;
                 }
 
                 // =====================================================================
@@ -268,6 +281,16 @@ macro_rules! with_builtins {
                         /// consolidation, metadata filtering).
                         #[sys_op]
                         fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
+
+                        /// Build an HTTP request from a specialized prompt.
+                        /// Creates a provider-specific HTTP request ready to be sent.
+                        #[sys_op]
+                        fn build_request(self: PrimitiveClient, prompt: PromptAst) -> Request;
+
+                        /// Parse an HTTP response into a BAML value.
+                        /// Interprets the provider-specific response format and parses the output.
+                        #[sys_op]
+                        fn parse(self: PrimitiveClient, response: Response, function_name: String) -> Any;
                     }
 
                     /// Get the Jinja template for an LLM function.

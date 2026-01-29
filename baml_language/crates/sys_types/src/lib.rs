@@ -201,6 +201,21 @@ impl SysOps {
                     operation: SysOp::LlmGetClientFunction,
                 }))
             },
+            SysOp::LlmBuildRequest => |_, _| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmBuildRequest,
+                }))
+            },
+            SysOp::LlmParseResponse => |_, _| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::LlmParseResponse,
+                }))
+            },
+            SysOp::HttpSend => |_, _| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::HttpSend,
+                }))
+            },
         }
     }
 

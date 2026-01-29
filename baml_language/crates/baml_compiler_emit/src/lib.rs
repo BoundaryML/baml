@@ -504,6 +504,8 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         // LLM operations
         "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::RenderPrompt),
         "baml.llm.PrimitiveClient.specialize_prompt" => Some(SysOp::SpecializePrompt),
+        "baml.llm.PrimitiveClient.build_request" => Some(SysOp::LlmBuildRequest),
+        "baml.llm.PrimitiveClient.parse" => Some(SysOp::LlmParseResponse),
         "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
         "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
         "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
@@ -516,6 +518,7 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
         "baml.net.Socket.read" => Some(SysOp::NetRead),
         "baml.net.Socket.close" => Some(SysOp::NetClose),
         "baml.http.fetch" => Some(SysOp::HttpFetch),
+        "baml.http.send" => Some(SysOp::HttpSend),
         "baml.http.Response.text" => Some(SysOp::ResponseText),
         "baml.http.Response.ok" => Some(SysOp::ResponseOk),
         _ => None,

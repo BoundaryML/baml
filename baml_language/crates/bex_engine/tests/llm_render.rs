@@ -353,7 +353,7 @@ function test_render() -> int {
     // Pass an empty map for args - the Greet function expects a 'name' param
     // but for this test we just want to verify the render_prompt flow works
     let args = {};
-    let result = baml.llm.render_prompt("Greet", args, 0);
+    let result = baml.llm.render_prompt("Greet", args);
     // If we got here without crashing, the call worked
     42
 }
@@ -405,7 +405,7 @@ function Greet(name: string) -> string {
 // PromptAst is now a visible builtin type
 function get_prompt() -> PromptAst {
     let args = { "name": "World" };
-    baml.llm.render_prompt("Greet", args, 0)
+    baml.llm.render_prompt("Greet", args)
 }
 "##;
 
@@ -435,4 +435,88 @@ function get_prompt() -> PromptAst {
             panic!("get_prompt failed: {e}");
         }
     }
+}
+
+/// Test that `build_request` panics (not yet implemented).
+///
+/// This test verifies the `baml.llm.build_request` entry point is callable
+/// but panics because the underlying `LlmBuildRequest` `SysOp` is not implemented.
+#[tokio::test]
+#[should_panic(expected = "LlmBuildRequest SysOp not yet implemented")]
+async fn test_build_request_panics() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+function test_build_request() -> int {
+    let args = { "name": "World" };
+    let request = baml.llm.build_request("Greet", args);
+    42
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    // This should panic with "LlmBuildRequest SysOp not yet implemented"
+    let _ = engine.call_function("test_build_request", &[]).await;
+}
+
+/// Test that `call_llm_function` panics (not yet implemented).
+///
+/// This test verifies the `baml.llm.call_llm_function` entry point is callable
+/// but panics because the underlying `SysOps` are not implemented.
+#[tokio::test]
+#[should_panic(expected = "LlmBuildRequest SysOp not yet implemented")]
+async fn test_call_llm_function_panics() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+function test_call_llm() -> string {
+    let args = { "name": "World" };
+    baml.llm.call_llm_function("Greet", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    // This should panic with "LlmBuildRequest SysOp not yet implemented"
+    // (build_request is called before http.send and parse)
+    let _ = engine.call_function("test_call_llm", &[]).await;
 }

@@ -1335,6 +1335,18 @@ impl BexEngine {
                 let result = self.execute_get_client_function(args);
                 SysOpResult::Ready(result)
             }
+            SysOp::LlmBuildRequest => {
+                let result = Self::execute_build_request(args);
+                SysOpResult::Ready(result)
+            }
+            SysOp::LlmParseResponse => {
+                let result = Self::execute_parse_response(args);
+                SysOpResult::Ready(result)
+            }
+            SysOp::HttpSend => {
+                let result = Self::execute_http_send(args);
+                SysOpResult::Ready(result)
+            }
         }
     }
 
@@ -1516,6 +1528,10 @@ impl BexEngine {
                             },
                         ))
                     }
+                    // PromptAst needs to be copied out for specialize_prompt
+                    Object::PromptAst(ast) => BexValue::External(BexExternalValue::PromptAst(
+                        Self::vm_prompt_ast_to_external(ast),
+                    )),
                     other => {
                         panic!("Cannot convert object type to BexValue for sys op: {other:?}")
                     }
@@ -1695,6 +1711,36 @@ impl BexEngine {
         Ok(BexExternalValue::FunctionRef {
             global_index: *global_index,
         })
+    }
+
+    /// Execute the `build_request` LLM operation.
+    ///
+    /// Arguments: [`PrimitiveClient`, prompt: `PromptAst`]
+    /// Returns: `HttpRequest` (to be sent via HTTP)
+    ///
+    /// TODO: Implement this by porting logic from legacy `LLMPrimitiveProvider::build_request`.
+    fn execute_build_request(_args: &[BexValue]) -> Result<BexExternalValue, OpError> {
+        panic!("LlmBuildRequest SysOp not yet implemented - TODO: port from legacy")
+    }
+
+    /// Execute the `parse` LLM operation.
+    ///
+    /// Arguments: [`PrimitiveClient`, response: `Response`, `function_name`: String]
+    /// Returns: The parsed BAML value
+    ///
+    /// TODO: Implement this by porting logic from legacy response parsing.
+    fn execute_parse_response(_args: &[BexValue]) -> Result<BexExternalValue, OpError> {
+        panic!("LlmParseResponse SysOp not yet implemented - TODO: port from legacy")
+    }
+
+    /// Execute the `http.send` operation.
+    ///
+    /// Arguments: [request: `Request`]
+    /// Returns: `Response`
+    ///
+    /// TODO: Implement this by extending the HTTP client to support full requests.
+    fn execute_http_send(_args: &[BexValue]) -> Result<BexExternalValue, OpError> {
+        panic!("HttpSend SysOp not yet implemented - TODO: implement HTTP POST support")
     }
 
     /// Convert VM values to `BexExternalValues` for sys ops.
