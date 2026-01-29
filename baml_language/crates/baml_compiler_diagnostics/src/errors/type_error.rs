@@ -110,4 +110,16 @@ pub enum TypeError<C: ErrorContext> {
     /// Map has keys that aren't valid. Only string, literal string, and enum are
     /// valid may key types.
     InvalidMapKeyType { ty: C::Ty, location: C::Location },
+
+    // ============ Type Structure Validation Errors ============
+    /// Type aliases form a dependency cycle (non-structural recursion).
+    AliasCycle {
+        cycle_path: String,
+        location: C::Location,
+    },
+    /// Classes form a dependency cycle (infinite recursion).
+    ClassCycle {
+        cycle_path: String,
+        location: C::Location,
+    },
 }

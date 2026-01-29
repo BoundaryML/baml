@@ -1,0 +1,255 @@
+syntax = "proto3";
+package baml.cffi.v1;
+
+import "baml/cffi/v1/baml_object.proto";
+
+option go_package = "./cffi";
+
+// -----------------------------------------------------------------------------
+// CFFIValue definition
+// -----------------------------------------------------------------------------
+
+// The wrapper message for CFFIValue.
+message CFFIValueHolder {
+  // we must include this because we might be a "string"
+  // but in a container type like (string | int) and some languages
+  // require we decode this.
+  //
+  // Required for BAML -> CFFI
+  // But not for CFFI -> BAML (BAML always does type validation again at
+  // boundaries)
+  oneof value {
+    CFFIValueNull null_value = 2;
+    string string_value = 3;
+    int64 int_value = 4;
+    double float_value = 5;
+    bool bool_value = 6;
+    CFFIValueClass class_value = 7;
+    CFFIValueEnum enum_value = 8;
+    CFFIFieldTypeLiteral literal_value = 9;
+    CFFIValueRawObject object_value = 10;
+    // Container types
+    CFFIValueList list_value = 11;
+    CFFIValueMap map_value = 12;
+    CFFIValueUnionVariant union_variant_value = 13;
+    CFFIValueChecked checked_value = 14;
+    CFFIValueStreamingState streaming_state_value = 15;
+  }
+}
+
+enum CFFITypeNamespace {
+  INTERNAL = 0;
+  TYPES = 1;
+  STREAM_TYPES = 2;
+  STREAM_STATE_TYPES = 3;
+  CHECKED_TYPES = 4;
+}
+
+// wrapper for the name of a type
+message CFFITypeName {
+  CFFITypeNamespace namespace = 1;
+  // the name of the type
+  string name = 2;
+}
+
+message CFFIValueNull {}
+
+// Each variant as a message.
+message CFFIValueList {
+  CFFIFieldTypeHolder item_type = 1;
+  repeated CFFIValueHolder items = 2;
+}
+
+// A helper message to represent map entries (used also in Class).
+message CFFIMapEntry {
+  string key = 1;
+  CFFIValueHolder value = 2;
+}
+
+message CFFIValueMap {
+  CFFIFieldTypeHolder key_type = 1;
+  CFFIFieldTypeHolder value_type = 2;
+  repeated CFFIMapEntry entries = 3;
+}
+
+message CFFIValueClass {
+  CFFITypeName name = 1;
+  repeated CFFIMapEntry fields = 2;
+}
+
+message CFFIValueEnum {
+  CFFITypeName name = 1;
+  string value = 2;
+  bool is_dynamic = 3;
+}
+
+message CFFIValueRawObject {
+  oneof object {
+    BamlObjectHandle media = 1;
+    BamlObjectHandle type = 2;
+  }
+}
+
+// For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
+message CFFIValueUnionVariant {
+  CFFITypeName name = 1;
+  bool is_optional = 2;
+  bool is_single_pattern = 3;
+  CFFIFieldTypeHolder self_type = 4;
+  string value_option_name = 5;
+  CFFIValueHolder value = 6;
+}
+
+message CFFIValueChecked {
+  CFFITypeName name = 1;
+  CFFIValueHolder value = 2;
+  repeated CFFICheckValue checks = 3;
+}
+
+// -----------------------------------------------------------------------------
+// CFFIMedia definitions
+// -----------------------------------------------------------------------------
+
+// We need to handle CFFIMediaType. Since one variant is "Other(String)",
+// we represent it as a message with an enum tag and an optional string.
+enum MediaTypeEnum {
+  IMAGE = 0;
+  AUDIO = 1;
+  PDF = 2;
+  VIDEO = 3;
+}
+
+// -----------------------------------------------------------------------------
+// CFFIFieldType definition
+// -----------------------------------------------------------------------------
+
+// The wrapper message for CFFIFieldType.
+message CFFIFieldTypeHolder {
+  oneof type {
+    CFFIFieldTypeString string_type = 1;
+    CFFIFieldTypeInt int_type = 2;
+    CFFIFieldTypeFloat float_type = 3;
+    CFFIFieldTypeBool bool_type = 4;
+    CFFIFieldTypeNull null_type = 5;
+    CFFIFieldTypeLiteral literal_type = 6;
+    CFFIFieldTypeMedia media_type = 7;
+    CFFIFieldTypeEnum enum_type = 8;
+    CFFIFieldTypeClass class_type = 9;
+    CFFIFieldTypeTypeAlias type_alias_type = 10;
+    CFFIFieldTypeList list_type = 11;
+    CFFIFieldTypeMap map_type = 12;
+    CFFIFieldTypeUnionVariant union_variant_type = 14;
+    CFFIFieldTypeOptional optional_type = 15;
+    CFFIFieldTypeChecked checked_type = 16;
+    CFFIFieldTypeStreamState stream_state_type = 17;
+    CFFIFieldTypeAny any_type = 18;
+  }
+}
+
+// Simple marker messages for primitive types.
+message CFFIFieldTypeString {}
+message CFFIFieldTypeInt {}
+message CFFIFieldTypeFloat {}
+message CFFIFieldTypeBool {}
+message CFFIFieldTypeNull {}
+message CFFIFieldTypeAny {}
+
+// Literal: wraps a literal oneof.
+message CFFILiteralString {
+  string value = 1;
+}
+
+message CFFILiteralInt {
+  int64 value = 1;
+}
+
+message CFFILiteralBool {
+  bool value = 1;
+}
+
+message CFFIFieldTypeLiteral {
+  oneof literal {
+    CFFILiteralString string_literal = 1;
+    CFFILiteralInt int_literal = 2;
+    CFFILiteralBool bool_literal = 3;
+  }
+}
+
+// For Media, reuse the CFFIMediaType message.
+message CFFIFieldTypeMedia {
+  MediaTypeEnum media = 1;
+}
+
+message CFFIFieldTypeEnum {
+  string name = 1;
+}
+
+message CFFIFieldTypeClass {
+  CFFITypeName name = 1;
+}
+
+message CFFIFieldTypeTypeAlias {
+  CFFITypeName name = 1;
+}
+
+message CFFIFieldTypeList {
+  CFFIFieldTypeHolder item_type = 1;
+}
+
+message CFFIFieldTypeMap {
+  CFFIFieldTypeHolder key_type = 1;
+  CFFIFieldTypeHolder value_type = 2;
+}
+
+message CFFIFieldTypeUnionVariant {
+  CFFITypeName name = 1;
+}
+
+message CFFIFieldTypeOptional {
+  CFFIFieldTypeHolder value = 1;
+}
+
+message CFFIFieldTypeChecked {
+  CFFIFieldTypeHolder value = 1;
+  repeated CFFICheckType checks = 2;
+}
+
+message CFFIFieldTypeStreamState {
+  CFFIFieldTypeHolder value = 1;
+}
+
+// -----------------------------------------------------------------------------
+// CFFICheck definitions
+// -----------------------------------------------------------------------------
+
+message CFFICheckType {
+  string name = 1;
+}
+
+message CFFICheckValue {
+  string name = 1;
+  string expression = 2;
+  string status = 3;
+  CFFIValueHolder value = 4;
+}
+
+// -----------------------------------------------------------------------------
+// Other Enums
+// -----------------------------------------------------------------------------
+
+enum CFFIStreamState {
+  PENDING = 0;
+  STARTED = 1;
+  DONE = 2;
+}
+
+// -----------------------------------------------------------------------------
+// CFFIValue definitions
+// -----------------------------------------------------------------------------
+
+// The wrapper message for CFFIValue.
+message CFFIValueStreamingState {
+  CFFIValueHolder value = 1;
+  CFFIStreamState state = 2;
+  CFFITypeName name = 3;
+}

@@ -23,7 +23,7 @@
 
 use baml_base::Span;
 use baml_compiler_hir::{
-    ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, StmtId as HirStmtId,
+    ExprBody as HirExprBody, ExprId as HirExprId, FunctionBody, HirSourceMap, StmtId as HirStmtId,
 };
 use baml_compiler_tir::{InferenceResult, TypeResolutionContext};
 use la_arena::Arena;
@@ -38,29 +38,84 @@ use crate::{
 ///
 /// These errors are internal signals that codegen should be skipped.
 /// Missing nodes are already reported as user-facing diagnostics by earlier
-/// compiler phases (parser, HIR validation), so no source location is needed here.
+/// compiler phases (parser, HIR validation), but we include span information
+/// for better debugging when errors occur at runtime initialization.
 #[derive(Debug, Clone)]
 pub enum LoweringError {
     /// Encountered a Missing expression node.
-    MissingExpression,
+    MissingExpression {
+        /// The span where the missing expression was expected.
+        span: Span,
+    },
     /// Encountered a Missing statement node.
-    MissingStatement,
+    MissingStatement {
+        /// The span where the missing statement was expected.
+        span: Span,
+    },
     /// Function body is missing.
     MissingBody,
     /// LLM function - no expression body to lower.
     LlmFunction,
     /// No root expression in the body.
     NoRootExpression,
+    /// Error occurred while lowering a specific function.
+    InFunction {
+        function_name: String,
+        error: Box<LoweringError>,
+    },
+}
+
+impl LoweringError {
+    /// Wrap this error with function context.
+    #[must_use]
+    pub fn in_function(self, function_name: impl Into<String>) -> Self {
+        LoweringError::InFunction {
+            function_name: function_name.into(),
+            error: Box::new(self),
+        }
+    }
+
+    /// Get the innermost span from the error chain, if any.
+    pub fn span(&self) -> Option<Span> {
+        match self {
+            LoweringError::MissingExpression { span } => Some(*span),
+            LoweringError::MissingStatement { span } => Some(*span),
+            LoweringError::InFunction { error, .. } => error.span(),
+            _ => None,
+        }
+    }
 }
 
 impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LoweringError::MissingExpression => write!(f, "missing expression"),
-            LoweringError::MissingStatement => write!(f, "missing statement"),
+            LoweringError::MissingExpression { span } => {
+                write!(
+                    f,
+                    "missing expression at file {}:{}..{}",
+                    span.file_id,
+                    u32::from(span.range.start()),
+                    u32::from(span.range.end())
+                )
+            }
+            LoweringError::MissingStatement { span } => {
+                write!(
+                    f,
+                    "missing statement at file {}:{}..{}",
+                    span.file_id,
+                    u32::from(span.range.start()),
+                    u32::from(span.range.end())
+                )
+            }
             LoweringError::MissingBody => write!(f, "function body is missing"),
             LoweringError::LlmFunction => write!(f, "LLM function - no MIR"),
             LoweringError::NoRootExpression => write!(f, "no root expression in body"),
+            LoweringError::InFunction {
+                function_name,
+                error,
+            } => {
+                write!(f, "in function '{function_name}': {error}")
+            }
         }
     }
 }
@@ -77,8 +132,8 @@ pub fn lower_from_hir(
     resolution_ctx: &TypeResolutionContext,
 ) -> Result<ExprBody, LoweringError> {
     match body {
-        FunctionBody::Expr(hir_body, _source_map) => {
-            let ctx = LoweringContext::new(inference, resolution_ctx);
+        FunctionBody::Expr(hir_body, source_map) => {
+            let ctx = LoweringContext::new(inference, resolution_ctx, source_map);
             ctx.lower_expr_body(hir_body)
         }
         FunctionBody::Llm(_) => {
@@ -152,14 +207,20 @@ impl ExprBodyBuilder {
 struct LoweringContext<'a> {
     inference: &'a InferenceResult,
     resolution_ctx: &'a TypeResolutionContext,
+    source_map: &'a HirSourceMap,
     builder: ExprBodyBuilder,
 }
 
 impl<'a> LoweringContext<'a> {
-    fn new(inference: &'a InferenceResult, resolution_ctx: &'a TypeResolutionContext) -> Self {
+    fn new(
+        inference: &'a InferenceResult,
+        resolution_ctx: &'a TypeResolutionContext,
+        source_map: &'a HirSourceMap,
+    ) -> Self {
         Self {
             inference,
             resolution_ctx,
+            source_map,
             builder: ExprBodyBuilder::new(),
         }
     }
@@ -190,7 +251,10 @@ impl<'a> LoweringContext<'a> {
             .unwrap_or(Ty::Unknown);
 
         match hir_expr {
-            HirExpr::Missing => Err(LoweringError::MissingExpression),
+            HirExpr::Missing => {
+                let span = self.source_map.expr_span(hir_id).unwrap_or_default();
+                Err(LoweringError::MissingExpression { span })
+            }
 
             HirExpr::Literal(lit) => Ok(self.builder.alloc(Expr::Literal(Literal::from(lit)), ty)),
 
@@ -533,7 +597,10 @@ impl<'a> LoweringContext<'a> {
         let stmt = &hir_body.stmts[stmt_id];
 
         match stmt {
-            HirStmt::Missing => Err(LoweringError::MissingStatement),
+            HirStmt::Missing => {
+                let span = self.source_map.stmt_span(stmt_id).unwrap_or_default();
+                Err(LoweringError::MissingStatement { span })
+            }
 
             HirStmt::Let {
                 pattern,

@@ -17,6 +17,10 @@ function TestFnNamedArgsSingleClass(myArg: NamedArgsSingleClass) -> string {
   "#
 }
 
+function TestFnNamedArgsSingleClassExprFunc(myArg: NamedArgsSingleClass) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleClass {
   functions [TestFnNamedArgsSingleClass]
   args {

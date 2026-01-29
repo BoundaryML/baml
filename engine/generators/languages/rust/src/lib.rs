@@ -153,10 +153,16 @@ impl LanguageFeatures for RustLanguageFeatures {
             .collect();
         type_aliases_rust_stream.sort_by(|a, b| a.name.cmp(&b.name));
 
-        // Get functions
+        // Get functions (including expression functions)
+        let expr_fn_wrappers = ir.expr_fns_as_functions();
         let functions: Vec<_> = ir
             .walk_functions()
             .map(|f| ir_to_rust::rust_functions::ir_function_to_rust(f.item, &pkg))
+            .chain(
+                expr_fn_wrappers
+                    .iter()
+                    .map(|f| ir_to_rust::rust_functions::ir_function_to_rust(f, &pkg)),
+            )
             .collect();
 
         // Phase 4: Generate types/ directory

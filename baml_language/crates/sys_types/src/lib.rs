@@ -165,14 +165,24 @@ impl SysOps {
                     operation: SysOp::HttpFetch,
                 }))
             },
-            SysOp::HttpResponseText => |_, _| {
+            SysOp::ResponseText => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpResponseText,
+                    operation: SysOp::ResponseText,
                 }))
             },
-            SysOp::HttpResponseOk => |_, _| {
+            SysOp::ResponseOk => |_, _| {
                 SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpResponseOk,
+                    operation: SysOp::ResponseOk,
+                }))
+            },
+            SysOp::RenderPrompt => |_, _| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::RenderPrompt,
+                }))
+            },
+            SysOp::SpecializePrompt => |_, _| {
+                SysOpResult::Ready(Err(OpError::Unsupported {
+                    operation: SysOp::SpecializePrompt,
                 }))
             },
         }
@@ -191,8 +201,8 @@ impl SysOps {
             net_close: Self::unsupported(SysOp::NetClose),
             shell: Self::unsupported(SysOp::Shell),
             http_fetch: Self::unsupported(SysOp::HttpFetch),
-            http_response_text: Self::unsupported(SysOp::HttpResponseText),
-            http_response_ok: Self::unsupported(SysOp::HttpResponseOk),
+            http_response_text: Self::unsupported(SysOp::ResponseText),
+            http_response_ok: Self::unsupported(SysOp::ResponseOk),
         }
     }
 }

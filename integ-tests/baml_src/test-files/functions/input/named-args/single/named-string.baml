@@ -6,6 +6,10 @@ function TestFnNamedArgsSingleString(myString: string) -> string {
   "#
 }
 
+function TestFnNamedArgsSingleStringExprFunc(myString: string) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleString {
   functions [TestFnNamedArgsSingleString]
   args {

@@ -266,15 +266,6 @@ impl TypeBuilder {
         )
     }
 
-    /// Access the `DummyJsonTodoUpdate` class builder.
-    pub fn DummyJsonTodoUpdate(&self) -> DummyJsonTodoUpdateClassBuilder {
-        DummyJsonTodoUpdateClassBuilder::new(
-            self.inner
-                .get_class("DummyJsonTodoUpdate")
-                .expect("class DummyJsonTodoUpdate is defined in schema"),
-        )
-    }
-
     /// Access the `DummyOutput` class builder.
     pub fn DummyOutput(&self) -> DummyOutputClassBuilder {
         DummyOutputClassBuilder::new(

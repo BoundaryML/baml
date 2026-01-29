@@ -53,302 +53,302 @@ Function DeepExpression (arity: 0, kind: Bytecode):
      18   BIN_OP +       
      19   RETURN         
 
-Function Process1 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process1 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process10 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process10 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process100 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process100 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process11 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process11 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process12 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process12 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process13 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process13 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process14 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process14 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process15 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process15 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process16 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process16 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process17 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process17 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process18 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process18 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process19 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process19 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process2 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process2 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process20 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process20 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process21 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process21 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process22 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process22 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process23 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process23 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process24 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process24 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process25 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process25 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process26 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process26 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process27 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process27 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process28 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process28 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process29 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process29 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process3 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process3 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process30 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process30 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process31 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process31 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process32 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process32 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process33 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process33 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process34 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process34 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process35 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process35 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process36 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process36 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process37 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process37 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process38 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process38 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process39 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process39 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process4 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process4 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process40 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process40 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process41 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process41 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process42 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process42 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process43 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process43 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process44 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process44 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process45 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process45 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process46 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process46 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process47 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process47 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process48 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process48 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process49 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process49 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process5 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process5 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process50 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process50 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process51 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process51 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process52 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process52 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process53 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process53 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process54 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process54 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process55 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process55 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process56 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process56 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process57 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process57 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process58 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process58 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process59 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process59 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process6 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process6 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process60 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process60 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process61 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process61 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process62 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process62 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process63 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process63 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process64 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process64 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process65 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process65 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process66 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process66 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process67 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process67 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process68 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process68 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process69 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process69 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process7 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process7 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process70 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process70 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process71 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process71 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process72 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process72 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process73 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process73 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process74 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process74 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process75 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process75 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process76 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process76 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process77 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process77 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process78 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process78 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process79 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process79 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process8 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process8 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process80 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process80 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process81 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process81 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process82 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process82 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process83 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process83 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process84 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process84 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process85 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process85 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process86 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process86 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process87 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process87 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process88 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process88 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process89 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process89 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process9 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process9 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process90 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process90 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process91 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process91 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process92 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process92 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process93 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process93 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process94 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process94 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process95 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process95 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process96 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process96 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process97 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process97 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process98 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process98 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)
 
-Function Process99 (arity: 1, kind: External(Llm(RenderPrompt))):
+Function Process99 (arity: 1, kind: SysOp(RenderPrompt)):
   (no bytecode)

@@ -9,6 +9,12 @@ function NullLiteralClassHello(s: string) -> ClassForNullLiteral {
     "#
 }
 
+function NullLiteralClassHelloExprFunc(s: string) -> ClassForNullLiteral {
+    return ClassForNullLiteral {
+        a: "hi"
+    };
+}
+
 test NullLiteralClassHello {
     functions [NullLiteralClassHello]
     args { s "unused" }

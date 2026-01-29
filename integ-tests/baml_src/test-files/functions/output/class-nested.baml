@@ -25,6 +25,20 @@ function FnOutputClassNested(input: string) -> TestClassNested {
   "#
 }
 
+function FnOutputClassNestedExprFunc(input: string) -> TestClassNested {
+  return TestClassNested {
+    prop1: "example string",
+    prop2: InnerClass {
+      prop1: "example string",
+      prop2: "example string",
+      inner: InnerClass2 {
+        prop2: 540,
+        prop3: 1.23
+      }
+    }
+  };
+}
+
 test FnOutputClassNested {
   functions [FnOutputClassNested]
   args {

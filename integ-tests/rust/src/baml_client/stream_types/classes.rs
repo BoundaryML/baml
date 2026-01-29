@@ -385,22 +385,6 @@ impl AsRef<DummyJsonTodo> for DummyJsonTodo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
-pub struct DummyJsonTodoUpdate {
-    pub todo: Option<String>,
-
-    pub completed: Option<bool>,
-
-    pub userId: Option<i64>,
-}
-
-impl AsRef<DummyJsonTodoUpdate> for DummyJsonTodoUpdate {
-    fn as_ref(&self) -> &DummyJsonTodoUpdate {
-        self
-    }
-}
-
 #[derive(Debug, Clone, BamlDecode)]
 #[baml(dynamic)]
 

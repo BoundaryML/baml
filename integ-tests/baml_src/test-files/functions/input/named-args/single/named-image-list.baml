@@ -7,6 +7,10 @@ function TestImageListInput(imgs: image[]) -> string{
   "#
 }
 
+function TestImageListInputExprFunc(imgs: image[]) -> string {
+  return "Hello, world!";
+}
+
 test  TestImageListInput {
   functions [TestImageListInput]
   args {

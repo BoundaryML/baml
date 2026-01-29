@@ -12,7 +12,7 @@
 //! # External Operations
 //!
 //! External operations (LLM calls, HTTP requests, file I/O) are dispatched via
-//! the `ExternalOp` enum using static dispatch. This avoids dynamic dispatch
+//! the `SysOp` enum using static dispatch. This avoids dynamic dispatch
 //! overhead and makes the system more macro-friendly.
 //!
 //! # Resources
@@ -67,7 +67,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ExternalOp, GlobalPool, HeapPtr, LlmOp, Object, Value};
+use bex_vm_types::{GlobalPool, HeapPtr, Object, Value};
 // Re-export sys_types types for convenience
 pub use sys_types::{
     CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
@@ -1189,62 +1189,27 @@ impl BexEngine {
                     let pending = vm.pending_future(id)?;
 
                     // Convert arguments to BexExternalValue
-                    let args = Self::vm_args_to_external(vm, &pending.args);
+                    let args = self.vm_args_to_bex_values(vm, &pending.args);
 
-                    match pending.operation {
-                        ExternalOp::Llm(llm_op) => {
-                            match llm_op {
-                                LlmOp::RenderPrompt => {
-                                    // render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst
-                                    // args[0] = PrimitiveClient, args[1] = template, args[2] = args map
-                                    let result = Self::execute_render_prompt(&args)
-                                        .map_err(EngineError::from);
-                                    match result {
-                                        Ok(prompt_ast) => {
-                                            // Convert external PromptAst to VM PromptAst and set future ready
-                                            let vm_ast = self
-                                                .external_prompt_ast_to_vm_owned(vm, prompt_ast);
-                                            let value = vm.alloc_prompt_ast(vm_ast);
-                                            vm.set_future_ready(id, value)?;
-                                        }
-                                        Err(e) => {
-                                            // Send error through the channel
-                                            let pending_futures = pending_futures.clone();
-                                            tokio::spawn(async move {
-                                                let _ = pending_futures
-                                                    .send(FutureResult { id, result: Err(e) });
-                                            });
-                                        }
-                                    }
-                                }
-                            }
+                    match self.execute_sys_op(pending.operation, &args) {
+                        SysOpResult::Ready(result) => {
+                            // Sync operation - set future to Ready without touching stack.
+                            // The VM will continue to the Await instruction which will
+                            // extract the value from the Ready future.
+                            let value =
+                                self.external_to_vm_value(vm, result.map_err(EngineError::from)?);
+                            vm.set_future_ready(id, value)?;
                         }
-                        ExternalOp::Sys(sys_op) => {
-                            // Convert VM args to BexValue (handles for objects, primitives inline)
-                            let bex_args = self.vm_args_to_bex_values(vm, &pending.args);
-                            match self.execute_sys_op(sys_op, &bex_args) {
-                                SysOpResult::Ready(result) => {
-                                    // Sync operation - set future to Ready without touching stack.
-                                    // The VM will continue to the Await instruction which will
-                                    // extract the value from the Ready future.
-                                    let value = self.external_to_vm_value(
-                                        vm,
-                                        result.map_err(EngineError::from)?,
-                                    );
-                                    vm.set_future_ready(id, value)?;
-                                }
-                                SysOpResult::Async(fut) => {
-                                    // Async operation - spawn task
-                                    let pending_futures = pending_futures.clone();
-                                    tokio::spawn(async move {
-                                        let result = fut.await;
-                                        let _ = pending_futures.send(FutureResult {
-                                            id,
-                                            result: result.map_err(EngineError::from),
-                                        });
-                                    });
-                                }
-                            }
+                        SysOpResult::Async(fut) => {
+                            // Async operation - spawn task
+                            let pending_futures = pending_futures.clone();
+                            tokio::spawn(async move {
+                                let result = fut.await;
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
                         }
                     }
                 }
@@ -1326,7 +1291,7 @@ impl BexEngine {
         }
     }
 
-    /// Execute a system operation using the provider table.
+    /// Execute a system operation.
     fn execute_sys_op(&self, op: SysOp, args: &[BexValue]) -> SysOpResult {
         let heap = Arc::clone(&self.heap);
         match op {
@@ -1338,51 +1303,46 @@ impl BexEngine {
             SysOp::NetClose => (self.sys_ops.net_close)(heap, args),
             SysOp::Shell => (self.sys_ops.shell)(heap, args),
             SysOp::HttpFetch => (self.sys_ops.http_fetch)(heap, args),
-            SysOp::HttpResponseText => (self.sys_ops.http_response_text)(heap, args),
-            SysOp::HttpResponseOk => (self.sys_ops.http_response_ok)(heap, args),
+            SysOp::ResponseText => (self.sys_ops.http_response_text)(heap, args),
+            SysOp::ResponseOk => (self.sys_ops.http_response_ok)(heap, args),
+            SysOp::RenderPrompt => SysOpResult::Ready(
+                Self::execute_render_prompt(args).map(BexExternalValue::PromptAst),
+            ),
+            SysOp::SpecializePrompt => SysOpResult::Ready(
+                Self::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
+            ),
         }
     }
 
     /// Execute the `render_prompt` LLM operation.
     ///
     /// Arguments: [`PrimitiveClient`, template: String, args: Map<String, Any>]
-    fn execute_render_prompt(
-        args: &[BexExternalValue],
-    ) -> Result<bex_external_types::PromptAst, OpError> {
+    fn execute_render_prompt(args: &[BexValue]) -> Result<bex_external_types::PromptAst, OpError> {
         use bex_jinja_runtime::RenderPromptError;
-
-        // Extract PrimitiveClient
-        let client = match &args[0] {
-            BexExternalValue::PrimitiveClient(c) => c,
-            other => {
-                return Err(RenderPromptError::InvalidArgument {
-                    message: format!("expected PrimitiveClient, got {}", other.type_name()),
-                }
-                .into());
+        let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
+            return Err(RenderPromptError::InvalidArgument {
+                message: "expected PrimitiveClient, got something else".to_string(),
             }
+            .into());
         };
 
         // Extract template string
-        let template = match &args[1] {
-            BexExternalValue::String(s) => s.as_str(),
-            other => {
-                return Err(RenderPromptError::InvalidArgument {
-                    message: format!("expected String for template, got {}", other.type_name()),
-                }
-                .into());
+        let BexValue::External(BexExternalValue::String(s)) = &args[1] else {
+            return Err(RenderPromptError::InvalidArgument {
+                message: "expected String for template, got something else".to_string(),
             }
+            .into());
         };
+        let template = s.as_str();
 
         // Extract args map
-        let template_args = match &args[2] {
-            BexExternalValue::Map { entries, .. } => entries.clone(),
-            other => {
-                return Err(RenderPromptError::InvalidArgument {
-                    message: format!("expected Map for args, got {}", other.type_name()),
-                }
-                .into());
+        let BexValue::External(BexExternalValue::Map { entries, .. }) = &args[2] else {
+            return Err(RenderPromptError::InvalidArgument {
+                message: "expected Map for args, got something else".to_string(),
             }
+            .into());
         };
+        let template_args = entries.clone();
 
         // Build render context from PrimitiveClient
         let render_ctx = bex_jinja_runtime::RenderContext {
@@ -1403,6 +1363,29 @@ impl BexEngine {
 
         // Convert VM PromptAst to external PromptAst
         Ok(Self::vm_prompt_ast_to_external(&vm_prompt_ast))
+    }
+
+    /// Execute the `specialize_prompt` LLM operation.
+    ///
+    /// Arguments: [`PrimitiveClient`, prompt: `PromptAst`]
+    fn execute_specialize_prompt(
+        args: &[BexValue],
+    ) -> Result<bex_external_types::PromptAst, OpError> {
+        let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
+            return Err(bex_jinja_runtime::RenderPromptError::InvalidArgument {
+                message: "expected PrimitiveClient, got something else".to_string(),
+            }
+            .into());
+        };
+
+        let BexValue::External(BexExternalValue::PromptAst(prompt)) = &args[1] else {
+            return Err(bex_jinja_runtime::RenderPromptError::InvalidArgument {
+                message: "expected PromptAst, got something else".to_string(),
+            }
+            .into());
+        };
+
+        Ok(sys_llm::specialize_prompt(client, prompt.clone()))
     }
 
     /// Convert VM `bex_vm_types::PromptAst` to external `bex_external_types::PromptAst`.
@@ -1519,6 +1502,7 @@ impl BexEngine {
     ///
     /// This is simpler than `vm_value_to_external` because sys ops only receive
     /// primitives, strings, arrays, maps, and resources - not instances/variants.
+    #[allow(unused)]
     fn vm_args_to_external(vm: &BexVm, args: &[Value]) -> Vec<BexExternalValue> {
         args.iter()
             .map(|v| Self::vm_arg_to_external(vm, v))

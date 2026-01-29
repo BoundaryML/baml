@@ -6,7 +6,7 @@
 //! ## Error Types
 //!
 //! - [`ParseError`] - Syntax errors from the parser
-//! - [`TypeError`] - Type checking errors (generic over the type representation)
+//! - [`TypeError`] - Type checking and type-level validation errors (generic over the type representation)
 //! - [`NameError`] - Name resolution errors (duplicates across files)
 //! - [`HirDiagnostic`] - HIR lowering errors (per-file validation)
 

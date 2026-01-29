@@ -23,7 +23,7 @@ import { toBamlError } from "@boundaryml/baml"
 import type { Checked, Check } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
-import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyJsonTodoUpdate, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SkipDynamicClass, SkipNonDynamicClass, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
+import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SkipDynamicClass, SkipNonDynamicClass, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
 
 export class LlmResponseParser {
@@ -5504,6 +5504,29 @@ export class LlmResponseParser {
     }
   }
   
+  AllowedOptionalsExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): types.OptionalListAndMap {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "AllowedOptionalsExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as types.OptionalListAndMap
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   AnotherTakedown(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
@@ -5545,6 +5568,29 @@ export class LlmResponseParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as number
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AudioInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "AudioInputExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5688,76 +5734,76 @@ export class LlmResponseParser {
     }
   }
   
-  ExecFetchAs(
+  FnLiteralClassInputOutputExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.DummyJsonTodo {
+  ): types.LiteralClassHello {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAs",
+        "FnLiteralClassInputOutputExprFunc",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as types.DummyJsonTodo
+      ) as types.LiteralClassHello
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  ExecFetchAsWithHttpPostRequest(
+  FnLiteralUnionClassInputOutputExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.DummyJsonTodo {
+  ): types.LiteralClassOne | types.LiteralClassTwo {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAsWithHttpPostRequest",
+        "FnLiteralUnionClassInputOutputExprFunc",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as types.DummyJsonTodo
+      ) as types.LiteralClassOne | types.LiteralClassTwo
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  ExecFetchAsWithHttpPutRequestAndClassJson(
+  FnNamedArgsSingleStringOptionalExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.DummyJsonTodo {
+  ): string {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAsWithHttpPutRequestAndClassJson",
+        "FnNamedArgsSingleStringOptionalExprFunc",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as types.DummyJsonTodo
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  HomeEnvVarIsEmpty(
+  FnOutputBoolExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): boolean {
@@ -5767,7 +5813,7 @@ export class LlmResponseParser {
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "HomeEnvVarIsEmpty",
+        "FnOutputBoolExprFunc",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -5775,6 +5821,144 @@ export class LlmResponseParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as boolean
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): types.TestOutputClass {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as types.TestOutputClass
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): types.TestOutputClass[] {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassListExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as types.TestOutputClass[]
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassNestedExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): types.TestClassNested {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassNestedExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as types.TestClassNested
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): number {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputIntExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as number
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputLiteralStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): "example output" {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputLiteralStringExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as "example output"
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnTestNamedArgsSingleEnumExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnTestNamedArgsSingleEnumExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5895,6 +6079,52 @@ export class LlmResponseParser {
     }
   }
   
+  NullLiteralClassHelloExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): types.ClassForNullLiteral {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "NullLiteralClassHelloExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as types.ClassForNullLiteral
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  PdfInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "PdfInputExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ReturnCategory(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
@@ -5936,29 +6166,6 @@ export class LlmResponseParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as number
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ReturnImageFromUrl(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Image {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "ReturnImageFromUrl",
-        llmResponse,
-        false,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as Image
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6021,29 +6228,6 @@ export class LlmResponseParser {
       );
       return this.runtime.parseLlmResponse(
         "ReturnOne",
-        llmResponse,
-        false,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as number
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  SimpleWatchWithFilter(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "SimpleWatchWithFilter",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -6148,24 +6332,392 @@ export class LlmResponseParser {
     }
   }
   
-  WorkflowWatch(
+  TestFnNamedArgsLiteralBoolExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number {
+  ): string {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowWatch",
+        "TestFnNamedArgsLiteralBoolExprFunc",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as number
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsLiteralIntExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsLiteralStringExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleBoolExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleBoolExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleClassExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleEnumListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleEnumListExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleFloatExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleFloatExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleIntExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, types.StringToClassEntry> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToClassExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, types.StringToClassEntry>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToMapExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, Record<string, string>> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToMapExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, Record<string, string>>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, string> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToStringExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, string>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringArrayExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringArrayExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string[] {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringListExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string[]
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestImageInputExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageListInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestImageListInputExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  VideoInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "VideoInputExprFunc",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6182,29 +6734,6 @@ export class LlmResponseParser {
       );
       return this.runtime.parseLlmResponse(
         "WorkflowWatchChild",
-        llmResponse,
-        false,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as number
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  WorkflowWatchWithFilter(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "WorkflowWatchWithFilter",
         llmResponse,
         false,
         this.ctxManager.cloneContext(),
@@ -11697,6 +12226,29 @@ export class LlmStreamParser {
     }
   }
   
+  AllowedOptionalsExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): partial_types.OptionalListAndMap | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "AllowedOptionalsExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as partial_types.OptionalListAndMap | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   AnotherTakedown(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
@@ -11738,6 +12290,29 @@ export class LlmStreamParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as number | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AudioInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "AudioInputExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -11881,76 +12456,76 @@ export class LlmStreamParser {
     }
   }
   
-  ExecFetchAs(
+  FnLiteralClassInputOutputExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DummyJsonTodo | null {
+  ): partial_types.LiteralClassHello | null {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAs",
+        "FnLiteralClassInputOutputExprFunc",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as partial_types.DummyJsonTodo | null
+      ) as partial_types.LiteralClassHello | null
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  ExecFetchAsWithHttpPostRequest(
+  FnLiteralUnionClassInputOutputExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DummyJsonTodo | null {
+  ): partial_types.LiteralClassOne | partial_types.LiteralClassTwo | null {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAsWithHttpPostRequest",
+        "FnLiteralUnionClassInputOutputExprFunc",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as partial_types.DummyJsonTodo | null
+      ) as partial_types.LiteralClassOne | partial_types.LiteralClassTwo | null
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  ExecFetchAsWithHttpPutRequestAndClassJson(
+  FnNamedArgsSingleStringOptionalExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DummyJsonTodo | null {
+  ): string | null {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "ExecFetchAsWithHttpPutRequestAndClassJson",
+        "FnNamedArgsSingleStringOptionalExprFunc",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as partial_types.DummyJsonTodo | null
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
-  HomeEnvVarIsEmpty(
+  FnOutputBoolExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
   ): boolean | null {
@@ -11960,7 +12535,7 @@ export class LlmStreamParser {
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "HomeEnvVarIsEmpty",
+        "FnOutputBoolExprFunc",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
@@ -11968,6 +12543,144 @@ export class LlmStreamParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as boolean | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): partial_types.TestOutputClass | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as partial_types.TestOutputClass | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): partial_types.TestOutputClass[] {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassListExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as partial_types.TestOutputClass[]
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassNestedExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): partial_types.TestClassNested | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputClassNestedExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as partial_types.TestClassNested | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): number | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputIntExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as number | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputLiteralStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): "example output" | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnOutputLiteralStringExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as "example output" | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnTestNamedArgsSingleEnumExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "FnTestNamedArgsSingleEnumExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -12088,6 +12801,52 @@ export class LlmStreamParser {
     }
   }
   
+  NullLiteralClassHelloExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): partial_types.ClassForNullLiteral | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "NullLiteralClassHelloExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as partial_types.ClassForNullLiteral | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  PdfInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "PdfInputExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ReturnCategory(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
@@ -12129,29 +12888,6 @@ export class LlmStreamParser {
         __baml_options__?.clientRegistry,
         __env__,
       ) as number | null
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ReturnImageFromUrl(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Image | null {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "ReturnImageFromUrl",
-        llmResponse,
-        true,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as Image | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -12214,29 +12950,6 @@ export class LlmStreamParser {
       );
       return this.runtime.parseLlmResponse(
         "ReturnOne",
-        llmResponse,
-        true,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as number | null
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  SimpleWatchWithFilter(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "SimpleWatchWithFilter",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
@@ -12341,24 +13054,392 @@ export class LlmStreamParser {
     }
   }
   
-  WorkflowWatch(
+  TestFnNamedArgsLiteralBoolExprFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): string | null {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const __env__: Record<string, string> = Object.fromEntries(
         Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
       );
       return this.runtime.parseLlmResponse(
-        "WorkflowWatch",
+        "TestFnNamedArgsLiteralBoolExprFunc",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         __env__,
-      ) as number | null
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsLiteralIntExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsLiteralStringExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleBoolExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleBoolExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleClassExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleEnumListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleEnumListExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleFloatExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleFloatExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleIntExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleIntExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToClassExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, partial_types.StringToClassEntry> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToClassExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, partial_types.StringToClassEntry>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToMapExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, Record<string, string>> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToMapExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, Record<string, string>>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): Record<string, string> {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleMapStringToStringExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as Record<string, string>
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringArrayExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringArrayExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringListExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string[] {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestFnNamedArgsSingleStringListExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string[]
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestImageInputExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageListInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "TestImageListInputExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  VideoInputExprFunc(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
+  ): string | null {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+      return this.runtime.parseLlmResponse(
+        "VideoInputExprFunc",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        __env__,
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -12375,29 +13456,6 @@ export class LlmStreamParser {
       );
       return this.runtime.parseLlmResponse(
         "WorkflowWatchChild",
-        llmResponse,
-        true,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        __env__,
-      ) as number | null
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  WorkflowWatchWithFilter(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-      return this.runtime.parseLlmResponse(
-        "WorkflowWatchWithFilter",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

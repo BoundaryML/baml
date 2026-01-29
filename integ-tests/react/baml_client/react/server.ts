@@ -24,7 +24,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio, Pdf, Video } from "@boundaryml/baml";
 
-import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyJsonTodoUpdate,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AddTodoItem,  AddressWithMeta,  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyJsonTodo,  DummyOutput,  DynEnumOne,  DynEnumThree,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MaintainFieldOrder,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PersonWithMeta,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  RecursiveUnion,  RenderEnumInput,  RenderStatusEnum,  RenderTestClass,  RenderTestEnum,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SkipDynamicClass,  SkipNonDynamicClass,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  TodoMessageToUser,  Tree,  TwoStoriesOneTitle,  TwoStoriesOneTitleCheck,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -4344,6 +4344,24 @@ export const VideoInputVertex = async (
 };
 
 /**
+ * Executes the "AllowedOptionalsExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "AllowedOptionalsExprFunc"
+ * with the specified parameters.
+ *
+ * @param { types.OptionalListAndMap } optionals - Input parameter.
+ *
+ * @returns {Promise<types.OptionalListAndMap>} A promise that resolves with the result of the action.
+ */
+export const AllowedOptionalsExprFunc = async (
+  optionals: types.OptionalListAndMap,
+): Promise<types.OptionalListAndMap> => {
+  return b.AllowedOptionalsExprFunc(
+    optionals,
+  );
+};
+
+/**
  * Executes the "AnotherTakedown" BAML action.
  *
  * This server action calls the underlying BAML function "AnotherTakedown"
@@ -4379,6 +4397,24 @@ export const AssignElseIfExpr = async (
   return b.AssignElseIfExpr(
     a,
     b,
+  );
+};
+
+/**
+ * Executes the "AudioInputExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "AudioInputExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Audio } aud - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const AudioInputExprFunc = async (
+  aud: Audio,
+): Promise<string> => {
+  return b.AudioInputExprFunc(
+    aud,
   );
 };
 
@@ -4482,65 +4518,182 @@ export const EchoWorkflow = async (
 };
 
 /**
- * Executes the "ExecFetchAs" BAML action.
+ * Executes the "FnLiteralClassInputOutputExprFunc" BAML action.
  *
- * This server action calls the underlying BAML function "ExecFetchAs"
+ * This server action calls the underlying BAML function "FnLiteralClassInputOutputExprFunc"
  * with the specified parameters.
  *
- * @param { string } url - Input parameter.
+ * @param { types.LiteralClassHello } input - Input parameter.
  *
- * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ * @returns {Promise<types.LiteralClassHello>} A promise that resolves with the result of the action.
  */
-export const ExecFetchAs = async (
-  url: string,
-): Promise<types.DummyJsonTodo> => {
-  return b.ExecFetchAs(
-    url,
+export const FnLiteralClassInputOutputExprFunc = async (
+  input: types.LiteralClassHello,
+): Promise<types.LiteralClassHello> => {
+  return b.FnLiteralClassInputOutputExprFunc(
+    input,
   );
 };
 
 /**
- * Executes the "ExecFetchAsWithHttpPostRequest" BAML action.
+ * Executes the "FnLiteralUnionClassInputOutputExprFunc" BAML action.
  *
- * This server action calls the underlying BAML function "ExecFetchAsWithHttpPostRequest"
+ * This server action calls the underlying BAML function "FnLiteralUnionClassInputOutputExprFunc"
  * with the specified parameters.
  *
+ * @param { types.LiteralClassOne | types.LiteralClassTwo } input - Input parameter.
  *
- * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ * @returns {Promise<types.LiteralClassOne | types.LiteralClassTwo>} A promise that resolves with the result of the action.
  */
-export const ExecFetchAsWithHttpPostRequest = async (
-): Promise<types.DummyJsonTodo> => {
-  return b.ExecFetchAsWithHttpPostRequest(
+export const FnLiteralUnionClassInputOutputExprFunc = async (
+  input: types.LiteralClassOne | types.LiteralClassTwo,
+): Promise<types.LiteralClassOne | types.LiteralClassTwo> => {
+  return b.FnLiteralUnionClassInputOutputExprFunc(
+    input,
   );
 };
 
 /**
- * Executes the "ExecFetchAsWithHttpPutRequestAndClassJson" BAML action.
+ * Executes the "FnNamedArgsSingleStringOptionalExprFunc" BAML action.
  *
- * This server action calls the underlying BAML function "ExecFetchAsWithHttpPutRequestAndClassJson"
+ * This server action calls the underlying BAML function "FnNamedArgsSingleStringOptionalExprFunc"
  * with the specified parameters.
  *
+ * @param { string | null } myString (optional) - Input parameter.
  *
- * @returns {Promise<types.DummyJsonTodo>} A promise that resolves with the result of the action.
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
-export const ExecFetchAsWithHttpPutRequestAndClassJson = async (
-): Promise<types.DummyJsonTodo> => {
-  return b.ExecFetchAsWithHttpPutRequestAndClassJson(
+export const FnNamedArgsSingleStringOptionalExprFunc = async (
+  myString?: string | null,
+): Promise<string> => {
+  return b.FnNamedArgsSingleStringOptionalExprFunc(
+    myString,
   );
 };
 
 /**
- * Executes the "HomeEnvVarIsEmpty" BAML action.
+ * Executes the "FnOutputBoolExprFunc" BAML action.
  *
- * This server action calls the underlying BAML function "HomeEnvVarIsEmpty"
+ * This server action calls the underlying BAML function "FnOutputBoolExprFunc"
  * with the specified parameters.
  *
+ * @param { string } input - Input parameter.
  *
  * @returns {Promise<boolean>} A promise that resolves with the result of the action.
  */
-export const HomeEnvVarIsEmpty = async (
+export const FnOutputBoolExprFunc = async (
+  input: string,
 ): Promise<boolean> => {
-  return b.HomeEnvVarIsEmpty(
+  return b.FnOutputBoolExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnOutputClassExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnOutputClassExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<types.TestOutputClass>} A promise that resolves with the result of the action.
+ */
+export const FnOutputClassExprFunc = async (
+  input: string,
+): Promise<types.TestOutputClass> => {
+  return b.FnOutputClassExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnOutputClassListExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnOutputClassListExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<types.TestOutputClass[]>} A promise that resolves with the result of the action.
+ */
+export const FnOutputClassListExprFunc = async (
+  input: string,
+): Promise<types.TestOutputClass[]> => {
+  return b.FnOutputClassListExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnOutputClassNestedExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnOutputClassNestedExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<types.TestClassNested>} A promise that resolves with the result of the action.
+ */
+export const FnOutputClassNestedExprFunc = async (
+  input: string,
+): Promise<types.TestClassNested> => {
+  return b.FnOutputClassNestedExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnOutputIntExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnOutputIntExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<number>} A promise that resolves with the result of the action.
+ */
+export const FnOutputIntExprFunc = async (
+  input: string,
+): Promise<number> => {
+  return b.FnOutputIntExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnOutputLiteralStringExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnOutputLiteralStringExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<"example output">} A promise that resolves with the result of the action.
+ */
+export const FnOutputLiteralStringExprFunc = async (
+  input: string,
+): Promise<"example output"> => {
+  return b.FnOutputLiteralStringExprFunc(
+    input,
+  );
+};
+
+/**
+ * Executes the "FnTestNamedArgsSingleEnumExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "FnTestNamedArgsSingleEnumExprFunc"
+ * with the specified parameters.
+ *
+ * @param { types.NamedArgsSingleEnum } myArg - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const FnTestNamedArgsSingleEnumExprFunc = async (
+  myArg: types.NamedArgsSingleEnum,
+): Promise<string> => {
+  return b.FnTestNamedArgsSingleEnumExprFunc(
+    myArg,
   );
 };
 
@@ -4638,6 +4791,42 @@ export const NotEmpty = async (
 };
 
 /**
+ * Executes the "NullLiteralClassHelloExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "NullLiteralClassHelloExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } s - Input parameter.
+ *
+ * @returns {Promise<types.ClassForNullLiteral>} A promise that resolves with the result of the action.
+ */
+export const NullLiteralClassHelloExprFunc = async (
+  s: string,
+): Promise<types.ClassForNullLiteral> => {
+  return b.NullLiteralClassHelloExprFunc(
+    s,
+  );
+};
+
+/**
+ * Executes the "PdfInputExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "PdfInputExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Pdf } doc - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const PdfInputExprFunc = async (
+  doc: Pdf,
+): Promise<string> => {
+  return b.PdfInputExprFunc(
+    doc,
+  );
+};
+
+/**
  * Executes the "ReturnCategory" BAML action.
  *
  * This server action calls the underlying BAML function "ReturnCategory"
@@ -4673,24 +4862,6 @@ export const ReturnElseIfExpr = async (
   return b.ReturnElseIfExpr(
     a,
     b,
-  );
-};
-
-/**
- * Executes the "ReturnImageFromUrl" BAML action.
- *
- * This server action calls the underlying BAML function "ReturnImageFromUrl"
- * with the specified parameters.
- *
- * @param { string } url - Input parameter.
- *
- * @returns {Promise<Image>} A promise that resolves with the result of the action.
- */
-export const ReturnImageFromUrl = async (
-  url: string,
-): Promise<Image> => {
-  return b.ReturnImageFromUrl(
-    url,
   );
 };
 
@@ -4742,21 +4913,6 @@ export const ReturnNumberCallingLlm = async (
 export const ReturnOne = async (
 ): Promise<number> => {
   return b.ReturnOne(
-  );
-};
-
-/**
- * Executes the "SimpleWatchWithFilter" BAML action.
- *
- * This server action calls the underlying BAML function "SimpleWatchWithFilter"
- * with the specified parameters.
- *
- *
- * @returns {Promise<number>} A promise that resolves with the result of the action.
- */
-export const SimpleWatchWithFilter = async (
-): Promise<number> => {
-  return b.SimpleWatchWithFilter(
   );
 };
 
@@ -4836,17 +4992,308 @@ export const SumFromTo = async (
 };
 
 /**
- * Executes the "WorkflowWatch" BAML action.
+ * Executes the "TestFnNamedArgsLiteralBoolExprFunc" BAML action.
  *
- * This server action calls the underlying BAML function "WorkflowWatch"
+ * This server action calls the underlying BAML function "TestFnNamedArgsLiteralBoolExprFunc"
  * with the specified parameters.
  *
+ * @param { true } myBool - Input parameter.
  *
- * @returns {Promise<number>} A promise that resolves with the result of the action.
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
-export const WorkflowWatch = async (
-): Promise<number> => {
-  return b.WorkflowWatch(
+export const TestFnNamedArgsLiteralBoolExprFunc = async (
+  myBool: true,
+): Promise<string> => {
+  return b.TestFnNamedArgsLiteralBoolExprFunc(
+    myBool,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsLiteralIntExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsLiteralIntExprFunc"
+ * with the specified parameters.
+ *
+ * @param { 1 } myInt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsLiteralIntExprFunc = async (
+  myInt: 1,
+): Promise<string> => {
+  return b.TestFnNamedArgsLiteralIntExprFunc(
+    myInt,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsLiteralStringExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsLiteralStringExprFunc"
+ * with the specified parameters.
+ *
+ * @param { "My String" } myString - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsLiteralStringExprFunc = async (
+  myString: "My String",
+): Promise<string> => {
+  return b.TestFnNamedArgsLiteralStringExprFunc(
+    myString,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleBoolExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleBoolExprFunc"
+ * with the specified parameters.
+ *
+ * @param { boolean } myBool - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleBoolExprFunc = async (
+  myBool: boolean,
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleBoolExprFunc(
+    myBool,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleClassExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleClassExprFunc"
+ * with the specified parameters.
+ *
+ * @param { types.NamedArgsSingleClass } myArg - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleClassExprFunc = async (
+  myArg: types.NamedArgsSingleClass,
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleClassExprFunc(
+    myArg,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleEnumListExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleEnumListExprFunc"
+ * with the specified parameters.
+ *
+ * @param { types.NamedArgsSingleEnumList[] } myArg - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleEnumListExprFunc = async (
+  myArg: types.NamedArgsSingleEnumList[],
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleEnumListExprFunc(
+    myArg,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleFloatExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleFloatExprFunc"
+ * with the specified parameters.
+ *
+ * @param { number } myFloat - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleFloatExprFunc = async (
+  myFloat: number,
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleFloatExprFunc(
+    myFloat,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleIntExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleIntExprFunc"
+ * with the specified parameters.
+ *
+ * @param { number } myInt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleIntExprFunc = async (
+  myInt: number,
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleIntExprFunc(
+    myInt,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleMapStringToClassExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleMapStringToClassExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Record<string, types.StringToClassEntry> } myMap - Input parameter.
+ *
+ * @returns {Promise<Record<string, types.StringToClassEntry>>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleMapStringToClassExprFunc = async (
+  myMap: Record<string, types.StringToClassEntry>,
+): Promise<Record<string, types.StringToClassEntry>> => {
+  return b.TestFnNamedArgsSingleMapStringToClassExprFunc(
+    myMap,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleMapStringToMapExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleMapStringToMapExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Record<string, Record<string, string>> } myMap - Input parameter.
+ *
+ * @returns {Promise<Record<string, Record<string, string>>>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleMapStringToMapExprFunc = async (
+  myMap: Record<string, Record<string, string>>,
+): Promise<Record<string, Record<string, string>>> => {
+  return b.TestFnNamedArgsSingleMapStringToMapExprFunc(
+    myMap,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleMapStringToStringExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleMapStringToStringExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Record<string, string> } myMap - Input parameter.
+ *
+ * @returns {Promise<Record<string, string>>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleMapStringToStringExprFunc = async (
+  myMap: Record<string, string>,
+): Promise<Record<string, string>> => {
+  return b.TestFnNamedArgsSingleMapStringToStringExprFunc(
+    myMap,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleStringArrayExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleStringArrayExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string[] } myStringArray - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleStringArrayExprFunc = async (
+  myStringArray: string[],
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleStringArrayExprFunc(
+    myStringArray,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleStringExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleStringExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string } myString - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleStringExprFunc = async (
+  myString: string,
+): Promise<string> => {
+  return b.TestFnNamedArgsSingleStringExprFunc(
+    myString,
+  );
+};
+
+/**
+ * Executes the "TestFnNamedArgsSingleStringListExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFnNamedArgsSingleStringListExprFunc"
+ * with the specified parameters.
+ *
+ * @param { string[] } myArg - Input parameter.
+ *
+ * @returns {Promise<string[]>} A promise that resolves with the result of the action.
+ */
+export const TestFnNamedArgsSingleStringListExprFunc = async (
+  myArg: string[],
+): Promise<string[]> => {
+  return b.TestFnNamedArgsSingleStringListExprFunc(
+    myArg,
+  );
+};
+
+/**
+ * Executes the "TestImageInputExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestImageInputExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Image } img - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestImageInputExprFunc = async (
+  img: Image,
+): Promise<string> => {
+  return b.TestImageInputExprFunc(
+    img,
+  );
+};
+
+/**
+ * Executes the "TestImageListInputExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestImageListInputExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Image[] } imgs - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestImageListInputExprFunc = async (
+  imgs: Image[],
+): Promise<string> => {
+  return b.TestImageListInputExprFunc(
+    imgs,
+  );
+};
+
+/**
+ * Executes the "VideoInputExprFunc" BAML action.
+ *
+ * This server action calls the underlying BAML function "VideoInputExprFunc"
+ * with the specified parameters.
+ *
+ * @param { Video } vid - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const VideoInputExprFunc = async (
+  vid: Video,
+): Promise<string> => {
+  return b.VideoInputExprFunc(
+    vid,
   );
 };
 
@@ -4862,20 +5309,5 @@ export const WorkflowWatch = async (
 export const WorkflowWatchChild = async (
 ): Promise<number> => {
   return b.WorkflowWatchChild(
-  );
-};
-
-/**
- * Executes the "WorkflowWatchWithFilter" BAML action.
- *
- * This server action calls the underlying BAML function "WorkflowWatchWithFilter"
- * with the specified parameters.
- *
- *
- * @returns {Promise<number>} A promise that resolves with the result of the action.
- */
-export const WorkflowWatchWithFilter = async (
-): Promise<number> => {
-  return b.WorkflowWatchWithFilter(
   );
 };

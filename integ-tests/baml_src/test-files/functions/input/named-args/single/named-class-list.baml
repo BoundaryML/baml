@@ -8,6 +8,10 @@ function TestFnNamedArgsSingleStringList(myArg: string[]) -> string[] {
   "#
 }
 
+function TestFnNamedArgsSingleStringListExprFunc(myArg: string[]) -> string[] {
+  return ["hello", "world"];
+}
+
 test TestFnNamedArgsSingleStringList {
   functions [TestFnNamedArgsSingleStringList]
   args {

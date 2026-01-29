@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "baml"
-version = "0.217.0"
+version = "0.218.1"
 dependencies = [
  "async-channel",
  "baml-macros",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "baml-macros"
-version = "0.217.0"
+version = "0.218.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "baml-sys"
-version = "0.217.0"
+version = "0.218.1"
 dependencies = [
  "hex",
  "libc",

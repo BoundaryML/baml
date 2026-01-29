@@ -7,6 +7,9 @@ function TestImageInput(img: image) -> string{
   "#
 }
 
+function TestImageInputExprFunc(img: image) -> string {
+  return "Hello, world!";
+}
 
 function TestImageInputAnthropic(img: image) -> string{
   client Claude

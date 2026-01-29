@@ -22,7 +22,7 @@ import type { BamlRuntime, BamlCtxManager, Image, Audio, Pdf, Video } from "@bou
 import { toBamlError, HTTPRequest, ClientRegistry } from "@boundaryml/baml"
 import type { Checked, Check } from "./types"
 import type * as types from "./types"
-import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyJsonTodoUpdate, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SkipDynamicClass, SkipNonDynamicClass, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
+import type {AddTodoItem, AddressWithMeta, AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyJsonTodo, DummyOutput, DynEnumOne, DynEnumThree, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PersonWithMeta, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, RenderEnumInput, RenderStatusEnum, RenderTestClass, RenderTestEnum, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SkipDynamicClass, SkipNonDynamicClass, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, TodoMessageToUser, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
 import type * as events from "./events"
 
@@ -7892,6 +7892,39 @@ export class HttpRequest {
     }
   }
   
+  AllowedOptionalsExprFunc(
+      optionals: types.OptionalListAndMap,
+      __baml_options__?: BamlCallOptions<events.AllowedOptionalsExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "AllowedOptionalsExprFunc",
+        {
+          "optionals": optionals
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   AnotherTakedown(
       xs: string[],
       __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
@@ -7946,6 +7979,39 @@ export class HttpRequest {
         "AssignElseIfExpr",
         {
           "a": a,"b": b
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AudioInputExprFunc(
+      aud: Audio,
+      __baml_options__?: BamlCallOptions<events.AudioInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "AudioInputExprFunc",
+        {
+          "aud": aud
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8156,9 +8222,9 @@ export class HttpRequest {
     }
   }
   
-  ExecFetchAs(
-      url: string,
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
+  FnLiteralClassInputOutputExprFunc(
+      input: types.LiteralClassHello,
+      __baml_options__?: BamlCallOptions<events.FnLiteralClassInputOutputExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8174,9 +8240,9 @@ export class HttpRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAs",
+        "FnLiteralClassInputOutputExprFunc",
         {
-          "url": url
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8189,9 +8255,9 @@ export class HttpRequest {
     }
   }
   
-  ExecFetchAsWithHttpPostRequest(
-      
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
+  FnLiteralUnionClassInputOutputExprFunc(
+      input: types.LiteralClassOne | types.LiteralClassTwo,
+      __baml_options__?: BamlCallOptions<events.FnLiteralUnionClassInputOutputExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8207,9 +8273,9 @@ export class HttpRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAsWithHttpPostRequest",
+        "FnLiteralUnionClassInputOutputExprFunc",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8222,9 +8288,9 @@ export class HttpRequest {
     }
   }
   
-  ExecFetchAsWithHttpPutRequestAndClassJson(
-      
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
+  FnNamedArgsSingleStringOptionalExprFunc(
+      myString?: string | null,
+      __baml_options__?: BamlCallOptions<events.FnNamedArgsSingleStringOptionalExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8240,9 +8306,9 @@ export class HttpRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAsWithHttpPutRequestAndClassJson",
+        "FnNamedArgsSingleStringOptionalExprFunc",
         {
-          
+          "myString": myString?? null
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8255,9 +8321,9 @@ export class HttpRequest {
     }
   }
   
-  HomeEnvVarIsEmpty(
-      
-      __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
+  FnOutputBoolExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputBoolExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8273,9 +8339,207 @@ export class HttpRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "HomeEnvVarIsEmpty",
+        "FnOutputBoolExprFunc",
         {
-          
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassListExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassListExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassNestedExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassNestedExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassNestedExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputIntExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputIntExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputLiteralStringExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputLiteralStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputLiteralStringExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnTestNamedArgsSingleEnumExprFunc(
+      myArg: types.NamedArgsSingleEnum,
+      __baml_options__?: BamlCallOptions<events.FnTestNamedArgsSingleEnumExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnTestNamedArgsSingleEnumExprFunc",
+        {
+          "myArg": myArg
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8453,6 +8717,72 @@ export class HttpRequest {
     }
   }
   
+  NullLiteralClassHelloExprFunc(
+      s: string,
+      __baml_options__?: BamlCallOptions<events.NullLiteralClassHelloExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "NullLiteralClassHelloExprFunc",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  PdfInputExprFunc(
+      doc: Pdf,
+      __baml_options__?: BamlCallOptions<events.PdfInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "PdfInputExprFunc",
+        {
+          "doc": doc
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ReturnCategory(
       category: types.Category,
       __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
@@ -8507,39 +8837,6 @@ export class HttpRequest {
         "ReturnElseIfExpr",
         {
           "a": a,"b": b
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        false,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ReturnImageFromUrl(
-      url: string,
-      __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "ReturnImageFromUrl",
-        {
-          "url": url
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8637,39 +8934,6 @@ export class HttpRequest {
 
       return this.runtime.buildRequestSync(
         "ReturnOne",
-        {
-          
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        false,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  SimpleWatchWithFilter(
-      
-      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "SimpleWatchWithFilter",
         {
           
         },
@@ -8816,9 +9080,9 @@ export class HttpRequest {
     }
   }
   
-  WorkflowWatch(
-      
-      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
+  TestFnNamedArgsLiteralBoolExprFunc(
+      myBool: true,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralBoolExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -8834,9 +9098,537 @@ export class HttpRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "WorkflowWatch",
+        "TestFnNamedArgsLiteralBoolExprFunc",
         {
-          
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralIntExprFunc(
+      myInt: 1,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsLiteralIntExprFunc",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralStringExprFunc(
+      myString: "My String",
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsLiteralStringExprFunc",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleBoolExprFunc(
+      myBool: boolean,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleBoolExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleBoolExprFunc",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleClassExprFunc(
+      myArg: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleClassExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleEnumListExprFunc(
+      myArg: types.NamedArgsSingleEnumList[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleEnumListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleEnumListExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleFloatExprFunc(
+      myFloat: number,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleFloatExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleFloatExprFunc",
+        {
+          "myFloat": myFloat
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleIntExprFunc(
+      myInt: number,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleIntExprFunc",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToClassExprFunc(
+      myMap: Record<string, types.StringToClassEntry>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToClassExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToMapExprFunc(
+      myMap: Record<string, Record<string, string>>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToMapExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToMapExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToStringExprFunc(
+      myMap: Record<string, string>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToStringExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringArrayExprFunc(
+      myStringArray: string[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringArrayExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringArrayExprFunc",
+        {
+          "myStringArray": myStringArray
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringExprFunc(
+      myString: string,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringExprFunc",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringListExprFunc(
+      myArg: string[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringListExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageInputExprFunc(
+      img: Image,
+      __baml_options__?: BamlCallOptions<events.TestImageInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestImageInputExprFunc",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageListInputExprFunc(
+      imgs: Image[],
+      __baml_options__?: BamlCallOptions<events.TestImageListInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestImageListInputExprFunc",
+        {
+          "imgs": imgs
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        false,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  VideoInputExprFunc(
+      vid: Video,
+      __baml_options__?: BamlCallOptions<events.VideoInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "VideoInputExprFunc",
+        {
+          "vid": vid
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -8868,39 +9660,6 @@ export class HttpRequest {
 
       return this.runtime.buildRequestSync(
         "WorkflowWatchChild",
-        {
-          
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        false,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  WorkflowWatchWithFilter(
-      
-      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "WorkflowWatchWithFilter",
         {
           
         },
@@ -16775,6 +17534,39 @@ export class HttpStreamRequest {
     }
   }
   
+  AllowedOptionalsExprFunc(
+      optionals: types.OptionalListAndMap,
+      __baml_options__?: BamlCallOptions<events.AllowedOptionalsExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "AllowedOptionalsExprFunc",
+        {
+          "optionals": optionals
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   AnotherTakedown(
       xs: string[],
       __baml_options__?: BamlCallOptions<events.AnotherTakedownEventCollector>
@@ -16829,6 +17621,39 @@ export class HttpStreamRequest {
         "AssignElseIfExpr",
         {
           "a": a,"b": b
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AudioInputExprFunc(
+      aud: Audio,
+      __baml_options__?: BamlCallOptions<events.AudioInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "AudioInputExprFunc",
+        {
+          "aud": aud
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17039,9 +17864,9 @@ export class HttpStreamRequest {
     }
   }
   
-  ExecFetchAs(
-      url: string,
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsEventCollector>
+  FnLiteralClassInputOutputExprFunc(
+      input: types.LiteralClassHello,
+      __baml_options__?: BamlCallOptions<events.FnLiteralClassInputOutputExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -17057,9 +17882,9 @@ export class HttpStreamRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAs",
+        "FnLiteralClassInputOutputExprFunc",
         {
-          "url": url
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17072,9 +17897,9 @@ export class HttpStreamRequest {
     }
   }
   
-  ExecFetchAsWithHttpPostRequest(
-      
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPostRequestEventCollector>
+  FnLiteralUnionClassInputOutputExprFunc(
+      input: types.LiteralClassOne | types.LiteralClassTwo,
+      __baml_options__?: BamlCallOptions<events.FnLiteralUnionClassInputOutputExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -17090,9 +17915,9 @@ export class HttpStreamRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAsWithHttpPostRequest",
+        "FnLiteralUnionClassInputOutputExprFunc",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17105,9 +17930,9 @@ export class HttpStreamRequest {
     }
   }
   
-  ExecFetchAsWithHttpPutRequestAndClassJson(
-      
-      __baml_options__?: BamlCallOptions<events.ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector>
+  FnNamedArgsSingleStringOptionalExprFunc(
+      myString?: string | null,
+      __baml_options__?: BamlCallOptions<events.FnNamedArgsSingleStringOptionalExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -17123,9 +17948,9 @@ export class HttpStreamRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "ExecFetchAsWithHttpPutRequestAndClassJson",
+        "FnNamedArgsSingleStringOptionalExprFunc",
         {
-          
+          "myString": myString?? null
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17138,9 +17963,9 @@ export class HttpStreamRequest {
     }
   }
   
-  HomeEnvVarIsEmpty(
-      
-      __baml_options__?: BamlCallOptions<events.HomeEnvVarIsEmptyEventCollector>
+  FnOutputBoolExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputBoolExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -17156,9 +17981,207 @@ export class HttpStreamRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "HomeEnvVarIsEmpty",
+        "FnOutputBoolExprFunc",
         {
-          
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassListExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassListExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputClassNestedExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputClassNestedExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputClassNestedExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputIntExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputIntExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnOutputLiteralStringExprFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions<events.FnOutputLiteralStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnOutputLiteralStringExprFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  FnTestNamedArgsSingleEnumExprFunc(
+      myArg: types.NamedArgsSingleEnum,
+      __baml_options__?: BamlCallOptions<events.FnTestNamedArgsSingleEnumExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "FnTestNamedArgsSingleEnumExprFunc",
+        {
+          "myArg": myArg
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17336,6 +18359,72 @@ export class HttpStreamRequest {
     }
   }
   
+  NullLiteralClassHelloExprFunc(
+      s: string,
+      __baml_options__?: BamlCallOptions<events.NullLiteralClassHelloExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "NullLiteralClassHelloExprFunc",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  PdfInputExprFunc(
+      doc: Pdf,
+      __baml_options__?: BamlCallOptions<events.PdfInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "PdfInputExprFunc",
+        {
+          "doc": doc
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ReturnCategory(
       category: types.Category,
       __baml_options__?: BamlCallOptions<events.ReturnCategoryEventCollector>
@@ -17390,39 +18479,6 @@ export class HttpStreamRequest {
         "ReturnElseIfExpr",
         {
           "a": a,"b": b
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        true,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ReturnImageFromUrl(
-      url: string,
-      __baml_options__?: BamlCallOptions<events.ReturnImageFromUrlEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "ReturnImageFromUrl",
-        {
-          "url": url
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17520,39 +18576,6 @@ export class HttpStreamRequest {
 
       return this.runtime.buildRequestSync(
         "ReturnOne",
-        {
-          
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        true,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  SimpleWatchWithFilter(
-      
-      __baml_options__?: BamlCallOptions<events.SimpleWatchWithFilterEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "SimpleWatchWithFilter",
         {
           
         },
@@ -17699,9 +18722,9 @@ export class HttpStreamRequest {
     }
   }
   
-  WorkflowWatch(
-      
-      __baml_options__?: BamlCallOptions<events.WorkflowWatchEventCollector>
+  TestFnNamedArgsLiteralBoolExprFunc(
+      myBool: true,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralBoolExprFuncEventCollector>
   ): HTTPRequest {
     try {
       const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
@@ -17717,9 +18740,537 @@ export class HttpStreamRequest {
       }
 
       return this.runtime.buildRequestSync(
-        "WorkflowWatch",
+        "TestFnNamedArgsLiteralBoolExprFunc",
         {
-          
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralIntExprFunc(
+      myInt: 1,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsLiteralIntExprFunc",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsLiteralStringExprFunc(
+      myString: "My String",
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsLiteralStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsLiteralStringExprFunc",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleBoolExprFunc(
+      myBool: boolean,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleBoolExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleBoolExprFunc",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleClassExprFunc(
+      myArg: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleClassExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleEnumListExprFunc(
+      myArg: types.NamedArgsSingleEnumList[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleEnumListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleEnumListExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleFloatExprFunc(
+      myFloat: number,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleFloatExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleFloatExprFunc",
+        {
+          "myFloat": myFloat
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleIntExprFunc(
+      myInt: number,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleIntExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleIntExprFunc",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToClassExprFunc(
+      myMap: Record<string, types.StringToClassEntry>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToClassExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToClassExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToMapExprFunc(
+      myMap: Record<string, Record<string, string>>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToMapExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToMapExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleMapStringToStringExprFunc(
+      myMap: Record<string, string>,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleMapStringToStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleMapStringToStringExprFunc",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringArrayExprFunc(
+      myStringArray: string[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringArrayExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringArrayExprFunc",
+        {
+          "myStringArray": myStringArray
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringExprFunc(
+      myString: string,
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringExprFunc",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestFnNamedArgsSingleStringListExprFunc(
+      myArg: string[],
+      __baml_options__?: BamlCallOptions<events.TestFnNamedArgsSingleStringListExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestFnNamedArgsSingleStringListExprFunc",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageInputExprFunc(
+      img: Image,
+      __baml_options__?: BamlCallOptions<events.TestImageInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestImageInputExprFunc",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestImageListInputExprFunc(
+      imgs: Image[],
+      __baml_options__?: BamlCallOptions<events.TestImageListInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "TestImageListInputExprFunc",
+        {
+          "imgs": imgs
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __clientRegistry__,
+        true,
+        __env__,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  VideoInputExprFunc(
+      vid: Video,
+      __baml_options__?: BamlCallOptions<events.VideoInputExprFuncEventCollector>
+  ): HTTPRequest {
+    try {
+      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const __env__: Record<string, string> = Object.fromEntries(
+        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
+
+      // Resolve client option to clientRegistry (client takes precedence)
+      let __clientRegistry__ = __baml_options__?.clientRegistry;
+      if (__baml_options__?.client) {
+        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
+        __clientRegistry__.setPrimary(__baml_options__.client);
+      }
+
+      return this.runtime.buildRequestSync(
+        "VideoInputExprFunc",
+        {
+          "vid": vid
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -17751,39 +19302,6 @@ export class HttpStreamRequest {
 
       return this.runtime.buildRequestSync(
         "WorkflowWatchChild",
-        {
-          
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __clientRegistry__,
-        true,
-        __env__,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  WorkflowWatchWithFilter(
-      
-      __baml_options__?: BamlCallOptions<events.WorkflowWatchWithFilterEventCollector>
-  ): HTTPRequest {
-    try {
-      const __rawEnv__ = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
-      const __env__: Record<string, string> = Object.fromEntries(
-        Object.entries(__rawEnv__).filter(([_, value]) => value !== undefined) as [string, string][]
-      );
-
-      // Resolve client option to clientRegistry (client takes precedence)
-      let __clientRegistry__ = __baml_options__?.clientRegistry;
-      if (__baml_options__?.client) {
-        __clientRegistry__ = __clientRegistry__ || new ClientRegistry();
-        __clientRegistry__.setPrimary(__baml_options__.client);
-      }
-
-      return this.runtime.buildRequestSync(
-        "WorkflowWatchWithFilter",
         {
           
         },

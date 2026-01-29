@@ -5,6 +5,10 @@ function FnOutputLiteralString(input: string) -> "example output" {
   "#
 }
 
+function FnOutputLiteralStringExprFunc(input: string) -> "example output" {
+  return "example output";
+}
+
 test FnOutputLiteralString {
   functions [FnOutputLiteralString]
   args {

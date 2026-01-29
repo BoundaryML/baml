@@ -12,7 +12,6 @@
 
 from typing import Callable, Any, Protocol, Generic, TypeVar, overload, Literal
 import threading
-import typing
 
 T = TypeVar("T")
 
@@ -42,6 +41,66 @@ class InternalEventBindings(Protocol):
 class EventCollectorInternal(Protocol):
     def __handlers__(self) -> InternalEventBindings:
         ...
+
+
+class AllowedOptionalsExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "AllowedOptionalsExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def AllowedOptionalsExprFunc() -> AllowedOptionalsExprFuncEventCollector:
+    return AllowedOptionalsExprFuncEventCollector()
 
 
 class AnotherTakedownEventCollector:
@@ -162,6 +221,66 @@ class AssignElseIfExprEventCollector:
 
 def AssignElseIfExpr() -> AssignElseIfExprEventCollector:
     return AssignElseIfExprEventCollector()
+
+
+class AudioInputExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "AudioInputExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def AudioInputExprFunc() -> AudioInputExprFuncEventCollector:
+    return AudioInputExprFuncEventCollector()
 
 
 class BoolToIntWithIfElseEventCollector:
@@ -524,7 +643,7 @@ def EchoWorkflow() -> EchoWorkflowEventCollector:
     return EchoWorkflowEventCollector()
 
 
-class ExecFetchAsEventCollector:
+class FnLiteralClassInputOutputExprFuncEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
@@ -572,7 +691,7 @@ class ExecFetchAsEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "ExecFetchAs"
+                    self.function_name = "FnLiteralClassInputOutputExprFunc"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -580,11 +699,11 @@ class ExecFetchAsEventCollector:
 
             return Bindings()
 
-def ExecFetchAs() -> ExecFetchAsEventCollector:
-    return ExecFetchAsEventCollector()
+def FnLiteralClassInputOutputExprFunc() -> FnLiteralClassInputOutputExprFuncEventCollector:
+    return FnLiteralClassInputOutputExprFuncEventCollector()
 
 
-class ExecFetchAsWithHttpPostRequestEventCollector:
+class FnLiteralUnionClassInputOutputExprFuncEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
@@ -632,7 +751,7 @@ class ExecFetchAsWithHttpPostRequestEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "ExecFetchAsWithHttpPostRequest"
+                    self.function_name = "FnLiteralUnionClassInputOutputExprFunc"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -640,11 +759,11 @@ class ExecFetchAsWithHttpPostRequestEventCollector:
 
             return Bindings()
 
-def ExecFetchAsWithHttpPostRequest() -> ExecFetchAsWithHttpPostRequestEventCollector:
-    return ExecFetchAsWithHttpPostRequestEventCollector()
+def FnLiteralUnionClassInputOutputExprFunc() -> FnLiteralUnionClassInputOutputExprFuncEventCollector:
+    return FnLiteralUnionClassInputOutputExprFuncEventCollector()
 
 
-class ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
+class FnNamedArgsSingleStringOptionalExprFuncEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
@@ -692,7 +811,7 @@ class ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "ExecFetchAsWithHttpPutRequestAndClassJson"
+                    self.function_name = "FnNamedArgsSingleStringOptionalExprFunc"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -700,11 +819,11 @@ class ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
 
             return Bindings()
 
-def ExecFetchAsWithHttpPutRequestAndClassJson() -> ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector:
-    return ExecFetchAsWithHttpPutRequestAndClassJsonEventCollector()
+def FnNamedArgsSingleStringOptionalExprFunc() -> FnNamedArgsSingleStringOptionalExprFuncEventCollector:
+    return FnNamedArgsSingleStringOptionalExprFuncEventCollector()
 
 
-class HomeEnvVarIsEmptyEventCollector:
+class FnOutputBoolExprFuncEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
@@ -752,7 +871,7 @@ class HomeEnvVarIsEmptyEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "HomeEnvVarIsEmpty"
+                    self.function_name = "FnOutputBoolExprFunc"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -760,8 +879,368 @@ class HomeEnvVarIsEmptyEventCollector:
 
             return Bindings()
 
-def HomeEnvVarIsEmpty() -> HomeEnvVarIsEmptyEventCollector:
-    return HomeEnvVarIsEmptyEventCollector()
+def FnOutputBoolExprFunc() -> FnOutputBoolExprFuncEventCollector:
+    return FnOutputBoolExprFuncEventCollector()
+
+
+class FnOutputClassExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnOutputClassExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnOutputClassExprFunc() -> FnOutputClassExprFuncEventCollector:
+    return FnOutputClassExprFuncEventCollector()
+
+
+class FnOutputClassListExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnOutputClassListExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnOutputClassListExprFunc() -> FnOutputClassListExprFuncEventCollector:
+    return FnOutputClassListExprFuncEventCollector()
+
+
+class FnOutputClassNestedExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnOutputClassNestedExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnOutputClassNestedExprFunc() -> FnOutputClassNestedExprFuncEventCollector:
+    return FnOutputClassNestedExprFuncEventCollector()
+
+
+class FnOutputIntExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnOutputIntExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnOutputIntExprFunc() -> FnOutputIntExprFuncEventCollector:
+    return FnOutputIntExprFuncEventCollector()
+
+
+class FnOutputLiteralStringExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnOutputLiteralStringExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnOutputLiteralStringExprFunc() -> FnOutputLiteralStringExprFuncEventCollector:
+    return FnOutputLiteralStringExprFuncEventCollector()
+
+
+class FnTestNamedArgsSingleEnumExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "FnTestNamedArgsSingleEnumExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def FnTestNamedArgsSingleEnumExprFunc() -> FnTestNamedArgsSingleEnumExprFuncEventCollector:
+    return FnTestNamedArgsSingleEnumExprFuncEventCollector()
 
 
 class IsTargetWordEventCollector:
@@ -1064,6 +1543,126 @@ def NotEmpty() -> NotEmptyEventCollector:
     return NotEmptyEventCollector()
 
 
+class NullLiteralClassHelloExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "NullLiteralClassHelloExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def NullLiteralClassHelloExprFunc() -> NullLiteralClassHelloExprFuncEventCollector:
+    return NullLiteralClassHelloExprFuncEventCollector()
+
+
+class PdfInputExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "PdfInputExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def PdfInputExprFunc() -> PdfInputExprFuncEventCollector:
+    return PdfInputExprFuncEventCollector()
+
+
 class ReturnCategoryEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
@@ -1182,66 +1781,6 @@ class ReturnElseIfExprEventCollector:
 
 def ReturnElseIfExpr() -> ReturnElseIfExprEventCollector:
     return ReturnElseIfExprEventCollector()
-
-
-class ReturnImageFromUrlEventCollector:
-    def __init__(self):
-        self._block_handlers: list[BlockHandler] = []
-        self._lock = threading.Lock()
-
-        
-
-        
-        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
-        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
-        
-
-        
-        self._function_handler_map: dict[str, EventCollectorInternal] = {}
-        
-
-        
-
-    def on_block(self, handler: BlockHandler) -> None:
-        with self._lock:
-            self._block_handlers.append(handler)
-
-    
-
-    def __handlers__(self) -> InternalEventBindings:
-        with self._lock:
-            vars_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._var_handler_map.items()
-                if handlers
-            }
-
-            streams_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._stream_handler_map.items()
-                if handlers
-            }
-
-            functions_dict = {
-                fn_name: collector.__handlers__()
-                for fn_name, collector in self._function_handler_map.items()
-            }
-
-            # Capture block_handlers from outer scope
-            block_handlers = list(self._block_handlers)
-
-            class Bindings:
-                def __init__(self):
-                    self.function_name = "ReturnImageFromUrl"
-                    self.block = block_handlers
-                    self.vars = vars_dict
-                    self.streams = streams_dict
-                    self.functions = functions_dict
-
-            return Bindings()
-
-def ReturnImageFromUrl() -> ReturnImageFromUrlEventCollector:
-    return ReturnImageFromUrlEventCollector()
 
 
 class ReturnNumberEventCollector:
@@ -1422,111 +1961,6 @@ class ReturnOneEventCollector:
 
 def ReturnOne() -> ReturnOneEventCollector:
     return ReturnOneEventCollector()
-
-
-class SimpleWatchWithFilterEventCollector:
-    def __init__(self):
-        self._block_handlers: list[BlockHandler] = []
-        self._lock = threading.Lock()
-
-        
-        self._var_handlers_new_name: list[VarEventHandler[str]] = []
-        self._stream_handlers_new_name: list[StreamHandler] = []
-        
-        self._var_handlers_word: list[VarEventHandler[str]] = []
-        self._stream_handlers_word: list[StreamHandler] = []
-        
-
-        
-        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
-            
-            "new_name": self._var_handlers_new_name,
-            
-            "word": self._var_handlers_word,
-            
-        }
-
-        self._stream_handler_map: dict[str, list[StreamHandler]] = {
-            
-            "new_name": self._stream_handlers_new_name,
-            
-            "word": self._stream_handlers_word,
-            
-        }
-        
-
-        
-        self._function_handler_map: dict[str, EventCollectorInternal] = {}
-        
-
-        
-
-    def on_block(self, handler: BlockHandler) -> None:
-        with self._lock:
-            self._block_handlers.append(handler)
-
-    
-    
-    @overload
-    def on_var(self, channel: Literal["new_name"], handler: VarEventHandler[str]) -> None: ...
-    
-    @overload
-    def on_var(self, channel: Literal["word"], handler: VarEventHandler[str]) -> None: ...
-    
-
-    def on_var(self, channel: Literal["new_name", "word"], handler: VarEventHandler[Any]) -> None:
-        with self._lock:
-            if channel in self._var_handler_map:
-                self._var_handler_map[channel].append(handler)
-
-    
-    @overload
-    def on_stream(self, channel: Literal["new_name"], handler: StreamHandler) -> None: ...
-    
-    @overload
-    def on_stream(self, channel: Literal["word"], handler: StreamHandler) -> None: ...
-    
-
-    def on_stream(self, channel: Literal["new_name", "word"], handler: StreamHandler) -> None:
-        with self._lock:
-            if channel in self._stream_handler_map:
-                self._stream_handler_map[channel].append(handler)
-    
-
-    def __handlers__(self) -> InternalEventBindings:
-        with self._lock:
-            vars_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._var_handler_map.items()
-                if handlers
-            }
-
-            streams_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._stream_handler_map.items()
-                if handlers
-            }
-
-            functions_dict = {
-                fn_name: collector.__handlers__()
-                for fn_name, collector in self._function_handler_map.items()
-            }
-
-            # Capture block_handlers from outer scope
-            block_handlers = list(self._block_handlers)
-
-            class Bindings:
-                def __init__(self):
-                    self.function_name = "SimpleWatchWithFilter"
-                    self.block = block_handlers
-                    self.vars = vars_dict
-                    self.streams = streams_dict
-                    self.functions = functions_dict
-
-            return Bindings()
-
-def SimpleWatchWithFilter() -> SimpleWatchWithFilterEventCollector:
-    return SimpleWatchWithFilterEventCollector()
 
 
 class StoreFnCallInLocalVarEventCollector:
@@ -1769,118 +2203,28 @@ def SumFromTo() -> SumFromToEventCollector:
     return SumFromToEventCollector()
 
 
-class WorkflowWatchEventCollector:
+class TestFnNamedArgsLiteralBoolExprFuncEventCollector:
     def __init__(self):
         self._block_handlers: list[BlockHandler] = []
         self._lock = threading.Lock()
 
         
-        self._var_handlers_once: list[VarEventHandler[str]] = []
-        self._stream_handlers_once: list[StreamHandler] = []
+
         
-        self._var_handlers_story: list[VarEventHandler[str]] = []
-        self._stream_handlers_story: list[StreamHandler] = []
-        
-        self._var_handlers_twice: list[VarEventHandler[typing.List[str]]] = []
-        self._stream_handlers_twice: list[StreamHandler] = []
-        
-        self._var_handlers_x: list[VarEventHandler[int]] = []
-        self._stream_handlers_x: list[StreamHandler] = []
-        
-        self._var_handlers_y: list[VarEventHandler[bool]] = []
-        self._stream_handlers_y: list[StreamHandler] = []
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
         
 
         
-        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
-            
-            "once": self._var_handlers_once,
-            
-            "story": self._var_handlers_story,
-            
-            "twice": self._var_handlers_twice,
-            
-            "x": self._var_handlers_x,
-            
-            "y": self._var_handlers_y,
-            
-        }
-
-        self._stream_handler_map: dict[str, list[StreamHandler]] = {
-            
-            "once": self._stream_handlers_once,
-            
-            "story": self._stream_handlers_story,
-            
-            "twice": self._stream_handlers_twice,
-            
-            "x": self._stream_handlers_x,
-            
-            "y": self._stream_handlers_y,
-            
-        }
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
         
 
-        
-        self._function_handler_map: dict[str, EventCollectorInternal] = {
-            
-            "WorkflowWatchChild": WorkflowWatchChild(),
-            
-        }
-        
-
-        
-        self.function_WorkflowWatchChild = self._function_handler_map["WorkflowWatchChild"]
         
 
     def on_block(self, handler: BlockHandler) -> None:
         with self._lock:
             self._block_handlers.append(handler)
 
-    
-    
-    @overload
-    def on_var(self, channel: Literal["once"], handler: VarEventHandler[str]) -> None: ...
-    
-    @overload
-    def on_var(self, channel: Literal["story"], handler: VarEventHandler[str]) -> None: ...
-    
-    @overload
-    def on_var(self, channel: Literal["twice"], handler: VarEventHandler[typing.List[str]]) -> None: ...
-    
-    @overload
-    def on_var(self, channel: Literal["x"], handler: VarEventHandler[int]) -> None: ...
-    
-    @overload
-    def on_var(self, channel: Literal["y"], handler: VarEventHandler[bool]) -> None: ...
-    
-
-    def on_var(self, channel: Literal["once", "story", "twice", "x", "y"], handler: VarEventHandler[Any]) -> None:
-        with self._lock:
-            if channel in self._var_handler_map:
-                self._var_handler_map[channel].append(handler)
-
-    
-    @overload
-    def on_stream(self, channel: Literal["once"], handler: StreamHandler) -> None: ...
-    
-    @overload
-    def on_stream(self, channel: Literal["story"], handler: StreamHandler) -> None: ...
-    
-    @overload
-    def on_stream(self, channel: Literal["twice"], handler: StreamHandler) -> None: ...
-    
-    @overload
-    def on_stream(self, channel: Literal["x"], handler: StreamHandler) -> None: ...
-    
-    @overload
-    def on_stream(self, channel: Literal["y"], handler: StreamHandler) -> None: ...
-    
-
-    def on_stream(self, channel: Literal["once", "story", "twice", "x", "y"], handler: StreamHandler) -> None:
-        with self._lock:
-            if channel in self._stream_handler_map:
-                self._stream_handler_map[channel].append(handler)
     
 
     def __handlers__(self) -> InternalEventBindings:
@@ -1907,7 +2251,7 @@ class WorkflowWatchEventCollector:
 
             class Bindings:
                 def __init__(self):
-                    self.function_name = "WorkflowWatch"
+                    self.function_name = "TestFnNamedArgsLiteralBoolExprFunc"
                     self.block = block_handlers
                     self.vars = vars_dict
                     self.streams = streams_dict
@@ -1915,8 +2259,968 @@ class WorkflowWatchEventCollector:
 
             return Bindings()
 
-def WorkflowWatch() -> WorkflowWatchEventCollector:
-    return WorkflowWatchEventCollector()
+def TestFnNamedArgsLiteralBoolExprFunc() -> TestFnNamedArgsLiteralBoolExprFuncEventCollector:
+    return TestFnNamedArgsLiteralBoolExprFuncEventCollector()
+
+
+class TestFnNamedArgsLiteralIntExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsLiteralIntExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsLiteralIntExprFunc() -> TestFnNamedArgsLiteralIntExprFuncEventCollector:
+    return TestFnNamedArgsLiteralIntExprFuncEventCollector()
+
+
+class TestFnNamedArgsLiteralStringExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsLiteralStringExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsLiteralStringExprFunc() -> TestFnNamedArgsLiteralStringExprFuncEventCollector:
+    return TestFnNamedArgsLiteralStringExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleBoolExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleBoolExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleBoolExprFunc() -> TestFnNamedArgsSingleBoolExprFuncEventCollector:
+    return TestFnNamedArgsSingleBoolExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleClassExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleClassExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleClassExprFunc() -> TestFnNamedArgsSingleClassExprFuncEventCollector:
+    return TestFnNamedArgsSingleClassExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleEnumListExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleEnumListExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleEnumListExprFunc() -> TestFnNamedArgsSingleEnumListExprFuncEventCollector:
+    return TestFnNamedArgsSingleEnumListExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleFloatExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleFloatExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleFloatExprFunc() -> TestFnNamedArgsSingleFloatExprFuncEventCollector:
+    return TestFnNamedArgsSingleFloatExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleIntExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleIntExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleIntExprFunc() -> TestFnNamedArgsSingleIntExprFuncEventCollector:
+    return TestFnNamedArgsSingleIntExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleMapStringToClassExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleMapStringToClassExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleMapStringToClassExprFunc() -> TestFnNamedArgsSingleMapStringToClassExprFuncEventCollector:
+    return TestFnNamedArgsSingleMapStringToClassExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleMapStringToMapExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleMapStringToMapExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleMapStringToMapExprFunc() -> TestFnNamedArgsSingleMapStringToMapExprFuncEventCollector:
+    return TestFnNamedArgsSingleMapStringToMapExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleMapStringToStringExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleMapStringToStringExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleMapStringToStringExprFunc() -> TestFnNamedArgsSingleMapStringToStringExprFuncEventCollector:
+    return TestFnNamedArgsSingleMapStringToStringExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleStringArrayExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleStringArrayExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleStringArrayExprFunc() -> TestFnNamedArgsSingleStringArrayExprFuncEventCollector:
+    return TestFnNamedArgsSingleStringArrayExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleStringExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleStringExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleStringExprFunc() -> TestFnNamedArgsSingleStringExprFuncEventCollector:
+    return TestFnNamedArgsSingleStringExprFuncEventCollector()
+
+
+class TestFnNamedArgsSingleStringListExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestFnNamedArgsSingleStringListExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestFnNamedArgsSingleStringListExprFunc() -> TestFnNamedArgsSingleStringListExprFuncEventCollector:
+    return TestFnNamedArgsSingleStringListExprFuncEventCollector()
+
+
+class TestImageInputExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestImageInputExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestImageInputExprFunc() -> TestImageInputExprFuncEventCollector:
+    return TestImageInputExprFuncEventCollector()
+
+
+class TestImageListInputExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "TestImageListInputExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def TestImageListInputExprFunc() -> TestImageListInputExprFuncEventCollector:
+    return TestImageListInputExprFuncEventCollector()
+
+
+class VideoInputExprFuncEventCollector:
+    def __init__(self):
+        self._block_handlers: list[BlockHandler] = []
+        self._lock = threading.Lock()
+
+        
+
+        
+        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {}
+        self._stream_handler_map: dict[str, list[StreamHandler]] = {}
+        
+
+        
+        self._function_handler_map: dict[str, EventCollectorInternal] = {}
+        
+
+        
+
+    def on_block(self, handler: BlockHandler) -> None:
+        with self._lock:
+            self._block_handlers.append(handler)
+
+    
+
+    def __handlers__(self) -> InternalEventBindings:
+        with self._lock:
+            vars_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._var_handler_map.items()
+                if handlers
+            }
+
+            streams_dict = {
+                channel: list(handlers)
+                for channel, handlers in self._stream_handler_map.items()
+                if handlers
+            }
+
+            functions_dict = {
+                fn_name: collector.__handlers__()
+                for fn_name, collector in self._function_handler_map.items()
+            }
+
+            # Capture block_handlers from outer scope
+            block_handlers = list(self._block_handlers)
+
+            class Bindings:
+                def __init__(self):
+                    self.function_name = "VideoInputExprFunc"
+                    self.block = block_handlers
+                    self.vars = vars_dict
+                    self.streams = streams_dict
+                    self.functions = functions_dict
+
+            return Bindings()
+
+def VideoInputExprFunc() -> VideoInputExprFuncEventCollector:
+    return VideoInputExprFuncEventCollector()
 
 
 class WorkflowWatchChildEventCollector:
@@ -2009,96 +3313,4 @@ class WorkflowWatchChildEventCollector:
 
 def WorkflowWatchChild() -> WorkflowWatchChildEventCollector:
     return WorkflowWatchChildEventCollector()
-
-
-class WorkflowWatchWithFilterEventCollector:
-    def __init__(self):
-        self._block_handlers: list[BlockHandler] = []
-        self._lock = threading.Lock()
-
-        
-        self._var_handlers_this_word: list[VarEventHandler[str]] = []
-        self._stream_handlers_this_word: list[StreamHandler] = []
-        
-
-        
-        self._var_handler_map: dict[str, list[VarEventHandler[Any]]] = {
-            
-            "this_word": self._var_handlers_this_word,
-            
-        }
-
-        self._stream_handler_map: dict[str, list[StreamHandler]] = {
-            
-            "this_word": self._stream_handlers_this_word,
-            
-        }
-        
-
-        
-        self._function_handler_map: dict[str, EventCollectorInternal] = {}
-        
-
-        
-
-    def on_block(self, handler: BlockHandler) -> None:
-        with self._lock:
-            self._block_handlers.append(handler)
-
-    
-    
-    @overload
-    def on_var(self, channel: Literal["this_word"], handler: VarEventHandler[str]) -> None: ...
-    
-
-    def on_var(self, channel: Literal["this_word"], handler: VarEventHandler[Any]) -> None:
-        with self._lock:
-            if channel in self._var_handler_map:
-                self._var_handler_map[channel].append(handler)
-
-    
-    @overload
-    def on_stream(self, channel: Literal["this_word"], handler: StreamHandler) -> None: ...
-    
-
-    def on_stream(self, channel: Literal["this_word"], handler: StreamHandler) -> None:
-        with self._lock:
-            if channel in self._stream_handler_map:
-                self._stream_handler_map[channel].append(handler)
-    
-
-    def __handlers__(self) -> InternalEventBindings:
-        with self._lock:
-            vars_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._var_handler_map.items()
-                if handlers
-            }
-
-            streams_dict = {
-                channel: list(handlers)
-                for channel, handlers in self._stream_handler_map.items()
-                if handlers
-            }
-
-            functions_dict = {
-                fn_name: collector.__handlers__()
-                for fn_name, collector in self._function_handler_map.items()
-            }
-
-            # Capture block_handlers from outer scope
-            block_handlers = list(self._block_handlers)
-
-            class Bindings:
-                def __init__(self):
-                    self.function_name = "WorkflowWatchWithFilter"
-                    self.block = block_handlers
-                    self.vars = vars_dict
-                    self.streams = streams_dict
-                    self.functions = functions_dict
-
-            return Bindings()
-
-def WorkflowWatchWithFilter() -> WorkflowWatchWithFilterEventCollector:
-    return WorkflowWatchWithFilterEventCollector()
 

@@ -14,6 +14,7 @@ bex_llm_types = { workspace = true }
 bex_program = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_llm = { workspace = true }
 sys_resource_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }

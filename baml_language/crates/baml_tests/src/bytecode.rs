@@ -282,7 +282,7 @@ fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program:
             let snap_val = match val {
                 baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
                 baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Int(s.parse().unwrap_or(0))
+                    bex_program::LiteralValue::Float(s.clone())
                 }
                 baml_compiler_tir::LiteralValue::String(s) => {
                     bex_program::LiteralValue::String(s.clone())

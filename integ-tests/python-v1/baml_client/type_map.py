@@ -88,9 +88,6 @@ type_map = {
     "types.DummyJsonTodo": types.DummyJsonTodo,
     "stream_types.DummyJsonTodo": stream_types.DummyJsonTodo,
 
-    "types.DummyJsonTodoUpdate": types.DummyJsonTodoUpdate,
-    "stream_types.DummyJsonTodoUpdate": stream_types.DummyJsonTodoUpdate,
-
     "types.DummyOutput": types.DummyOutput,
     "stream_types.DummyOutput": stream_types.DummyOutput,
 

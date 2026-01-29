@@ -228,7 +228,7 @@ impl BexExternalValue {
             BexExternalValue::Resource(handle) => match handle.kind() {
                 sys_resource_types::ResourceType::File => "file",
                 sys_resource_types::ResourceType::Socket => "socket",
-                sys_resource_types::ResourceType::HttpResponse => "http-response",
+                sys_resource_types::ResourceType::Response => "http-response",
             },
             BexExternalValue::PromptAst(_) => "prompt_ast",
             BexExternalValue::PrimitiveClient(_) => "primitive_client",

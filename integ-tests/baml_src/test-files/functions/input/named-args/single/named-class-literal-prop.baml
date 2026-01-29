@@ -10,11 +10,8 @@ function FnLiteralClassInputOutput(input: LiteralClassHello) -> LiteralClassHell
   "#
 }
 
-test TestFnLiteralClassInputOutput{
-  functions [FnLiteralClassInputOutput]
-  args {
-    input {
-      prop "hello"
-    }
-  }
+function FnLiteralClassInputOutputExprFunc(input: LiteralClassHello) -> LiteralClassHello {
+  return LiteralClassHello {
+    prop: "hello"
+  };
 }

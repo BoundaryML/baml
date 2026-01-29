@@ -15,6 +15,14 @@ function FnClassOptionalOutput(input: string) -> ClassOptionalOutput? {
   "#
 }
 
+// TODO: expr func
+// function FnClassOptionalOutputExprFunc(input: string) -> ClassOptionalOutput? {
+//   return ClassOptionalOutput {
+//     prop1: "example string",
+//     prop2: "example string"
+//   };
+// }
+
 
 class Blah {
   prop4 string?

@@ -205,6 +205,18 @@ impl<C: ErrorContext> TypeError<C> {
                     ty_fn(ty)
                 )
             ).with_primary_span(loc_fn(location)),
+
+            TypeError::AliasCycle { cycle_path, location } => Diagnostic::error(
+                DiagnosticId::AliasCycle,
+                format!("These aliases form a dependency cycle: {cycle_path}"),
+            )
+            .with_primary_span(loc_fn(location)),
+
+            TypeError::ClassCycle { cycle_path, location } => Diagnostic::error(
+                DiagnosticId::ClassCycle,
+                format!("These classes form a dependency cycle: {cycle_path}"),
+            )
+            .with_primary_span(loc_fn(location)),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

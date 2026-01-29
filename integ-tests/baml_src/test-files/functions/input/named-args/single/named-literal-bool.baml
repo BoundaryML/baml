@@ -5,6 +5,10 @@ function TestNamedArgsLiteralBool(myBool: true) -> string {
   "#
 }
 
+function TestFnNamedArgsLiteralBoolExprFunc(myBool: true) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsLiteralBool {
   functions [TestNamedArgsLiteralBool]
   args {

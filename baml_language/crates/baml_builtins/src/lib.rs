@@ -86,9 +86,9 @@ pub struct BuiltinSignature {
     /// Return type.
     pub returns: TypePattern,
 
-    /// Whether this is an external function (runs async outside VM).
-    /// External functions use DispatchFuture/Await instead of Call.
-    pub is_external: bool,
+    /// Whether this is a `sys_op` function (runs async outside VM).
+    /// `Sys_op` functions use DispatchFuture/Await instead of Call.
+    pub is_sys_op: bool,
 }
 
 impl BuiltinSignature {
@@ -184,13 +184,13 @@ macro_rules! with_builtins {
                     #[builtin]
                     struct File {
                         private _handle: ResourceHandle,
-                        #[external]
+                        #[sys_op]
                         fn read(self: File) -> String;
-                        #[external]
+                        #[sys_op]
                         fn close(self: File);
                     }
 
-                    #[external]
+                    #[sys_op]
                     fn open(path: String) -> File;
                 }
 
@@ -199,7 +199,7 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod sys {
                     /// Execute a shell command and return stdout.
-                    #[external]
+                    #[sys_op]
                     fn shell(command: String) -> String;
                 }
 
@@ -211,15 +211,15 @@ macro_rules! with_builtins {
                     struct Socket {
                         private _handle: ResourceHandle,
                         /// Read data from the socket as a string.
-                        #[external]
+                        #[sys_op]
                         fn read(self: Socket) -> String;
                         /// Close the socket.
-                        #[external]
+                        #[sys_op]
                         fn close(self: Socket);
                     }
 
                     /// Connect to a TCP address (host:port).
-                    #[external]
+                    #[sys_op]
                     fn connect(addr: String) -> Socket;
                 }
 
@@ -234,15 +234,15 @@ macro_rules! with_builtins {
                         headers: Map<String, String>,
                         url: String,
                         /// Get response body as text (consumes body).
-                        #[external]
+                        #[sys_op]
                         fn text(self: Response) -> String;
                         /// Check if status is 2xx.
-                        #[external]
+                        #[sys_op]
                         fn ok(self: Response) -> bool;
                     }
 
                     /// Fetch a URL via HTTP GET.
-                    #[external]
+                    #[sys_op]
                     fn fetch(url: String) -> Response;
                 }
 
@@ -262,8 +262,14 @@ macro_rules! with_builtins {
                     struct PrimitiveClient {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
-                        #[external]
+                        #[sys_op]
                         fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+
+                        /// Specialize a prompt for this client's provider.
+                        /// Applies provider-specific transformations (message merging, system prompt
+                        /// consolidation, metadata filtering).
+                        #[sys_op]
+                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
                     }
                 }
             }

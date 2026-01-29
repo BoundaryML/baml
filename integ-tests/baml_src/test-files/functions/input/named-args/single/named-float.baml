@@ -5,6 +5,10 @@ function TestFnNamedArgsSingleFloat(myFloat: float) -> string {
   "#
 }
 
+function TestFnNamedArgsSingleFloatExprFunc(myFloat: float) -> string {
+  return "Hello, world!";
+}
+
 test TestFnNamedArgsSingleFloat {
   functions [TestFnNamedArgsSingleFloat]
   args {

@@ -5,6 +5,11 @@ function FnOutputLiteralBool(input: string) -> false {
   "#
 }
 
+// TODO:
+// function FnOutputLiteralBoolExprFunc(input: string) -> false {
+//   return false;
+// }
+
 test FnOutputLiteralBool {
   functions [FnOutputLiteralBool]
   args {

@@ -9,6 +9,10 @@ function TestFnNamedArgsSingleMapStringToClass(myMap: map<string, StringToClassE
   "#
 }
 
+function TestFnNamedArgsSingleMapStringToClassExprFunc(myMap: map<string, StringToClassEntry>) -> map<string, StringToClassEntry> {
+  return myMap;
+}
+
 test TestFnNamedArgsSingleMapStringToClass {
   functions [TestFnNamedArgsSingleMapStringToClass]
   args {
