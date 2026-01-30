@@ -873,6 +873,7 @@ name = "bex_jinja_runtime"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_base",
  "bex_external_types",
  "bex_llm_types",
  "bex_program",
@@ -4566,7 +4567,9 @@ dependencies = [
 name = "sys_llm"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
  "bex_external_types",
+ "bex_heap",
  "bex_jinja_runtime",
  "bex_llm_types",
  "bex_program",

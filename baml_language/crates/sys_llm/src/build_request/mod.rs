@@ -6,8 +6,10 @@ mod anthropic;
 mod openai;
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst, Ty};
+use bex_heap::BexHeap;
 use indexmap::indexmap;
 
 use crate::LlmProvider;
@@ -42,7 +44,11 @@ pub(crate) trait LlmRequestBuilder {
     ) -> indexmap::IndexMap<String, String>;
 
     /// Convert a specialized prompt into the JSON body fields specific to this provider.
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value>;
+    fn build_prompt_body(
+        &self,
+        prompt: PromptAst,
+        heap: &Arc<BexHeap>,
+    ) -> serde_json::Map<String, serde_json::Value>;
 
     // --- Default methods (shared logic) ---
 
@@ -51,10 +57,11 @@ pub(crate) trait LlmRequestBuilder {
         &self,
         client: &PrimitiveClientValue,
         prompt: PromptAst,
+        heap: &Arc<BexHeap>,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
         let headers = self.build_headers(client);
-        let body = self.build_body(client, prompt)?;
+        let body = self.build_body(client, prompt, heap)?;
         Ok(RawHttpRequest {
             method: "POST".to_string(),
             url,
@@ -84,12 +91,13 @@ pub(crate) trait LlmRequestBuilder {
         &self,
         client: &PrimitiveClientValue,
         prompt: PromptAst,
+        heap: &Arc<BexHeap>,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
         }
-        body.extend(self.build_prompt_body(prompt));
+        body.extend(self.build_prompt_body(prompt, heap));
         self.forward_options(client, &mut body);
         serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
             key: "body".into(),
@@ -125,6 +133,7 @@ pub(crate) trait LlmRequestBuilder {
 pub(crate) fn build_request(
     client: &PrimitiveClientValue,
     prompt: PromptAst,
+    heap: &Arc<BexHeap>,
 ) -> Result<BexExternalValue, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
@@ -136,9 +145,11 @@ pub(crate) fn build_request(
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter
         | LlmProvider::OpenAiResponses => {
-            openai::OpenAiBuilder::new(&provider).build_request(client, prompt)?
+            openai::OpenAiBuilder::new(&provider).build_request(client, prompt, heap)?
         }
-        LlmProvider::Anthropic => anthropic::AnthropicBuilder.build_request(client, prompt)?,
+        LlmProvider::Anthropic => {
+            anthropic::AnthropicBuilder.build_request(client, prompt, heap)?
+        }
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
         | LlmProvider::AwsBedrock
@@ -230,25 +241,154 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
 /// Convert `PromptAst` content to JSON content parts.
 ///
 /// Used by both `OpenAI` and Anthropic builders.
-pub(crate) fn prompt_to_content_parts(content: PromptAst) -> Vec<serde_json::Value> {
+pub(crate) fn prompt_to_content_parts(
+    content: PromptAst,
+    heap: &Arc<BexHeap>,
+) -> Vec<serde_json::Value> {
     match content {
         PromptAst::String(s) => {
             vec![serde_json::json!({"type": "text", "text": s})]
         }
         PromptAst::Vec(items) => items
             .into_iter()
-            .flat_map(prompt_to_content_parts)
+            .flat_map(|item| prompt_to_content_parts(item, heap))
             .collect(),
-        PromptAst::Media(_handle) => {
-            // Media resolution deferred — emit placeholder
-            vec![
-                serde_json::json!({"type": "text", "text": "[media placeholder - resolution deferred]"}),
-            ]
-        }
+        PromptAst::Media { handle, kind } => resolve_media_to_json(&handle, kind, heap),
         PromptAst::Message { .. } => {
             // Nested messages shouldn't appear in content parts
             vec![]
         }
+    }
+}
+
+/// Resolve a media Handle to provider-appropriate JSON content parts.
+///
+/// Dereferences the Handle via GC protection to read the `MediaValue` from the heap,
+/// then converts to JSON based on the content type and media kind.
+#[allow(unsafe_code)]
+fn resolve_media_to_json(
+    handle: &bex_external_types::Handle,
+    kind: baml_base::MediaKind,
+    heap: &Arc<BexHeap>,
+) -> Vec<serde_json::Value> {
+    heap.with_gc_protection(|protected| {
+        let Some(ptr) = protected.resolve_handle(handle.slab_key()) else {
+            return vec![
+                serde_json::json!({"type": "text", "text": "[invalid media handle]"}),
+            ];
+        };
+        // SAFETY: GC protection held, pointer is valid
+        let obj = unsafe { ptr.get() };
+        let bex_vm_types::Object::Media(media) = obj else {
+            return vec![
+                serde_json::json!({"type": "text", "text": "[unexpected object type for media]"}),
+            ];
+        };
+
+        use bex_vm_types::types::MediaContent;
+        match &media.content {
+            MediaContent::Base64 { base64_data } => {
+                let mime = media
+                    .mime_type
+                    .as_deref()
+                    .unwrap_or(default_mime_for_kind(kind));
+                media_to_json_parts(kind, mime, base64_data, None)
+            }
+            MediaContent::Url { url, base64_data } => {
+                if let Some(b64) = base64_data {
+                    let mime = media
+                        .mime_type
+                        .as_deref()
+                        .unwrap_or(default_mime_for_kind(kind));
+                    media_to_json_parts(kind, mime, b64, None)
+                } else {
+                    // URL not yet fetched — use raw URL (some providers accept this)
+                    media_url_to_json_parts(kind, url)
+                }
+            }
+            MediaContent::File {
+                base64_data, file, ..
+            } => {
+                if let Some(b64) = base64_data {
+                    let mime = media
+                        .mime_type
+                        .as_deref()
+                        .unwrap_or(default_mime_for_kind(kind));
+                    media_to_json_parts(kind, mime, b64, None)
+                } else {
+                    // File not yet read — should not happen after specialize_prompt
+                    vec![serde_json::json!({
+                        "type": "text",
+                        "text": format!("[{kind} media: unresolved file {file}]")
+                    })]
+                }
+            }
+        }
+    })
+}
+
+/// Convert base64 media data to JSON content parts.
+fn media_to_json_parts(
+    kind: baml_base::MediaKind,
+    mime: &str,
+    base64_data: &str,
+    _url: Option<&str>,
+) -> Vec<serde_json::Value> {
+    match kind {
+        baml_base::MediaKind::Image => vec![serde_json::json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!("data:{mime};base64,{base64_data}")
+            }
+        })],
+        baml_base::MediaKind::Audio => vec![serde_json::json!({
+            "type": "input_audio",
+            "input_audio": {
+                "data": base64_data,
+                "format": audio_format_from_mime(mime)
+            }
+        })],
+        _ => vec![serde_json::json!({
+            "type": "text",
+            "text": format!("[{kind} media: base64, {} bytes]", base64_data.len())
+        })],
+    }
+}
+
+/// Convert a raw URL to JSON content parts (when base64 is not available).
+fn media_url_to_json_parts(
+    kind: baml_base::MediaKind,
+    url: &str,
+) -> Vec<serde_json::Value> {
+    match kind {
+        baml_base::MediaKind::Image => vec![serde_json::json!({
+            "type": "image_url",
+            "image_url": { "url": url }
+        })],
+        _ => vec![serde_json::json!({
+            "type": "text",
+            "text": format!("[{kind} media: {url}]")
+        })],
+    }
+}
+
+/// Get default MIME type for a media kind.
+fn default_mime_for_kind(kind: baml_base::MediaKind) -> &'static str {
+    match kind {
+        baml_base::MediaKind::Image => "image/png",
+        baml_base::MediaKind::Audio => "audio/wav",
+        baml_base::MediaKind::Video => "video/mp4",
+        baml_base::MediaKind::Pdf => "application/pdf",
+        baml_base::MediaKind::Generic => "application/octet-stream",
+    }
+}
+
+/// Extract audio format from MIME type for OpenAI's input_audio format field.
+fn audio_format_from_mime(mime: &str) -> &str {
+    match mime {
+        "audio/mp3" | "audio/mpeg" => "mp3",
+        "audio/wav" | "audio/wave" | "audio/x-wav" => "wav",
+        _ => "wav",
     }
 }
 
@@ -257,6 +397,10 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
+
+    fn test_heap() -> Arc<BexHeap> {
+        BexHeap::new(vec![])
+    }
 
     fn make_client(provider: &str, options: Vec<(&str, BexExternalValue)>) -> PrimitiveClientValue {
         let mut opts = IndexMap::new();
@@ -327,7 +471,7 @@ mod tests {
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let BexExternalValue::Instance { class_name, .. } = &result else {
             panic!("expected Instance");
         };
@@ -338,7 +482,7 @@ mod tests {
     fn test_unsupported_provider() {
         let client = make_client("unknown-provider", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt);
+        let result = build_request(&client, prompt, &test_heap());
         assert!(result.is_err());
         assert!(
             result
@@ -366,7 +510,7 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = PromptAst::Vec(vec![msg("system", system_text)]);
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
 
         // Verify envelope
         assert_eq!(get_field_str(&result, "method"), "POST");
@@ -420,7 +564,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]);
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
 
         assert_eq!(
             get_field_str(&result, "url"),
@@ -458,7 +602,7 @@ mod tests {
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let body = parse_body(&result);
         assert!(body["messages"][0]["content"].is_array());
         assert_eq!(body["messages"][0]["content"][0]["type"], "text");
@@ -475,7 +619,7 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         assert_eq!(
             get_field_str(&result, "url"),
             "https://custom.api.com/v1/chat/completions"
@@ -492,7 +636,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.7);
     }
@@ -511,7 +655,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let body = parse_body(&result);
         assert!(body.get("api_key").is_none());
         assert!(body.get("base_url").is_none());
@@ -543,7 +687,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]);
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
 
         // Verify envelope
         assert_eq!(get_field_str(&result, "method"), "POST");
@@ -593,7 +737,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let body = parse_body(&result);
         assert!(body.get("system").is_none());
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
@@ -635,7 +779,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
 
         assert_eq!(
             get_header(&result, "anthropic-beta").unwrap(),
@@ -657,7 +801,7 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         assert_eq!(
             get_header(&result, "anthropic-version").unwrap(),
             "2024-01-01"
@@ -668,7 +812,7 @@ mod tests {
     fn test_anthropic_default_version() {
         let client = make_client("anthropic", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         assert_eq!(
             get_header(&result, "anthropic-version").unwrap(),
             "2023-06-01"
@@ -688,7 +832,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, &test_heap()).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["max_tokens"], 1000);
     }

@@ -109,7 +109,10 @@ pub fn execute_build_primitive_client(args: &[BexValue]) -> Result<BexExternalVa
 ///
 /// Arguments: `[PrimitiveClient, prompt: PromptAst]`
 /// Returns: `Instance { class_name: "baml.http.Request", fields: { method, url, headers, body } }`
-pub fn execute_build_request(args: &[BexValue]) -> Result<BexExternalValue, OpError> {
+pub fn execute_build_request(
+    heap: std::sync::Arc<bex_heap::BexHeap>,
+    args: &[BexValue],
+) -> Result<BexExternalValue, OpError> {
     let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
         return Err(OpError::TypeError {
             expected: "PrimitiveClient",
@@ -124,7 +127,8 @@ pub fn execute_build_request(args: &[BexValue]) -> Result<BexExternalValue, OpEr
         });
     };
 
-    build_request::build_request(client, prompt.clone()).map_err(|e| OpError::Other(e.to_string()))
+    build_request::build_request(client, prompt.clone(), &heap)
+        .map_err(|e| OpError::Other(e.to_string()))
 }
 
 /// Execute the `parse` LLM operation.

@@ -8,8 +8,10 @@
 mod transformations;
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use bex_external_types::{BexExternalValue, BexValue, PrimitiveClientValue, PromptAst};
+use bex_heap::BexHeap;
 use sys_types::OpError;
 
 use crate::{LlmProvider, ModelFeatures};
@@ -20,19 +22,29 @@ use crate::{LlmProvider, ModelFeatures};
 /// 1. Merge adjacent same-role messages
 /// 2. Consolidate system prompts (when `max_one_system_prompt` is true)
 /// 3. Filter role metadata (strip disallowed metadata keys)
-pub fn specialize_prompt(client: &PrimitiveClientValue, prompt: PromptAst) -> PromptAst {
+///
+/// The `heap` parameter is needed for media resolution (deferred — currently a no-op).
+pub fn specialize_prompt(
+    client: &PrimitiveClientValue,
+    prompt: PromptAst,
+    _heap: &Arc<BexHeap>,
+) -> PromptAst {
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);
     let features = ModelFeatures::for_provider(provider, &client.options);
 
     let prompt = transformations::merge_adjacent_messages(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
     transformations::filter_metadata(prompt, &features)
+    // TODO: transformations::resolve_media(prompt, heap) — deferred to future phase
 }
 
 /// Execute the `specialize_prompt` LLM `SysOp`.
 ///
 /// Arguments: `[PrimitiveClient, prompt: PromptAst]`
-pub fn execute_specialize_prompt(args: &[BexValue]) -> Result<PromptAst, OpError> {
+pub fn execute_specialize_prompt(
+    heap: Arc<BexHeap>,
+    args: &[BexValue],
+) -> Result<PromptAst, OpError> {
     let BexValue::External(BexExternalValue::PrimitiveClient(client)) = &args[0] else {
         return Err(bex_jinja_runtime::RenderPromptError::InvalidArgument {
             message: "expected PrimitiveClient, got something else".to_string(),
@@ -47,5 +59,5 @@ pub fn execute_specialize_prompt(args: &[BexValue]) -> Result<PromptAst, OpError
         .into());
     };
 
-    Ok(specialize_prompt(client, prompt.clone()))
+    Ok(specialize_prompt(client, prompt.clone(), &heap))
 }

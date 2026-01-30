@@ -585,9 +585,13 @@ pub enum PromptAst {
     /// A plain string.
     String(String),
 
-    /// A media value - serializable opaque handle.
-    /// WARNING: usize is platform-dependent. Serialization must occur within the same platform.
-    Media(usize),
+    /// A media value referencing a heap-allocated `Object::Media(MediaValue)`.
+    Media {
+        /// Pointer to an Object::Media(MediaValue) on the heap.
+        handle: HeapPtr,
+        /// Media kind (image, audio, video, pdf, generic).
+        kind: baml_base::MediaKind,
+    },
 
     /// A message with a role, content, and optional metadata.
     Message {

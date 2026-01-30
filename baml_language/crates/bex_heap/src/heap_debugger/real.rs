@@ -366,8 +366,10 @@ impl BexHeap {
     fn debug_assert_valid_prompt_ast(&self, ast: &bex_vm_types::PromptAst) {
         use bex_vm_types::PromptAst;
         match ast {
-            // String and Media (now usize) have no heap references to validate
-            PromptAst::String(_) | PromptAst::Media(_) => {}
+            PromptAst::String(_) => {}
+            PromptAst::Media { handle, .. } => {
+                self.debug_assert_valid_index(*handle);
+            }
             PromptAst::Message {
                 metadata, content, ..
             } => {

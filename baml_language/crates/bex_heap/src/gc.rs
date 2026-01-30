@@ -333,8 +333,10 @@ impl BexHeap {
     fn add_prompt_ast_references(ast: &bex_vm_types::PromptAst, worklist: &mut Vec<HeapPtr>) {
         use bex_vm_types::PromptAst;
         match ast {
-            // String and Media (now usize) have no heap references
-            PromptAst::String(_) | PromptAst::Media(_) => {}
+            PromptAst::String(_) => {}
+            PromptAst::Media { handle, .. } => {
+                worklist.push(*handle);
+            }
             PromptAst::Message {
                 metadata, content, ..
             } => {
@@ -436,8 +438,12 @@ impl BexHeap {
     ) {
         use bex_vm_types::PromptAst;
         match ast {
-            // String and Media (now usize) have no heap references to fix
-            PromptAst::String(_) | PromptAst::Media(_) => {}
+            PromptAst::String(_) => {}
+            PromptAst::Media { handle, .. } => {
+                if let Some(&new_ptr) = forwarding.get(handle) {
+                    *handle = new_ptr;
+                }
+            }
             PromptAst::Message {
                 metadata, content, ..
             } => {

@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use bex_external_types::BexExternalValue;
+use bex_external_types::{BexExternalValue, PromptAst as ExternalPromptAst};
 use bex_llm_types::OutputFormatContent;
-use bex_vm_types::{PromptAst, Value};
 use indexmap::IndexMap;
 use minijinja::Environment;
 
 use crate::{
     MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, filters,
-    output_format_object::OutputFormatObject, value_conversion::external_value_to_jinja,
+    output_format_object::OutputFormatObject,
+    value_conversion::{MediaTable, external_value_to_jinja},
 };
 
 /// Enum variant for Jinja rendering.
@@ -44,7 +44,28 @@ pub struct RenderContext {
     pub enums: HashMap<String, RenderEnum>,
 }
 
-/// Render a Jinja template to a `PromptAst`.
+// ============================================================================
+// Jinja-internal PromptAst (private to this crate)
+// ============================================================================
+
+/// Jinja-internal PromptAst. Media is represented as a usize index into a lookup table
+/// so it can survive minijinja template rendering (which requires string-serializable values).
+#[derive(Clone, Debug, PartialEq)]
+enum JinjaPromptAst {
+    String(String),
+    Media(usize),
+    Message {
+        role: String,
+        content: Box<JinjaPromptAst>,
+    },
+    Vec(Vec<JinjaPromptAst>),
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/// Render a Jinja template to an external `PromptAst`.
 ///
 /// # Arguments
 /// * `template` - The Jinja template string
@@ -52,34 +73,44 @@ pub struct RenderContext {
 /// * `ctx` - Rendering context with client info and output format
 ///
 /// # Returns
-/// A `PromptAst` representing the rendered prompt.
+/// A `bex_external_types::PromptAst` representing the rendered prompt.
 pub fn render_prompt(
     template: &str,
     args: &IndexMap<String, BexExternalValue>,
     ctx: &RenderContext,
-) -> Result<PromptAst, crate::RenderPromptError> {
+) -> Result<ExternalPromptAst, crate::RenderPromptError> {
     let mut env = create_environment();
 
     // Preprocess template
     let processed_template = preprocess_template(template);
     env.add_template("prompt", &processed_template)?;
 
-    // Add globals
-    add_globals(&mut env, ctx);
+    // Build media lookup table during value conversion
+    let mut media_table: MediaTable = Vec::new();
+
+    // Add globals (with media table for tag conversion)
+    add_globals(&mut env, ctx, &mut media_table);
 
     // Build context - args are already extracted BexExternalValue
     let jinja_args: minijinja::value::Value = args
         .iter()
-        .map(|(k, v)| (k.clone(), external_value_to_jinja(v)))
+        .map(|(k, v)| (k.clone(), external_value_to_jinja(v, &mut media_table)))
         .collect();
     let tmpl = env.get_template("prompt")?;
 
     // Render
     let rendered = tmpl.render(jinja_args)?;
 
-    // Parse result into PromptAst
-    Ok(parse_rendered_output(&rendered, ctx))
+    // Parse to jinja-internal PromptAst (uses usize for Media)
+    let jinja_ast = parse_rendered_output(&rendered, ctx);
+
+    // Convert jinja-internal → external PromptAst using lookup table
+    Ok(jinja_to_external_prompt_ast(jinja_ast, &media_table))
 }
+
+// ============================================================================
+// Environment Setup
+// ============================================================================
 
 fn create_environment() -> Environment<'static> {
     let mut env = Environment::new();
@@ -138,7 +169,7 @@ fn preprocess_template(template: &str) -> String {
         .to_string()
 }
 
-fn add_globals(env: &mut Environment, ctx: &RenderContext) {
+fn add_globals(env: &mut Environment, ctx: &RenderContext, media_table: &mut MediaTable) {
     use minijinja::context;
 
     // Create role function - same function used for both _.role() and _.chat()
@@ -189,24 +220,28 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) {
                 name => ctx.client.name.clone(),
                 provider => ctx.client.provider.clone(),
             },
-            tags => ctx.tags.iter().map(|(k, v)| (k.clone(), external_value_to_jinja(v))).collect::<minijinja::value::Value>(),
+            tags => ctx.tags.iter().map(|(k, v)| (k.clone(), external_value_to_jinja(v, media_table))).collect::<minijinja::value::Value>(),
             output_format => minijinja::value::Value::from_object(output_format),
             enums => enums_map,
         },
     );
 }
 
-fn parse_rendered_output(rendered: &str, ctx: &RenderContext) -> PromptAst {
+// ============================================================================
+// Jinja-internal Parsing
+// ============================================================================
+
+fn parse_rendered_output(rendered: &str, ctx: &RenderContext) -> JinjaPromptAst {
     // Check if this is a chat-style prompt (contains role delimiters)
     if rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         parse_chat_prompt(rendered, ctx)
     } else {
         // Simple completion prompt
-        PromptAst::String(rendered.to_string())
+        JinjaPromptAst::String(rendered.to_string())
     }
 }
 
-fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
+fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> JinjaPromptAst {
     let mut messages = Vec::new();
 
     // Split on role delimiter
@@ -220,10 +255,9 @@ fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
             // Save previous message if any
             if let Some(role) = current_role.take() {
                 let content = parse_message_content(&current_content);
-                messages.push(PromptAst::Message {
+                messages.push(JinjaPromptAst::Message {
                     role,
                     content: Box::new(content),
-                    metadata: Value::Null,
                 });
                 current_content.clear();
             }
@@ -243,23 +277,22 @@ fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
     // Save last message
     if let Some(role) = current_role {
         let content = parse_message_content(&current_content);
-        messages.push(PromptAst::Message {
+        messages.push(JinjaPromptAst::Message {
             role,
             content: Box::new(content),
-            metadata: Value::Null,
         });
     }
 
     if messages.is_empty() {
-        PromptAst::String(rendered.to_string())
+        JinjaPromptAst::String(rendered.to_string())
     } else if messages.len() == 1 {
         messages.pop().unwrap()
     } else {
-        PromptAst::Vec(messages)
+        JinjaPromptAst::Vec(messages)
     }
 }
 
-fn parse_message_content(content: &str) -> PromptAst {
+fn parse_message_content(content: &str) -> JinjaPromptAst {
     // Check for media delimiters
     if content.contains(MAGIC_MEDIA_DELIMITER) {
         let mut parts = Vec::new();
@@ -270,20 +303,20 @@ fn parse_message_content(content: &str) -> PromptAst {
                 // This is a media chunk - parse the handle
                 // Format: :baml-start-media:{handle}:baml-end-media:
                 if let Some(handle) = parse_media_handle(chunk) {
-                    parts.push(PromptAst::Media(handle));
+                    parts.push(JinjaPromptAst::Media(handle));
                 }
             } else if !chunk.trim().is_empty() {
-                parts.push(PromptAst::String((*chunk).to_string()));
+                parts.push(JinjaPromptAst::String((*chunk).to_string()));
             }
         }
 
         if parts.len() == 1 {
             parts.pop().unwrap()
         } else {
-            PromptAst::Vec(parts)
+            JinjaPromptAst::Vec(parts)
         }
     } else {
-        PromptAst::String(content.trim().to_string())
+        JinjaPromptAst::String(content.trim().to_string())
     }
 }
 
@@ -294,6 +327,42 @@ fn parse_media_handle(chunk: &str) -> Option<usize> {
         .and_then(|s| s.strip_suffix(":baml-end-media:"))
         .and_then(|s| s.parse().ok())
 }
+
+// ============================================================================
+// Jinja-internal → External conversion
+// ============================================================================
+
+/// Convert jinja-internal PromptAst to VM-external PromptAst using the media lookup table.
+fn jinja_to_external_prompt_ast(
+    ast: JinjaPromptAst,
+    media_table: &[(bex_external_types::Handle, baml_base::MediaKind)],
+) -> ExternalPromptAst {
+    match ast {
+        JinjaPromptAst::String(s) => ExternalPromptAst::String(s),
+        JinjaPromptAst::Media(index) => {
+            let (handle, kind) = &media_table[index];
+            ExternalPromptAst::Media {
+                handle: handle.clone(),
+                kind: *kind,
+            }
+        }
+        JinjaPromptAst::Message { role, content } => ExternalPromptAst::Message {
+            role,
+            content: Box::new(jinja_to_external_prompt_ast(*content, media_table)),
+            metadata: Box::new(BexExternalValue::Null),
+        },
+        JinjaPromptAst::Vec(items) => ExternalPromptAst::Vec(
+            items
+                .into_iter()
+                .map(|item| jinja_to_external_prompt_ast(item, media_table))
+                .collect(),
+        ),
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -325,7 +394,10 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello, world!".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Hello, world!".to_string())
+        );
     }
 
     #[test]
@@ -340,7 +412,10 @@ mod tests {
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello, Alice!".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Hello, Alice!".to_string())
+        );
     }
 
     #[test]
@@ -365,7 +440,10 @@ mod tests {
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Name: Bob, Age: 30".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Name: Bob, Age: 30".to_string())
+        );
     }
 
     #[test]
@@ -379,18 +457,18 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        let expected = PromptAst::Vec(vec![
-            PromptAst::Message {
+        let expected = ExternalPromptAst::Vec(vec![
+            ExternalPromptAst::Message {
                 role: "system".to_string(),
-                content: Box::new(PromptAst::String(
+                content: Box::new(ExternalPromptAst::String(
                     "You are a helpful assistant.".to_string(),
                 )),
-                metadata: Value::Null,
+                metadata: Box::new(BexExternalValue::Null),
             },
-            PromptAst::Message {
+            ExternalPromptAst::Message {
                 role: "user".to_string(),
-                content: Box::new(PromptAst::String("Hello!".to_string())),
-                metadata: Value::Null,
+                content: Box::new(ExternalPromptAst::String("Hello!".to_string())),
+                metadata: Box::new(BexExternalValue::Null),
             },
         ]);
 
@@ -406,10 +484,12 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        let expected = PromptAst::Message {
+        let expected = ExternalPromptAst::Message {
             role: "user".to_string(),
-            content: Box::new(PromptAst::String("Hello with default role!".to_string())),
-            metadata: Value::Null,
+            content: Box::new(ExternalPromptAst::String(
+                "Hello with default role!".to_string(),
+            )),
+            metadata: Box::new(BexExternalValue::Null),
         };
 
         assert_eq!(result, expected);
@@ -424,7 +504,10 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello,\nWorld!".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Hello,\nWorld!".to_string())
+        );
     }
 
     #[test]
@@ -448,7 +531,7 @@ mod tests {
 
         assert_eq!(
             result,
-            PromptAst::String("Items: apple, banana, cherry".to_string())
+            ExternalPromptAst::String("Items: apple, banana, cherry".to_string())
         );
     }
 
@@ -463,7 +546,10 @@ mod tests {
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
-        assert_eq!(result, PromptAst::String("Answer as an int".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Answer as an int".to_string())
+        );
     }
 
     #[test]
@@ -478,7 +564,7 @@ mod tests {
 
         assert_eq!(
             result,
-            PromptAst::String("Please respond with: int".to_string())
+            ExternalPromptAst::String("Please respond with: int".to_string())
         );
     }
 
@@ -508,6 +594,9 @@ mod tests {
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
-        assert_eq!(result, PromptAst::String("Category: SPORTS".to_string()));
+        assert_eq!(
+            result,
+            ExternalPromptAst::String("Category: SPORTS".to_string())
+        );
     }
 }

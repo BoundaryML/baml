@@ -2,7 +2,10 @@
 //!
 //! Supports: `OpenAi`, `OpenAiGeneric`, `AzureOpenAi`, Ollama, `OpenRouter`.
 
+use std::sync::Arc;
+
 use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst};
+use bex_heap::BexHeap;
 use indexmap::IndexMap;
 
 use super::{BuildRequestError, LlmRequestBuilder, get_string_option, prompt_to_content_parts};
@@ -56,9 +59,13 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         headers
     }
 
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value> {
+    fn build_prompt_body(
+        &self,
+        prompt: PromptAst,
+        heap: &Arc<BexHeap>,
+    ) -> serde_json::Map<String, serde_json::Value> {
         let mut map = serde_json::Map::new();
-        let messages = prompt_to_openai_messages(prompt);
+        let messages = prompt_to_openai_messages(prompt, heap);
         map.insert("messages".to_string(), serde_json::Value::Array(messages));
         map
     }
@@ -70,24 +77,24 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
 /// ```json
 /// [{"role": "system", "content": "..."}, {"role": "user", "content": [{"type": "text", "text": "..."}]}]
 /// ```
-fn prompt_to_openai_messages(prompt: PromptAst) -> Vec<serde_json::Value> {
+fn prompt_to_openai_messages(prompt: PromptAst, heap: &Arc<BexHeap>) -> Vec<serde_json::Value> {
     match prompt {
         PromptAst::Vec(items) => items
             .into_iter()
-            .filter_map(prompt_node_to_message)
+            .filter_map(|item| prompt_node_to_message(item, heap))
             .collect(),
-        single => prompt_node_to_message(single).into_iter().collect(),
+        single => prompt_node_to_message(single, heap).into_iter().collect(),
     }
 }
 
-fn prompt_node_to_message(node: PromptAst) -> Option<serde_json::Value> {
+fn prompt_node_to_message(node: PromptAst, heap: &Arc<BexHeap>) -> Option<serde_json::Value> {
     match node {
         PromptAst::Message {
             role,
             content,
             metadata,
         } => {
-            let content_parts = prompt_to_content_parts(*content);
+            let content_parts = prompt_to_content_parts(*content, heap);
             let mut msg = serde_json::Map::new();
             msg.insert("role".to_string(), serde_json::Value::String(role));
 

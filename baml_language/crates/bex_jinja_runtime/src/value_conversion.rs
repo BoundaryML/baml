@@ -4,11 +4,21 @@ use minijinja::value::Value as JinjaValue;
 
 use crate::MAGIC_MEDIA_DELIMITER;
 
+/// Media lookup table entry: maps a usize index to an external Handle + MediaKind.
+pub(crate) type MediaTable = Vec<(bex_external_types::Handle, baml_base::MediaKind)>;
+
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///
 /// `BexExternalValue` is already fully extracted from the VM heap,
 /// so no heap access is needed here.
-pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
+///
+/// Media values are registered in `media_table` and embedded as magic delimiter strings
+/// containing the table index. After Jinja rendering, the indices are resolved back
+/// to `Handle` + `MediaKind` pairs.
+pub(crate) fn external_value_to_jinja(
+    value: &BexExternalValue,
+    media_table: &mut MediaTable,
+) -> JinjaValue {
     match value {
         BexExternalValue::Null => JinjaValue::from(()), // Maps to None in Jinja
         BexExternalValue::Int(i) => JinjaValue::from(*i),
@@ -17,14 +27,17 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
         BexExternalValue::String(s) => JinjaValue::from(s.as_str()),
 
         BexExternalValue::Array { items, .. } => {
-            let jinja_items: Vec<JinjaValue> = items.iter().map(external_value_to_jinja).collect();
+            let jinja_items: Vec<JinjaValue> = items
+                .iter()
+                .map(|item| external_value_to_jinja(item, media_table))
+                .collect();
             JinjaValue::from(jinja_items)
         }
 
         BexExternalValue::Map { entries, .. } => {
             let jinja_map: IndexMap<String, JinjaValue> = entries
                 .iter()
-                .map(|(k, v)| (k.clone(), external_value_to_jinja(v)))
+                .map(|(k, v)| (k.clone(), external_value_to_jinja(v, media_table)))
                 .collect();
             JinjaValue::from_iter(jinja_map)
         }
@@ -33,7 +46,7 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
             // Convert instance fields to a map for Jinja access
             let jinja_map: IndexMap<String, JinjaValue> = fields
                 .iter()
-                .map(|(k, v)| (k.clone(), external_value_to_jinja(v)))
+                .map(|(k, v)| (k.clone(), external_value_to_jinja(v, media_table)))
                 .collect();
             JinjaValue::from_iter(jinja_map)
         }
@@ -48,16 +61,15 @@ pub(crate) fn external_value_to_jinja(value: &BexExternalValue) -> JinjaValue {
 
         BexExternalValue::Union { value, .. } => {
             // Unwrap the union and convert the inner value
-            external_value_to_jinja(value)
+            external_value_to_jinja(value, media_table)
         }
 
-        BexExternalValue::Media { .. } => {
-            // TODO: Media handling will be implemented in a separate pass.
-            // For now, stub out with a placeholder that will be parsed back.
-            // The actual media resolution mechanism needs to be designed.
-            let placeholder_handle: usize = 0; // Stubbed - real implementation TBD
+        BexExternalValue::Media { handle, kind } => {
+            // Register in lookup table and embed index as magic delimiter string
+            let index = media_table.len();
+            media_table.push((handle.clone(), *kind));
             JinjaValue::from(format!(
-                "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{placeholder_handle}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
+                "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{index}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
             ))
         }
 

@@ -290,7 +290,10 @@ fn deep_copy_value_recursive(
                 Object::Media(m) => vm.tlab.alloc(Object::Media(m)),
                 Object::Resource(r) => vm.tlab.alloc(Object::Resource(r)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
-                Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
+                Object::PromptAst(ast) => {
+                    let copied_ast = deep_copy_prompt_ast(vm, &ast, copied_objects)?;
+                    vm.tlab.alloc(Object::PromptAst(copied_ast))
+                }
                 Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
@@ -302,6 +305,45 @@ fn deep_copy_value_recursive(
             Ok(Value::Object(new_ptr))
         }
     }
+}
+
+/// Recursively deep copy a PromptAst tree, deep-copying Media heap objects.
+fn deep_copy_prompt_ast(
+    vm: &mut BexVm,
+    ast: &bex_vm_types::PromptAst,
+    copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
+) -> Result<bex_vm_types::PromptAst, VmError> {
+    use bex_vm_types::PromptAst;
+    Ok(match ast {
+        PromptAst::String(s) => PromptAst::String(s.clone()),
+        PromptAst::Media { handle, kind } => {
+            // Deep-copy the underlying Object::Media
+            if let Some(&new_ptr) = copied_objects.get(handle) {
+                PromptAst::Media { handle: new_ptr, kind: *kind }
+            } else {
+                let media = vm.get_object(*handle).clone();
+                let new_ptr = vm.tlab.alloc(media);
+                copied_objects.insert(*handle, new_ptr);
+                PromptAst::Media { handle: new_ptr, kind: *kind }
+            }
+        }
+        PromptAst::Message { role, content, metadata } => {
+            let copied_content = deep_copy_prompt_ast(vm, content, copied_objects)?;
+            let copied_metadata = deep_copy_value_recursive(vm, *metadata, copied_objects)?;
+            PromptAst::Message {
+                role: role.clone(),
+                content: Box::new(copied_content),
+                metadata: copied_metadata,
+            }
+        }
+        PromptAst::Vec(items) => {
+            let copied_items: Result<Vec<_>, _> = items
+                .iter()
+                .map(|item| deep_copy_prompt_ast(vm, item, copied_objects))
+                .collect();
+            PromptAst::Vec(copied_items?)
+        }
+    })
 }
 
 /// Recursively compare two values for deep equality

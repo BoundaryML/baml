@@ -776,7 +776,8 @@ impl BexEngine {
                 sys_llm::execute_render_prompt(args).map(BexExternalValue::PromptAst),
             ),
             SysOp::SpecializePrompt => SysOpResult::Ready(
-                sys_llm::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
+                sys_llm::execute_specialize_prompt(Arc::clone(&heap), args)
+                    .map(BexExternalValue::PromptAst),
             ),
             SysOp::LlmGetJinjaTemplate => {
                 SysOpResult::Ready(llm::execute_get_jinja_template(&self.snapshot, args))
@@ -789,7 +790,9 @@ impl BexEngine {
                 &self.function_global_indices,
                 args,
             )),
-            SysOp::LlmBuildRequest => SysOpResult::Ready(sys_llm::execute_build_request(args)),
+            SysOp::LlmBuildRequest => SysOpResult::Ready(
+                sys_llm::execute_build_request(Arc::clone(&heap), args),
+            ),
             SysOp::LlmParseResponse => SysOpResult::Ready(sys_llm::execute_parse_response(args)),
             SysOp::HttpSend => (self.sys_ops.http_send)(heap, args),
         }

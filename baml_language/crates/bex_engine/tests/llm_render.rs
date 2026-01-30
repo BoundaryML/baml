@@ -181,7 +181,7 @@ async fn test_render_prompt_directly() {
     let result = bex_jinja_runtime::render_prompt(template, &args, &ctx).unwrap();
 
     match result {
-        bex_vm_types::PromptAst::String(s) => {
+        bex_external_types::PromptAst::String(s) => {
             assert_eq!(s, "Hello, Alice! You are 30 years old.");
         }
         _ => panic!("Expected string result"),
@@ -233,15 +233,15 @@ You are a helpful assistant.
 
     // Result should be a Vec of messages
     match result {
-        bex_vm_types::PromptAst::Vec(messages) => {
+        bex_external_types::PromptAst::Vec(messages) => {
             assert_eq!(messages.len(), 2);
 
             // Check first message (system)
             match &messages[0] {
-                bex_vm_types::PromptAst::Message { role, content, .. } => {
+                bex_external_types::PromptAst::Message { role, content, .. } => {
                     assert_eq!(role, "system");
                     match content.as_ref() {
-                        bex_vm_types::PromptAst::String(s) => {
+                        bex_external_types::PromptAst::String(s) => {
                             assert!(s.contains("helpful assistant"));
                         }
                         _ => panic!("Expected string content"),
@@ -252,10 +252,10 @@ You are a helpful assistant.
 
             // Check second message (user)
             match &messages[1] {
-                bex_vm_types::PromptAst::Message { role, content, .. } => {
+                bex_external_types::PromptAst::Message { role, content, .. } => {
                     assert_eq!(role, "user");
                     match content.as_ref() {
-                        bex_vm_types::PromptAst::String(s) => {
+                        bex_external_types::PromptAst::String(s) => {
                             assert!(s.contains("What is 2+2?"));
                         }
                         _ => panic!("Expected string content"),
@@ -310,7 +310,7 @@ async fn test_render_prompt_with_enums() {
     let result = bex_jinja_runtime::render_prompt(template, &args, &ctx).unwrap();
 
     match result {
-        bex_vm_types::PromptAst::String(s) => {
+        bex_external_types::PromptAst::String(s) => {
             assert_eq!(s, "Category: SPORTS");
         }
         _ => panic!("Expected string result"),

@@ -279,7 +279,7 @@ impl BexEngine {
             Object::PromptAst(ast) => {
                 // Convert VM PromptAst to external PromptAst
                 Ok(BexExternalValue::PromptAst(
-                    sys_llm::vm_prompt_ast_to_external(ast),
+                    sys_llm::vm_prompt_ast_to_external(ast, self.heap()),
                 ))
             }
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
@@ -412,7 +412,11 @@ impl BexEngine {
     ) -> bex_vm_types::PromptAst {
         match ast {
             bex_external_types::PromptAst::String(s) => bex_vm_types::PromptAst::String(s.clone()),
-            bex_external_types::PromptAst::Media(handle) => bex_vm_types::PromptAst::Media(*handle),
+            bex_external_types::PromptAst::Media { handle, kind } => {
+                let ptr = handle.object_ptr(guard)
+                    .expect("Media handle should be valid");
+                bex_vm_types::PromptAst::Media { handle: ptr, kind: *kind }
+            }
             bex_external_types::PromptAst::Message {
                 role,
                 content,
@@ -530,7 +534,13 @@ impl BexEngine {
     ) -> bex_vm_types::PromptAst {
         match ast {
             bex_external_types::PromptAst::String(s) => bex_vm_types::PromptAst::String(s),
-            bex_external_types::PromptAst::Media(handle) => bex_vm_types::PromptAst::Media(handle),
+            bex_external_types::PromptAst::Media { handle, kind } => {
+                let vm_ptr = self.heap.with_gc_protection(|protected| {
+                    protected.resolve_handle(handle.slab_key())
+                        .expect("Media handle should be valid")
+                });
+                bex_vm_types::PromptAst::Media { handle: vm_ptr, kind }
+            }
             bex_external_types::PromptAst::Message {
                 role,
                 content,
@@ -632,7 +642,7 @@ impl BexEngine {
                     }
                     // PromptAst needs to be copied out for specialize_prompt
                     Object::PromptAst(ast) => BexValue::External(BexExternalValue::PromptAst(
-                        sys_llm::vm_prompt_ast_to_external(ast),
+                        sys_llm::vm_prompt_ast_to_external(ast, self.heap()),
                     )),
                     other => {
                         panic!("Cannot convert object type to BexValue for sys op: {other:?}")

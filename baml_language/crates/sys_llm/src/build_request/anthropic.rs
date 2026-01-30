@@ -1,6 +1,9 @@
 //! Anthropic-format HTTP request builder.
 
+use std::sync::Arc;
+
 use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst};
+use bex_heap::BexHeap;
 use indexmap::IndexMap;
 
 use super::{BuildRequestError, LlmRequestBuilder, get_string_option, prompt_to_content_parts};
@@ -32,9 +35,13 @@ impl LlmRequestBuilder for AnthropicBuilder {
         headers
     }
 
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value> {
+    fn build_prompt_body(
+        &self,
+        prompt: PromptAst,
+        heap: &Arc<BexHeap>,
+    ) -> serde_json::Map<String, serde_json::Value> {
         let mut map = serde_json::Map::new();
-        let (system_parts, messages) = extract_system_and_messages(prompt);
+        let (system_parts, messages) = extract_system_and_messages(prompt, heap);
         if !system_parts.is_empty() {
             map.insert("system".to_string(), serde_json::Value::Array(system_parts));
         }
@@ -50,6 +57,7 @@ impl LlmRequestBuilder for AnthropicBuilder {
 /// - Messages: `[{"role": "user", "content": [{"type": "text", "text": "..."}]}]`
 fn extract_system_and_messages(
     prompt: PromptAst,
+    heap: &Arc<BexHeap>,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
@@ -67,7 +75,7 @@ fn extract_system_and_messages(
                 metadata: _,
             } if role == "system" => {
                 // System messages → top-level system field
-                let parts = prompt_to_content_parts(*content);
+                let parts = prompt_to_content_parts(*content, heap);
                 system_parts.extend(parts);
             }
             PromptAst::Message {
@@ -76,7 +84,7 @@ fn extract_system_and_messages(
                 metadata,
             } => {
                 // Non-system messages → messages array
-                let content_parts = prompt_to_content_parts(*content);
+                let content_parts = prompt_to_content_parts(*content, heap);
                 let mut msg = serde_json::Map::new();
                 msg.insert("role".to_string(), serde_json::Value::String(role));
                 msg.insert(
