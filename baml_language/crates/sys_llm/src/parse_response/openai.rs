@@ -1,6 +1,8 @@
-use super::openai_types::*;
-use super::types::{FinishReason, LlmProviderResponse, TokenUsage};
-use super::ParseResponseError;
+use super::{
+    ParseResponseError,
+    openai_types::ChatCompletionResponse,
+    types::{FinishReason, LlmProviderResponse, TokenUsage},
+};
 
 /// Parse an OpenAI-compatible chat completion response body into a normalized `LlmProviderResponse`.
 pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, ParseResponseError> {
@@ -14,6 +16,18 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         return Err(ParseResponseError::NoContent {
             provider: "openai",
             detail: "response has no choices".into(),
+        });
+    }
+
+    if response.choices.len() > 1 {
+        return Err(ParseResponseError::UnsupportedResponseFormat {
+            provider: "openai",
+            detail: format!(
+                "response contains {} choices but we can only parse a single choice; \
+                 dropping {} choice(s) would lose data",
+                response.choices.len(),
+                response.choices.len() - 1
+            ),
         });
     }
 
@@ -74,8 +88,7 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse_response::parse_response;
-    use crate::LlmProvider;
+    use crate::{LlmProvider, parse_response::parse_response};
 
     #[test]
     fn test_parse_basic_response() {
@@ -113,7 +126,7 @@ mod tests {
         // Metadata
         assert_eq!(resp.metadata["id"], "chatcmpl-123");
         assert_eq!(resp.metadata["system_fingerprint"], "fp_44709d6fcb");
-        assert_eq!(resp.metadata["created"], 1677652288);
+        assert_eq!(resp.metadata["created"], 1_677_652_288);
         assert_eq!(resp.metadata["object"], "chat.completion");
     }
 
@@ -192,6 +205,33 @@ mod tests {
 
         let err = parse_openai_response(body).unwrap_err();
         assert!(matches!(err, ParseResponseError::NoContent { .. }));
+    }
+
+    #[test]
+    fn test_parse_multiple_choices() {
+        let body = r#"{
+            "model": "gpt-4o",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": { "role": "assistant", "content": "Answer A" },
+                    "finish_reason": "stop"
+                },
+                {
+                    "index": 1,
+                    "message": { "role": "assistant", "content": "Answer B" },
+                    "finish_reason": "stop"
+                }
+            ]
+        }"#;
+
+        let err = parse_openai_response(body).unwrap_err();
+        assert!(matches!(
+            err,
+            ParseResponseError::UnsupportedResponseFormat { .. }
+        ));
+        let msg = err.to_string();
+        assert!(msg.contains("2 choices"), "error message: {msg}");
     }
 
     #[test]

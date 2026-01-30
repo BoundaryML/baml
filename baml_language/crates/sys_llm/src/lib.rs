@@ -14,7 +14,7 @@ mod specialize_prompt;
 use bex_external_types::{BexExternalValue, BexValue, PrimitiveClientValue};
 pub use model_features::{AllowedMetadata, ModelFeatures};
 pub use parse_response::{
-    parse_response, FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage,
+    FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage, parse_response,
 };
 pub use provider::LlmProvider;
 pub use render_prompt::{execute_render_prompt, vm_prompt_ast_to_external};

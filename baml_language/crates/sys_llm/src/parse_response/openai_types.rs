@@ -27,6 +27,7 @@ where
 
     match Option::<FloatOrInt>::deserialize(deserializer)? {
         Some(FloatOrInt::Int(i)) => Ok(Some(i)),
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
         None => Ok(None),
     }
@@ -40,6 +41,7 @@ pub struct ChatCompletionChoice {
     pub logprobs: Option<ChatChoiceLogprobs>,
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct CompletionUsage {
     pub prompt_tokens: u64,
@@ -141,7 +143,7 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.created, Some(1677652288));
+        assert_eq!(response.created, Some(1_677_652_288));
     }
 
     #[test]

@@ -3,7 +3,7 @@ use serde_json::Value as JsonValue;
 /// Normalized response from any LLM provider.
 ///
 /// This is the result of parsing a provider-specific HTTP response body
-/// (e.g. OpenAI ChatCompletion JSON, Anthropic Message JSON) into a
+/// (e.g. `OpenAI` `ChatCompletion` JSON, Anthropic Message JSON) into a
 /// common shape.
 ///
 /// Provider-specific data that doesn't fit the common fields is
@@ -27,7 +27,7 @@ pub struct LlmProviderResponse {
     /// Arbitrary provider-specific metadata as a JSON map.
     ///
     /// Examples of what ends up here:
-    /// - OpenAI: `id`, `system_fingerprint`, `created`, `logprobs`
+    /// - `OpenAI`: `id`, `system_fingerprint`, `created`, `logprobs`
     /// - Anthropic: `id`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `service_tier`, `stop_sequence`
     /// - Google: `safety_ratings`, `citation_metadata`, `grounding_metadata`
     pub metadata: serde_json::Map<String, JsonValue>,
@@ -36,7 +36,7 @@ pub struct LlmProviderResponse {
 /// Normalized finish reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FinishReason {
-    /// The model finished generating naturally (OpenAI: "stop", Anthropic: "end_turn"/"stop_sequence", Google: "STOP").
+    /// The model finished generating naturally (`OpenAI`: `stop`, Anthropic: `end_turn`/`stop_sequence`, Google: `STOP`).
     Stop,
     /// The model hit the maximum token limit.
     Length,

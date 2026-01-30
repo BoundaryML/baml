@@ -25,6 +25,12 @@ pub enum ParseResponseError {
         detail: String,
     },
 
+    #[error("{provider} response has unsupported shape: {detail}")]
+    UnsupportedResponseFormat {
+        provider: &'static str,
+        detail: String,
+    },
+
     #[error("provider {0} is not yet supported for response parsing")]
     UnsupportedProvider(String),
 }
@@ -47,14 +53,14 @@ pub fn parse_response(
             anthropic::parse_anthropic_response(body)
         }
 
-        LlmProvider::OpenAiResponses => {
-            Err(ParseResponseError::UnsupportedProvider("openai-responses".into()))
-        }
-        LlmProvider::GoogleAi | LlmProvider::VertexAi => {
-            Err(ParseResponseError::UnsupportedProvider(format!("{provider:?}")))
-        }
-        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {
-            Err(ParseResponseError::UnsupportedProvider(format!("{provider:?}")))
-        }
+        LlmProvider::OpenAiResponses => Err(ParseResponseError::UnsupportedProvider(
+            "openai-responses".into(),
+        )),
+        LlmProvider::GoogleAi | LlmProvider::VertexAi => Err(
+            ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
+        ),
+        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Err(
+            ParseResponseError::UnsupportedProvider(format!("{provider:?}")),
+        ),
     }
 }
