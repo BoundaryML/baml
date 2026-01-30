@@ -122,6 +122,7 @@ impl BamlRuntime {
                             ArgCoercer {
                                 span_path: None,
                                 allow_implicit_cast_to_string: false,
+                                skip_assert_eval: false,
                             },
                         ) {
                             Ok(baml_args) => baml_args,
@@ -163,6 +164,7 @@ impl BamlRuntime {
             ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
+                skip_assert_eval: false,
             },
         ) {
             Ok(baml_args) => baml_args,

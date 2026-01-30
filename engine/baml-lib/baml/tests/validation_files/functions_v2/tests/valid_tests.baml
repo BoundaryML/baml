@@ -65,11 +65,13 @@ function InputImage(img: image) -> string {
 test Foo {
   functions [InputImage]
   args {
+    img { url "https://example.com/image.png" }
   }
 }
 
-test Foo {
+test Foo2 {
   functions [InputEnum]
   args {
+    color "RED"
   }
 }

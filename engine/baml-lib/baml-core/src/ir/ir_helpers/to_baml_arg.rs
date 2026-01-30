@@ -126,6 +126,9 @@ impl ParameterError {
 pub struct ArgCoercer {
     pub span_path: Option<PathBuf>,
     pub allow_implicit_cast_to_string: bool,
+    /// If true, skip evaluating @assert/@check constraints during coercion.
+    /// Useful for type validation where we only care about structural type matching.
+    pub skip_assert_eval: bool,
 }
 
 /// Linter doesn't like `Result<T, ()>` so we'll use this as a placeholder.
@@ -606,6 +609,11 @@ impl ArgCoercer {
             }
         }?;
 
+        // Skip constraint evaluation if requested (e.g., for type-only validation)
+        if self.skip_assert_eval {
+            return Ok(value);
+        }
+
         let search_for_failures_result =
             first_failing_assert_nested(ir, &value.clone().value(), field_type).map_err(|e| {
                 scope.push_error(format!("Failed to evaluate assert: {e:?}"));
@@ -707,6 +715,7 @@ mod tests {
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,
+            skip_assert_eval: false,
         };
         let res = arg_coercer.coerce_arg(&ir, &type_, &value, &mut ScopeStack::new());
         assert!(res.is_err());
@@ -726,6 +735,7 @@ type JsonArray = JsonValue[]
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,
+            skip_assert_eval: false,
         };
 
         // let json = BamlValueWithMeta::Map(

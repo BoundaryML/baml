@@ -595,6 +595,7 @@ impl BamlRuntime {
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
+        ir.validate_test_args(&mut schema.diagnostics);
 
         Self::new_runtime(Arc::new(ir), schema.db, schema.diagnostics, contents, &copy)
     }
@@ -700,6 +701,7 @@ impl BamlRuntime {
             internal_baml_core::ir::ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
+                skip_assert_eval: false,
             },
         )?;
 
@@ -811,6 +813,7 @@ impl BamlRuntime {
                         internal_baml_core::ir::ArgCoercer {
                             span_path: span.map(|s| s.file.path_buf().clone()),
                             allow_implicit_cast_to_string: true,
+                            skip_assert_eval: false,
                         },
                     )
                     .map(|bv| bv.into_iter().map(|(k, v)| (k, v.value())).collect())

@@ -1649,6 +1649,7 @@ mod tests {
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,
+            skip_assert_eval: false,
         };
         let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
         eprintln!("res: {res:?}");
@@ -1743,6 +1744,7 @@ mod tests {
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,
+            skip_assert_eval: false,
         };
         let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
         let err = res.expect_err("Should fail due to block constraint");

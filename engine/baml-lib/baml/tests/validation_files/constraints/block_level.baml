@@ -29,11 +29,16 @@ function FooFn(input: Foo2) -> Foo {
   client GPT35
   prompt #"
   "#
-} 
+}
 
 test TestFoo {
   functions [FooFn]
-  args {}
+  args {
+    input {
+      foo 42
+      bar "hello"
+    }
+  }
   @@check(foo_check_1, {{ this }})
   @@check(foo_check_2, {{ this }})
 }

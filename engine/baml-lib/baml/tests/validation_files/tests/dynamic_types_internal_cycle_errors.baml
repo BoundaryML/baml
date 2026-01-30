@@ -1,4 +1,4 @@
-function TypeBuilderFn() -> string { 
+function TypeBuilderFn() -> string {
   client "openai/gpt-4o-mini"
   prompt #"Hello"#
 }
@@ -16,9 +16,7 @@ test AttemptToMakeClassInfinitelyRecursive {
       cycle DynamicClass
     }
   }
-  args {
-    from_text "Test"
-  }
+  args {}
 }
 
 // error: Error validating: These classes form a dependency cycle: DynamicClass

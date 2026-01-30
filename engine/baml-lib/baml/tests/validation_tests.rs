@@ -18,30 +18,56 @@ fn parse_schema_fail_on_diagnostics(file: impl Into<SourceFile>) -> Result<(), S
     let path = PathBuf::from("./unknown");
     let file = file.into();
     let feature_flags = FeatureFlags::from_vec(vec!["beta".to_string()]).unwrap();
-    let schema = baml_lib::validate(&path, vec![file], feature_flags);
+    let mut schema = baml_lib::validate(&path, vec![file], feature_flags);
 
-    match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
-        ([], []) => {
-            match IntermediateRepr::from_parser_database(&schema.db, schema.configuration) {
-                Ok(_ir) => Ok(()),
-                Err(e) => Err(format!("{:?}", e.context("Error while converting AST to IR (did you mean to add a step to AST validation?)")))
+    // If there are already errors, report them before trying to create IR
+    if !schema.diagnostics.errors().is_empty() {
+        let mut message: Vec<u8> = Vec::new();
+
+        for warn in schema.diagnostics.warnings() {
+            warn.pretty_print(&mut message)
+                .expect("printing datamodel warning");
+        }
+
+        for err in schema.diagnostics.errors() {
+            err.pretty_print(&mut message)
+                .expect("printing datamodel error");
+        }
+
+        return Err(String::from_utf8_lossy(&message).into_owned());
+    }
+
+    // Try to create IR and run post-IR validation
+    match IntermediateRepr::from_parser_database(&schema.db, schema.configuration) {
+        Ok(ir) => {
+            // Run post-IR validation (e.g., test argument validation)
+            ir.validate_test_args(&mut schema.diagnostics);
+
+            match (schema.diagnostics.warnings(), schema.diagnostics.errors()) {
+                ([], []) => Ok(()),
+                (warnings, errors) => {
+                    let mut message: Vec<u8> = Vec::new();
+
+                    for warn in warnings {
+                        warn.pretty_print(&mut message)
+                            .expect("printing datamodel warning");
+                    }
+
+                    for err in errors {
+                        err.pretty_print(&mut message)
+                            .expect("printing datamodel error");
+                    }
+
+                    Err(String::from_utf8_lossy(&message).into_owned())
+                }
             }
         }
-        (warnings, errors) => {
-            let mut message: Vec<u8> = Vec::new();
-
-            for warn in warnings {
-                warn.pretty_print(&mut message)
-                    .expect("printing datamodel warning");
-            }
-
-            for err in errors {
-                err.pretty_print(&mut message)
-                    .expect("printing datamodel error");
-            }
-
-            Err(String::from_utf8_lossy(&message).into_owned())
-        }
+        Err(e) => Err(format!(
+            "{:?}",
+            e.context(
+                "Error while converting AST to IR (did you mean to add a step to AST validation?)"
+            )
+        )),
     }
 }
 

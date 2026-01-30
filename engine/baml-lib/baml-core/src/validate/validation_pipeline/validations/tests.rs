@@ -25,6 +25,23 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             }
         }
 
+        // Note: Test argument validation (missing/unknown args) is done post-IR
+        // in IntermediateRepr::validate_test_args() where we have access to resolved types.
+
+        let test_case = walker.test_case();
+
+        // Validate that referenced functions exist (warning only, so baml-cli generate still works)
+        for (function_name, function_span) in &test_case.functions {
+            if ctx.db.find_function_by_name(function_name).is_none()
+                && ctx.db.find_expr_fn_by_name(function_name).is_none()
+            {
+                ctx.push_warning(DatamodelWarning::new(
+                    format!("Function '{}' not found", function_name),
+                    function_span.clone(),
+                ));
+            }
+        }
+
         let constraints = &walker.test_case().constraints;
         let args = &walker.test_case().args;
         let mut check_names: Vec<String> = Vec::new();

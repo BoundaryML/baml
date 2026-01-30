@@ -1105,6 +1105,104 @@ impl IntermediateRepr {
                 ));
             }
         }
+
+        // Check for unknown arguments
+        let unknown_args: Vec<&String> = test_args.difference(&function_inputs).copied().collect();
+
+        if !unknown_args.is_empty() {
+            let unknown_list: Vec<String> = unknown_args.iter().map(|s| s.to_string()).collect();
+            let expected_list: Vec<String> =
+                function_inputs.iter().map(|s| s.to_string()).collect();
+
+            diagnostics.push_warning(DatamodelWarning::new(
+                format!(
+                    "Test '{}' has unknown argument(s) for function '{}': {}. Expected: {}",
+                    test.name,
+                    function.name,
+                    unknown_list.join(", "),
+                    if expected_list.is_empty() {
+                        "(none)".to_string()
+                    } else {
+                        expected_list.join(", ")
+                    }
+                ),
+                test_span.clone(),
+            ));
+        }
+
+        // Type check each argument value against the expected type
+        self.validate_test_arg_types(function, test, test_span, diagnostics);
+    }
+
+    /// Validates that test argument values can be coerced to their expected types.
+    fn validate_test_arg_types(
+        &self,
+        function: &Function,
+        test: &TestCase,
+        test_span: &Span,
+        diagnostics: &mut Diagnostics,
+    ) {
+        use std::collections::HashMap;
+
+        use baml_types::{BamlValue, EvaluationContext};
+
+        use crate::ir::ir_helpers::{scope_diagnostics::ScopeStack, ArgCoercer};
+
+        // Create an evaluation context that allows missing env vars
+        // (we just want to check types, not resolve all values)
+        let empty_env: HashMap<String, String> = HashMap::new();
+        let ctx = EvaluationContext::new(&empty_env, true); // fill_missing_env_vars = true
+
+        let arg_coercer = ArgCoercer {
+            span_path: Some(test_span.file.path_buf().clone()),
+            allow_implicit_cast_to_string: true,
+            skip_assert_eval: true, // Only check types, don't evaluate constraints
+        };
+
+        // Check each test argument against its expected type
+        for (arg_name, arg_value) in &test.args {
+            // Find the expected type for this argument
+            let expected_type = function
+                .inputs
+                .iter()
+                .find(|(name, _)| name == arg_name)
+                .map(|(_, type_ir)| type_ir);
+
+            let Some(expected_type) = expected_type else {
+                // Unknown argument - already reported above
+                continue;
+            };
+
+            // Try to resolve the value to a BamlValue
+            let baml_value: Result<BamlValue, _> = arg_value.resolve_serde(&ctx);
+
+            match baml_value {
+                Ok(value) => {
+                    // Try to coerce the value to the expected type
+                    let mut scope = ScopeStack::new();
+                    let _result = arg_coercer.coerce_arg(self, expected_type, &value, &mut scope);
+
+                    if scope.has_errors() {
+                        diagnostics.push_warning(DatamodelWarning::new(
+                            format!(
+                                "Test '{}' argument '{}' has type error: {}",
+                                test.name, arg_name, scope
+                            ),
+                            test_span.clone(),
+                        ));
+                    }
+                }
+                Err(e) => {
+                    // Could not resolve the value (e.g., env var issues)
+                    // Skip type checking for this argument
+                    log::debug!(
+                        "Could not resolve test arg '{}' for type checking: {}",
+                        arg_name,
+                        e
+                    );
+                }
+            }
+        }
     }
 
     /// Some block_types like enums and classes may have attributes on them.
