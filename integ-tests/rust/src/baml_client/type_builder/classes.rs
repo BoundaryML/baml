@@ -2694,10 +2694,10 @@ impl MaintainFieldOrderClassBuilder {
     // Field Accessors (1:1 with schema field names)
     // =========================================================================
 
-    /// Access the `a` field builder.
-    pub fn property_a(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("a").expect(
-            "MaintainFieldOrder.a is statically defined in .baml and should always be present",
+    /// Access the `c` field builder.
+    pub fn property_c(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("c").expect(
+            "MaintainFieldOrder.c is statically defined in .baml and should always be present",
         )
     }
 
@@ -2708,10 +2708,10 @@ impl MaintainFieldOrderClassBuilder {
         )
     }
 
-    /// Access the `c` field builder.
-    pub fn property_c(&self) -> baml::ClassPropertyBuilder {
-        self.inner.get_property("c").expect(
-            "MaintainFieldOrder.c is statically defined in .baml and should always be present",
+    /// Access the `a` field builder.
+    pub fn property_a(&self) -> baml::ClassPropertyBuilder {
+        self.inner.get_property("a").expect(
+            "MaintainFieldOrder.a is statically defined in .baml and should always be present",
         )
     }
 }

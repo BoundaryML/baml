@@ -398,9 +398,9 @@ class LiteralClassTwo(BaseModel):
     prop: typing_extensions.Literal['two']
 
 class MaintainFieldOrder(BaseModel):
-    a: str
-    b: str
     c: str
+    b: str
+    a: str
 
 class MalformedConstraints(BaseModel):
     foo: Checked[int, typing_extensions.Literal['foo_check']]

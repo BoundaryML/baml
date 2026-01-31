@@ -2745,9 +2745,9 @@ func (c LiteralClassTwo) BamlTypeName() string {
 }
 
 type MaintainFieldOrder struct {
-	A string `json:"a"`
-	B string `json:"b"`
 	C string `json:"c"`
+	B string `json:"b"`
+	A string `json:"a"`
 }
 
 func (c *MaintainFieldOrder) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -2764,14 +2764,14 @@ func (c *MaintainFieldOrder) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 		valueHolder := field.Value
 		switch key {
 
-		case "a":
-			c.A = baml.Decode(valueHolder).Interface().(string)
+		case "c":
+			c.C = baml.Decode(valueHolder).Interface().(string)
 
 		case "b":
 			c.B = baml.Decode(valueHolder).Interface().(string)
 
-		case "c":
-			c.C = baml.Decode(valueHolder).Interface().(string)
+		case "a":
+			c.A = baml.Decode(valueHolder).Interface().(string)
 
 		default:
 
@@ -2785,11 +2785,11 @@ func (c *MaintainFieldOrder) Decode(holder *cffi.CFFIValueClass, typeMap baml.Ty
 func (c MaintainFieldOrder) Encode() (*cffi.HostValue, error) {
 	fields := map[string]any{}
 
-	fields["a"] = c.A
+	fields["c"] = c.C
 
 	fields["b"] = c.B
 
-	fields["c"] = c.C
+	fields["a"] = c.A
 
 	return baml.EncodeClass("MaintainFieldOrder", fields, nil)
 }

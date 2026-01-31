@@ -509,9 +509,9 @@ class LiteralClassTwo(BaseModel):
 class MaintainFieldOrder(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    a: str
-    b: str
     c: str
+    b: str
+    a: str
 
 class MalformedConstraints(BaseModel):
     class Config:

@@ -2,12 +2,13 @@ import pytest
 from ..baml_client import b
 from ..baml_client.types import MaintainFieldOrder
 
-# Order of fields in classes can be messed up because of HashMap in Rust.
-# Use IndexMap everywhere.
+# Order of fields in classes can be messed up because of HashMap/BTreeMap in Rust.
+# Use IndexMap everywhere. Field names c, b, a are intentionally not alphabetical
+# to catch ordering bugs (alphabetical would be a, b, c).
 @pytest.mark.asyncio
 async def test_maintain_field_order():
     request = await b.request.UseMaintainFieldOrder(
-        MaintainFieldOrder(a="1", b="2", c="3")
+        MaintainFieldOrder(c="1", b="2", a="3")
     )
 
     assert request.body.json() == {
@@ -19,9 +20,9 @@ async def test_maintain_field_order():
                     {
                         "type": "text",
                         "text": '''Return this value back to me: {
-    "a": "1",
+    "c": "1",
     "b": "2",
-    "c": "3",
+    "a": "3",
 }''',
                     }
                 ],

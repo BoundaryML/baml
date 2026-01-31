@@ -429,9 +429,9 @@ module BamlClient
 
   class MaintainFieldOrder < T::Struct
       include Baml::Sorbet::Struct
-      const :a, T.nilable(String)
-      const :b, T.nilable(String)
       const :c, T.nilable(String)
+      const :b, T.nilable(String)
+      const :a, T.nilable(String)
   end
 
 

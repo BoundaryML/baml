@@ -610,9 +610,9 @@ module BamlClient
 
   class MaintainFieldOrder < T::Struct
       include Baml::Sorbet::Struct
-      const :a, String
-      const :b, String
       const :c, String
+      const :b, String
+      const :a, String
   end
 
 

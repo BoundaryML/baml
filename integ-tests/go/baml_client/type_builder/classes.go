@@ -2075,16 +2075,16 @@ func (t *MaintainFieldOrderClassView) ListProperties() ([]ClassPropertyView, err
 	return builders, nil
 }
 
-func (t *MaintainFieldOrderClassView) PropertyA() (ClassPropertyView, error) {
-	return t.inner.Property("a")
+func (t *MaintainFieldOrderClassView) PropertyC() (ClassPropertyView, error) {
+	return t.inner.Property("c")
 }
 
 func (t *MaintainFieldOrderClassView) PropertyB() (ClassPropertyView, error) {
 	return t.inner.Property("b")
 }
 
-func (t *MaintainFieldOrderClassView) PropertyC() (ClassPropertyView, error) {
-	return t.inner.Property("c")
+func (t *MaintainFieldOrderClassView) PropertyA() (ClassPropertyView, error) {
+	return t.inner.Property("a")
 }
 
 func (t *TypeBuilder) MaintainFieldOrder() (*MaintainFieldOrderClassView, error) {
