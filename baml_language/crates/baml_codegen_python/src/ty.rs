@@ -75,6 +75,7 @@ impl Namespace {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Literal {
     Int(i64),
+    Float(String),
     String(PyString),
     Bool(bool),
 }
@@ -83,6 +84,7 @@ impl Literal {
     pub(crate) fn from_codegen_types(lit: &baml_base::Literal) -> Self {
         match lit {
             baml_base::Literal::Int(v) => Self::Int(*v),
+            baml_base::Literal::Float(s) => Self::Float(s.clone()),
             baml_base::Literal::String(v) => Self::String(PyString::new(v)),
             baml_base::Literal::Bool(v) => Self::Bool(*v),
         }
@@ -93,6 +95,7 @@ impl std::fmt::Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Int(v) => write!(f, "{v}"),
+            Literal::Float(s) => write!(f, "{s}"),
             Literal::String(v) => write!(f, "{v}"),
             Literal::Bool(true) => write!(f, "True"),
             Literal::Bool(false) => write!(f, "False"),

@@ -780,6 +780,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_type"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler_tir",
+ "smol_str",
+]
+
+[[package]]
 name = "baml_typetags"
 version = "0.1.0"
 

@@ -325,6 +325,7 @@ impl ToPyString for baml_codegen_types::DefaultValue {
             DefaultValue::Null => Some("None".to_string()),
             DefaultValue::Literal(lit) => match lit {
                 baml_base::Literal::Int(v) => Some(v.to_string()),
+                baml_base::Literal::Float(s) => Some(s.clone()),
                 baml_base::Literal::String(v) => Some(PyString::new(v).to_string()),
                 baml_base::Literal::Bool(true) => Some("True".to_string()),
                 baml_base::Literal::Bool(false) => Some("False".to_string()),

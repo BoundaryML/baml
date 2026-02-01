@@ -42,6 +42,8 @@ pub mod pretty;
 mod resolve;
 mod types;
 
+// Re-export HIR types that are part of TIR's public API (used in Ty variants).
+pub use baml_compiler_hir::{FullyQualifiedName, Namespace};
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
     method_return_type, parse_builtin_path, substitute,

@@ -18,6 +18,7 @@ version = "0.0.0"
 [workspace.dependencies]
 #  Internal dependencies (baml_*)
 baml_base = { path = "crates/baml_base" }
+baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
