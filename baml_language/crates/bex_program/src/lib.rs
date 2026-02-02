@@ -53,6 +53,8 @@ pub struct EnumVariantDef {
     pub name: String,
     pub description: Option<String>,
     pub alias: Option<String>,
+    /// @skip — whether this variant should be excluded from serialization
+    pub skip: bool,
 }
 
 // ============================================================================
@@ -84,10 +86,7 @@ pub enum FunctionBody {
         client: String,
     },
     /// Imperative expression function - compiled to bytecode.
-    Expr {
-        /// Index into the bytecode program's function table.
-        bytecode_index: usize,
-    },
+    Expr,
 }
 
 // ============================================================================

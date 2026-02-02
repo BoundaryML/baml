@@ -74,6 +74,9 @@ impl baml_compiler_hir::Db for TestDatabase {}
 impl baml_compiler_tir::Db for TestDatabase {}
 
 #[salsa::db]
+impl baml_compiler_vir::Db for TestDatabase {}
+
+#[salsa::db]
 impl baml_compiler_mir::Db for TestDatabase {}
 
 impl Default for TestDatabase {
@@ -213,9 +216,7 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                             client,
                         }
                     }
-                    _ => bex_program::FunctionBody::Expr {
-                        bytecode_index: 0, // Not needed for type checking
-                    },
+                    _ => bex_program::FunctionBody::Expr,
                 };
 
                 let func_def = bex_program::FunctionDef {
@@ -271,6 +272,7 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                         name: variant.name.to_string(),
                         description: None,
                         alias: None,
+                        skip: false,
                     })
                     .collect();
 

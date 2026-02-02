@@ -40,7 +40,7 @@ pub(crate) fn execute_get_jinja_template(
         bex_program::FunctionBody::Llm {
             prompt_template, ..
         } => Ok(BexExternalValue::String(prompt_template.clone())),
-        bex_program::FunctionBody::Expr { .. } => Err(OpError::Other(format!(
+        bex_program::FunctionBody::Expr => Err(OpError::Other(format!(
             "Function '{function_name}' is not an LLM function"
         ))),
     }
@@ -78,7 +78,7 @@ pub(crate) fn execute_get_client_function(
     // Extract client name from LLM function body
     let client_name = match &function_def.body {
         bex_program::FunctionBody::Llm { client, .. } => client.as_str(),
-        bex_program::FunctionBody::Expr { .. } => {
+        bex_program::FunctionBody::Expr => {
             return Err(OpError::Other(format!(
                 "Function '{function_name}' is not an LLM function"
             )));

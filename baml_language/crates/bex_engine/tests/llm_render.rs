@@ -98,7 +98,7 @@ async fn test_get_jinja_template() {
         } => {
             assert_eq!(prompt_template, "Classify the following text: {{ text }}");
         }
-        FunctionBody::Expr { .. } => panic!("Expected LLM function body"),
+        FunctionBody::Expr => panic!("Expected LLM function body"),
     }
 }
 
@@ -136,7 +136,7 @@ async fn test_llm_function_structure() {
             assert!(prompt_template.contains("{{ text }}"));
             assert_eq!(client, "TestClient");
         }
-        FunctionBody::Expr { .. } => panic!("Expected LLM function body"),
+        FunctionBody::Expr => panic!("Expected LLM function body"),
     }
 }
 

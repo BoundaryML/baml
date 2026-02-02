@@ -163,9 +163,7 @@ fn extract_schema(
                         name: signature.name.to_string(),
                         params,
                         return_type,
-                        body: bex_program::FunctionBody::Expr {
-                            bytecode_index: 0, // Not needed for type checking
-                        },
+                        body: bex_program::FunctionBody::Expr,
                     };
 
                     functions.insert(signature.name.to_string(), func_def);
@@ -214,6 +212,7 @@ fn extract_schema(
                             name: variant.name.to_string(),
                             description: None,
                             alias: None,
+                            skip: false,
                         })
                         .collect();
 
