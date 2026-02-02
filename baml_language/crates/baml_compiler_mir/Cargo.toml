@@ -11,6 +11,7 @@ baml_base = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_compiler_vir = { workspace = true }
+baml_type = { workspace = true }
 baml_typetags = { workspace = true }
 baml_workspace = { workspace = true }
 la-arena = { workspace = true }

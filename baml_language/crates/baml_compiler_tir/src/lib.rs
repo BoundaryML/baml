@@ -51,7 +51,7 @@ pub use builtins::{
 pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
-pub use normalize::find_invalid_map_keys;
+pub use normalize::{find_invalid_map_keys, find_recursive_aliases};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
