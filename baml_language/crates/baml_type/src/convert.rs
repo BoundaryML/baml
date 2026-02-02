@@ -2,7 +2,7 @@
 //!
 //! Called from two sites:
 //! 1. VIR lowering (`lower_ty`)
-//! 2. Schema extraction (`extract_schema`)
+//! 2. VIR schema lowering (`schema_lower::convert_ty`)
 
 use std::collections::{HashMap, HashSet};
 

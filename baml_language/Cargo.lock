@@ -402,8 +402,7 @@ version = "0.218.1"
 dependencies = [
  "baml_base",
  "baml_compiler_emit",
- "baml_compiler_hir",
- "baml_compiler_tir",
+ "baml_compiler_vir",
  "baml_project",
  "baml_type",
  "baml_workspace",
