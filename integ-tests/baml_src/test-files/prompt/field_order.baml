@@ -1,7 +1,7 @@
 class MaintainFieldOrder {
-  a string
-  b string
   c string
+  b string
+  a string
 }
 
 function UseMaintainFieldOrder(input: MaintainFieldOrder) -> MaintainFieldOrder {

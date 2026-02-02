@@ -4101,7 +4101,7 @@ class MaintainFieldOrderAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("MaintainFieldOrder")
-        self._properties: typing.Set[str] = set([  "a",  "b",  "c",  ])
+        self._properties: typing.Set[str] = set([  "c",  "b",  "a",  ])
         self._props = MaintainFieldOrderProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -4130,16 +4130,16 @@ class MaintainFieldOrderProperties:
     
     
     @property
-    def a(self) -> type_builder.ClassPropertyViewer:
-        return type_builder.ClassPropertyViewer(self.__bldr.property("a"))
+    def c(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("c"))
     
     @property
     def b(self) -> type_builder.ClassPropertyViewer:
         return type_builder.ClassPropertyViewer(self.__bldr.property("b"))
     
     @property
-    def c(self) -> type_builder.ClassPropertyViewer:
-        return type_builder.ClassPropertyViewer(self.__bldr.property("c"))
+    def a(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("a"))
     
     
 

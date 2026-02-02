@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
@@ -257,13 +257,13 @@ pub fn parse_py_type(
                     })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
                 let mut fields = IndexMap::new();
-                // Get regular fields. Maintain order, no HashMap.
+                // Get regular fields. Use IndexMap to preserve insertion order.
                 if let Ok(model_fields) = if is_pydantic_2 {
                     t.getattr("model_fields")?
-                        .extract::<BTreeMap<String, PyObject>>()
+                        .extract::<IndexMap<String, PyObject>>()
                 } else {
                     let res = any.call_method0(py, "dict")?;
-                    res.extract::<BTreeMap<String, PyObject>>(py)
+                    res.extract::<IndexMap<String, PyObject>>(py)
                 } {
                     for (key, _) in model_fields {
                         if let Ok(value) = any.getattr(py, key.as_str()) {

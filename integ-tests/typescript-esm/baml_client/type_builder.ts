@@ -135,7 +135,7 @@ export default class TypeBuilder {
     
     LiteralClassTwo: ClassViewer<'LiteralClassTwo', "prop">;
     
-    MaintainFieldOrder: ClassViewer<'MaintainFieldOrder', "a" | "b" | "c">;
+    MaintainFieldOrder: ClassViewer<'MaintainFieldOrder', "c" | "b" | "a">;
     
     MalformedConstraints: ClassViewer<'MalformedConstraints', "foo">;
     
@@ -515,7 +515,7 @@ export default class TypeBuilder {
         ]);
         
         this.MaintainFieldOrder = this.tb.classViewer("MaintainFieldOrder", [
-          "a","b","c",
+          "c","b","a",
         ]);
         
         this.MalformedConstraints = this.tb.classViewer("MalformedConstraints", [

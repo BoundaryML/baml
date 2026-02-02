@@ -379,9 +379,9 @@ class LiteralClassTwo(BaseModel):
 class MaintainFieldOrder(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    a: typing.Optional[str] = None
-    b: typing.Optional[str] = None
     c: typing.Optional[str] = None
+    b: typing.Optional[str] = None
+    a: typing.Optional[str] = None
 
 class MalformedConstraints(BaseModel):
     class Config:

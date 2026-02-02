@@ -1160,11 +1160,11 @@ impl AsRef<LiteralClassTwo> for LiteralClassTwo {
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
 
 pub struct MaintainFieldOrder {
-    pub a: String,
+    pub c: String,
 
     pub b: String,
 
-    pub c: String,
+    pub a: String,
 }
 
 impl AsRef<MaintainFieldOrder> for MaintainFieldOrder {

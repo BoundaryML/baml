@@ -268,9 +268,9 @@ class LiteralClassTwo(BaseModel):
     prop: typing.Optional[typing_extensions.Literal['two']] = None
 
 class MaintainFieldOrder(BaseModel):
-    a: typing.Optional[str] = None
-    b: typing.Optional[str] = None
     c: typing.Optional[str] = None
+    b: typing.Optional[str] = None
+    a: typing.Optional[str] = None
 
 class MalformedConstraints(BaseModel):
     foo: typing.Optional[types.Checked[int, typing_extensions.Literal['foo_check']]] = None

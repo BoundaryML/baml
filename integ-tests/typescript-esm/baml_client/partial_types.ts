@@ -278,9 +278,9 @@ export namespace partial_types {
       prop?: "two" | null
     }
     export interface MaintainFieldOrder {
-      a?: string | null
-      b?: string | null
       c?: string | null
+      b?: string | null
+      a?: string | null
     }
     export interface MalformedConstraints {
       foo?: types.Checked<number,"foo_check"> | null
