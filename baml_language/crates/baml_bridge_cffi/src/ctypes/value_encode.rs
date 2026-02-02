@@ -90,7 +90,7 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                     is_optional: metadata.is_optional,
                     is_single_pattern: metadata.is_single_pattern,
                     self_type: Some(ty_to_field_type(&metadata.union_type)),
-                    value_option_name: format!("{:?}", metadata.selected_option),
+                    value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
                 },
             )))
