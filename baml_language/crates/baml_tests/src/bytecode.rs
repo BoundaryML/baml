@@ -144,6 +144,12 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
     let project = db.project();
     let resolution_ctx = TypeResolutionContext::new(&db, project);
 
+    // Get alias map for type expansion
+    let type_aliases = baml_compiler_tir::type_aliases(&db, project)
+        .aliases(&db)
+        .clone();
+    let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases);
+
     // Get item tree for accessing class/enum definitions
     let item_tree = file_item_tree(&db, file);
 
@@ -161,8 +167,11 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                 let (tir_return_type, _) = resolution_ctx
                     .lower_type_ref(&signature.return_type, baml_base::Span::default());
 
-                // Convert TIR Ty to Snapshot Ty
-                let return_type = convert_tir_ty_to_snapshot_ty(&tir_return_type);
+                // Convert TIR Ty to unified baml_type::Ty, then sanitize for runtime
+                let return_type =
+                    baml_type::convert_tir_ty(&tir_return_type, &type_aliases, &recursive_aliases)
+                        .and_then(baml_type::sanitize_for_runtime)
+                        .unwrap_or(baml_type::Ty::Null);
 
                 // Build params
                 let params: Vec<bex_program::ParamDef> = signature
@@ -173,7 +182,13 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                             resolution_ctx.lower_type_ref(&p.type_ref, baml_base::Span::default());
                         bex_program::ParamDef {
                             name: p.name.to_string(),
-                            param_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
+                            param_type: baml_type::convert_tir_ty(
+                                &tir_ty,
+                                &type_aliases,
+                                &recursive_aliases,
+                            )
+                            .and_then(baml_type::sanitize_for_runtime)
+                            .unwrap_or(baml_type::Ty::Null),
                         }
                     })
                     .collect();
@@ -224,7 +239,13 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
                             .lower_type_ref(&field.type_ref, baml_base::Span::default());
                         bex_program::FieldDef {
                             name: field.name.to_string(),
-                            field_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
+                            field_type: baml_type::convert_tir_ty(
+                                &tir_ty,
+                                &type_aliases,
+                                &recursive_aliases,
+                            )
+                            .and_then(baml_type::sanitize_for_runtime)
+                            .unwrap_or(baml_type::Ty::Null),
                             description: None,
                             alias: None,
                         }
@@ -272,70 +293,6 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
         clients: HashMap::new(),
         retry_policies: HashMap::new(),
         bytecode,
-    }
-}
-
-/// Convert a TIR `Ty` to a Snapshot `Ty`.
-///
-/// The main difference is that TIR uses `FullyQualifiedName` for classes/enums,
-/// while Snapshot uses plain `String`.
-fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::Ty {
-    use baml_compiler_tir::Ty as TirTy;
-    use bex_program::Ty as SnapTy;
-
-    match tir_ty {
-        TirTy::Int => SnapTy::Int,
-        TirTy::Float => SnapTy::Float,
-        TirTy::String => SnapTy::String,
-        TirTy::Bool => SnapTy::Bool,
-        TirTy::Null => SnapTy::Null,
-
-        TirTy::Media(kind) => {
-            let snap_kind = match kind {
-                baml_base::MediaKind::Image => bex_program::MediaKind::Image,
-                baml_base::MediaKind::Audio => bex_program::MediaKind::Audio,
-                baml_base::MediaKind::Video => bex_program::MediaKind::Video,
-                baml_base::MediaKind::Pdf => bex_program::MediaKind::Pdf,
-                baml_base::MediaKind::Generic => bex_program::MediaKind::Image,
-            };
-            SnapTy::Media(snap_kind)
-        }
-
-        TirTy::Literal(val) => {
-            let snap_val = match val {
-                baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
-                baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Float(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::String(s) => {
-                    bex_program::LiteralValue::String(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::Bool(b) => bex_program::LiteralValue::Bool(*b),
-            };
-            SnapTy::Literal(snap_val)
-        }
-
-        TirTy::Class(fqn) => SnapTy::Class(fqn.to_string()),
-        TirTy::Enum(fqn) => SnapTy::Enum(fqn.to_string()),
-        TirTy::TypeAlias(fqn) => SnapTy::Class(fqn.to_string()),
-
-        TirTy::Optional(inner) => SnapTy::Optional(Box::new(convert_tir_ty_to_snapshot_ty(inner))),
-        TirTy::List(inner) => SnapTy::List(Box::new(convert_tir_ty_to_snapshot_ty(inner))),
-        TirTy::Map { key, value } => SnapTy::Map {
-            key: Box::new(convert_tir_ty_to_snapshot_ty(key)),
-            value: Box::new(convert_tir_ty_to_snapshot_ty(value)),
-        },
-        TirTy::Union(types) => {
-            SnapTy::Union(types.iter().map(convert_tir_ty_to_snapshot_ty).collect())
-        }
-
-        TirTy::Function { params, ret } => {
-            let _ = (params, ret);
-            SnapTy::Null
-        }
-
-        TirTy::Unknown | TirTy::Error | TirTy::Void => SnapTy::Null,
-        TirTy::WatchAccessor(inner) => convert_tir_ty_to_snapshot_ty(inner),
     }
 }
 

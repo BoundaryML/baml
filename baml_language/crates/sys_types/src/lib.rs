@@ -50,6 +50,7 @@ pub enum OpError {
 pub type OpFuture = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
 
 /// Result of a system operation - either immediate or async.
+#[allow(clippy::large_enum_variant)]
 pub enum SysOpResult {
     /// Operation completed synchronously with this result.
     Ready(Result<BexExternalValue, OpError>),

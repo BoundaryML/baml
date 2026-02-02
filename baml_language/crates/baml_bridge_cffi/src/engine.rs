@@ -111,6 +111,12 @@ fn extract_schema(
     let project = db.get_project().ok_or(BridgeError::ProjectNotInitialized)?;
     let resolution_ctx = TypeResolutionContext::new(db, project);
 
+    // Get alias map for type expansion
+    let type_aliases = baml_compiler_tir::type_aliases(db, project)
+        .aliases(db)
+        .clone();
+    let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases);
+
     for file in db.get_source_files() {
         let item_tree = file_item_tree(db, file);
         let items_struct = file_items(db, file);
@@ -124,8 +130,14 @@ fn extract_schema(
                     let (tir_return_type, _) = resolution_ctx
                         .lower_type_ref(&signature.return_type, baml_base::Span::default());
 
-                    // Convert TIR Ty to Program Ty
-                    let return_type = convert_tir_ty_to_program_ty(&tir_return_type);
+                    // Convert TIR Ty to unified baml_type::Ty, then sanitize for runtime
+                    let return_type = baml_type::convert_tir_ty(
+                        &tir_return_type,
+                        &type_aliases,
+                        &recursive_aliases,
+                    )
+                    .and_then(baml_type::sanitize_for_runtime)
+                    .unwrap_or(baml_type::Ty::Null);
 
                     // Build params
                     let params: Vec<bex_program::ParamDef> = signature
@@ -136,7 +148,13 @@ fn extract_schema(
                                 .lower_type_ref(&p.type_ref, baml_base::Span::default());
                             bex_program::ParamDef {
                                 name: p.name.to_string(),
-                                param_type: convert_tir_ty_to_program_ty(&tir_ty),
+                                param_type: baml_type::convert_tir_ty(
+                                    &tir_ty,
+                                    &type_aliases,
+                                    &recursive_aliases,
+                                )
+                                .and_then(baml_type::sanitize_for_runtime)
+                                .unwrap_or(baml_type::Ty::Null),
                             }
                         })
                         .collect();
@@ -164,7 +182,13 @@ fn extract_schema(
                                 .lower_type_ref(&field.type_ref, baml_base::Span::default());
                             bex_program::FieldDef {
                                 name: field.name.to_string(),
-                                field_type: convert_tir_ty_to_program_ty(&tir_ty),
+                                field_type: baml_type::convert_tir_ty(
+                                    &tir_ty,
+                                    &type_aliases,
+                                    &recursive_aliases,
+                                )
+                                .and_then(baml_type::sanitize_for_runtime)
+                                .unwrap_or(baml_type::Ty::Null),
                                 description: None,
                                 alias: None,
                             }
@@ -207,67 +231,6 @@ fn extract_schema(
     }
 
     Ok((classes, enums, functions))
-}
-
-/// Convert a TIR `Ty` to a Program `Ty`.
-fn convert_tir_ty_to_program_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::Ty {
-    use baml_compiler_tir::Ty as TirTy;
-    use bex_program::Ty as ProgTy;
-
-    match tir_ty {
-        TirTy::Int => ProgTy::Int,
-        TirTy::Float => ProgTy::Float,
-        TirTy::String => ProgTy::String,
-        TirTy::Bool => ProgTy::Bool,
-        TirTy::Null => ProgTy::Null,
-
-        TirTy::Media(kind) => {
-            let prog_kind = match kind {
-                baml_base::MediaKind::Image => bex_program::MediaKind::Image,
-                baml_base::MediaKind::Audio => bex_program::MediaKind::Audio,
-                baml_base::MediaKind::Video => bex_program::MediaKind::Video,
-                baml_base::MediaKind::Pdf => bex_program::MediaKind::Pdf,
-                baml_base::MediaKind::Generic => bex_program::MediaKind::Image,
-            };
-            ProgTy::Media(prog_kind)
-        }
-
-        TirTy::Literal(val) => {
-            let prog_val = match val {
-                baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
-                baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Float(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::String(s) => {
-                    bex_program::LiteralValue::String(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::Bool(b) => bex_program::LiteralValue::Bool(*b),
-            };
-            ProgTy::Literal(prog_val)
-        }
-
-        TirTy::Class(fqn) => ProgTy::Class(fqn.to_string()),
-        TirTy::Enum(fqn) => ProgTy::Enum(fqn.to_string()),
-        TirTy::TypeAlias(fqn) => ProgTy::Class(fqn.to_string()),
-
-        TirTy::Optional(inner) => ProgTy::Optional(Box::new(convert_tir_ty_to_program_ty(inner))),
-        TirTy::List(inner) => ProgTy::List(Box::new(convert_tir_ty_to_program_ty(inner))),
-        TirTy::Map { key, value } => ProgTy::Map {
-            key: Box::new(convert_tir_ty_to_program_ty(key)),
-            value: Box::new(convert_tir_ty_to_program_ty(value)),
-        },
-        TirTy::Union(types) => {
-            ProgTy::Union(types.iter().map(convert_tir_ty_to_program_ty).collect())
-        }
-
-        TirTy::Function { params, ret } => {
-            let _ = (params, ret);
-            ProgTy::Null
-        }
-
-        TirTy::Unknown | TirTy::Error | TirTy::Void => ProgTy::Null,
-        TirTy::WatchAccessor(inner) => convert_tir_ty_to_program_ty(inner),
-    }
 }
 
 /// Render a LoweringError with source context for better debugging.

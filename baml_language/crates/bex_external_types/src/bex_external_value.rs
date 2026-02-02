@@ -22,8 +22,8 @@
 //! }
 //! ```
 
-// Re-export Ty from bex_program for convenience
-pub use bex_program::Ty;
+// Re-export Ty from baml_type for convenience
+pub use baml_type::Ty;
 use indexmap::IndexMap;
 use sys_resource_types::ResourceHandle;
 

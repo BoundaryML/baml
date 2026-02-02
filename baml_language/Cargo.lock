@@ -405,6 +405,7 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "bex_engine",
  "bex_external_types",
@@ -765,6 +766,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_db",
  "baml_project",
+ "baml_type",
  "baml_typetags",
  "baml_workspace",
  "bex_program",
@@ -862,6 +864,7 @@ name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_type",
  "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",
@@ -910,6 +913,8 @@ dependencies = [
 name = "bex_program"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
+ "baml_type",
  "bex_vm_types",
 ]
 
