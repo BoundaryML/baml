@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -25,19 +25,19 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"
-    Say hello to {{name}}
-  "#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Say"
-          WORD "hello"
-          WORD "to"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "name"
-          R_BRACE "}"
-          R_BRACE "}"
+          PROMPT_TEXT "Say hello to"
+            WORD "Say"
+            WORD "hello"
+            WORD "to"
+          TEMPLATE_INTERPOLATION "{{name}}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "name"
+            R_BRACE "}"
+            R_BRACE "}"
           QUOTE """
           HASH "#"
       R_BRACE "}"

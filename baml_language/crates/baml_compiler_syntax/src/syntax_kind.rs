@@ -247,10 +247,11 @@ pub enum SyntaxKind {
     UNQUOTED_STRING,
 
     // Template components (inside raw strings)
-    TEMPLATE_CONTENT,
-    TEMPLATE_INTERPOLATION, // {{ expr }}
-    TEMPLATE_CONTROL,       // {% for ... %}
-    TEMPLATE_COMMENT,       // {# comment #}
+    TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
+    TEMPLATE_INTERPOLATION, // {{ expr }} - Jinja expressions
+    TEMPLATE_CONTROL,       // {% for ... %} - Jinja statements
+    TEMPLATE_COMMENT,       // {# comment #} - Jinja comments
+    PROMPT_TEXT,            // Plain text between Jinja constructs
 
     // Error recovery
     ERROR,

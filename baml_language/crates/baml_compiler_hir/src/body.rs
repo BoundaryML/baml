@@ -122,14 +122,18 @@ pub struct PromptTemplate {
     pub interpolations: Vec<Interpolation>,
 }
 
-/// A {{ var }} interpolation in a prompt.
+/// A {{ expr }} interpolation in a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interpolation {
-    /// Variable name referenced
-    pub var_name: Name,
+    /// The raw expression text inside the {{ }} delimiters.
+    /// This will be parsed by minijinja during Jinja validation.
+    pub expr_text: String,
 
-    /// Source offset in the prompt string
+    /// Source offset in the prompt string (points to the opening `{{`)
     pub offset: u32,
+
+    /// Length of the full interpolation including delimiters (e.g., `{{ foo }}`)
+    pub length: u32,
 }
 
 /// Body of an expression function (turing-complete).
@@ -496,7 +500,7 @@ impl FunctionBody {
         let prompt = llm_body
             .prompt_field()
             .and_then(|pf| pf.raw_string())
-            .map(|raw_str| Self::parse_prompt(&raw_str.full_text()));
+            .map(|raw_str| Self::parse_prompt(&raw_str));
 
         if let (Some(client), Some(prompt)) = (client, prompt) {
             FunctionBody::Llm(LlmBody { client, prompt })
@@ -507,49 +511,65 @@ impl FunctionBody {
         }
     }
 
-    fn parse_prompt(prompt_text: &str) -> PromptTemplate {
-        // Strip #"..."# or "..." delimiters
-        let prompt_text = prompt_text.trim();
-        let content = if prompt_text.starts_with("#\"") && prompt_text.ends_with("\"#") {
-            &prompt_text[2..prompt_text.len() - 2]
-        } else if prompt_text.starts_with('"') && prompt_text.ends_with('"') {
-            &prompt_text[1..prompt_text.len() - 1]
-        } else {
-            prompt_text
-        };
+    fn parse_prompt(raw_string: &baml_compiler_syntax::ast::RawStringLiteral) -> PromptTemplate {
+        use baml_compiler_syntax::ast::*;
 
-        // Parse {{ var }} interpolations
-        let interpolations = Self::parse_interpolations(content);
-
-        PromptTemplate {
-            text: content.to_string(),
-            interpolations,
-        }
-    }
-
-    fn parse_interpolations(prompt: &str) -> Vec<Interpolation> {
+        let mut text = String::new();
         let mut interpolations = Vec::new();
-        let mut offset = 0;
+        let mut current_offset = 0u32;
 
-        while let Some(start) = prompt[offset..].find("{{") {
-            let abs_start = offset + start;
-            if let Some(end) = prompt[abs_start..].find("}}") {
-                let abs_end = abs_start + end;
-                let var_text = prompt[abs_start + 2..abs_end].trim();
+        // Iterate through the children of the raw string in order
+        for child in raw_string.syntax().children() {
+            match child.kind() {
+                baml_compiler_syntax::SyntaxKind::PROMPT_TEXT => {
+                    // Plain text - add directly to output
+                    if let Some(prompt_text) = PromptText::cast(child.clone()) {
+                        let content = prompt_text.text();
+                        text.push_str(&content);
+                        current_offset += content.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_INTERPOLATION => {
+                    // Jinja expression {{ ... }}
+                    if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
+                        let inner = jinja_expr.inner_text();
+                        let full_text = jinja_expr.full_text();
 
-                #[allow(clippy::cast_possible_truncation)]
-                interpolations.push(Interpolation {
-                    var_name: Name::new(var_text),
-                    offset: abs_start as u32, // Prompt strings are unlikely to exceed 4GB
-                });
+                        // Store the expression text for later validation by minijinja
+                        interpolations.push(Interpolation {
+                            expr_text: inner.to_string(),
+                            offset: current_offset,
+                            length: full_text.len() as u32,
+                        });
 
-                offset = abs_end + 2;
-            } else {
-                break;
+                        // Keep the {{ }} in the text for now (will be replaced at runtime)
+                        let placeholder = full_text;
+                        text.push_str(&placeholder);
+                        current_offset += placeholder.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_CONTROL => {
+                    // Jinja statement {% ... %} - keep in text as-is for minijinja to evaluate
+                    if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
+                        let content = jinja_stmt.full_text();
+                        text.push_str(&content);
+                        current_offset += content.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_COMMENT => {
+                    // Jinja comment {# ... #} - skip (comments are stripped)
+                    // Don't add to text, don't update offset
+                }
+                _ => {
+                    // Other tokens (delimiters, etc.) - skip
+                }
             }
         }
 
-        interpolations
+        PromptTemplate {
+            text,
+            interpolations,
+        }
     }
 
     fn lower_expr_body(

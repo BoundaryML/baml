@@ -22,7 +22,10 @@ baml_builtins = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_workspace = { workspace = true }
+indexmap = { workspace = true }
+minijinja = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
+strsim = "0.11"
 text-size = { workspace = true }

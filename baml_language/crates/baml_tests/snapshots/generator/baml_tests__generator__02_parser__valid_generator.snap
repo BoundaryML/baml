@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -94,10 +94,11 @@ SOURCE_FILE
       WORD "MyClient"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"Hello"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Hello"
+          PROMPT_TEXT "Hello"
+            WORD "Hello"
           QUOTE """
           HASH "#"
       R_BRACE "}"

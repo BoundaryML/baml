@@ -36,6 +36,7 @@ pub type TirTypeError = TypeError<TirContext<Ty>>;
 pub mod builtins;
 mod cycles;
 mod exhaustiveness;
+pub mod jinja;
 mod lower;
 mod normalize;
 pub mod pretty;

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -25,16 +25,18 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"Get user {{id}}"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Get"
-          WORD "user"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "id"
-          R_BRACE "}"
-          R_BRACE "}"
+          PROMPT_TEXT "Get user"
+            WORD "Get"
+            WORD "user"
+          TEMPLATE_INTERPOLATION "{{id}}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "id"
+            R_BRACE "}"
+            R_BRACE "}"
           QUOTE """
           HASH "#"
       R_BRACE "}"
@@ -54,11 +56,12 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"Get status"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Get"
-          WORD "status"
+          PROMPT_TEXT "Get status"
+            WORD "Get"
+            WORD "status"
           QUOTE """
           HASH "#"
       R_BRACE "}"
@@ -86,12 +89,13 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"Get mixed list"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Get"
-          WORD "mixed"
-          WORD "list"
+          PROMPT_TEXT "Get mixed list"
+            WORD "Get"
+            WORD "mixed"
+            WORD "list"
           QUOTE """
           HASH "#"
       R_BRACE "}"
@@ -121,12 +125,13 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"Get mixed map"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Get"
-          WORD "mixed"
-          WORD "map"
+          PROMPT_TEXT "Get mixed map"
+            WORD "Get"
+            WORD "mixed"
+            WORD "map"
           QUOTE """
           HASH "#"
       R_BRACE "}"

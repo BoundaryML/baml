@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -9,7 +9,6 @@ function FormatMessage(name: string) -> string {
     
         Generate a message for "{{ name }}"
         Include quotes like: "Welcome, '{{ name }}'!"
-      
   "#
 }
 
@@ -38,7 +37,6 @@ function ProcessText(input: string) -> string {
         {{ input }}
         
         Return the processed result.
-      
   "#
 }
 

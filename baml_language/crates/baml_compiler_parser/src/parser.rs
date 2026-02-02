@@ -1124,45 +1124,172 @@ impl<'a> Parser<'a> {
             }
             p.bump(); // Opening "
 
-            // Collect content until we find Quote followed by same number of hashes
-            let mut loop_counter = 0;
-            loop {
-                loop_counter += 1;
-                if loop_counter > 100_000 {
-                    p.error_unexpected_token(
-                        "Raw string parsing exceeded iteration limit".to_string(),
-                    );
+            // Parse raw string content with Jinja template support
+            p.parse_raw_string_content(opening_hashes);
+        });
+
+        true
+    }
+
+    /// Parse the content inside a raw string, recognizing Jinja template constructs
+    fn parse_raw_string_content(&mut self, opening_hashes: usize) {
+        let mut loop_counter = 0;
+
+        loop {
+            loop_counter += 1;
+            if loop_counter > 100_000 {
+                self.error_unexpected_token(
+                    "Raw string parsing exceeded iteration limit".to_string(),
+                );
+                break;
+            }
+
+            if self.at_end() {
+                self.error_unexpected_token(format!(
+                    "Unclosed raw string (expected \"{}\")",
+                    "#".repeat(opening_hashes)
+                ));
+                break;
+            }
+
+            // Check for closing delimiter
+            if self.at(TokenKind::Quote) {
+                let closing_hashes = self.count_consecutive_hashes_after_quote();
+                if closing_hashes == opening_hashes {
+                    // Found matching closing delimiter
+                    self.bump(); // Closing "
+                    for _ in 0..closing_hashes {
+                        self.bump(); // #
+                    }
                     break;
                 }
+            }
 
-                if p.at_end() {
-                    p.error_unexpected_token(format!(
-                        "Unclosed raw string (expected \"{}\")",
-                        "#".repeat(opening_hashes)
-                    ));
-                    break;
+            // Check for Jinja constructs
+            if self.at_jinja_expression() {
+                self.parse_jinja_expression();
+            } else if self.at_jinja_statement() {
+                self.parse_jinja_statement();
+            } else if self.at_jinja_comment() {
+                self.parse_jinja_comment();
+            } else {
+                // Plain text content - collect tokens until we hit a Jinja construct or closing delimiter
+                self.parse_prompt_text(opening_hashes);
+            }
+        }
+    }
+
+    /// Check if we're at the start of a Jinja expression: {{
+    fn at_jinja_expression(&self) -> bool {
+        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+    }
+
+    /// Check if we're at the start of a Jinja statement: {%
+    fn at_jinja_statement(&self) -> bool {
+        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Percent)
+    }
+
+    /// Check if we're at the start of a Jinja comment: {#
+    fn at_jinja_comment(&self) -> bool {
+        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Hash)
+    }
+
+    /// Parse a Jinja expression: {{ ... }}
+    fn parse_jinja_expression(&mut self) {
+        self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
+            p.bump(); // {
+            p.bump(); // {
+
+            // Collect tokens until we find }}
+            let mut depth = 1;
+            while !p.at_end() && depth > 0 {
+                if p.at(TokenKind::LBrace) && p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace) {
+                    depth += 1;
+                    p.bump_raw();
+                    p.bump_raw();
+                } else if p.at(TokenKind::RBrace)
+                    && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace)
+                {
+                    depth -= 1;
+                    if depth == 0 {
+                        p.bump(); // }
+                        p.bump(); // }
+                        break;
+                    } else {
+                        p.bump_raw();
+                        p.bump_raw();
+                    }
+                } else {
+                    p.bump_raw();
                 }
+            }
 
+            if depth > 0 {
+                p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
+            }
+        });
+    }
+
+    /// Parse a Jinja statement: {% ... %}
+    fn parse_jinja_statement(&mut self) {
+        self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
+            p.bump(); // {
+            p.bump(); // %
+
+            // Collect tokens until we find %}
+            while !p.at_end() {
+                if p.at(TokenKind::Percent) && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace)
+                {
+                    p.bump(); // %
+                    p.bump(); // }
+                    break;
+                } else {
+                    p.bump_raw();
+                }
+            }
+        });
+    }
+
+    /// Parse a Jinja comment: {# ... #}
+    fn parse_jinja_comment(&mut self) {
+        self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
+            p.bump(); // {
+            p.bump(); // #
+
+            // Collect tokens until we find #}
+            while !p.at_end() {
+                if p.at(TokenKind::Hash) && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace) {
+                    p.bump(); // #
+                    p.bump(); // }
+                    break;
+                } else {
+                    p.bump_raw();
+                }
+            }
+        });
+    }
+
+    /// Parse plain text content between Jinja constructs
+    fn parse_prompt_text(&mut self, opening_hashes: usize) {
+        self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
+            // Collect tokens until we hit a Jinja construct or closing delimiter
+            while !p.at_end() {
+                // Check for closing delimiter
                 if p.at(TokenKind::Quote) {
-                    // Check if followed by correct number of hashes
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
                     if closing_hashes == opening_hashes {
-                        // Found matching closing delimiter
-                        p.bump(); // Closing "
-                        for _ in 0..closing_hashes {
-                            p.bump(); // #
-                        }
                         break;
                     }
                 }
 
-                // Not the closing delimiter, consume as content
-                // Use bump_raw() to avoid treating // as comments inside raw strings
+                // Check for Jinja constructs
+                if p.at_jinja_expression() || p.at_jinja_statement() || p.at_jinja_comment() {
+                    break;
+                }
+
                 p.bump_raw();
             }
         });
-
-        true
     }
 
     /// Parse a string or raw string (dispatches to correct method)

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -76,30 +76,32 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "block_string"
             CONFIG_VALUE
-              RAW_STRING_LITERAL #"hello there my frien
-                d"#
+              RAW_STRING_LITERAL
                 HASH "#"
                 QUOTE """
-                WORD "hello"
-                WORD "there"
-                WORD "my"
-                WORD "frien"
-                WORD "d"
+                PROMPT_TEXT "hello there my frien
+                d"
+                  WORD "hello"
+                  WORD "there"
+                  WORD "my"
+                  WORD "frien"
+                  WORD "d"
                 QUOTE """
                 HASH "#"
           CONFIG_ITEM
             WORD "inline_raw_string"
             CONFIG_VALUE
-              RAW_STRING_LITERAL #"inline "raw" string,,"#
+              RAW_STRING_LITERAL
                 HASH "#"
                 QUOTE """
-                WORD "inline"
-                QUOTE """
-                WORD "raw"
-                QUOTE """
-                WORD "string"
-                COMMA ","
-                COMMA ","
+                PROMPT_TEXT "inline "raw" string,,"
+                  WORD "inline"
+                  QUOTE """
+                  WORD "raw"
+                  QUOTE """
+                  WORD "string"
+                  COMMA ","
+                  COMMA ","
                 QUOTE """
                 HASH "#"
           CONFIG_ITEM
@@ -312,25 +314,24 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "block_string"
             CONFIG_VALUE
-              RAW_STRING_LITERAL #"
-      hello there my friend
-      {# a comment in a prompt #}
-    "#
+              RAW_STRING_LITERAL
                 HASH "#"
                 QUOTE """
-                WORD "hello"
-                WORD "there"
-                WORD "my"
-                WORD "friend"
-                L_BRACE "{"
-                HASH "#"
-                WORD "a"
-                WORD "comment"
-                KW_IN "in"
-                WORD "a"
-                WORD "prompt"
-                HASH "#"
-                R_BRACE "}"
+                PROMPT_TEXT "hello there my friend"
+                  WORD "hello"
+                  WORD "there"
+                  WORD "my"
+                  WORD "friend"
+                TEMPLATE_COMMENT "{# a comment in a prompt #}"
+                  L_BRACE "{"
+                  HASH "#"
+                  WORD "a"
+                  WORD "comment"
+                  KW_IN "in"
+                  WORD "a"
+                  WORD "prompt"
+                  HASH "#"
+                  R_BRACE "}"
                 QUOTE """
                 HASH "#"
           R_BRACE "}"

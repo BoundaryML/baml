@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -68,27 +68,27 @@ SOURCE_FILE
         WORD "VertexGCP"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"
-        give short story {{ user_id }}
-        {{ ctx.output_format }}
-    "#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "give"
-          WORD "short"
-          WORD "story"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "user_id"
-          R_BRACE "}"
-          R_BRACE "}"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "ctx"
-          DOT "."
-          WORD "output_format"
-          R_BRACE "}"
-          R_BRACE "}"
+          PROMPT_TEXT "give short story"
+            WORD "give"
+            WORD "short"
+            WORD "story"
+          TEMPLATE_INTERPOLATION "{{ user_id }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "user_id"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ ctx.output_format }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "ctx"
+            DOT "."
+            WORD "output_format"
+            R_BRACE "}"
+            R_BRACE "}"
           QUOTE """
           HASH "#"
       R_BRACE "}"

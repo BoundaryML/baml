@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -24,26 +24,26 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"
-    Extract structured data from: {{ text }}
-    Return as JSON.
-  "#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Extract"
-          WORD "structured"
-          WORD "data"
-          WORD "from"
-          COLON ":"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "text"
-          R_BRACE "}"
-          R_BRACE "}"
-          WORD "Return"
-          WORD "as"
-          WORD "JSON"
-          DOT "."
+          PROMPT_TEXT "Extract structured data from:"
+            WORD "Extract"
+            WORD "structured"
+            WORD "data"
+            WORD "from"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ text }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "text"
+            R_BRACE "}"
+            R_BRACE "}"
+          PROMPT_TEXT "Return as JSON."
+            WORD "Return"
+            WORD "as"
+            WORD "JSON"
+            DOT "."
           QUOTE """
           HASH "#"
       R_BRACE "}"

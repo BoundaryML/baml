@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -46,10 +46,11 @@ string"
         WORD "TestClient"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"test"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          KW_TEST "test"
+          PROMPT_TEXT "test"
+            KW_TEST "test"
           QUOTE """
           HASH "#"
       R_BRACE "}"
@@ -70,10 +71,11 @@ string"
         WORD "TestClient"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"test"#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          KW_TEST "test"
+          PROMPT_TEXT "test"
+            KW_TEST "test"
           QUOTE """
           HASH "#"
       R_BRACE "}"

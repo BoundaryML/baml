@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -24,33 +24,31 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"
-    Analyze the following text:
-    {{ text }}
-    
-    Return an Analysis object with sentiment and keywords.
-  "#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Analyze"
-          WORD "the"
-          WORD "following"
-          WORD "text"
-          COLON ":"
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "text"
-          R_BRACE "}"
-          R_BRACE "}"
-          WORD "Return"
-          WORD "an"
-          WORD "Analysis"
-          WORD "object"
-          WORD "with"
-          WORD "sentiment"
-          WORD "and"
-          WORD "keywords"
-          DOT "."
+          PROMPT_TEXT "Analyze the following text:"
+            WORD "Analyze"
+            WORD "the"
+            WORD "following"
+            WORD "text"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ text }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "text"
+            R_BRACE "}"
+            R_BRACE "}"
+          PROMPT_TEXT "Return an Analysis object with sentiment and keywords."
+            WORD "Return"
+            WORD "an"
+            WORD "Analysis"
+            WORD "object"
+            WORD "with"
+            WORD "sentiment"
+            WORD "and"
+            WORD "keywords"
+            DOT "."
           QUOTE """
           HASH "#"
       R_BRACE "}"
@@ -204,35 +202,35 @@ SOURCE_FILE
         WORD "GPT4"
       PROMPT_FIELD
         WORD "prompt"
-        RAW_STRING_LITERAL #"
-    Process this through multiple steps:
-    1. {{ input }}
-    2. Transform it
-    3. Return result
-  "#
+        RAW_STRING_LITERAL
           HASH "#"
           QUOTE """
-          WORD "Process"
-          WORD "this"
-          WORD "through"
-          WORD "multiple"
-          WORD "steps"
-          COLON ":"
-          INTEGER_LITERAL "1"
-          DOT "."
-          L_BRACE "{"
-          L_BRACE "{"
-          WORD "input"
-          R_BRACE "}"
-          R_BRACE "}"
-          INTEGER_LITERAL "2"
-          DOT "."
-          WORD "Transform"
-          WORD "it"
-          INTEGER_LITERAL "3"
-          DOT "."
-          WORD "Return"
-          WORD "result"
+          PROMPT_TEXT "Process this through multiple steps:
+    1."
+            WORD "Process"
+            WORD "this"
+            WORD "through"
+            WORD "multiple"
+            WORD "steps"
+            COLON ":"
+            INTEGER_LITERAL "1"
+            DOT "."
+          TEMPLATE_INTERPOLATION "{{ input }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "input"
+            R_BRACE "}"
+            R_BRACE "}"
+          PROMPT_TEXT "2. Transform it
+    3. Return result"
+            INTEGER_LITERAL "2"
+            DOT "."
+            WORD "Transform"
+            WORD "it"
+            INTEGER_LITERAL "3"
+            DOT "."
+            WORD "Return"
+            WORD "result"
           QUOTE """
           HASH "#"
       R_BRACE "}"

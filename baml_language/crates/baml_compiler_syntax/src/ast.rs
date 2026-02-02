@@ -69,6 +69,12 @@ ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
 
+// Jinja template components (inside raw strings)
+ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
+ast_node!(JinjaStatement, TEMPLATE_CONTROL);
+ast_node!(JinjaComment, TEMPLATE_COMMENT);
+ast_node!(PromptText, PROMPT_TEXT);
+
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
@@ -730,6 +736,101 @@ impl RawStringLiteral {
     ///
     /// For `#"Hello"#`, returns `#"Hello"#`.
     pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
+    }
+
+    /// Get all Jinja expressions in the raw string.
+    ///
+    /// For `#"Hello {{ name }}"#`, returns the `{{ name }}` node.
+    pub fn jinja_expressions(&self) -> impl Iterator<Item = JinjaExpression> {
+        self.syntax.children().filter_map(JinjaExpression::cast)
+    }
+
+    /// Get all Jinja statements in the raw string.
+    ///
+    /// For `#"{% if x %}...{% endif %}"#`, returns the `{% if x %}` and `{% endif %}` nodes.
+    pub fn jinja_statements(&self) -> impl Iterator<Item = JinjaStatement> {
+        self.syntax.children().filter_map(JinjaStatement::cast)
+    }
+
+    /// Get all Jinja comments in the raw string.
+    ///
+    /// For `#"{# comment #}"#`, returns the `{# comment #}` node.
+    pub fn jinja_comments(&self) -> impl Iterator<Item = JinjaComment> {
+        self.syntax.children().filter_map(JinjaComment::cast)
+    }
+
+    /// Get all prompt text nodes in the raw string.
+    ///
+    /// For `#"Hello {{ name }}"#`, returns the `Hello ` text node.
+    pub fn prompt_texts(&self) -> impl Iterator<Item = PromptText> {
+        self.syntax.children().filter_map(PromptText::cast)
+    }
+}
+
+impl JinjaExpression {
+    /// Get the inner text of the Jinja expression, without the {{ }} delimiters.
+    ///
+    /// For `{{ input.name }}`, returns `input.name` (with whitespace trimmed).
+    pub fn inner_text(&self) -> String {
+        let text = self.syntax.text().to_string();
+        // Strip {{ and }}
+        if text.starts_with("{{") && text.ends_with("}}") {
+            text[2..text.len() - 2].trim().to_string()
+        } else {
+            text
+        }
+    }
+
+    /// Get the full text of the Jinja expression, including {{ }} delimiters.
+    pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
+    }
+}
+
+impl JinjaStatement {
+    /// Get the inner text of the Jinja statement, without the {% %} delimiters.
+    ///
+    /// For `{% if condition %}`, returns `if condition` (with whitespace trimmed).
+    pub fn inner_text(&self) -> String {
+        let text = self.syntax.text().to_string();
+        // Strip {% and %}
+        if text.starts_with("{%") && text.ends_with("%}") {
+            text[2..text.len() - 2].trim().to_string()
+        } else {
+            text
+        }
+    }
+
+    /// Get the full text of the Jinja statement, including {% %} delimiters.
+    pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
+    }
+}
+
+impl JinjaComment {
+    /// Get the inner text of the Jinja comment, without the {# #} delimiters.
+    ///
+    /// For `{# this is a comment #}`, returns `this is a comment` (with whitespace trimmed).
+    pub fn inner_text(&self) -> String {
+        let text = self.syntax.text().to_string();
+        // Strip {# and #}
+        if text.starts_with("{#") && text.ends_with("#}") {
+            text[2..text.len() - 2].trim().to_string()
+        } else {
+            text
+        }
+    }
+
+    /// Get the full text of the Jinja comment, including {# #} delimiters.
+    pub fn full_text(&self) -> String {
+        self.syntax.text().to_string()
+    }
+}
+
+impl PromptText {
+    /// Get the text content.
+    pub fn text(&self) -> String {
         self.syntax.text().to_string()
     }
 }

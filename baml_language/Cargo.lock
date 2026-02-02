@@ -561,9 +561,12 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_workspace",
+ "indexmap 2.13.0",
+ "minijinja",
  "rowan 0.16.1",
  "salsa",
  "smol_str",
+ "strsim",
  "text-size",
 ]
 

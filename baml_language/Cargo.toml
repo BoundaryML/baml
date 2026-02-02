@@ -59,6 +59,8 @@ minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "mai
   "debug",
   "preserve_order",
   "serde",
+  "unstable_machinery",
+  "unstable_machinery_serde",
 ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
