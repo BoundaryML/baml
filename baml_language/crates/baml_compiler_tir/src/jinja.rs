@@ -12,7 +12,6 @@
 mod expr;
 mod stmt;
 
-use baml_compiler_diagnostics::Diagnostic;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
@@ -644,34 +643,37 @@ fn pretty_print_expr(expr: &minijinja::machinery::ast::Expr) -> String {
 /// Returns a list of type errors found in the template.
 pub fn validate_template(
     template_text: &str,
-    _env: &JinjaTypeEnv,
-) -> Result<Vec<Diagnostic>, minijinja::Error> {
+    env: &mut JinjaTypeEnv,
+) -> Result<Vec<TypeError>, minijinja::Error> {
     // Parse the template using minijinja
-    let _ast = minijinja::machinery::parse(
+    let ast = minijinja::machinery::parse(
         template_text,
         "prompt",
         Default::default(),
         Default::default(),
     )?;
 
-    // TODO: Implement full validation
-    // For now, just return empty list - full implementation will be added
-    Ok(Vec::new())
+    // Walk the statement tree and collect type errors
+    let errors = validate_statement(&ast, env);
+
+    Ok(errors)
 }
 
 /// Validate a single Jinja expression.
 ///
-/// Returns a list of type errors found in the expression.
+/// Returns the inferred type and any type errors found.
 pub fn validate_expression(
     expr_text: &str,
-    _env: &JinjaTypeEnv,
-) -> Result<Vec<Diagnostic>, minijinja::Error> {
+    env: &JinjaTypeEnv,
+) -> Result<(JinjaType, Vec<TypeError>), minijinja::Error> {
     // Parse the expression using minijinja
-    let _ast = minijinja::machinery::parse_expr(expr_text)?;
+    let ast = minijinja::machinery::parse_expr(expr_text)?;
 
-    // TODO: Implement expression type checking
-    // For now, just return empty list - full implementation will be added
-    Ok(Vec::new())
+    // Infer the type and collect errors
+    match infer_expression_type(&ast, env) {
+        Ok(ty) => Ok((ty, Vec::new())),
+        Err(errors) => Ok((JinjaType::Unknown, errors)),
+    }
 }
 
 #[cfg(test)]

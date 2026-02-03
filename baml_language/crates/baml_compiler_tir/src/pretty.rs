@@ -671,5 +671,6 @@ pub fn short_display(error: &TirTypeError) -> String {
         TypeError::ClassCycle { cycle_path, .. } => {
             format!("Class cycle detected: {cycle_path}")
         }
+        TypeError::JinjaError { message, .. } => message.clone(),
     }
 }

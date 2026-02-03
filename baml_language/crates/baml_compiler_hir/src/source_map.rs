@@ -76,6 +76,24 @@ impl ErrorLocation {
             ErrorLocation::Span(span) => *span,
         }
     }
+
+    /// Resolve this location to a `Span` when no source map is available.
+    ///
+    /// For LLM function errors, all locations should be `Span` variants.
+    /// For expression-based locations (`Expr`, `MatchArm`), returns a default span.
+    pub fn to_span_no_source_map(
+        &self,
+        type_spans: &std::collections::HashMap<Name, Span>,
+    ) -> Span {
+        match self {
+            ErrorLocation::Expr(_) => Span::default(),
+            ErrorLocation::MatchArm(_) => Span::default(),
+            ErrorLocation::TypeItem(name) => {
+                type_spans.get(name).copied().unwrap_or_else(Span::default)
+            }
+            ErrorLocation::Span(span) => *span,
+        }
+    }
 }
 
 impl From<ExprId> for ErrorLocation {

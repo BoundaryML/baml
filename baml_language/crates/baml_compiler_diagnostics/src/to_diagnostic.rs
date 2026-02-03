@@ -217,6 +217,11 @@ impl<C: ErrorContext> TypeError<C> {
                 format!("These classes form a dependency cycle: {cycle_path}"),
             )
             .with_primary_span(loc_fn(location)),
+
+            TypeError::JinjaError { message, location } => {
+                Diagnostic::warning(DiagnosticId::JinjaError, message.clone())
+                    .with_primary_span(loc_fn(location))
+            }
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

@@ -125,31 +125,44 @@ pub fn collect_diagnostics(
                 let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
-                // Only infer types for expression functions (not LLM functions)
-                if let FunctionBody::Expr(expr_body, hir_source_map) = &*body {
-                    // Collect body lowering diagnostics (e.g., missing semicolons)
+                // Collect body lowering diagnostics (e.g., missing semicolons)
+                if let FunctionBody::Expr(expr_body, _) = &*body {
                     for diag in &expr_body.diagnostics {
                         diagnostics.push(diag.to_diagnostic());
                     }
+                }
 
-                    let inference_result = baml_compiler_tir::infer_function(
-                        db,
-                        &signature,
-                        Some(&sig_source_map),
-                        &body,
-                        Some(globals.clone()),
-                        Some(class_fields.clone()),
-                        Some(type_aliases_map.clone()),
-                        Some(enum_variants_map.clone()),
-                        *func_loc,
-                    );
+                // Infer types for both expression and LLM functions
+                // LLM functions are validated for Jinja template errors
+                let inference_result = baml_compiler_tir::infer_function(
+                    db,
+                    &signature,
+                    Some(&sig_source_map),
+                    &body,
+                    Some(globals.clone()),
+                    Some(class_fields.clone()),
+                    Some(type_aliases_map.clone()),
+                    Some(enum_variants_map.clone()),
+                    *func_loc,
+                );
 
-                    // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
-                    for type_error in &inference_result.errors {
-                        diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
-                            loc.to_span(hir_source_map, &type_spans)
-                        }));
-                    }
+                // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
+                // For LLM functions, errors use Span locations directly
+                // For Expr functions, errors may use ExprId which needs the source map
+                let hir_source_map = match &*body {
+                    FunctionBody::Expr(_, source_map) => Some(source_map),
+                    _ => None,
+                };
+
+                for type_error in &inference_result.errors {
+                    diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
+                        if let Some(source_map) = hir_source_map {
+                            loc.to_span(source_map, &type_spans)
+                        } else {
+                            // For LLM functions, errors should already have Span locations
+                            loc.to_span_no_source_map(&type_spans)
+                        }
+                    }));
                 }
             }
         }

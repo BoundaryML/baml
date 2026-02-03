@@ -122,4 +122,11 @@ pub enum TypeError<C: ErrorContext> {
         cycle_path: String,
         location: C::Location,
     },
+
+    // ============ Jinja Template Errors ============
+    /// Error in a Jinja template expression or statement.
+    JinjaError {
+        message: String,
+        location: C::Location,
+    },
 }

@@ -120,6 +120,11 @@ pub struct PromptTemplate {
 
     /// Parsed interpolation expressions
     pub interpolations: Vec<Interpolation>,
+
+    /// Start offset of the template text in the source file.
+    /// Used to convert Jinja error spans (which are relative to the template)
+    /// into file-level spans for diagnostics.
+    pub file_offset: u32,
 }
 
 /// A {{ expr }} interpolation in a prompt.
@@ -518,6 +523,12 @@ impl FunctionBody {
         let mut interpolations = Vec::new();
         let mut current_offset = 0u32;
 
+        // Get the file offset where the template text starts (after the #" delimiter)
+        // The raw string syntax is: #"..."# where the content starts after #"
+        let raw_string_start = raw_string.syntax().text_range().start();
+        // Skip the #" prefix (2 characters)
+        let file_offset = u32::from(raw_string_start) + 2;
+
         // Iterate through the children of the raw string in order
         for child in raw_string.syntax().children() {
             match child.kind() {
@@ -569,6 +580,7 @@ impl FunctionBody {
         PromptTemplate {
             text,
             interpolations,
+            file_offset,
         }
     }
 

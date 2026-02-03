@@ -131,6 +131,9 @@ pub enum DiagnosticId {
     // Cycle detection diagnostics (E0068-E0069)
     AliasCycle,
     ClassCycle,
+
+    // Jinja template diagnostics (E0070)
+    JinjaError,
 }
 
 impl DiagnosticId {
@@ -221,6 +224,9 @@ impl DiagnosticId {
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
+
+            // Jinja template diagnostics
+            DiagnosticId::JinjaError => "E0070",
         }
     }
 }

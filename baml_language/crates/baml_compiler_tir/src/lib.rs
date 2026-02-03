@@ -19,7 +19,7 @@ use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
-    MatchArmId, PatId, Pattern, SignatureSourceMap, StmtId, TirContext, TypeId,
+    MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext, TypeId,
 };
 use baml_workspace::Project;
 
@@ -887,7 +887,10 @@ pub fn infer_function_body<'db>(
                 )
             }
         }
-        FunctionBody::Llm(_) => {
+        FunctionBody::Llm(llm_body) => {
+            // Validate Jinja templates in the prompt
+            validate_llm_prompt(&mut ctx, &llm_body.prompt, &param_types, file_id);
+
             // LLM functions return their declared return type
             (
                 expected_return.clone(),
@@ -954,6 +957,113 @@ pub fn infer_function_body<'db>(
         exhaustive_matches: ctx.exhaustive_matches,
         errors: ctx.errors,
         expr_resolutions: ctx.expr_resolutions,
+    }
+}
+
+/// Validate Jinja templates in an LLM function's prompt.
+///
+/// This builds a Jinja type environment from the TIR context and validates
+/// the prompt template, converting any Jinja type errors to TIR type errors.
+fn validate_llm_prompt(
+    ctx: &mut TypeContext<'_>,
+    prompt: &PromptTemplate,
+    param_types: &HashMap<Name, Ty>,
+    file_id: FileId,
+) {
+    use jinja::{JinjaType, JinjaTypeEnv};
+
+    // Build a Jinja type environment from the TIR context
+    let mut jinja_env = JinjaTypeEnv::new();
+
+    // Add function parameters
+    for (param_name, param_ty) in param_types {
+        let jinja_ty = JinjaType::from(param_ty);
+        jinja_env.add_variable(param_name.to_string(), jinja_ty);
+    }
+
+    // Add special variables that are always available in prompts
+    // `_` is a special role-setting object
+    jinja_env.add_variable("_", JinjaType::Unknown);
+    // `ctx` provides output format and other context
+    jinja_env.add_variable("ctx", JinjaType::Unknown);
+
+    // Add class definitions from the context
+    for (class_name, fields) in &ctx.class_fields {
+        let field_types: indexmap::IndexMap<String, JinjaType> = fields
+            .iter()
+            .map(|(fname, fty)| (fname.to_string(), JinjaType::from(fty)))
+            .collect();
+        jinja_env.add_class(class_name.to_string(), field_types);
+    }
+
+    // Add enum definitions from the context
+    for (enum_name, variants) in &ctx.enum_variants {
+        jinja_env.add_enum(
+            enum_name.to_string(),
+            variants.iter().map(|v| v.to_string()).collect(),
+        );
+    }
+
+    // Add template string functions from globals
+    // Functions in scope are available to call in templates
+    // We add them both as functions (for signature checking) and as variables
+    // (so {{ Foo() }} resolves "Foo" as a callable)
+    for (func_name, func_ty) in ctx.scopes.first().unwrap_or(&HashMap::new()) {
+        if let Ty::Function { params, ret } = func_ty {
+            // Generate placeholder names for params (arg0, arg1, ...)
+            let jinja_params: Vec<(String, JinjaType)> = params
+                .iter()
+                .enumerate()
+                .map(|(i, ty)| (format!("arg{}", i), JinjaType::from(ty)))
+                .collect();
+            let jinja_ret = JinjaType::from(ret.as_ref());
+
+            // Add function to the function map (for signature validation)
+            jinja_env.add_function(func_name.to_string(), jinja_ret, jinja_params);
+
+            // Also add as a variable with FunctionRef type (so Var lookup succeeds)
+            jinja_env.add_variable(
+                func_name.to_string(),
+                JinjaType::FunctionRef(func_name.to_string()),
+            );
+        }
+    }
+
+    // Validate the entire prompt template
+    match jinja::validate_template(&prompt.text, &mut jinja_env) {
+        Ok(errors) => {
+            // Convert Jinja errors to TIR errors
+            for error in errors {
+                let jinja_span = error.span();
+                // Convert minijinja span to baml span
+                // The jinja span is relative to the prompt text, so we add the file_offset
+                // to get the absolute position in the source file
+                let start_offset = prompt.file_offset + jinja_span.start_offset as u32;
+                let end_offset = prompt.file_offset + jinja_span.end_offset as u32;
+
+                let baml_span = Span::new(
+                    file_id,
+                    TextRange::new(start_offset.into(), end_offset.into()),
+                );
+
+                ctx.push_error(TypeError::JinjaError {
+                    message: error.message().to_string(),
+                    location: ErrorLocation::Span(baml_span),
+                });
+            }
+        }
+        Err(parse_error) => {
+            // Jinja parse error - report as a single error
+            // Use the start of the prompt as the error location
+            let baml_span = Span::new(
+                file_id,
+                TextRange::new(prompt.file_offset.into(), (prompt.file_offset + 1).into()),
+            );
+            ctx.push_error(TypeError::JinjaError {
+                message: format!("Failed to parse Jinja template: {}", parse_error),
+                location: ErrorLocation::Span(baml_span),
+            });
+        }
     }
 }
 
