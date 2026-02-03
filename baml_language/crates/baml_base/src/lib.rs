@@ -5,8 +5,10 @@
 pub mod core_types;
 pub mod debug_log;
 pub mod files;
+pub mod qualified_name;
 
 // Re-export everything for convenience
 pub use core_types::*;
 pub use debug_log::{DebugMessage, drain_debug_log, has_debug_messages};
 pub use files::*;
+pub use qualified_name::{Namespace, QualifiedName};

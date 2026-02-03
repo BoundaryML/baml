@@ -135,6 +135,8 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
+        // BuiltinUnknown is preserved for VIR type checking at call sites.
+        baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
 
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,
@@ -152,7 +154,8 @@ pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
         // Compiler-only → Null (preserves backwards compatibility)
         // Note: Unknown/Error/Never don't exist in baml_type::Ty — they were
         // already mapped to Null/Void during convert_tir_ty.
-        Ty::Function { .. } | Ty::Void => Ok(Ty::Null),
+        // BuiltinUnknown should also not reach runtime.
+        Ty::Function { .. } | Ty::Void | Ty::BuiltinUnknown => Ok(Ty::Null),
         // WatchAccessor → unwrap inner
         Ty::WatchAccessor(inner) => sanitize_for_runtime(*inner),
         // Recursive TypeAlias → error

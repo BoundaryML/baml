@@ -373,8 +373,9 @@ function Foo(s: Success) -> string {
         let test = builder.build();
 
         let result = test.goto_definition();
+        // Methods have qualified names: ClassName.methodName
         assert!(
-            result.contains("main.baml:4:12 -> Celebrate"),
+            result.contains("main.baml:4:12 -> Success.Celebrate"),
             "Should navigate to Celebrate method, got: {result}"
         );
     }

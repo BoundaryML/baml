@@ -156,6 +156,9 @@ fn lower_type_ref_resolved_with_ctx(
         // Error/Unknown
         TypeRef::Error => Ty::Error,
         TypeRef::Unknown => Ty::Unknown,
+
+        // BuiltinUnknown - the `unknown` type keyword for builtin functions
+        TypeRef::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 

@@ -261,9 +261,18 @@ fn find_function_at_position(
                     }
                     baml_db::baml_compiler_syntax::ast::Item::Class(class_node) => {
                         // Check methods in classes
+                        // Method func_name is qualified as "ClassName.methodName"
+                        // AST method name is just "methodName"
+                        let class_name = class_node
+                            .name()
+                            .map(|n| n.text().to_string())
+                            .unwrap_or_default();
                         for method in class_node.methods() {
                             if let Some(name) = method.name() {
-                                if name.text() == func_name {
+                                // Compare against qualified name (ClassName.methodName)
+                                let qualified_method_name =
+                                    format!("{}.{}", class_name, name.text());
+                                if qualified_method_name == func_name.as_str() {
                                     let range = method.syntax().text_range();
                                     if range.contains(position) {
                                         return Some(*func_loc);
@@ -389,8 +398,9 @@ fn resolution_to_navigation_target(
             }
 
             // Field not found - it might be a method (desugared to a top-level function)
-            // Try looking up the field name as a function
-            let method_fqn = FullyQualifiedName::local(field.clone());
+            // Methods are registered with qualified names: "ClassName.methodName"
+            let qualified_method_name = format!("{}.{}", class_fqn.name, field);
+            let method_fqn = FullyQualifiedName::local(qualified_method_name.into());
             if let Some(target) = lookup_symbol_definition(db, &method_fqn) {
                 return Some(target);
             }
@@ -398,7 +408,7 @@ fn resolution_to_navigation_target(
             // Fallback to class definition if neither field nor method found
             lookup_symbol_definition(db, class_fqn)
         }
-        ResolvedValue::BuiltinFunction { path: _ } => {
+        ResolvedValue::BuiltinFunction(_) => {
             // Builtins don't have source definitions
             None
         }

@@ -27,3 +27,21 @@ client<llm> MyClient {
 //    │ 
 //    │ Note: Error code: E0044
 // ───╯
+// Error: Expected `string`, found `123`
+//    ╭─[ client_remap_role_non_string_allowed_roles.baml:5:18 ]
+//    │
+//  5 │     allowed_roles ["user", 123, "assistant"]
+//    │                  ─────────────┬─────────────  
+//    │                               ╰─────────────── Expected `string`, found `123`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: Expected `string`, found `123`
+//    ╭─[ client_remap_role_non_string_allowed_roles.baml:5:18 ]
+//    │
+//  5 │     allowed_roles ["user", 123, "assistant"]
+//    │                  ─────────────┬─────────────  
+//    │                               ╰─────────────── Expected `string`, found `123`
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

@@ -118,6 +118,9 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
 
+        // BuiltinUnknown accepts any type (for builtins that need heterogeneous values)
+        (TypePattern::BuiltinUnknown, _) => true,
+
         // No match
         _ => false,
     }
@@ -170,6 +173,7 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             params: params.iter().map(|p| substitute(p, bindings)).collect(),
             ret: Box::new(substitute(ret, bindings)),
         },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 
@@ -197,6 +201,7 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
             params: params.iter().map(substitute_unknown).collect(),
             ret: Box::new(substitute_unknown(ret)),
         },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 

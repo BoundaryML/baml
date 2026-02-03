@@ -398,8 +398,8 @@ fn is_same_resolution(a: &ResolvedValue, b: &ResolvedValue) -> bool {
         ) => c1 == c2 && f1 == f2,
 
         (
-            ResolvedValue::BuiltinFunction { path: p1 },
-            ResolvedValue::BuiltinFunction { path: p2 },
+            ResolvedValue::BuiltinFunction(p1),
+            ResolvedValue::BuiltinFunction(p2),
         ) => p1 == p2,
 
         _ => false,

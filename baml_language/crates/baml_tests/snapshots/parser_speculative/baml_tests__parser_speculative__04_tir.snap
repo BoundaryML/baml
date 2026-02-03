@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -10,12 +10,12 @@ expression: output
   Function ProcessData:
     Return: String
   Function ExtractData:
-    Return: Class(FullyQualifiedName { namespace: Local, name: "JsonData" })
+    Return: Class(QualifiedName { namespace: Local, name: "JsonData" })
   Function SimpleCalc:
     Return: Int
   Function ProcessAnalysis:
     Return: String
   Function LLMAnalyze:
-    Return: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
+    Return: Class(QualifiedName { namespace: Local, name: "Analysis" })
   Function ChainedProcess:
     Return: String

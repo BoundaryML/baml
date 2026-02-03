@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function GetUser:
-    Return: Class(FullyQualifiedName { namespace: Local, name: "MyClass" })
+    Return: Class(QualifiedName { namespace: Local, name: "MyClass" })

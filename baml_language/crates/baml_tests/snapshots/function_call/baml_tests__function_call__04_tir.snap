@@ -1,12 +1,10 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function array_length:
     Return: Int
-  Function Greeting:
-    Return: String
   Function param_in_if_statement:
     Return: Union([Literal(Int(1)), Literal(Int(2))])
   Function Bar:
@@ -14,4 +12,8 @@ expression: output
   Function Foo:
     Return: Int
   Function GreetBaz:
-    Return: String
+    Return: Unknown
+    Errors:
+      - Expected 0 args, found 1
+  Function Baz.Greeting:
+    Return: Unknown

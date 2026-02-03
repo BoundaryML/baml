@@ -446,6 +446,7 @@ fn type_to_pattern(
                 "f64" => quote!(TypePattern::Float),
                 "bool" => quote!(TypePattern::Bool),
                 "Media" => quote!(TypePattern::Media),
+                "Unknown" => quote!(TypePattern::BuiltinUnknown),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(GenericArgument::Type(inner)) = args.args.first() {

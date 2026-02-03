@@ -500,6 +500,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
             let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
             let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
+            let enum_variants_map = enum_variants(&db, root);
+            let enum_variants_data = enum_variants_map.enums(&db).clone();
 
             let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&db, root);
 
@@ -548,7 +550,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let signature = function_signature(&db, *func_id);
                         let sig_source_map = function_signature_source_map(&db, *func_id);
                         let body = function_body(&db, *func_id);
-                        let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
+                        let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         // Lower HIR → VIR → MIR
                         let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx, &type_aliases_map, &recursive_aliases) {

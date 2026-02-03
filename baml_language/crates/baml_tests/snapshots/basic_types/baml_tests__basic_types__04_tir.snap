@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -8,6 +8,6 @@ expression: output
   Function GetMixedList:
     Return: List(Union([Int, String]))
   Function GetStatus:
-    Return: Enum(FullyQualifiedName { namespace: Local, name: "Status" })
+    Return: Enum(QualifiedName { namespace: Local, name: "Status" })
   Function GetUser:
-    Return: Class(FullyQualifiedName { namespace: Local, name: "User" })
+    Return: Class(QualifiedName { namespace: Local, name: "User" })

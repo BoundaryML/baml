@@ -62,6 +62,9 @@ pub use pretty::pretty_print;
 pub use schema::*;
 pub use ty::*;
 
+// Re-export resolution types from TIR for MIR's use
+pub use baml_compiler_tir::{ResolvedMethod, ResolvedValue};
+
 /// Query the project schema — classes, enums, and functions with resolved types.
 ///
 /// This is a Salsa tracked query that reads HIR items, TIR resolved types,

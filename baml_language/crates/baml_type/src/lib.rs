@@ -104,6 +104,19 @@ pub enum Ty {
     Void,
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     WatchAccessor(Box<Ty>),
+    /// Internal-only type for builtin functions that accept any argument.
+    ///
+    /// Similar to TypeScript's `unknown` - any value can be passed where
+    /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
+    /// where a specific type is required.
+    ///
+    /// Used in llm.baml for functions like:
+    /// ```baml
+    /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
+    /// ```
+    ///
+    /// This is a compiler-only variant that should never reach runtime.
+    BuiltinUnknown,
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -140,6 +153,11 @@ impl Ty {
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
+            return true;
+        }
+
+        // Any type is a subtype of BuiltinUnknown (it accepts everything)
+        if matches!(other, Ty::BuiltinUnknown) {
             return true;
         }
 
@@ -184,7 +202,11 @@ impl Ty {
     pub fn is_compiler_only(&self) -> bool {
         matches!(
             self,
-            Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_)
+            Ty::TypeAlias(_)
+                | Ty::Function { .. }
+                | Ty::Void
+                | Ty::WatchAccessor(_)
+                | Ty::BuiltinUnknown
         )
     }
 
@@ -199,6 +221,9 @@ impl Ty {
             Ty::Function { .. } => Err("Function type should not reach runtime".to_string()),
             Ty::Void => Err("Void type should not reach runtime".to_string()),
             Ty::WatchAccessor(_) => Err("WatchAccessor type should not reach runtime".to_string()),
+            Ty::BuiltinUnknown => {
+                Err("BuiltinUnknown type should not reach runtime".to_string())
+            }
             // Recurse into containers
             Ty::Optional(inner) => inner.validate_runtime(),
             Ty::List(inner) => inner.validate_runtime(),
@@ -261,6 +286,7 @@ impl fmt::Display for Ty {
             }
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
+            Ty::BuiltinUnknown => write!(f, "unknown"),
         }
     }
 }

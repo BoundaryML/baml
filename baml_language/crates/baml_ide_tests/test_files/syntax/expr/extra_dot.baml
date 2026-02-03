@@ -76,3 +76,12 @@ function ModernFunction(x: int) -> int {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Expected 0 arguments, found 1
+//     ╭─[ expr_extra_dot.baml:21:16 ]
+//     │
+//  21 │   .let result = receipt.calculate();
+//     │                ──────────┬─────────  
+//     │                          ╰─────────── Expected 0 arguments, found 1
+//     │ 
+//     │ Note: Error code: E0005
+// ────╯

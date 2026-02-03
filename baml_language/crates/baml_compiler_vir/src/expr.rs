@@ -9,8 +9,15 @@
 //! represents only **valid, complete programs**. If the HIR contains any
 //! `Missing` nodes, lowering will fail. This is the gate between
 //! "LSP-compatible IR" and "codegen-ready IR".
+//!
+//! # Resolution Information
+//!
+//! VIR carries resolution information from TIR via the `resolutions` field
+//! in `ExprBody`. This allows downstream phases (MIR) to know exactly what
+//! each name refers to without re-deriving it from type information.
 
 use baml_base::Name;
+use baml_compiler_tir::ResolvedValue;
 use la_arena::{Arena, Idx};
 
 use crate::Ty;
@@ -44,6 +51,12 @@ pub struct ExprBody {
     /// Maps expression ID to (`enum_name`, `variant_name`).
     /// Used by MIR lowering to emit enum variant constants.
     pub enum_variant_exprs: rustc_hash::FxHashMap<ExprId, (Name, Name)>,
+    /// Resolution information from TIR.
+    ///
+    /// Maps expression IDs to what they resolved to (local variable, function,
+    /// builtin, enum variant, etc.). This is carried from TIR so that MIR
+    /// lowering doesn't need to re-derive resolution from types.
+    pub resolutions: rustc_hash::FxHashMap<ExprId, ResolvedValue>,
     /// Root expression of the body.
     pub root: ExprId,
 }
@@ -64,6 +77,14 @@ impl ExprBody {
     /// Get a pattern by ID.
     pub fn pattern(&self, id: PatId) -> &Pattern {
         &self.patterns[id]
+    }
+
+    /// Get the resolution for an expression, if any.
+    ///
+    /// Returns `None` for expressions that don't have resolution info
+    /// (e.g., literals, operators, etc.)
+    pub fn resolution(&self, id: ExprId) -> Option<&ResolvedValue> {
+        self.resolutions.get(&id)
     }
 }
 

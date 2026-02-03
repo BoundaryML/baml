@@ -1,64 +1,13 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn BadUnionPattern:
-  (no MIR due to errors: missing expression at file 0:0..0)
+fn Broken.MixedLiteralAndTyped:
+  (no MIR due to errors: function body is missing)
 
-fn Invalid() -> null {
-    // Locals:
-    let _0: null // return
+fn Broken.Invalid:
+  (no MIR due to errors: function body is missing)
 
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-
-}
-
-fn MixedLiteralAndTyped(x: int) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: int // x // param
-    let _2: bool
-    let _3: bool
-    let _4: int // n
-
-    bb0: {
-        _2 = copy _1 == const 42_i64;
-        branch copy _2 -> [bb4, bb5];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        unreachable;
-    }
-
-    bb4: {
-        _0 = const "mixed";
-        goto -> bb2;
-    }
-
-    bb5: {
-        _3 = is_type(copy _1, Int);
-        branch copy _3 -> [bb6, bb3];
-    }
-
-    bb6: {
-        _4 = copy _1;
-        goto -> bb4;
-    }
-
-}
+fn Broken.BadUnionPattern:
+  (no MIR due to errors: function body is missing)
