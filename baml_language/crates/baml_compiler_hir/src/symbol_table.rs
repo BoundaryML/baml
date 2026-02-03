@@ -30,8 +30,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, ItemId, TestLoc, TypeAliasLoc,
-    file_item_tree, fqn::QualifiedName, project_items,
+    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, ItemId, TemplateStringLoc, TestLoc,
+    TypeAliasLoc, file_item_tree, fqn::QualifiedName, project_items,
 };
 
 /// A definition location in the symbol table.
@@ -48,6 +48,8 @@ pub enum Definition<'db> {
     TypeAlias(TypeAliasLoc<'db>),
     /// A function definition.
     Function(FunctionLoc<'db>),
+    /// A template string definition.
+    TemplateString(TemplateStringLoc<'db>),
     /// A client configuration.
     Client(ClientLoc<'db>),
     /// A generator configuration.
@@ -65,9 +67,12 @@ impl<'db> Definition<'db> {
         )
     }
 
-    /// Check if this definition is a value (function).
+    /// Check if this definition is a value (function or template string).
     pub fn is_value(&self) -> bool {
-        matches!(self, Definition::Function(_))
+        matches!(
+            self,
+            Definition::Function(_) | Definition::TemplateString(_)
+        )
     }
 
     /// Get this definition as a class location, if it is one.
@@ -194,6 +199,12 @@ pub fn symbol_table<'db>(
                 let func = &item_tree[loc.id(db)];
                 let fqn = QualifiedName::local(func.name.clone());
                 values.insert(fqn, Definition::Function(*loc));
+            }
+            ItemId::TemplateString(loc) => {
+                let item_tree = file_item_tree(db, loc.file(db));
+                let ts = &item_tree[loc.id(db)];
+                let fqn = QualifiedName::local(ts.name.clone());
+                values.insert(fqn, Definition::TemplateString(*loc));
             }
             // Clients, generators, and tests are not typically referenced by name
             // in user code, but we could add them to a third namespace if needed.

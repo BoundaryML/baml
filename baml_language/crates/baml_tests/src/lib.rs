@@ -86,7 +86,7 @@ fn format_hir_file(
 ) -> String {
     use std::fmt::Write;
 
-    use baml_compiler_hir::{function_body, function_signature};
+    use baml_compiler_hir::{function_body, function_signature, template_string_signature};
     use baml_db::baml_compiler_hir::ItemId;
 
     // Get the ItemTree once and keep it alive for all lookups
@@ -281,6 +281,27 @@ fn format_hir_file(
                 }
                 writeln!(result, "}}").unwrap();
                 writeln!(result).unwrap(); // blank line after generator
+            }
+            ItemId::TemplateString(ts_id) => {
+                let ts = &item_tree[ts_id.id(db)];
+                let sig = template_string_signature(db, *ts_id);
+
+                // Format as: template_string Name(param: Type, ...) -> String
+                write!(result, "template_string {}(", ts.name).unwrap();
+                for (i, param) in sig.params.iter().enumerate() {
+                    if i > 0 {
+                        write!(result, ", ").unwrap();
+                    }
+                    write!(
+                        result,
+                        "{}: {}",
+                        param.name,
+                        format_type_ref(&param.type_ref)
+                    )
+                    .unwrap();
+                }
+                writeln!(result, ") -> String").unwrap();
+                writeln!(result).unwrap(); // blank line after template_string
             }
         }
     }

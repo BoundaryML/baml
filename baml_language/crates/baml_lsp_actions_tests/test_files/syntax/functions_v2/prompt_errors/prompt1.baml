@@ -77,4 +77,48 @@ function Bar1(a: string) -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Function 'Foo' expects 0 arguments, but got 1
+//     ╭─[ functions_v2_prompt_errors_prompt1.baml:24:7 ]
+//     │
+//  24 │     {{ Foo(a) }}
+//     │       ───┬──  
+//     │          ╰──── Function 'Foo' expects 0 arguments, but got 1
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
+//     ╭─[ functions_v2_prompt_errors_prompt1.baml:32:17 ]
+//     │
+//  32 │       {% set b = Foo %}
+//     │                 ─┬─  
+//     │                  ╰─── Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
+//     ╭─[ functions_v2_prompt_errors_prompt1.baml:34:17 ]
+//     │
+//  34 │       {% set b = Foo2 %}
+//     │                 ──┬─  
+//     │                   ╰─── Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Variable `b` does not exist. Did you mean one of these: `_`, `a`, `Bar1`?
+//     ╭─[ functions_v2_prompt_errors_prompt1.baml:37:7 ]
+//     │
+//  37 │     {{ b() }}
+//     │       ┬  
+//     │       ╰── Variable `b` does not exist. Did you mean one of these: `_`, `a`, `Bar1`?
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Variable `b` does not exist. Did you mean one of these: `_`, `Bar1`, `Foo`?
+//    ╭─[ functions_v2_prompt_errors_prompt1.baml:6:11 ]
+//    │
+//  6 │   This! {{ b}}
+//    │           ┬  
+//    │           ╰── Variable `b` does not exist. Did you mean one of these: `_`, `Bar1`, `Foo`?
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯

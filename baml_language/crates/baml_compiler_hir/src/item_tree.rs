@@ -12,8 +12,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     ids::{ItemKind, LocalItemId, hash_name},
     loc::{
-        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, TestMarker,
-        TypeAliasMarker,
+        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker,
+        TemplateStringMarker, TestMarker, TypeAliasMarker,
     },
     type_ref::TypeRef,
 };
@@ -75,6 +75,7 @@ pub struct ItemTree {
     pub(crate) clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
     pub(crate) generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub(crate) tests: FxHashMap<LocalItemId<TestMarker>, Test>,
+    pub(crate) template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
 
     /// Collision tracker: (`ItemKind`, hash) -> next available index.
     /// Single map for all item types, following rust-analyzer's pattern.
@@ -98,6 +99,7 @@ impl ItemTree {
             clients: FxHashMap::default(),
             generators: FxHashMap::default(),
             tests: FxHashMap::default(),
+            template_strings: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
     }
@@ -158,6 +160,16 @@ impl ItemTree {
     pub fn alloc_generator(&mut self, generator: Generator) -> LocalItemId<GeneratorMarker> {
         let id = self.alloc_id(ItemKind::Generator, &generator.name);
         self.generators.insert(id, generator);
+        id
+    }
+
+    /// Add a template string and return its local ID.
+    pub fn alloc_template_string(
+        &mut self,
+        template_string: TemplateString,
+    ) -> LocalItemId<TemplateStringMarker> {
+        let id = self.alloc_id(ItemKind::TemplateString, &template_string.name);
+        self.template_strings.insert(id, template_string);
         id
     }
 
@@ -322,6 +334,15 @@ pub struct Generator {
     pub module_format: Option<String>,
 }
 
+/// Template string definition.
+///
+/// Template strings are reusable prompt fragments that can be called
+/// from within function prompts. They have parameters and a body template.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateString {
+    pub name: Name,
+}
+
 //
 // ──────────────────────────────────────────────────────── INDEX IMPLS ─────
 //
@@ -389,5 +410,15 @@ impl Index<LocalItemId<GeneratorMarker>> for ItemTree {
         self.generators
             .get(&index)
             .expect("Generator not found in ItemTree")
+    }
+}
+
+/// Index `ItemTree` by `TemplateStringMarker` to get `TemplateString` data.
+impl Index<LocalItemId<TemplateStringMarker>> for ItemTree {
+    type Output = TemplateString;
+    fn index(&self, index: LocalItemId<TemplateStringMarker>) -> &Self::Output {
+        self.template_strings
+            .get(&index)
+            .expect("TemplateString not found in ItemTree")
     }
 }

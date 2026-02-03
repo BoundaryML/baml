@@ -22,6 +22,8 @@ pub use crate::loc::EnumLoc as EnumId;
 pub use crate::loc::FunctionLoc as FunctionId;
 /// Identifier for a generator configuration.
 pub use crate::loc::GeneratorLoc as GeneratorId;
+/// Identifier for a template string definition.
+pub use crate::loc::TemplateStringLoc as TemplateStringId;
 /// Identifier for a test definition.
 pub use crate::loc::TestLoc as TestId;
 /// Identifier for a type alias.
@@ -72,6 +74,12 @@ impl std::fmt::Debug for GeneratorId<'_> {
     }
 }
 
+impl std::fmt::Debug for TemplateStringId<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TemplateStringId(..)")
+    }
+}
+
 /// Union type for any top-level item.
 ///
 /// Note: Salsa interned types have a `'db` lifetime, so `ItemId` must also have one.
@@ -84,6 +92,7 @@ pub enum ItemId<'db> {
     Client(ClientId<'db>),
     Generator(GeneratorId<'db>),
     Test(TestId<'db>),
+    TemplateString(TemplateStringId<'db>),
 }
 
 // Manual Debug impl since Salsa interned types don't auto-derive Debug
@@ -97,6 +106,7 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Client(_) => write!(f, "Client(_)"),
             ItemId::Generator(_) => write!(f, "Generator(_)"),
             ItemId::Test(_) => write!(f, "Test(_)"),
+            ItemId::TemplateString(_) => write!(f, "TemplateString(_)"),
         }
     }
 }
@@ -165,4 +175,5 @@ pub enum ItemKind {
     Client,
     Generator,
     Test,
+    TemplateString,
 }

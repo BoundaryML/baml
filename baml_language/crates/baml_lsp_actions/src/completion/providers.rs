@@ -217,6 +217,17 @@ pub(super) fn complete_symbols(db: &dyn Db, project: Project) -> Vec<CompletionI
                         .with_sort_text(format!("2{name}")),
                 );
             }
+            ItemId::TemplateString(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let ts = &item_tree[loc.id(db)];
+                let name = ts.name.as_str();
+                items.push(
+                    CompletionItem::new(name, CompletionKind::TemplateString)
+                        .with_detail("template_string")
+                        .with_sort_text(format!("1{name}")),
+                );
+            }
         }
     }
 

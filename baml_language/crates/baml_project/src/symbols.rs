@@ -22,6 +22,7 @@ pub enum SymbolKind {
     Client,
     Test,
     Generator,
+    TemplateString,
     /// A field within a class.
     Field,
     /// A variant within an enum.
@@ -401,6 +402,25 @@ fn item_to_symbol(db: &dyn Db, item: ItemId<'_>, name_to_find: &Name) -> Option<
                 Some(Symbol {
                     name: generator.name.to_string(),
                     kind: SymbolKind::Generator,
+                    file_path,
+                    span,
+                })
+            } else {
+                None
+            }
+        }
+        ItemId::TemplateString(ts_loc) => {
+            let file = ts_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let ts = &item_tree[ts_loc.id(db)];
+
+            if &ts.name == name_to_find {
+                let file_path = file.path(db);
+                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+
+                Some(Symbol {
+                    name: ts.name.to_string(),
+                    kind: SymbolKind::TemplateString,
                     file_path,
                     span,
                 })

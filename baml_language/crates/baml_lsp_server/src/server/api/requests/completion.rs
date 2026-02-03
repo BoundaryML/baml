@@ -112,5 +112,6 @@ fn to_lsp_completion_kind(kind: baml_lsp_actions::CompletionKind) -> CompletionI
         baml_lsp_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
         baml_lsp_actions::CompletionKind::Test => CompletionItemKind::METHOD,
         baml_lsp_actions::CompletionKind::Type => CompletionItemKind::TYPE_PARAMETER,
+        baml_lsp_actions::CompletionKind::TemplateString => CompletionItemKind::FUNCTION,
     }
 }

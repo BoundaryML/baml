@@ -97,6 +97,8 @@ pub enum CompletionKind {
     Generator,
     /// A test
     Test,
+    /// A template string
+    TemplateString,
     /// A type (primitive or user-defined)
     Type,
 }

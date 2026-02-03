@@ -796,6 +796,14 @@ impl CompilerRunner {
                             writeln!(output).ok();
                             output_annotated.push((String::new(), LineStatus::Unknown));
                         }
+                        ItemId::TemplateString(ts_loc) => {
+                            let ts = &item_tree[ts_loc.id(&self.db)];
+                            let line = format!("template_string {}", ts.name);
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            writeln!(output).ok();
+                            output_annotated.push((String::new(), LineStatus::Unknown));
+                        }
                     }
                 }
             }

@@ -91,7 +91,7 @@ pub fn strip_string_delimiters(text: &str) -> &str {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum FunctionBody {
-    /// LLM function: has `LLM_FUNCTION_BODY` in CST
+    /// LLM function: has `LLM_FUNCTION_BODY` in CST.
     Llm(LlmBody),
 
     /// Expression function: has `EXPR_FUNCTION_BODY` in CST.
@@ -125,6 +125,77 @@ pub struct PromptTemplate {
     /// Used to convert Jinja error spans (which are relative to the template)
     /// into file-level spans for diagnostics.
     pub file_offset: u32,
+}
+
+impl PromptTemplate {
+    /// Parse a prompt template from a raw string literal.
+    pub fn from_raw_string(raw_string: &baml_compiler_syntax::ast::RawStringLiteral) -> Self {
+        use baml_compiler_syntax::ast::*;
+
+        let mut text = String::new();
+        let mut interpolations = Vec::new();
+        let mut current_offset = 0u32;
+
+        // Get the file offset where the template text starts (after the #" delimiter)
+        // The raw string syntax is: #"..."# where the content starts after #"
+        let raw_string_start = raw_string.syntax().text_range().start();
+        // Skip the #" prefix (2 characters)
+        let file_offset = u32::from(raw_string_start) + 2;
+
+        // Iterate through the children of the raw string in order
+        for child in raw_string.syntax().children() {
+            match child.kind() {
+                baml_compiler_syntax::SyntaxKind::PROMPT_TEXT => {
+                    // Plain text - add directly to output
+                    if let Some(prompt_text) = PromptText::cast(child.clone()) {
+                        let content = prompt_text.text();
+                        text.push_str(&content);
+                        current_offset += content.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_INTERPOLATION => {
+                    // Jinja expression {{ ... }}
+                    if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
+                        let inner = jinja_expr.inner_text();
+                        let full_text = jinja_expr.full_text();
+
+                        // Store the expression text for later validation by minijinja
+                        interpolations.push(Interpolation {
+                            expr_text: inner.to_string(),
+                            offset: current_offset,
+                            length: full_text.len() as u32,
+                        });
+
+                        // Keep the {{ }} in the text for now (will be replaced at runtime)
+                        let placeholder = full_text;
+                        text.push_str(&placeholder);
+                        current_offset += placeholder.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_CONTROL => {
+                    // Jinja statement {% ... %} - keep in text as-is for minijinja to evaluate
+                    if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
+                        let content = jinja_stmt.full_text();
+                        text.push_str(&content);
+                        current_offset += content.len() as u32;
+                    }
+                }
+                baml_compiler_syntax::SyntaxKind::TEMPLATE_COMMENT => {
+                    // Jinja comment {# ... #} - skip (comments are stripped)
+                    // Don't add to text, don't update offset
+                }
+                _ => {
+                    // Other tokens (delimiters, etc.) - skip
+                }
+            }
+        }
+
+        PromptTemplate {
+            text,
+            interpolations,
+            file_offset,
+        }
+    }
 }
 
 /// A {{ expr }} interpolation in a prompt.
@@ -517,71 +588,7 @@ impl FunctionBody {
     }
 
     fn parse_prompt(raw_string: &baml_compiler_syntax::ast::RawStringLiteral) -> PromptTemplate {
-        use baml_compiler_syntax::ast::*;
-
-        let mut text = String::new();
-        let mut interpolations = Vec::new();
-        let mut current_offset = 0u32;
-
-        // Get the file offset where the template text starts (after the #" delimiter)
-        // The raw string syntax is: #"..."# where the content starts after #"
-        let raw_string_start = raw_string.syntax().text_range().start();
-        // Skip the #" prefix (2 characters)
-        let file_offset = u32::from(raw_string_start) + 2;
-
-        // Iterate through the children of the raw string in order
-        for child in raw_string.syntax().children() {
-            match child.kind() {
-                baml_compiler_syntax::SyntaxKind::PROMPT_TEXT => {
-                    // Plain text - add directly to output
-                    if let Some(prompt_text) = PromptText::cast(child.clone()) {
-                        let content = prompt_text.text();
-                        text.push_str(&content);
-                        current_offset += content.len() as u32;
-                    }
-                }
-                baml_compiler_syntax::SyntaxKind::TEMPLATE_INTERPOLATION => {
-                    // Jinja expression {{ ... }}
-                    if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
-                        let inner = jinja_expr.inner_text();
-                        let full_text = jinja_expr.full_text();
-
-                        // Store the expression text for later validation by minijinja
-                        interpolations.push(Interpolation {
-                            expr_text: inner.to_string(),
-                            offset: current_offset,
-                            length: full_text.len() as u32,
-                        });
-
-                        // Keep the {{ }} in the text for now (will be replaced at runtime)
-                        let placeholder = full_text;
-                        text.push_str(&placeholder);
-                        current_offset += placeholder.len() as u32;
-                    }
-                }
-                baml_compiler_syntax::SyntaxKind::TEMPLATE_CONTROL => {
-                    // Jinja statement {% ... %} - keep in text as-is for minijinja to evaluate
-                    if let Some(jinja_stmt) = JinjaStatement::cast(child.clone()) {
-                        let content = jinja_stmt.full_text();
-                        text.push_str(&content);
-                        current_offset += content.len() as u32;
-                    }
-                }
-                baml_compiler_syntax::SyntaxKind::TEMPLATE_COMMENT => {
-                    // Jinja comment {# ... #} - skip (comments are stripped)
-                    // Don't add to text, don't update offset
-                }
-                _ => {
-                    // Other tokens (delimiters, etc.) - skip
-                }
-            }
-        }
-
-        PromptTemplate {
-            text,
-            interpolations,
-            file_offset,
-        }
+        PromptTemplate::from_raw_string(raw_string)
     }
 
     fn lower_expr_body(

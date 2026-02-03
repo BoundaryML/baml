@@ -203,10 +203,35 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
                     return Some(format!("test {}", test.name));
                 }
             }
+            ItemId::TemplateString(ts_loc) => {
+                let file = ts_loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let ts = &item_tree[ts_loc.id(db)];
+
+                if ts.name == name_to_find {
+                    let sig = baml_compiler_hir::template_string_signature(db, *ts_loc);
+                    return Some(format_template_string_signature(&sig));
+                }
+            }
         }
     }
 
     None
+}
+
+/// Format a template string signature for hover display.
+fn format_template_string_signature(sig: &baml_compiler_hir::TemplateStringSignature) -> String {
+    let params: Vec<String> = sig
+        .params
+        .iter()
+        .map(|p| format!("{}: {}", p.name, type_ref_to_str(&p.type_ref)))
+        .collect();
+
+    format!(
+        "template_string {}({}) -> string",
+        sig.name,
+        params.join(", ")
+    )
 }
 
 /// Format a function signature for hover display.

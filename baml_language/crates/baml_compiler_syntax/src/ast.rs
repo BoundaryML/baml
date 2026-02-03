@@ -694,6 +694,28 @@ impl FunctionDef {
     }
 }
 
+impl TemplateStringDef {
+    /// Get the template string name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+    }
+
+    /// Get the parameter list.
+    pub fn param_list(&self) -> Option<ParameterList> {
+        self.syntax.children().find_map(ParameterList::cast)
+    }
+
+    /// Get the raw string literal containing the template body.
+    pub fn raw_string(&self) -> Option<RawStringLiteral> {
+        self.syntax.children().find_map(RawStringLiteral::cast)
+    }
+}
+
 impl LlmFunctionBody {
     /// Get the client field if present.
     ///

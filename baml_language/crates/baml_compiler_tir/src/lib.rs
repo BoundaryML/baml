@@ -243,7 +243,7 @@ pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
 
 /// Query: Get the typing context for a project.
 ///
-/// Maps function names to their arrow types.
+/// Maps function names and template string names to their arrow types.
 #[salsa::tracked]
 pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
     let resolution_ctx = TypeResolutionContext::new(db, project);
@@ -254,29 +254,53 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
         let items = items_struct.items(db);
 
         for item in items {
-            if let baml_compiler_hir::ItemId::Function(func_loc) = item {
-                let signature = baml_compiler_hir::function_signature(db, *func_loc);
-                let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
-                let span = Span::default(); // TODO: get proper span from signature
+            match item {
+                baml_compiler_hir::ItemId::Function(func_loc) => {
+                    let signature = baml_compiler_hir::function_signature(db, *func_loc);
+                    let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
+                    let span = Span::default(); // TODO: get proper span from signature
 
-                let param_types: Vec<Ty> = signature
-                    .params
-                    .iter()
-                    .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
-                    .collect();
+                    let param_types: Vec<Ty> = signature
+                        .params
+                        .iter()
+                        .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
+                        .collect();
 
-                let return_type = resolution_ctx
-                    .lower_type_ref(&signature.return_type, span)
-                    .0;
+                    let return_type = resolution_ctx
+                        .lower_type_ref(&signature.return_type, span)
+                        .0;
 
-                let func_type = Ty::Function {
-                    params: param_types,
-                    ret: Box::new(return_type),
-                };
+                    let func_type = Ty::Function {
+                        params: param_types,
+                        ret: Box::new(return_type),
+                    };
 
-                // Use the qualified display name so builtin BAML functions are only
-                // callable via their namespace (e.g., "baml.llm.render_prompt").
-                context.insert(qualified_name.display_name(), func_type);
+                    // Use the qualified display name so builtin BAML functions are only
+                    // callable via their namespace (e.g., "baml.llm.render_prompt").
+                    context.insert(qualified_name.display_name(), func_type);
+                }
+
+                baml_compiler_hir::ItemId::TemplateString(ts_loc) => {
+                    let signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
+                    let span = Span::default();
+
+                    let param_types: Vec<Ty> = signature
+                        .params
+                        .iter()
+                        .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
+                        .collect();
+
+                    // Template strings always return String
+                    let return_type = Ty::String;
+
+                    let func_type = Ty::Function {
+                        params: param_types,
+                        ret: Box::new(return_type),
+                    };
+
+                    context.insert(signature.name.clone(), func_type);
+                }
+                _ => {}
             }
         }
     }
@@ -960,6 +984,79 @@ pub fn infer_function_body<'db>(
     }
 }
 
+/// Add built-in BAML types to a Jinja type environment.
+///
+/// This adds the special variables `_` and `ctx` along with their class definitions:
+/// - `_` (baml::BuiltIn): has `chat` and `role` function properties
+/// - `ctx` (baml::Context): has `output_format`, `client`, and `tags` properties
+/// - `baml::Client`: has `name` and `provider` string properties
+/// - `jinja::loop`: has standard Jinja loop variables (index, first, last, etc.)
+fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
+    use jinja::JinjaType;
+
+    // Define baml::Client class
+    jinja_env.add_class(
+        "baml::Client",
+        indexmap::IndexMap::from([
+            ("name".to_string(), JinjaType::String),
+            ("provider".to_string(), JinjaType::String),
+        ]),
+    );
+
+    // Define baml::Context class
+    // output_format can be used as a string or called as a function
+    jinja_env.add_class(
+        "baml::Context",
+        indexmap::IndexMap::from([
+            ("output_format".to_string(), JinjaType::String), // Simplified: just String for now
+            (
+                "client".to_string(),
+                JinjaType::ClassRef("baml::Client".to_string()),
+            ),
+            (
+                "tags".to_string(),
+                JinjaType::Map(Box::new(JinjaType::String), Box::new(JinjaType::String)),
+            ),
+        ]),
+    );
+
+    // Define baml::BuiltIn class (for `_`)
+    // chat and role are functions that set the chat role
+    jinja_env.add_class(
+        "baml::BuiltIn",
+        indexmap::IndexMap::from([
+            (
+                "chat".to_string(),
+                JinjaType::FunctionRef("baml::Chat".to_string()),
+            ),
+            (
+                "role".to_string(),
+                JinjaType::FunctionRef("baml::Chat".to_string()),
+            ),
+        ]),
+    );
+
+    // Define jinja::loop class (available inside for loops)
+    jinja_env.add_class(
+        "jinja::loop",
+        indexmap::IndexMap::from([
+            ("index".to_string(), JinjaType::Int),
+            ("index0".to_string(), JinjaType::Int),
+            ("revindex".to_string(), JinjaType::Int),
+            ("revindex0".to_string(), JinjaType::Int),
+            ("first".to_string(), JinjaType::Bool),
+            ("last".to_string(), JinjaType::Bool),
+            ("length".to_string(), JinjaType::Int),
+            ("depth".to_string(), JinjaType::Int),
+            ("depth0".to_string(), JinjaType::Int),
+        ]),
+    );
+
+    // Add the special variables
+    jinja_env.add_variable("_", JinjaType::ClassRef("baml::BuiltIn".to_string()));
+    jinja_env.add_variable("ctx", JinjaType::ClassRef("baml::Context".to_string()));
+}
+
 /// Validate Jinja templates in an LLM function's prompt.
 ///
 /// This builds a Jinja type environment from the TIR context and validates
@@ -981,11 +1078,8 @@ fn validate_llm_prompt(
         jinja_env.add_variable(param_name.to_string(), jinja_ty);
     }
 
-    // Add special variables that are always available in prompts
-    // `_` is a special role-setting object
-    jinja_env.add_variable("_", JinjaType::Unknown);
-    // `ctx` provides output format and other context
-    jinja_env.add_variable("ctx", JinjaType::Unknown);
+    // Add built-in BAML types for Jinja templates
+    add_builtin_jinja_types(&mut jinja_env);
 
     // Add class definitions from the context
     for (class_name, fields) in &ctx.class_fields {
@@ -1118,6 +1212,122 @@ pub fn function_type_inference<'db>(
     );
 
     Arc::new(result)
+}
+
+/// Validate a template string's Jinja template body.
+///
+/// Template strings don't need full type inference like functions - they just need
+/// their Jinja templates validated against available variables (parameters, globals, etc.)
+pub fn validate_template_string_body(
+    db: &dyn Db,
+    ts_loc: baml_compiler_hir::TemplateStringLoc<'_>,
+) -> Vec<TirTypeError> {
+    use baml_compiler_hir::{template_string_body, template_string_signature};
+    use jinja::{JinjaType, JinjaTypeEnv};
+
+    let signature = template_string_signature(db, ts_loc);
+    let body = template_string_body(db, ts_loc);
+    let project = db.project();
+
+    // Get file_id for span conversion
+    let file = ts_loc.file(db);
+    let file_id = file.file_id(db);
+
+    // Get the typing context (functions/template strings available)
+    let typing_ctx = typing_context(db, project);
+    let globals = typing_ctx.functions(db);
+
+    // Get class field types
+    let class_field_types = class_field_types(db, project);
+    let class_fields = class_field_types.classes(db);
+
+    // Get enum variants
+    let enum_variants_map = enum_variants(db, project);
+    let enum_variants = enum_variants_map.enums(db);
+
+    // Build a Jinja type environment
+    let mut jinja_env = JinjaTypeEnv::new();
+
+    // Add template string parameters
+    for param in &signature.params {
+        let resolution_ctx = TypeResolutionContext::new(db, project);
+        let span = Span::default();
+        let ty = resolution_ctx.lower_type_ref(&param.type_ref, span).0;
+        let jinja_ty = JinjaType::from(&ty);
+        jinja_env.add_variable(param.name.to_string(), jinja_ty);
+    }
+
+    // Add built-in BAML types for Jinja templates
+    add_builtin_jinja_types(&mut jinja_env);
+
+    // Add class definitions
+    for (class_name, fields) in class_fields {
+        let field_types: indexmap::IndexMap<String, JinjaType> = fields
+            .iter()
+            .map(|(fname, fty)| (fname.to_string(), JinjaType::from(fty)))
+            .collect();
+        jinja_env.add_class(class_name.to_string(), field_types);
+    }
+
+    // Add enum definitions
+    for (enum_name, variants) in enum_variants {
+        jinja_env.add_enum(
+            enum_name.to_string(),
+            variants.iter().map(|v| v.to_string()).collect(),
+        );
+    }
+
+    // Add functions (including other template strings) from globals
+    for (func_name, func_ty) in globals {
+        if let Ty::Function { params, ret } = func_ty {
+            let jinja_params: Vec<(String, JinjaType)> = params
+                .iter()
+                .enumerate()
+                .map(|(i, ty)| (format!("arg{}", i), JinjaType::from(ty)))
+                .collect();
+            let jinja_ret = JinjaType::from(ret.as_ref());
+
+            jinja_env.add_function(func_name.to_string(), jinja_ret, jinja_params);
+            jinja_env.add_variable(
+                func_name.to_string(),
+                JinjaType::FunctionRef(func_name.to_string()),
+            );
+        }
+    }
+
+    // Validate the template
+    let mut errors: Vec<TirTypeError> = Vec::new();
+    match jinja::validate_template(&body.text, &mut jinja_env) {
+        Ok(jinja_errors) => {
+            for error in jinja_errors {
+                let jinja_span = error.span();
+                let start_offset = body.file_offset + jinja_span.start_offset as u32;
+                let end_offset = body.file_offset + jinja_span.end_offset as u32;
+
+                let baml_span = Span::new(
+                    file_id,
+                    TextRange::new(start_offset.into(), end_offset.into()),
+                );
+
+                errors.push(TypeError::JinjaError {
+                    message: error.message().to_string(),
+                    location: ErrorLocation::Span(baml_span),
+                });
+            }
+        }
+        Err(parse_error) => {
+            let baml_span = Span::new(
+                file_id,
+                TextRange::new(body.file_offset.into(), (body.file_offset + 1).into()),
+            );
+            errors.push(TypeError::JinjaError {
+                message: format!("Failed to parse Jinja template: {}", parse_error),
+                location: ErrorLocation::Span(baml_span),
+            });
+        }
+    }
+
+    errors
 }
 
 /// Infer types for a function given its signature and body.

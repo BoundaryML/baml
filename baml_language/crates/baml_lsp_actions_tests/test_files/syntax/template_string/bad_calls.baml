@@ -81,4 +81,48 @@ template_string BadCall4 #"
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Function 'WithParams' expects argument 'arg0'
+//     ╭─[ template_string_bad_calls.baml:14:5 ]
+//     │
+//  14 │   {{ WithParams() }}
+//     │     ──────┬─────  
+//     │           ╰─────── Function 'WithParams' expects argument 'arg0'
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
+//     ╭─[ template_string_bad_calls.baml:18:5 ]
+//     │
+//  18 │   {{ Random(2) }}
+//     │     ───┬──  
+//     │        ╰──── Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Function 'WithParams' does not have an argument 'a'. Did you mean 'arg0'?
+//    ╭─[ template_string_bad_calls.baml:6:5 ]
+//    │
+//  6 │   {{ WithParams(a=2, b=2) }}
+//    │     ──────────┬─────────  
+//    │               ╰─────────── Function 'WithParams' does not have an argument 'a'. Did you mean 'arg0'?
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯
+// Warning: Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
+//    ╭─[ template_string_bad_calls.baml:6:5 ]
+//    │
+//  6 │   {{ WithParams(a=2, b=2) }}
+//    │     ──────────┬─────────  
+//    │               ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯
+// Warning: Function 'WithParams' expects argument 'arg0'
+//    ╭─[ template_string_bad_calls.baml:6:5 ]
+//    │
+//  6 │   {{ WithParams(a=2, b=2) }}
+//    │     ──────────┬─────────  
+//    │               ╰─────────── Function 'WithParams' expects argument 'arg0'
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯

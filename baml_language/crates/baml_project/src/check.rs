@@ -120,6 +120,18 @@ pub fn collect_diagnostics(
         let items = items_struct.items(db);
 
         for item in items {
+            // Validate template string bodies
+            if let ItemId::TemplateString(ts_loc) = item {
+                let ts_errors = baml_compiler_tir::validate_template_string_body(db, *ts_loc);
+                // Template strings don't have expression IDs, use empty source map
+                let empty_source_map = HirSourceMap::default();
+                for type_error in &ts_errors {
+                    diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
+                        loc.to_span(&empty_source_map, &type_spans)
+                    }));
+                }
+            }
+
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
                 let sig_source_map = function_signature_source_map(db, *func_loc);
@@ -147,21 +159,16 @@ pub fn collect_diagnostics(
                 );
 
                 // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
-                // For LLM functions, errors use Span locations directly
-                // For Expr functions, errors may use ExprId which needs the source map
+                // Both LLM and Expr bodies have source maps (LLM has an empty one)
                 let hir_source_map = match &*body {
-                    FunctionBody::Expr(_, source_map) => Some(source_map),
-                    _ => None,
+                    FunctionBody::Llm(_) => &HirSourceMap::default(),
+                    FunctionBody::Expr(_, source_map) => source_map,
+                    FunctionBody::Missing => &HirSourceMap::default(),
                 };
 
                 for type_error in &inference_result.errors {
                     diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
-                        if let Some(source_map) = hir_source_map {
-                            loc.to_span(source_map, &type_spans)
-                        } else {
-                            // For LLM functions, errors should already have Span locations
-                            loc.to_span_no_source_map(&type_spans)
-                        }
+                        loc.to_span(hir_source_map, &type_spans)
                     }));
                 }
             }

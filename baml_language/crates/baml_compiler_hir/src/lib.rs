@@ -52,7 +52,7 @@ pub use path::*;
 pub use pretty::{body_to_code, expr_to_code, stmt_to_code, type_ref_to_str};
 pub use reserved_names::{OutputType, ReservedNamesMode};
 // Re-export signature types explicitly (no wildcards to avoid conflicts)
-pub use signature::{FunctionSignature, Param};
+pub use signature::{FunctionSignature, Param, TemplateStringSignature};
 pub use source_map::{ErrorLocation, HirSourceMap, SignatureSourceMap, TirContext};
 pub use symbol_table::*;
 pub use type_ref::*;
@@ -837,6 +837,102 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
 }
 
 //
+// ────────────────────────────────────────────────── TEMPLATE STRING QUERIES ─────
+//
+
+/// Returns the signature of a template string (parameters).
+///
+/// This is separate from the `ItemTree` to provide fine-grained incrementality.
+#[salsa::tracked]
+pub fn template_string_signature<'db>(
+    db: &'db dyn Db,
+    template_string: TemplateStringLoc<'db>,
+) -> Arc<TemplateStringSignature> {
+    let (signature, _source_map) = template_string_signature_with_source_map(db, template_string);
+    signature
+}
+
+/// Returns the source map for a template string signature (parameter spans).
+#[salsa::tracked]
+pub fn template_string_signature_source_map<'db>(
+    db: &'db dyn Db,
+    template_string: TemplateStringLoc<'db>,
+) -> SignatureSourceMap {
+    let (_signature, source_map) = template_string_signature_with_source_map(db, template_string);
+    source_map
+}
+
+/// Internal helper that computes both signature and source map together.
+fn template_string_signature_with_source_map<'db>(
+    db: &'db dyn Db,
+    template_string: TemplateStringLoc<'db>,
+) -> (Arc<TemplateStringSignature>, SignatureSourceMap) {
+    let file = template_string.file(db);
+    let item_tree = file_item_tree(db, file);
+    let ts = &item_tree[template_string.id(db)];
+    let ts_name = ts.name.clone();
+
+    let tree = syntax_tree(db, file);
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    let default_signature = (
+        Arc::new(TemplateStringSignature {
+            name: ts.name.clone(),
+            params: vec![],
+        }),
+        SignatureSourceMap::default(),
+    );
+
+    let ts_def = source_file.items().find_map(|item| {
+        if let baml_compiler_syntax::ast::Item::TemplateString(ts_node) = item {
+            if ts_node.name().as_ref().map(SyntaxToken::text) == Some(&ts_name) {
+                return Some(TemplateStringSignature::lower(&ts_node));
+            }
+        }
+        None
+    });
+
+    ts_def.unwrap_or(default_signature)
+}
+
+/// Returns the body (prompt template) of a template string.
+#[salsa::tracked]
+pub fn template_string_body<'db>(
+    db: &'db dyn Db,
+    template_string: TemplateStringLoc<'db>,
+) -> Arc<PromptTemplate> {
+    let file = template_string.file(db);
+    let item_tree = file_item_tree(db, file);
+    let ts = &item_tree[template_string.id(db)];
+    let ts_name = ts.name.clone();
+
+    let tree = syntax_tree(db, file);
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    let ts_def = source_file.items().find_map(|item| {
+        if let baml_compiler_syntax::ast::Item::TemplateString(ts_node) = item {
+            if ts_node.name().as_ref().map(SyntaxToken::text) == Some(&ts_name) {
+                return Some(ts_node);
+            }
+        }
+        None
+    });
+
+    if let Some(ts_node) = ts_def {
+        if let Some(raw_string) = ts_node.raw_string() {
+            let prompt = PromptTemplate::from_raw_string(&raw_string);
+            return Arc::new(prompt);
+        }
+    }
+
+    Arc::new(PromptTemplate {
+        text: String::new(),
+        interpolations: vec![],
+        file_offset: 0,
+    })
+}
+
+//
 // ──────────────────────────────────────────────────────── INTERN HELPERS ─────
 //
 
@@ -901,6 +997,14 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
     for local_id in generators {
         let loc = GeneratorLoc::new(db, file, local_id);
         items.push(ItemId::Generator(loc));
+    }
+
+   // Intern template strings
+    let mut template_strings: Vec<_> = tree.template_strings.keys().copied().collect();
+    template_strings.sort_by_key(|id| id.as_u32());
+    for local_id in template_strings {
+        let loc = TemplateStringLoc::new(db, file, local_id);
+        items.push(ItemId::TemplateString(loc));
     }
 
     items
@@ -1006,6 +1110,11 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
         SyntaxKind::GENERATOR_DEF => {
             if let Some(g) = generator::lower_generator(node, ctx) {
                 tree.alloc_generator(g);
+            }
+        }
+        SyntaxKind::TEMPLATE_STRING_DEF => {
+            if let Some(ts) = lower_template_string(node) {
+                tree.alloc_template_string(ts);
             }
         }
         SyntaxKind::LET_STMT => {
@@ -1514,6 +1623,16 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
     })
 }
 
+/// Extract template string from CST.
+fn lower_template_string(node: &SyntaxNode) -> Option<item_tree::TemplateString> {
+    use baml_compiler_syntax::ast::TemplateStringDef;
+
+    let ts = TemplateStringDef::cast(node.clone())?;
+    let name = ts.name()?.text().into();
+
+    Some(item_tree::TemplateString { name })
+}
+
 /// Extract type alias from CST.
 pub(crate) fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     use baml_compiler_syntax::ast::TypeAliasDef;
@@ -1723,6 +1842,29 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                         );
                     }
                 }
+            }
+            ItemId::TemplateString(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let local_id = loc.id(db);
+                let ts = &item_tree[local_id];
+                let span = get_item_name_span(
+                    db,
+                    file,
+                    "template_string",
+                    ts.name.as_str(),
+                    local_id.index(),
+                )
+                .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let path = file.path(db).display().to_string();
+                check_duplicate(
+                    &mut seen,
+                    &mut errors,
+                    ts.name.clone(),
+                    "template_string",
+                    span,
+                    path,
+                );
             }
         }
     }
@@ -2548,6 +2690,16 @@ pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
             (
                 file,
                 "test",
+                item_tree[loc.id(db)].name.clone(),
+                loc.id(db).index(),
+            )
+        }
+        Definition::TemplateString(loc) => {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            (
+                file,
+                "template_string",
                 item_tree[loc.id(db)].name.clone(),
                 loc.id(db).index(),
             )

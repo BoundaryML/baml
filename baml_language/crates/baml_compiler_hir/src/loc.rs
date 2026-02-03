@@ -29,6 +29,8 @@ pub struct ClientMarker;
 pub struct TestMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GeneratorMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TemplateStringMarker;
 
 /// Location of a function in the source code.
 ///
@@ -82,4 +84,11 @@ pub struct TestLoc {
 pub struct GeneratorLoc {
     pub file: SourceFile,
     pub id: LocalItemId<GeneratorMarker>,
+}
+
+/// Location of a template string definition.
+#[salsa::interned]
+pub struct TemplateStringLoc {
+    pub file: SourceFile,
+    pub id: LocalItemId<TemplateStringMarker>,
 }
