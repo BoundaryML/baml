@@ -1,28 +1,28 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Calculate() -> Int {
+fn Calculate() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // a
-    let _2: Int
-    let _3: Int
-    let _4: Int // b
-    let _5: Int
-    let _6: Int
-    let _7: Int // c
-    let _8: Int
-    let _9: Int
-    let _10: Int
-    let _11: Int
-    let _12: Int // d
-    let _13: Int
-    let _14: Int
-    let _15: Int
-    let _16: Int
-    let _17: Void
+    let _0: int // return
+    let _1: int // a
+    let _2: 1
+    let _3: 2
+    let _4: int // b
+    let _5: int
+    let _6: 3
+    let _7: int // c
+    let _8: int
+    let _9: int
+    let _10: 2
+    let _11: 1
+    let _12: int // d
+    let _13: int
+    let _14: int
+    let _15: int
+    let _16: int
+    let _17: void
 
     bb0: {
         _2 = const 1_i64;
@@ -55,24 +55,24 @@ fn Calculate() -> Int {
 
 }
 
-fn FieldAccess(user: Class(FullyQualifiedName { namespace: Local, name: "User" })) -> String {
+fn FieldAccess(user: User) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "User" }) // user // param
-    let _2: String // name
-    let _3: Class(FullyQualifiedName { namespace: Local, name: "User" })
-    let _4: String // bio
-    let _5: Class(FullyQualifiedName { namespace: Local, name: "Profile" })
-    let _6: Class(FullyQualifiedName { namespace: Local, name: "User" })
-    let _7: String // theme
-    let _8: Class(FullyQualifiedName { namespace: Local, name: "Settings" })
-    let _9: Class(FullyQualifiedName { namespace: Local, name: "Profile" })
-    let _10: Class(FullyQualifiedName { namespace: Local, name: "User" })
-    let _11: String // firstTag
-    let _12: List(String)
-    let _13: Class(FullyQualifiedName { namespace: Local, name: "User" })
-    let _14: Int
-    let _15: Void
+    let _0: string // return
+    let _1: User // user // param
+    let _2: string // name
+    let _3: User
+    let _4: string // bio
+    let _5: Profile
+    let _6: User
+    let _7: string // theme
+    let _8: Settings
+    let _9: Profile
+    let _10: User
+    let _11: string // firstTag
+    let _12: string[]
+    let _13: User
+    let _14: int
+    let _15: void
 
     bb0: {
         _3 = copy _1;
@@ -102,28 +102,28 @@ fn FieldAccess(user: Class(FullyQualifiedName { namespace: Local, name: "User" }
 
 }
 
-fn IndexAccess(users: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))) -> String {
+fn IndexAccess(users: IndexUser[]) -> string {
     // Locals:
-    let _0: String // return
-    let _1: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })) // users // param
-    let _2: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }) // first
-    let _3: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
-    let _4: Int
-    let _5: Int // idx
-    let _6: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }) // second
-    let _7: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
-    let _8: Int
-    let _9: String // firstName
-    let _10: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })
-    let _11: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
-    let _12: Int
-    let _13: String // tag
-    let _14: List(String)
-    let _15: Class(FullyQualifiedName { namespace: Local, name: "IndexUser" })
-    let _16: List(Class(FullyQualifiedName { namespace: Local, name: "IndexUser" }))
-    let _17: Int
-    let _18: Int
-    let _19: Void
+    let _0: string // return
+    let _1: IndexUser[] // users // param
+    let _2: IndexUser // first
+    let _3: IndexUser[]
+    let _4: int
+    let _5: 1 // idx
+    let _6: IndexUser // second
+    let _7: IndexUser[]
+    let _8: int
+    let _9: string // firstName
+    let _10: IndexUser
+    let _11: IndexUser[]
+    let _12: int
+    let _13: string // tag
+    let _14: string[]
+    let _15: IndexUser
+    let _16: IndexUser[]
+    let _17: int
+    let _18: int
+    let _19: void
 
     bb0: {
         _3 = copy _1;
@@ -157,28 +157,28 @@ fn IndexAccess(users: List(Class(FullyQualifiedName { namespace: Local, name: "I
 
 }
 
-fn TestPrecedence() -> Bool {
+fn TestPrecedence() -> bool {
     // Locals:
-    let _0: Bool // return
-    let _1: Int // a
-    let _2: Int
-    let _3: Int
-    let _4: Int
-    let _5: Int
-    let _6: Int // c
-    let _7: Int
-    let _8: Int
-    let _9: Int
-    let _10: Int
-    let _11: Bool // b
-    let _12: Int
-    let _13: Int
-    let _14: Int
-    let _15: Int
-    let _16: Bool // d
-    let _17: Bool
-    let _18: Bool
-    let _19: Void
+    let _0: bool // return
+    let _1: int // a
+    let _2: 2
+    let _3: int
+    let _4: 3
+    let _5: 4
+    let _6: int // c
+    let _7: int
+    let _8: 2
+    let _9: 3
+    let _10: 4
+    let _11: bool // b
+    let _12: int
+    let _13: int
+    let _14: 10
+    let _15: 2
+    let _16: bool // d
+    let _17: bool
+    let _18: bool
+    let _19: void
 
     bb0: {
         _2 = const 2_i64;

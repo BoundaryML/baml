@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn Foo() -> Unknown {
+fn Foo() -> null {
     // Locals:
-    let _0: Unknown // return
+    let _0: null // return
 
     bb0: {
         _0 = const null;
@@ -18,19 +18,19 @@ fn Foo() -> Unknown {
 
 }
 
-fn GPT4.resolve() -> Unknown {
+fn GPT4.resolve() -> null {
     // Locals:
-    let _0: Unknown // return
-    let _1: Unknown
-    let _2: Unknown
-    let _3: Unknown
-    let _4: Unknown
-    let _5: Unknown
-    let _6: Unknown
-    let _7: Unknown
-    let _8: Unknown
-    let _9: Unknown
-    let _10: Unknown
+    let _0: null // return
+    let _1: null
+    let _2: null
+    let _3: null
+    let _4: null
+    let _5: null
+    let _6: null
+    let _7: null
+    let _8: null
+    let _9: null
+    let _10: null
 
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
@@ -62,10 +62,10 @@ fn GPT4.resolve() -> Unknown {
 fn Incomplete:
   (no MIR due to errors: function body is missing)
 
-fn NextFunction() -> String {
+fn NextFunction() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Void
+    let _0: string // return
+    let _1: void
 
     bb0: {
         _0 = const "parsed";

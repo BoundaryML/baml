@@ -257,12 +257,8 @@ impl<'a> LoweringContext<'a> {
         let hir_expr = &hir_body.exprs[hir_id];
 
         // Get type from TIR inference
-        let ty = self
-            .inference
-            .expr_types
-            .get(&hir_id)
-            .map(|ty| self.lower_ty(ty))
-            .unwrap_or(Ty::Null);
+        let tir_ty = self.inference.expr_types.get(&hir_id);
+        let ty = tir_ty.map(|ty| self.lower_ty(ty)).unwrap_or(Ty::Null);
 
         match hir_expr {
             HirExpr::Missing => {

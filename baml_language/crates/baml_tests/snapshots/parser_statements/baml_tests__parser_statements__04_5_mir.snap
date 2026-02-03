@@ -1,17 +1,17 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn mul_assign() -> Int {
+fn mul_assign() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Void
-    let _3: Int
-    let _4: Int
-    let _5: Int
-    let _6: Void
+    let _0: int // return
+    let _1: 3 // x
+    let _2: void
+    let _3: int
+    let _4: 4
+    let _5: int
+    let _6: void
 
     bb0: {
         _1 = const 3_i64;
@@ -34,25 +34,25 @@ fn mul_assign() -> Int {
 
 }
 
-fn assign_in_loop() -> Int {
+fn assign_in_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // sum
-    let _2: Int // i
-    let _3: Void
-    let _4: Bool
-    let _5: Int
-    let _6: Int
-    let _7: Void
-    let _8: Void
-    let _9: Int
-    let _10: Int
-    let _11: Int
-    let _12: Void
-    let _13: Int
-    let _14: Int
-    let _15: Int
-    let _16: Void
+    let _0: int // return
+    let _1: 0 // sum
+    let _2: 0 // i
+    let _3: void
+    let _4: bool
+    let _5: int
+    let _6: 5
+    let _7: void
+    let _8: void
+    let _9: int
+    let _10: int
+    let _11: int
+    let _12: void
+    let _13: int
+    let _14: 1
+    let _15: int
+    let _16: void
 
     bb0: {
         _1 = const 0_i64;
@@ -98,18 +98,18 @@ fn assign_in_loop() -> Int {
 
 }
 
-fn multi_assign() -> Int {
+fn multi_assign() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // a
-    let _2: Int // b
-    let _3: Void
-    let _4: Int
-    let _5: Void
-    let _6: Int
-    let _7: Void
-    let _8: Int
-    let _9: Int
+    let _0: int // return
+    let _1: 1 // a
+    let _2: 2 // b
+    let _3: void
+    let _4: 10
+    let _5: void
+    let _6: 20
+    let _7: void
+    let _8: int
+    let _9: int
 
     bb0: {
         _1 = const 1_i64;
@@ -136,15 +136,15 @@ fn multi_assign() -> Int {
 
 }
 
-fn sub_assign() -> Int {
+fn sub_assign() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Void
-    let _3: Int
-    let _4: Int
-    let _5: Int
-    let _6: Void
+    let _0: int // return
+    let _1: 10 // x
+    let _2: void
+    let _3: int
+    let _4: 3
+    let _5: int
+    let _6: void
 
     bb0: {
         _1 = const 10_i64;
@@ -167,15 +167,15 @@ fn sub_assign() -> Int {
 
 }
 
-fn add_assign() -> Int {
+fn add_assign() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Void
-    let _3: Int
-    let _4: Int
-    let _5: Int
-    let _6: Void
+    let _0: int // return
+    let _1: 10 // x
+    let _2: void
+    let _3: int
+    let _4: 5
+    let _5: int
+    let _6: void
 
     bb0: {
         _1 = const 10_i64;
@@ -198,13 +198,13 @@ fn add_assign() -> Int {
 
 }
 
-fn simple_assign() -> Int {
+fn simple_assign() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Void
-    let _3: Int
-    let _4: Void
+    let _0: int // return
+    let _1: 1 // x
+    let _2: void
+    let _3: 5
+    let _4: void
 
     bb0: {
         _1 = const 1_i64;
@@ -225,15 +225,15 @@ fn simple_assign() -> Int {
 
 }
 
-fn block_with_tail() -> Int {
+fn block_with_tail() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Int // y
-    let _3: Int // z
-    let _4: Int
-    let _5: Int
-    let _6: Void
+    let _0: int // return
+    let _1: int // x
+    let _2: 1 // y
+    let _3: 2 // z
+    let _4: int
+    let _5: int
+    let _6: void
 
     bb0: {
         _2 = const 1_i64;
@@ -255,18 +255,18 @@ fn block_with_tail() -> Int {
 
 }
 
-fn break_in_for() -> Int {
+fn break_in_for() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Int // i
-    let _3: Void
-    let _4: Bool
-    let _5: Int
-    let _6: Int
-    let _7: Void
-    let _8: Void
-    let _9: Void
+    let _0: int // return
+    let _1: void
+    let _2: 0 // i
+    let _3: void
+    let _4: bool
+    let _5: int
+    let _6: 10
+    let _7: void
+    let _8: void
+    let _9: void
 
     bb0: {
         _2 = const 0_i64;
@@ -301,14 +301,14 @@ fn break_in_for() -> Int {
 
 }
 
-fn simple_continue() -> Int {
+fn simple_continue() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Bool
-    let _3: Void
-    let _4: Void
-    let _5: Void
+    let _0: int // return
+    let _1: void
+    let _2: bool
+    let _3: void
+    let _4: void
+    let _5: void
 
     bb0: {
         goto -> bb2;
@@ -339,18 +339,18 @@ fn simple_continue() -> Int {
 
 }
 
-fn continue_with_locals() -> Int {
+fn continue_with_locals() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Bool
-    let _3: Void
-    let _4: Int // x
-    let _5: Void
-    let _6: Bool
-    let _7: Int // y
-    let _8: Void
-    let _9: Void
+    let _0: int // return
+    let _1: void
+    let _2: bool
+    let _3: void
+    let _4: 1 // x
+    let _5: void
+    let _6: bool
+    let _7: 2 // y
+    let _8: void
+    let _9: void
 
     bb0: {
         goto -> bb2;
@@ -398,14 +398,14 @@ fn continue_with_locals() -> Int {
 
 }
 
-fn simple_break() -> Int {
+fn simple_break() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Bool
-    let _3: Void
-    let _4: Void
-    let _5: Void
+    let _0: int // return
+    let _1: void
+    let _2: bool
+    let _3: void
+    let _4: void
+    let _5: void
 
     bb0: {
         goto -> bb2;
@@ -436,18 +436,18 @@ fn simple_break() -> Int {
 
 }
 
-fn nested_break() -> Int {
+fn nested_break() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Bool
-    let _3: Void
-    let _4: Void
-    let _5: Bool
-    let _6: Void
-    let _7: Void
-    let _8: Void
-    let _9: Void
+    let _0: int // return
+    let _1: void
+    let _2: bool
+    let _3: void
+    let _4: void
+    let _5: bool
+    let _6: void
+    let _7: void
+    let _8: void
+    let _9: void
 
     bb0: {
         goto -> bb2;
@@ -492,23 +492,23 @@ fn nested_break() -> Int {
 
 }
 
-fn continue_in_for() -> Int {
+fn continue_in_for() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Int // i
-    let _3: Void
-    let _4: Bool
-    let _5: Int
-    let _6: Int
-    let _7: Void
-    let _8: Void
-    let _9: Void
-    let _10: Int
-    let _11: Int
-    let _12: Int
-    let _13: Void
-    let _14: Void
+    let _0: int // return
+    let _1: void
+    let _2: 0 // i
+    let _3: void
+    let _4: bool
+    let _5: int
+    let _6: 10
+    let _7: void
+    let _8: void
+    let _9: void
+    let _10: int
+    let _11: int
+    let _12: 1
+    let _13: void
+    let _14: void
 
     bb0: {
         _2 = const 0_i64;
@@ -548,18 +548,18 @@ fn continue_in_for() -> Int {
 
 }
 
-fn break_with_locals() -> Int {
+fn break_with_locals() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Bool
-    let _3: Void
-    let _4: Int // x
-    let _5: Void
-    let _6: Bool
-    let _7: Int // y
-    let _8: Void
-    let _9: Void
+    let _0: int // return
+    let _1: void
+    let _2: bool
+    let _3: void
+    let _4: 1 // x
+    let _5: void
+    let _6: bool
+    let _7: 2 // y
+    let _8: void
+    let _9: void
 
     bb0: {
         goto -> bb2;
@@ -607,26 +607,26 @@ fn break_with_locals() -> Int {
 
 }
 
-fn c_style_for_loop() -> Int {
+fn c_style_for_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // result
-    let _2: Void
-    let _3: Int // i
-    let _4: Void
-    let _5: Bool
-    let _6: Int
-    let _7: Int
-    let _8: Void
-    let _9: Void
-    let _10: Int
-    let _11: Int
-    let _12: Int
-    let _13: Void
-    let _14: Int
-    let _15: Int
-    let _16: Int
-    let _17: Void
+    let _0: int // return
+    let _1: 0 // result
+    let _2: void
+    let _3: 0 // i
+    let _4: void
+    let _5: bool
+    let _6: int
+    let _7: 10
+    let _8: void
+    let _9: void
+    let _10: int
+    let _11: int
+    let _12: int
+    let _13: void
+    let _14: int
+    let _15: 1
+    let _16: int
+    let _17: void
 
     bb0: {
         _1 = const 0_i64;
@@ -673,35 +673,36 @@ fn c_style_for_loop() -> Int {
 
 }
 
-fn iterator_style_for_loop() -> Int {
+fn iterator_style_for_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // result
-    let _2: Void
-    let _3: List(Int) // _iter
-    let _4: Int
-    let _5: Int
-    let _6: Int
-    let _7: Int // _len
-    let _8: List(Int)
-    let _9: Int // _i
-    let _10: Void
-    let _11: Bool
-    let _12: Int
-    let _13: Int
-    let _14: Void
-    let _15: Int // i
-    let _16: List(Int)
-    let _17: Int
-    let _18: Void
-    let _19: Int
-    let _20: Int
-    let _21: Int
-    let _22: Void
-    let _23: Int
-    let _24: Int
-    let _25: Int
-    let _26: Void
+    let _0: int // return
+    let _1: 0 // result
+    let _2: void
+    let _3: int[] // _iter
+    let _4: 1
+    let _5: 2
+    let _6: 3
+    let _7: int // _len
+    let _8: int[]
+    let _9: (int[]) -> int
+    let _10: 0 // _i
+    let _11: void
+    let _12: bool
+    let _13: int
+    let _14: int
+    let _15: void
+    let _16: int // i
+    let _17: int[]
+    let _18: int
+    let _19: void
+    let _20: int
+    let _21: 1
+    let _22: int
+    let _23: void
+    let _24: int
+    let _25: int
+    let _26: int
+    let _27: void
 
     bb0: {
         _1 = const 0_i64;
@@ -710,7 +711,8 @@ fn iterator_style_for_loop() -> Int {
         _6 = const 3_i64;
         _3 = [copy _4, copy _5, copy _6];
         _8 = copy _3;
-        _7 = call const fn baml.Array.length(copy _8) -> [bb2];
+        _9 = const fn baml.Array.length;
+        _7 = call copy _9(copy _8) -> [bb2];
     }
 
     bb1: {
@@ -718,37 +720,37 @@ fn iterator_style_for_loop() -> Int {
     }
 
     bb2: {
-        _9 = const 0_i64;
+        _10 = const 0_i64;
         goto -> bb3;
     }
 
     bb3: {
-        _12 = copy _9;
-        _13 = copy _7;
-        _11 = copy _12 < copy _13;
-        branch copy _11 -> [bb4, bb5];
+        _13 = copy _10;
+        _14 = copy _7;
+        _12 = copy _13 < copy _14;
+        branch copy _12 -> [bb4, bb5];
     }
 
     bb4: {
-        _16 = copy _3;
-        _17 = copy _9;
-        _15 = copy _16[_17];
-        _19 = copy _9;
-        _20 = const 1_i64;
-        _21 = copy _19 + copy _20;
-        _9 = copy _21;
-        _18 = const null;
-        _23 = copy _1;
-        _24 = copy _15;
-        _25 = copy _23 + copy _24;
-        _1 = copy _25;
-        _22 = const null;
-        _14 = const null;
+        _17 = copy _3;
+        _18 = copy _10;
+        _16 = copy _17[_18];
+        _20 = copy _10;
+        _21 = const 1_i64;
+        _22 = copy _20 + copy _21;
+        _10 = copy _22;
+        _19 = const null;
+        _24 = copy _1;
+        _25 = copy _16;
+        _26 = copy _24 + copy _25;
+        _1 = copy _26;
+        _23 = const null;
+        _15 = const null;
         goto -> bb3;
     }
 
     bb5: {
-        _10 = const null;
+        _11 = const null;
         _2 = const null;
         _0 = copy _1;
         goto -> bb6;
@@ -760,57 +762,59 @@ fn iterator_style_for_loop() -> Int {
 
 }
 
-fn nested_for_loop() -> Int {
+fn nested_for_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // result
-    let _2: Void
-    let _3: List(Int) // _iter
-    let _4: Int
-    let _5: Int
-    let _6: Int
-    let _7: Int // _len
-    let _8: List(Int)
-    let _9: Int // _i
-    let _10: Void
-    let _11: Bool
-    let _12: Int
-    let _13: Int
-    let _14: Void
-    let _15: Int // i
-    let _16: List(Int)
-    let _17: Int
-    let _18: Void
-    let _19: Int
-    let _20: Int
-    let _21: Int
-    let _22: Void
-    let _23: List(Int) // _iter1
-    let _24: Int
-    let _25: Int
-    let _26: Int
-    let _27: Int // _len1
-    let _28: List(Int)
-    let _29: Int // _i1
-    let _30: Void
-    let _31: Bool
-    let _32: Int
-    let _33: Int
-    let _34: Void
-    let _35: Int // j
-    let _36: List(Int)
-    let _37: Int
-    let _38: Void
-    let _39: Int
-    let _40: Int
-    let _41: Int
-    let _42: Void
-    let _43: Int
-    let _44: Int
-    let _45: Int
-    let _46: Int
-    let _47: Int
-    let _48: Void
+    let _0: int // return
+    let _1: 0 // result
+    let _2: void
+    let _3: int[] // _iter
+    let _4: 1
+    let _5: 2
+    let _6: 3
+    let _7: int // _len
+    let _8: int[]
+    let _9: (int[]) -> int
+    let _10: 0 // _i
+    let _11: void
+    let _12: bool
+    let _13: int
+    let _14: int
+    let _15: void
+    let _16: int // i
+    let _17: int[]
+    let _18: int
+    let _19: void
+    let _20: int
+    let _21: 1
+    let _22: int
+    let _23: void
+    let _24: int[] // _iter1
+    let _25: 4
+    let _26: 5
+    let _27: 6
+    let _28: int // _len1
+    let _29: int[]
+    let _30: (int[]) -> int
+    let _31: 0 // _i1
+    let _32: void
+    let _33: bool
+    let _34: int
+    let _35: int
+    let _36: void
+    let _37: int // j
+    let _38: int[]
+    let _39: int
+    let _40: void
+    let _41: int
+    let _42: 1
+    let _43: int
+    let _44: void
+    let _45: int
+    let _46: int
+    let _47: int
+    let _48: int
+    let _49: int
+    let _50: void
 
     bb0: {
         _1 = const 0_i64;
@@ -819,7 +823,8 @@ fn nested_for_loop() -> Int {
         _6 = const 3_i64;
         _3 = [copy _4, copy _5, copy _6];
         _8 = copy _3;
-        _7 = call const fn baml.Array.length(copy _8) -> [bb2];
+        _9 = const fn baml.Array.length;
+        _7 = call copy _9(copy _8) -> [bb2];
     }
 
     bb1: {
@@ -827,77 +832,78 @@ fn nested_for_loop() -> Int {
     }
 
     bb2: {
-        _9 = const 0_i64;
+        _10 = const 0_i64;
         goto -> bb3;
     }
 
     bb3: {
-        _12 = copy _9;
-        _13 = copy _7;
-        _11 = copy _12 < copy _13;
-        branch copy _11 -> [bb4, bb5];
+        _13 = copy _10;
+        _14 = copy _7;
+        _12 = copy _13 < copy _14;
+        branch copy _12 -> [bb4, bb5];
     }
 
     bb4: {
-        _16 = copy _3;
-        _17 = copy _9;
-        _15 = copy _16[_17];
-        _19 = copy _9;
-        _20 = const 1_i64;
-        _21 = copy _19 + copy _20;
-        _9 = copy _21;
-        _18 = const null;
-        _24 = const 4_i64;
-        _25 = const 5_i64;
-        _26 = const 6_i64;
-        _23 = [copy _24, copy _25, copy _26];
-        _28 = copy _23;
-        _27 = call const fn baml.Array.length(copy _28) -> [bb6];
+        _17 = copy _3;
+        _18 = copy _10;
+        _16 = copy _17[_18];
+        _20 = copy _10;
+        _21 = const 1_i64;
+        _22 = copy _20 + copy _21;
+        _10 = copy _22;
+        _19 = const null;
+        _25 = const 4_i64;
+        _26 = const 5_i64;
+        _27 = const 6_i64;
+        _24 = [copy _25, copy _26, copy _27];
+        _29 = copy _24;
+        _30 = const fn baml.Array.length;
+        _28 = call copy _30(copy _29) -> [bb6];
     }
 
     bb5: {
-        _10 = const null;
+        _11 = const null;
         _2 = const null;
         _0 = copy _1;
         goto -> bb10;
     }
 
     bb6: {
-        _29 = const 0_i64;
+        _31 = const 0_i64;
         goto -> bb7;
     }
 
     bb7: {
-        _32 = copy _29;
-        _33 = copy _27;
-        _31 = copy _32 < copy _33;
-        branch copy _31 -> [bb8, bb9];
+        _34 = copy _31;
+        _35 = copy _28;
+        _33 = copy _34 < copy _35;
+        branch copy _33 -> [bb8, bb9];
     }
 
     bb8: {
-        _36 = copy _23;
-        _37 = copy _29;
-        _35 = copy _36[_37];
-        _39 = copy _29;
-        _40 = const 1_i64;
-        _41 = copy _39 + copy _40;
-        _29 = copy _41;
-        _38 = const null;
-        _43 = copy _1;
-        _45 = copy _15;
-        _46 = copy _35;
-        _44 = copy _45 * copy _46;
-        _47 = copy _43 + copy _44;
-        _1 = copy _47;
-        _42 = const null;
-        _34 = const null;
+        _38 = copy _24;
+        _39 = copy _31;
+        _37 = copy _38[_39];
+        _41 = copy _31;
+        _42 = const 1_i64;
+        _43 = copy _41 + copy _42;
+        _31 = copy _43;
+        _40 = const null;
+        _45 = copy _1;
+        _47 = copy _16;
+        _48 = copy _37;
+        _46 = copy _47 * copy _48;
+        _49 = copy _45 + copy _46;
+        _1 = copy _49;
+        _44 = const null;
+        _36 = const null;
         goto -> bb7;
     }
 
     bb9: {
-        _30 = const null;
-        _22 = const null;
-        _14 = const null;
+        _32 = const null;
+        _23 = const null;
+        _15 = const null;
         goto -> bb3;
     }
 
@@ -907,19 +913,19 @@ fn nested_for_loop() -> Int {
 
 }
 
-fn ConditionalLogic(age: Int) -> String {
+fn ConditionalLogic(age: int) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Int // age // param
-    let _2: Bool
-    let _3: Int
-    let _4: Int
-    let _5: Void
-    let _6: Bool
-    let _7: Int
-    let _8: Int
-    let _9: Void
-    let _10: Void
+    let _0: string // return
+    let _1: int // age // param
+    let _2: bool
+    let _3: int
+    let _4: 18
+    let _5: void
+    let _6: bool
+    let _7: int
+    let _8: 65
+    let _9: void
+    let _10: void
 
     bb0: {
         _3 = copy _1;
@@ -976,23 +982,23 @@ fn ConditionalLogic(age: Int) -> String {
 
 }
 
-fn let_statements() -> Int {
+fn let_statements() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Int // y
-    let _3: List(Int) // z
-    let _4: Int
-    let _5: Int
-    let _6: Int
-    let _7: Class(FullyQualifiedName { namespace: Local, name: "Point" }) // point
-    let _8: Int
-    let _9: Int
-    let _10: Void
-    let _11: Int
-    let _12: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _13: Int
-    let _14: Class(FullyQualifiedName { namespace: Local, name: "Point" })
+    let _0: int // return
+    let _1: 1 // x
+    let _2: int // y
+    let _3: int[] // z
+    let _4: 1
+    let _5: 2
+    let _6: 3
+    let _7: Point // point
+    let _8: 1
+    let _9: 2
+    let _10: void
+    let _11: int
+    let _12: Point
+    let _13: int
+    let _14: Point
 
     bb0: {
         _1 = const 1_i64;
@@ -1022,20 +1028,20 @@ fn let_statements() -> Int {
 
 }
 
-fn simple_while_loop() -> Int {
+fn simple_while_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // i
-    let _2: Void
-    let _3: Bool
-    let _4: Int
-    let _5: Int
-    let _6: Void
-    let _7: Void
-    let _8: Int
-    let _9: Int
-    let _10: Int
-    let _11: Void
+    let _0: int // return
+    let _1: 0 // i
+    let _2: void
+    let _3: bool
+    let _4: int
+    let _5: 10
+    let _6: void
+    let _7: void
+    let _8: int
+    let _9: int
+    let _10: 1
+    let _11: void
 
     bb0: {
         _1 = const 0_i64;
@@ -1075,26 +1081,26 @@ fn simple_while_loop() -> Int {
 
 }
 
-fn nested_while_loop() -> Int {
+fn nested_while_loop() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // i
-    let _2: Void
-    let _3: Bool
-    let _4: Int
-    let _5: Int
-    let _6: Void
-    let _7: Int // j
-    let _8: Void
-    let _9: Bool
-    let _10: Int
-    let _11: Int
-    let _12: Void
-    let _13: Void
-    let _14: Int
-    let _15: Int
-    let _16: Int
-    let _17: Void
+    let _0: int // return
+    let _1: 0 // i
+    let _2: void
+    let _3: bool
+    let _4: int
+    let _5: 10
+    let _6: void
+    let _7: 0 // j
+    let _8: void
+    let _9: bool
+    let _10: int
+    let _11: 10
+    let _12: void
+    let _13: void
+    let _14: int
+    let _15: int
+    let _16: 1
+    let _17: void
 
     bb0: {
         _1 = const 0_i64;

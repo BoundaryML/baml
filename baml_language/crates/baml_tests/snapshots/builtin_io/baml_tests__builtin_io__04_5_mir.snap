@@ -1,21 +1,23 @@
 ---
-source: target/debug/build/baml_tests-3725db7da166203a/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn ReadAndClose() -> String {
+fn ReadAndClose() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: String // content
-    let _6: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _7: Unknown
-    let _8: Null
-    let _9: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _10: Unknown
+    let _0: string // return
+    let _1: baml.fs.File // f
+    let _2: (string) -> baml.fs.File
+    let _3: "example.txt"
+    let _4: null
+    let _5: string // content
+    let _6: baml.fs.File
+    let _7: (baml.fs.File) -> string
+    let _8: null
+    let _9: null
+    let _10: baml.fs.File
+    let _11: (baml.fs.File) -> null
+    let _12: null
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -33,20 +35,22 @@ fn ReadAndClose() -> String {
 
     bb3: {
         _6 = copy _1;
-        _7 = dispatch_future const fn baml.fs.File.read(copy _6) -> bb4;
+        _7 = const fn baml.fs.File.read;
+        _8 = dispatch_future copy _7(copy _6) -> bb4;
     }
 
     bb4: {
-        _5 = await _7 -> [bb5];
+        _5 = await _8 -> [bb5];
     }
 
     bb5: {
-        _9 = copy _1;
-        _10 = dispatch_future const fn baml.fs.File.close(copy _9) -> bb6;
+        _10 = copy _1;
+        _11 = const fn baml.fs.File.close;
+        _12 = dispatch_future copy _11(copy _10) -> bb6;
     }
 
     bb6: {
-        _8 = await _10 -> [bb7];
+        _9 = await _12 -> [bb7];
     }
 
     bb7: {
@@ -56,25 +60,27 @@ fn ReadAndClose() -> String {
 
 }
 
-fn ReadMultipleFiles() -> String {
+fn ReadMultipleFiles() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f1
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f2
-    let _6: Unknown
-    let _7: String
-    let _8: Unknown
-    let _9: String // content1
-    let _10: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _11: Unknown
-    let _12: String // content2
-    let _13: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _14: Unknown
-    let _15: String
-    let _16: String
+    let _0: string // return
+    let _1: baml.fs.File // f1
+    let _2: (string) -> baml.fs.File
+    let _3: "file1.txt"
+    let _4: null
+    let _5: baml.fs.File // f2
+    let _6: (string) -> baml.fs.File
+    let _7: "file2.txt"
+    let _8: null
+    let _9: string // content1
+    let _10: baml.fs.File
+    let _11: (baml.fs.File) -> string
+    let _12: null
+    let _13: string // content2
+    let _14: baml.fs.File
+    let _15: (baml.fs.File) -> string
+    let _16: null
+    let _17: string
+    let _18: string
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -102,40 +108,43 @@ fn ReadMultipleFiles() -> String {
 
     bb5: {
         _10 = copy _1;
-        _11 = dispatch_future const fn baml.fs.File.read(copy _10) -> bb6;
+        _11 = const fn baml.fs.File.read;
+        _12 = dispatch_future copy _11(copy _10) -> bb6;
     }
 
     bb6: {
-        _9 = await _11 -> [bb7];
+        _9 = await _12 -> [bb7];
     }
 
     bb7: {
-        _13 = copy _5;
-        _14 = dispatch_future const fn baml.fs.File.read(copy _13) -> bb8;
+        _14 = copy _5;
+        _15 = const fn baml.fs.File.read;
+        _16 = dispatch_future copy _15(copy _14) -> bb8;
     }
 
     bb8: {
-        _12 = await _14 -> [bb9];
+        _13 = await _16 -> [bb9];
     }
 
     bb9: {
-        _15 = copy _9;
-        _16 = copy _12;
-        _0 = copy _15 + copy _16;
+        _17 = copy _9;
+        _18 = copy _13;
+        _0 = copy _17 + copy _18;
         goto -> bb1;
     }
 
 }
 
-fn ReadFile() -> String {
+fn ReadFile() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" }) // f
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _6: Unknown
+    let _0: string // return
+    let _1: baml.fs.File // f
+    let _2: (string) -> baml.fs.File
+    let _3: "example.txt"
+    let _4: null
+    let _5: baml.fs.File
+    let _6: (baml.fs.File) -> string
+    let _7: null
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -153,11 +162,12 @@ fn ReadFile() -> String {
 
     bb3: {
         _5 = copy _1;
-        _6 = dispatch_future const fn baml.fs.File.read(copy _5) -> bb4;
+        _6 = const fn baml.fs.File.read;
+        _7 = dispatch_future copy _6(copy _5) -> bb4;
     }
 
     bb4: {
-        _0 = await _6 -> [bb5];
+        _0 = await _7 -> [bb5];
     }
 
     bb5: {
@@ -166,14 +176,15 @@ fn ReadFile() -> String {
 
 }
 
-fn ReadFileInline() -> String {
+fn ReadFileInline() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["fs"] }, name: "File" })
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Unknown
+    let _0: string // return
+    let _1: baml.fs.File
+    let _2: (string) -> baml.fs.File
+    let _3: "data.json"
+    let _4: null
+    let _5: (baml.fs.File) -> string
+    let _6: null
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -190,11 +201,12 @@ fn ReadFileInline() -> String {
     }
 
     bb3: {
-        _5 = dispatch_future const fn baml.fs.File.read(copy _1) -> bb4;
+        _5 = const fn baml.fs.File.read;
+        _6 = dispatch_future copy _5(copy _1) -> bb4;
     }
 
     bb4: {
-        _0 = await _5 -> [bb5];
+        _0 = await _6 -> [bb5];
     }
 
     bb5: {
@@ -203,25 +215,27 @@ fn ReadFileInline() -> String {
 
 }
 
-fn MultipleConnections() -> String {
+fn MultipleConnections() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // s1
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // s2
-    let _6: Unknown
-    let _7: String
-    let _8: Unknown
-    let _9: String // data1
-    let _10: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _11: Unknown
-    let _12: String // data2
-    let _13: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _14: Unknown
-    let _15: String
-    let _16: String
+    let _0: string // return
+    let _1: baml.net.Socket // s1
+    let _2: (string) -> baml.net.Socket
+    let _3: "server1:80"
+    let _4: null
+    let _5: baml.net.Socket // s2
+    let _6: (string) -> baml.net.Socket
+    let _7: "server2:80"
+    let _8: null
+    let _9: string // data1
+    let _10: baml.net.Socket
+    let _11: (baml.net.Socket) -> string
+    let _12: null
+    let _13: string // data2
+    let _14: baml.net.Socket
+    let _15: (baml.net.Socket) -> string
+    let _16: null
+    let _17: string
+    let _18: string
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -249,39 +263,42 @@ fn MultipleConnections() -> String {
 
     bb5: {
         _10 = copy _1;
-        _11 = dispatch_future const fn baml.net.Socket.read(copy _10) -> bb6;
+        _11 = const fn baml.net.Socket.read;
+        _12 = dispatch_future copy _11(copy _10) -> bb6;
     }
 
     bb6: {
-        _9 = await _11 -> [bb7];
+        _9 = await _12 -> [bb7];
     }
 
     bb7: {
-        _13 = copy _5;
-        _14 = dispatch_future const fn baml.net.Socket.read(copy _13) -> bb8;
+        _14 = copy _5;
+        _15 = const fn baml.net.Socket.read;
+        _16 = dispatch_future copy _15(copy _14) -> bb8;
     }
 
     bb8: {
-        _12 = await _14 -> [bb9];
+        _13 = await _16 -> [bb9];
     }
 
     bb9: {
-        _15 = copy _9;
-        _16 = copy _12;
-        _0 = copy _15 + copy _16;
+        _17 = copy _9;
+        _18 = copy _13;
+        _0 = copy _17 + copy _18;
         goto -> bb1;
     }
 
 }
 
-fn ConnectAndReadInline() -> String {
+fn ConnectAndReadInline() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Unknown
+    let _0: string // return
+    let _1: baml.net.Socket
+    let _2: (string) -> baml.net.Socket
+    let _3: "localhost:3000"
+    let _4: null
+    let _5: (baml.net.Socket) -> string
+    let _6: null
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -298,11 +315,12 @@ fn ConnectAndReadInline() -> String {
     }
 
     bb3: {
-        _5 = dispatch_future const fn baml.net.Socket.read(copy _1) -> bb4;
+        _5 = const fn baml.net.Socket.read;
+        _6 = dispatch_future copy _5(copy _1) -> bb4;
     }
 
     bb4: {
-        _0 = await _5 -> [bb5];
+        _0 = await _6 -> [bb5];
     }
 
     bb5: {
@@ -311,15 +329,16 @@ fn ConnectAndReadInline() -> String {
 
 }
 
-fn ConnectAndRead() -> String {
+fn ConnectAndRead() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // sock
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _6: Unknown
+    let _0: string // return
+    let _1: baml.net.Socket // sock
+    let _2: (string) -> baml.net.Socket
+    let _3: "127.0.0.1:8080"
+    let _4: null
+    let _5: baml.net.Socket
+    let _6: (baml.net.Socket) -> string
+    let _7: null
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -337,11 +356,12 @@ fn ConnectAndRead() -> String {
 
     bb3: {
         _5 = copy _1;
-        _6 = dispatch_future const fn baml.net.Socket.read(copy _5) -> bb4;
+        _6 = const fn baml.net.Socket.read;
+        _7 = dispatch_future copy _6(copy _5) -> bb4;
     }
 
     bb4: {
-        _0 = await _6 -> [bb5];
+        _0 = await _7 -> [bb5];
     }
 
     bb5: {
@@ -350,19 +370,21 @@ fn ConnectAndRead() -> String {
 
 }
 
-fn ConnectReadAndClose() -> String {
+fn ConnectReadAndClose() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" }) // sock
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: String // data
-    let _6: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _7: Unknown
-    let _8: Null
-    let _9: Class(FullyQualifiedName { namespace: Builtin { path: ["net"] }, name: "Socket" })
-    let _10: Unknown
+    let _0: string // return
+    let _1: baml.net.Socket // sock
+    let _2: (string) -> baml.net.Socket
+    let _3: "127.0.0.1:8080"
+    let _4: null
+    let _5: string // data
+    let _6: baml.net.Socket
+    let _7: (baml.net.Socket) -> string
+    let _8: null
+    let _9: null
+    let _10: baml.net.Socket
+    let _11: (baml.net.Socket) -> null
+    let _12: null
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -380,20 +402,22 @@ fn ConnectReadAndClose() -> String {
 
     bb3: {
         _6 = copy _1;
-        _7 = dispatch_future const fn baml.net.Socket.read(copy _6) -> bb4;
+        _7 = const fn baml.net.Socket.read;
+        _8 = dispatch_future copy _7(copy _6) -> bb4;
     }
 
     bb4: {
-        _5 = await _7 -> [bb5];
+        _5 = await _8 -> [bb5];
     }
 
     bb5: {
-        _9 = copy _1;
-        _10 = dispatch_future const fn baml.net.Socket.close(copy _9) -> bb6;
+        _10 = copy _1;
+        _11 = const fn baml.net.Socket.close;
+        _12 = dispatch_future copy _11(copy _10) -> bb6;
     }
 
     bb6: {
-        _8 = await _10 -> [bb7];
+        _9 = await _12 -> [bb7];
     }
 
     bb7: {
@@ -403,21 +427,21 @@ fn ConnectReadAndClose() -> String {
 
 }
 
-fn ChainCommands() -> String {
+fn ChainCommands() -> string {
     // Locals:
-    let _0: String // return
-    let _1: String // result1
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
-    let _5: String // result2
-    let _6: Unknown
-    let _7: String
-    let _8: Unknown
-    let _9: String
-    let _10: String
-    let _11: String
-    let _12: String
+    let _0: string // return
+    let _1: string // result1
+    let _2: (string) -> string
+    let _3: "pwd"
+    let _4: null
+    let _5: string // result2
+    let _6: (string) -> string
+    let _7: "whoami"
+    let _8: null
+    let _9: string
+    let _10: string
+    let _11: " - "
+    let _12: string
 
     bb0: {
         _2 = const fn baml.sys.shell;
@@ -454,13 +478,13 @@ fn ChainCommands() -> String {
 
 }
 
-fn RunCommandWithVar() -> String {
+fn RunCommandWithVar() -> string {
     // Locals:
-    let _0: String // return
-    let _1: String // cmd
-    let _2: Unknown
-    let _3: String
-    let _4: Unknown
+    let _0: string // return
+    let _1: "ls -la" // cmd
+    let _2: (string) -> string
+    let _3: string
+    let _4: null
 
     bb0: {
         _1 = const "ls -la";
@@ -483,12 +507,12 @@ fn RunCommandWithVar() -> String {
 
 }
 
-fn RunCommand() -> String {
+fn RunCommand() -> string {
     // Locals:
-    let _0: String // return
-    let _1: Unknown
-    let _2: String
-    let _3: Unknown
+    let _0: string // return
+    let _1: (string) -> string
+    let _2: "echo hello"
+    let _3: null
 
     bb0: {
         _1 = const fn baml.sys.shell;

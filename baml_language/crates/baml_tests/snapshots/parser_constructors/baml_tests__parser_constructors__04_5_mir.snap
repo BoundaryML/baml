@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn floatArray() -> List(Float) {
+fn floatArray() -> float[] {
     // Locals:
-    let _0: List(Float) // return
-    let _1: Float
-    let _2: Float
-    let _3: Float
+    let _0: float[] // return
+    let _1: 1.0
+    let _2: 2.0
+    let _3: 3.0
 
     bb0: {
         _1 = const 1_f64;
@@ -24,12 +24,12 @@ fn floatArray() -> List(Float) {
 
 }
 
-fn stringArray() -> List(String) {
+fn stringArray() -> string[] {
     // Locals:
-    let _0: List(String) // return
-    let _1: String
-    let _2: String
-    let _3: String
+    let _0: string[] // return
+    let _1: "hello"
+    let _2: "world"
+    let _3: "test"
 
     bb0: {
         _1 = const "hello";
@@ -45,18 +45,18 @@ fn stringArray() -> List(String) {
 
 }
 
-fn pointArray() -> List(Class(FullyQualifiedName { namespace: Local, name: "Point" })) {
+fn pointArray() -> Point[] {
     // Locals:
-    let _0: List(Class(FullyQualifiedName { namespace: Local, name: "Point" })) // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _2: Int
-    let _3: Int
-    let _4: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _5: Int
-    let _6: Int
-    let _7: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _8: Int
-    let _9: Int
+    let _0: Point[] // return
+    let _1: Point
+    let _2: 1
+    let _3: 2
+    let _4: Point
+    let _5: 3
+    let _6: 4
+    let _7: Point
+    let _8: 5
+    let _9: 6
 
     bb0: {
         _2 = const 1_i64;
@@ -78,12 +78,12 @@ fn pointArray() -> List(Class(FullyQualifiedName { namespace: Local, name: "Poin
 
 }
 
-fn boolArray() -> List(Bool) {
+fn boolArray() -> bool[] {
     // Locals:
-    let _0: List(Bool) // return
-    let _1: Bool
-    let _2: Bool
-    let _3: Bool
+    let _0: bool[] // return
+    let _1: true
+    let _2: false
+    let _3: true
 
     bb0: {
         _1 = const true;
@@ -99,12 +99,12 @@ fn boolArray() -> List(Bool) {
 
 }
 
-fn mixedArray() -> List(Union([Int, String])) {
+fn mixedArray() -> int | string[] {
     // Locals:
-    let _0: List(Union([Int, String])) // return
-    let _1: Int
-    let _2: String
-    let _3: Int
+    let _0: int | string[] // return
+    let _1: 1
+    let _2: "two"
+    let _3: 3
 
     bb0: {
         _1 = const 1_i64;
@@ -120,12 +120,12 @@ fn mixedArray() -> List(Union([Int, String])) {
 
 }
 
-fn intArray() -> List(Int) {
+fn intArray() -> int[] {
     // Locals:
-    let _0: List(Int) // return
-    let _1: Int
-    let _2: Int
-    let _3: Int
+    let _0: int[] // return
+    let _1: 1
+    let _2: 2
+    let _3: 3
 
     bb0: {
         _1 = const 1_i64;
@@ -141,11 +141,11 @@ fn intArray() -> List(Int) {
 
 }
 
-fn point() -> Class(FullyQualifiedName { namespace: Local, name: "Point" }) {
+fn point() -> Point {
     // Locals:
-    let _0: Class(FullyQualifiedName { namespace: Local, name: "Point" }) // return
-    let _1: Int
-    let _2: Int
+    let _0: Point // return
+    let _1: 1
+    let _2: 2
 
     bb0: {
         _1 = const 1_i64;
@@ -160,15 +160,15 @@ fn point() -> Class(FullyQualifiedName { namespace: Local, name: "Point" }) {
 
 }
 
-fn vec2d() -> Class(FullyQualifiedName { namespace: Local, name: "Vec2D" }) {
+fn vec2d() -> Vec2D {
     // Locals:
-    let _0: Class(FullyQualifiedName { namespace: Local, name: "Vec2D" }) // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _2: Int
-    let _3: Int
-    let _4: Class(FullyQualifiedName { namespace: Local, name: "Point" })
-    let _5: Int
-    let _6: Int
+    let _0: Vec2D // return
+    let _1: Point
+    let _2: 1
+    let _3: 2
+    let _4: Point
+    let _5: 3
+    let _6: 4
 
     bb0: {
         _2 = const 1_i64;
@@ -187,13 +187,13 @@ fn vec2d() -> Class(FullyQualifiedName { namespace: Local, name: "Vec2D" }) {
 
 }
 
-fn boolValues() -> Map { key: String, value: Bool } {
+fn boolValues() -> map<string, bool> {
     // Locals:
-    let _0: Map { key: String, value: Bool } // return
-    let _1: String
-    let _2: Bool
-    let _3: String
-    let _4: Bool
+    let _0: map<string, bool> // return
+    let _1: "hello"
+    let _2: true
+    let _3: "test"
+    let _4: false
 
     bb0: {
         _1 = const "hello";
@@ -210,13 +210,13 @@ fn boolValues() -> Map { key: String, value: Bool } {
 
 }
 
-fn intValues() -> Map { key: String, value: Int } {
+fn intValues() -> map<string, int> {
     // Locals:
-    let _0: Map { key: String, value: Int } // return
-    let _1: String
-    let _2: Int
-    let _3: String
-    let _4: Int
+    let _0: map<string, int> // return
+    let _1: "hello"
+    let _2: 1
+    let _3: "test"
+    let _4: 2
 
     bb0: {
         _1 = const "hello";
@@ -233,13 +233,13 @@ fn intValues() -> Map { key: String, value: Int } {
 
 }
 
-fn stringValues() -> Map { key: String, value: String } {
+fn stringValues() -> map<string, string> {
     // Locals:
-    let _0: Map { key: String, value: String } // return
-    let _1: String
-    let _2: String
-    let _3: String
-    let _4: String
+    let _0: map<string, string> // return
+    let _1: "hello"
+    let _2: "world"
+    let _3: "test"
+    let _4: "test"
 
     bb0: {
         _1 = const "hello";
@@ -256,13 +256,13 @@ fn stringValues() -> Map { key: String, value: String } {
 
 }
 
-fn floatValues() -> Map { key: String, value: Float } {
+fn floatValues() -> map<string, float> {
     // Locals:
-    let _0: Map { key: String, value: Float } // return
-    let _1: String
-    let _2: Float
-    let _3: String
-    let _4: Float
+    let _0: map<string, float> // return
+    let _1: "hello"
+    let _2: 1.0
+    let _3: "test"
+    let _4: 2.0
 
     bb0: {
         _1 = const "hello";

@@ -81,6 +81,13 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
             Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
         }
         TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path)),
+        TypePattern::Function { params, ret } => Ty::Function {
+            params: params
+                .iter()
+                .map(|p| substitute_with_fallback(p, bindings))
+                .collect(),
+            ret: Box::new(substitute_with_fallback(ret, bindings)),
+        },
     }
 }
 
@@ -1317,10 +1324,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             param_types.push(builtins::substitute(pattern, &bindings));
                         }
                         let return_type = builtins::substitute(&def.returns, &bindings);
-                        Ty::Function {
+                        let callee_ty = Ty::Function {
                             params: param_types,
                             ret: Box::new(return_type),
-                        }
+                        };
+                        // Store the callee type so downstream passes (VIR, MIR) can find it
+                        ctx.set_expr_type(*callee, callee_ty.clone());
+                        callee_ty
                     } else {
                         // Fall back to normal field access inference (which may find a class field)
                         infer_expr(ctx, *callee, body)
@@ -1404,6 +1414,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             params: param_types,
                             ret: Box::new(return_type),
                         };
+                        // Store the callee type so downstream passes (VIR, MIR) can find it
+                        ctx.set_expr_type(*callee, callee_ty.clone());
                         (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`

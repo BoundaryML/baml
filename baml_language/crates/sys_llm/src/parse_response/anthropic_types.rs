@@ -48,12 +48,14 @@ pub struct StopSequence {
     pub value: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct AnthropicErrorResponse {
     pub r#type: String,
     pub error: AnthropicErrorInner,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct AnthropicErrorInner {
     pub r#type: String,

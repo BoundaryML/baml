@@ -813,10 +813,36 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // vs an actual field access (result type is the field's type)
                 if matches!(result_ty, baml_compiler_vir::Ty::Function { .. }) {
                     // Method reference - emit as a function constant
-                    // The method name is just the field name (methods are desugared to top-level functions)
+                    // For builtin types, use the qualified path:
+                    // - Class with module path: "baml.llm.PrimitiveClient" + "render_prompt"
+                    //                        -> "baml.llm.PrimitiveClient.render_prompt"
+                    // - Primitive types: List -> "baml.Array", String -> "baml.String", Map -> "baml.Map"
+                    let base_ty = body.ty(*base);
+                    let method_name = match base_ty {
+                        Ty::Class(type_name) if !type_name.module_path.is_empty() => {
+                            // Builtin class type - use fully qualified path
+                            Name::new(format!("{}.{}", type_name.display_name, field))
+                        }
+                        Ty::List(_) => {
+                            // Array methods: baml.Array.length, baml.Array.push, etc.
+                            Name::new(format!("baml.Array.{field}"))
+                        }
+                        Ty::String => {
+                            // String methods: baml.String.length, baml.String.toLowerCase, etc.
+                            Name::new(format!("baml.String.{field}"))
+                        }
+                        Ty::Map { .. } => {
+                            // Map methods: baml.Map.keys, baml.Map.values, etc.
+                            Name::new(format!("baml.Map.{field}"))
+                        }
+                        _ => {
+                            // User-defined class or other - just use field name
+                            field.clone()
+                        }
+                    };
                     self.builder.assign(
                         dest,
-                        Rvalue::Use(Operand::Constant(Constant::Function(field.clone()))),
+                        Rvalue::Use(Operand::Constant(Constant::Function(method_name))),
                     );
                 } else {
                     // Actual field access
@@ -1790,21 +1816,41 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         // baml_type::Ty. If VIR didn't resolve a builtin method, we fall through
         // to regular call handling below.
 
-        // Check if this is a user-defined method call (callee is FieldAccess on class type)
+        // Check if this is a method call (callee is FieldAccess)
         // For method calls like `obj.method()`, we need to pass `obj` as the first argument (self)
-        if let Expr::FieldAccess { base, field: _ } = callee_expr {
+        if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
-            let thir_base_ty = base_ty.clone();
 
-            // Check if base is a class type (has a class name)
-            if Self::class_name_from_ty(&thir_base_ty).is_some() {
+            // Get the type name for method path construction
+            // Works for both builtin class types and primitive types with methods
+            let type_name = match &base_ty {
+                Ty::Class(tn) if !tn.module_path.is_empty() => Some(tn.display_name.to_string()),
+                Ty::List(_) => Some("baml.Array".to_string()),
+                Ty::String => Some("baml.String".to_string()),
+                Ty::Map { .. } => Some("baml.Map".to_string()),
+                Ty::Class(_) => Self::class_name_from_ty(base_ty),
+                _ => None,
+            };
+
+            if let Some(type_name) = type_name {
                 // This is a method call - pass receiver as first argument
                 // Must lower receiver before callee to preserve evaluation order
                 let mut all_args = vec![self.lower_to_operand(*base, body)];
                 all_args.extend(self.lower_args(args, body));
                 let callee_operand = self.lower_to_operand(callee, body);
 
-                self.emit_call(callee_operand, all_args, dest);
+                // Check if this method is a SysOp builtin (e.g., baml.llm.PrimitiveClient.render_prompt)
+                // Build the full path using the type name (not variable name) + method name
+                let method_path = format!("{type_name}.{field}");
+                let is_sys_op = baml_compiler_tir::builtins::lookup_builtin_by_path(&method_path)
+                    .map(|def| def.is_sys_op)
+                    .unwrap_or(false);
+
+                if is_sys_op {
+                    self.emit_sys_op_call(callee_operand, all_args, dest);
+                } else {
+                    self.emit_call(callee_operand, all_args, dest);
+                }
                 return;
             }
         }

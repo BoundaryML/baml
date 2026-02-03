@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn ComplexType() -> Map { key: String, value: Map { key: String, value: Map { key: String, value: Optional(List(Int)) } } } {
+fn ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     // Locals:
-    let _0: Map { key: String, value: Map { key: String, value: Map { key: String, value: Optional(List(Int)) } } } // return
-    let _1: Void
+    let _0: map<string, map<string, map<string, int[]?>>> // return
+    let _1: void
 
     bb0: {
         goto -> bb2;
@@ -22,28 +22,28 @@ fn ComplexType() -> Map { key: String, value: Map { key: String, value: Map { ke
 
 }
 
-fn DeepExpression() -> Int {
+fn DeepExpression() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Void
-    let _2: Int
-    let _3: Int
-    let _4: Int
-    let _5: Int
-    let _6: Int
-    let _7: Int
-    let _8: Int
-    let _9: Int
-    let _10: Int
-    let _11: Int
-    let _12: Int
-    let _13: Int
-    let _14: Int
-    let _15: Int
-    let _16: Int
-    let _17: Int
-    let _18: Int
-    let _19: Int
+    let _0: int // return
+    let _1: void
+    let _2: int
+    let _3: int
+    let _4: int
+    let _5: int
+    let _6: int
+    let _7: int
+    let _8: int
+    let _9: int
+    let _10: 1
+    let _11: 2
+    let _12: 3
+    let _13: 4
+    let _14: 5
+    let _15: 6
+    let _16: 7
+    let _17: 8
+    let _18: 9
+    let _19: 10
 
     bb0: {
         _10 = const 1_i64;
@@ -378,21 +378,21 @@ fn Process73:
 fn Process57:
   (LLM function - no MIR)
 
-fn BodyTorture() -> Int {
+fn BodyTorture() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Unknown // x
-    let _2: Void
-    let _3: Bool
-    let _4: Void
-    let _5: Unknown
-    let _6: Int
-    let _7: Unknown
-    let _8: Void
-    let _9: Void
-    let _10: Unknown
-    let _11: Int
-    let _12: Unknown
+    let _0: int // return
+    let _1: null // x
+    let _2: void
+    let _3: bool
+    let _4: void
+    let _5: null
+    let _6: 1
+    let _7: null
+    let _8: void
+    let _9: void
+    let _10: null
+    let _11: 1
+    let _12: null
 
     bb0: {
         _1 = const null;

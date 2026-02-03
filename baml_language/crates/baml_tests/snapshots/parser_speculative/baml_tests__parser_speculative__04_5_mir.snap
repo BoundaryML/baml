@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -9,21 +9,21 @@ fn AnotherLLM:
 fn Ambiguous:
   (LLM function - no MIR)
 
-fn ProcessData(data: Class(FullyQualifiedName { namespace: Local, name: "JsonData" })) -> String {
+fn ProcessData(data: JsonData) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "JsonData" }) // data // param
-    let _2: Int // result
-    let _3: Int
-    let _4: Class(FullyQualifiedName { namespace: Local, name: "JsonData" })
-    let _5: Int
-    let _6: Class(FullyQualifiedName { namespace: Local, name: "JsonData" })
-    let _7: Void
-    let _8: Bool
-    let _9: Int
-    let _10: Int
-    let _11: Void
-    let _12: Void
+    let _0: string // return
+    let _1: JsonData // data // param
+    let _2: int // result
+    let _3: int
+    let _4: JsonData
+    let _5: int
+    let _6: JsonData
+    let _7: void
+    let _8: bool
+    let _9: int
+    let _10: 100
+    let _11: void
+    let _12: void
 
     bb0: {
         _4 = copy _1;
@@ -69,16 +69,16 @@ fn ProcessData(data: Class(FullyQualifiedName { namespace: Local, name: "JsonDat
 fn ExtractData:
   (LLM function - no MIR)
 
-fn SimpleCalc(a: Int, b: Int) -> Int {
+fn SimpleCalc(a: int, b: int) -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // a // param
-    let _2: Int // b // param
-    let _3: Void
-    let _4: Int
-    let _5: Int
-    let _6: Int
-    let _7: Int
+    let _0: int // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: void
+    let _4: int
+    let _5: int
+    let _6: int
+    let _7: 2
 
     bb0: {
         _4 = copy _1;
@@ -99,37 +99,37 @@ fn SimpleCalc(a: Int, b: Int) -> Int {
 
 }
 
-fn ProcessAnalysis(analysis: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })) -> String {
+fn ProcessAnalysis(analysis: Analysis) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "Analysis" }) // analysis // param
-    let _2: Float // score
-    let _3: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
-    let _4: Bool
-    let _5: Float
-    let _6: Float
-    let _7: Void
-    let _8: String
-    let _9: String
-    let _10: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
-    let _11: Bool
-    let _12: Float
-    let _13: Float
-    let _14: Void
-    let _15: String
-    let _16: String
-    let _17: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
-    let _18: Bool
-    let _19: Float
-    let _20: Float
-    let _21: Void
-    let _22: String
-    let _23: String
-    let _24: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
-    let _25: Void
-    let _26: String
-    let _27: String
-    let _28: Class(FullyQualifiedName { namespace: Local, name: "Analysis" })
+    let _0: string // return
+    let _1: Analysis // analysis // param
+    let _2: float // score
+    let _3: Analysis
+    let _4: bool
+    let _5: float
+    let _6: 0.8
+    let _7: void
+    let _8: "Very positive: "
+    let _9: string
+    let _10: Analysis
+    let _11: bool
+    let _12: float
+    let _13: 0.5
+    let _14: void
+    let _15: "Positive: "
+    let _16: string
+    let _17: Analysis
+    let _18: bool
+    let _19: float
+    let _20: 0.2
+    let _21: void
+    let _22: "Neutral: "
+    let _23: string
+    let _24: Analysis
+    let _25: void
+    let _26: "Negative: "
+    let _27: string
+    let _28: Analysis
 
     bb0: {
         _3 = copy _1;

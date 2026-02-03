@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn BadUnionPattern:
   (no MIR due to errors: missing expression at file 0:0..0)
 
-fn Invalid() -> Unknown {
+fn Invalid() -> null {
     // Locals:
-    let _0: Unknown // return
+    let _0: null // return
 
     bb0: {
         _0 = const null;
@@ -21,13 +21,13 @@ fn Invalid() -> Unknown {
 
 }
 
-fn MixedLiteralAndTyped(x: Int) -> String {
+fn MixedLiteralAndTyped(x: int) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Int // x // param
-    let _2: Bool
-    let _3: Bool
-    let _4: Int // n
+    let _0: string // return
+    let _1: int // x // param
+    let _2: bool
+    let _3: bool
+    let _4: int // n
 
     bb0: {
         _2 = copy _1 == const 42_i64;

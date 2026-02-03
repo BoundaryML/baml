@@ -522,6 +522,22 @@ fn type_to_pattern(
             // Unit type () means Null
             quote!(TypePattern::Null)
         }
+        Type::BareFn(fn_ty) => {
+            // Function pointer type: fn(args) -> RetType
+            let params: Vec<TokenStream2> = fn_ty
+                .inputs
+                .iter()
+                .map(|arg| type_to_pattern(&arg.ty, generic_params, builtin_types))
+                .collect();
+            let ret = match &fn_ty.output {
+                ReturnType::Default => quote!(TypePattern::Null),
+                ReturnType::Type(_, ty) => type_to_pattern(ty, generic_params, builtin_types),
+            };
+            quote!(TypePattern::Function {
+                params: vec![#(#params),*],
+                ret: Box::new(#ret),
+            })
+        }
         _ => {
             // Fallback
             quote!(TypePattern::Null)

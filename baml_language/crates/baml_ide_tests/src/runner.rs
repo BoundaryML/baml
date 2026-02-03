@@ -120,12 +120,12 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     };
 
     // 5. Handle cursor-based completions
-    let completion_result = if !parsed.cursor_markers.is_empty()
-        && parsed.expected_completions.is_some()
-    {
+    let completion_result = if let (false, Some(expected)) = (
+        parsed.cursor_markers.is_empty(),
+        parsed.expected_completions.as_ref(),
+    ) {
         let db = lsp_db.db();
         let project = lsp_db.project().expect("Project should be set");
-        let expected = parsed.expected_completions.as_ref().unwrap();
 
         // Collect all completion labels from all cursor positions
         let mut all_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
