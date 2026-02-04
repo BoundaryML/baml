@@ -1581,6 +1581,23 @@ pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidation
 /// Tests are validated separately: only tests with the same name AND
 /// targeting the same function are considered duplicates.
 fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
+    fn item_name_key(db: &dyn Db, file: SourceFile, name: &Name) -> Name {
+        match file_namespace(db, file) {
+            None => name.clone(),
+            Some(namespace_segments) => {
+                if namespace_segments
+                    .first()
+                    .is_some_and(|s| s.as_str() == "baml")
+                {
+                    let path = namespace_segments[1..].to_vec();
+                    QualifiedName::baml_std(path, name.clone()).display_name()
+                } else {
+                    QualifiedName::user_module(namespace_segments, name.clone()).display_name()
+                }
+            }
+        }
+    }
+
     let items = project_items(db, root);
     let mut seen: FxHashMap<Name, ItemInfo> = FxHashMap::default();
     // For tests: key is (test_name, function_name)
@@ -1594,60 +1611,43 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let func = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &func.name);
                 let span =
                     get_item_name_span(db, file, "function", func.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    func.name.clone(),
-                    "function",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "function", span, path);
             }
             ItemId::Class(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let class = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &class.name);
                 let span =
                     get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    class.name.clone(),
-                    "class",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "class", span, path);
             }
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let enum_def = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &enum_def.name);
                 let span =
                     get_item_name_span(db, file, "enum", enum_def.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    enum_def.name.clone(),
-                    "enum",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "enum", span, path);
             }
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let alias = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &alias.name);
                 let span = get_item_name_span(
                     db,
                     file,
@@ -1657,38 +1657,26 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 )
                 .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    alias.name.clone(),
-                    "type alias",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "type alias", span, path);
             }
             ItemId::Client(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let client = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &client.name);
                 let span =
                     get_item_name_span(db, file, "client", client.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    client.name.clone(),
-                    "client",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "client", span, path);
             }
             ItemId::Generator(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let generator = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &generator.name);
                 let span = get_item_name_span(
                     db,
                     file,
@@ -1698,14 +1686,7 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 )
                 .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    generator.name.clone(),
-                    "generator",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "generator", span, path);
             }
             ItemId::Test(loc) => {
                 // Tests are validated separately: only same name + same function is a duplicate

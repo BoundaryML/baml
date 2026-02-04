@@ -252,6 +252,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
         for item in items {
             if let baml_compiler_hir::ItemId::Function(func_loc) = item {
                 let signature = baml_compiler_hir::function_signature(db, *func_loc);
+                let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
                 let span = Span::default(); // TODO: get proper span from signature
 
                 let param_types: Vec<Ty> = signature
@@ -269,7 +270,9 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                     ret: Box::new(return_type),
                 };
 
-                context.insert(signature.name.clone(), func_type);
+                // Use the qualified display name so builtin BAML functions are only
+                // callable via their namespace (e.g., "baml.llm.render_prompt").
+                context.insert(qualified_name.display_name(), func_type);
             }
         }
     }
@@ -2638,6 +2641,12 @@ fn infer_field_access(
         // Build the function type from the builtin definition.
         // If this is a method (has a receiver), include the receiver type as the first param
         // since the Call handler will pass the receiver as the first argument.
+        if let Some(expr_id) = expr_id {
+            ctx.set_expr_resolution(
+                expr_id,
+                ResolvedValue::BuiltinFunction(QualifiedName::from_builtin_path(def.path)),
+            );
+        }
         let mut param_types: Vec<Ty> = Vec::new();
         if def.receiver.is_some() {
             param_types.push(base.clone());
