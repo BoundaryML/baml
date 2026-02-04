@@ -7,12 +7,12 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Literal, Name};
-use baml_compiler_tir::{self, FullyQualifiedName, LiteralValue, Namespace};
+use baml_compiler_tir::{self, LiteralValue, Namespace, QualifiedName};
 
 use crate::{Ty, TypeName};
 
-/// Convert a `FullyQualifiedName` to a `TypeName`, pre-computing the display string.
-pub fn fqn_to_type_name(fqn: &FullyQualifiedName) -> TypeName {
+/// Convert a `QualifiedName` to a `TypeName`, pre-computing the display string.
+pub fn fqn_to_type_name(fqn: &QualifiedName) -> TypeName {
     let display_name = Name::new(fqn.display());
     let module_path = match &fqn.namespace {
         Namespace::Local => vec![],
@@ -56,7 +56,7 @@ fn convert_literal(lit: &LiteralValue) -> Literal {
 /// Convert a TIR type to `baml_type::Ty`.
 ///
 /// This is the shared conversion called from both VIR lowering and schema extraction.
-/// - Converts `FullyQualifiedName` → `TypeName`
+/// - Converts `QualifiedName` → `TypeName`
 /// - Expands non-recursive type aliases using `aliases` map
 /// - Preserves literal types (no erasure)
 /// - Returns `Err` if a recursive type alias is encountered (caller decides policy)

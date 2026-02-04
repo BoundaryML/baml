@@ -27,7 +27,6 @@
 //! This happens after inferring the receiver type during expression type inference.
 
 use baml_base::{Name, QualifiedName};
-use baml_compiler_hir::FullyQualifiedName;
 
 /// Result of resolving a value path.
 ///
@@ -51,23 +50,23 @@ pub enum ResolvedValue {
     /// User-defined function.
     ///
     /// Functions are project-level and have a fully-qualified name.
-    Function(FullyQualifiedName),
+    Function(QualifiedName),
 
     /// User-defined class.
-    Class(FullyQualifiedName),
+    Class(QualifiedName),
 
     /// User-defined enum.
-    Enum(FullyQualifiedName),
+    Enum(QualifiedName),
 
     /// Type alias.
-    TypeAlias(FullyQualifiedName),
+    TypeAlias(QualifiedName),
 
     /// Enum variant (e.g., `Status.Active`).
     ///
     /// The enum and variant are both identified by their names.
     EnumVariant {
         /// The FQN of the enum type.
-        enum_fqn: FullyQualifiedName,
+        enum_fqn: QualifiedName,
         /// The variant name within the enum.
         variant: Name,
     },
@@ -75,7 +74,7 @@ pub enum ResolvedValue {
     /// Class field access.
     Field {
         /// The class's FQN.
-        class_fqn: FullyQualifiedName,
+        class_fqn: QualifiedName,
         /// The field name.
         field: Name,
     },
@@ -129,7 +128,7 @@ impl ResolvedValue {
     }
 
     /// Get the function FQN if this is a function.
-    pub fn as_function(&self) -> Option<&FullyQualifiedName> {
+    pub fn as_function(&self) -> Option<&QualifiedName> {
         match self {
             ResolvedValue::Function(fqn) => Some(fqn),
             _ => None,
@@ -137,7 +136,7 @@ impl ResolvedValue {
     }
 
     /// Get the enum variant info if this is an enum variant.
-    pub fn as_enum_variant(&self) -> Option<(&FullyQualifiedName, &Name)> {
+    pub fn as_enum_variant(&self) -> Option<(&QualifiedName, &Name)> {
         match self {
             ResolvedValue::EnumVariant { enum_fqn, variant } => Some((enum_fqn, variant)),
             _ => None,
@@ -161,7 +160,7 @@ pub enum ResolvedMethod {
     /// User-defined method (future: when we have impl blocks).
     UserDefined {
         /// The FQN of the impl block (future).
-        impl_fqn: FullyQualifiedName,
+        impl_fqn: QualifiedName,
         /// The method name.
         method_name: Name,
     },

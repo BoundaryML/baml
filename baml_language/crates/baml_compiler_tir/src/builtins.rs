@@ -7,14 +7,14 @@ use std::collections::HashMap;
 
 use baml_base::{Name, baml_debug};
 use baml_builtins::{BuiltinSignature, TypePattern};
-use baml_compiler_hir::FullyQualifiedName;
+use baml_compiler_hir::QualifiedName;
 
 use crate::Ty;
 
 /// Parse a builtin path string like "baml.http.Response" into an FQN.
 ///
 /// The path is expected to start with "baml." and have at least one segment after.
-pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {
+pub fn parse_builtin_path(path: &str) -> QualifiedName {
     assert!(
         path.starts_with("baml."),
         "builtin path must start with 'baml.'"
@@ -30,12 +30,12 @@ pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {
 
     if segments.len() == 1 {
         // Just a name with no path, e.g., "Array"
-        FullyQualifiedName::builtin_primitive(Name::new(segments[0]))
+        QualifiedName::builtin_primitive(Name::new(segments[0]))
     } else {
         // Multiple segments: all but last are path, last is name
         let (path_segments, name) = segments.split_at(segments.len() - 1);
         let path: Vec<Name> = path_segments.iter().map(|s| Name::new(*s)).collect();
-        FullyQualifiedName::builtin(path, Name::new(name[0]))
+        QualifiedName::builtin(path, Name::new(name[0]))
     }
 }
 

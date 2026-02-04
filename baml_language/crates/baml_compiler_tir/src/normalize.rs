@@ -488,13 +488,13 @@ fn ty_has_cycle(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler_hir::FullyQualifiedName;
+    use baml_compiler_hir::QualifiedName;
 
     use super::*;
 
     /// Helper to create a type alias type
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(FullyQualifiedName::local(Name::new(name)))
+        Ty::TypeAlias(QualifiedName::local(Name::new(name)))
     }
 
     #[test]

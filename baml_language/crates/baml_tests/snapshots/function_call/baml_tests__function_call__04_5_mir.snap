@@ -11,7 +11,7 @@ fn array_length() -> int {
     let _3: 2
     let _4: 3
     let _5: void
-    let _6: () -> int
+    let _6: (int[]) -> int
     let _7: int[]
 
     bb0: {

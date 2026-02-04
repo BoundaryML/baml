@@ -335,10 +335,7 @@ pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Vec<Name>> {
 /// // -> displays as "my_func"
 /// ```
 #[salsa::tracked]
-pub fn function_qualified_name<'db>(
-    db: &'db dyn Db,
-    function: FunctionLoc<'db>,
-) -> QualifiedName {
+pub fn function_qualified_name<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> QualifiedName {
     let file = function.file(db);
     let signature = function_signature(db, function);
 
@@ -351,7 +348,10 @@ pub fn function_qualified_name<'db>(
             // Builtin file - use BamlStd namespace
             // namespace_segments is like ["baml", "llm"]
             // We want BamlStd { path: ["llm"] } for "baml.llm.render_prompt"
-            if namespace_segments.first().is_some_and(|s| s.as_str() == "baml") {
+            if namespace_segments
+                .first()
+                .is_some_and(|s| s.as_str() == "baml")
+            {
                 // Strip the "baml" prefix - it's implicit in BamlStd
                 let path = namespace_segments[1..].to_vec();
                 QualifiedName::baml_std(path, signature.name.clone())

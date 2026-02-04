@@ -15,6 +15,15 @@ use crate::Name;
 /// is called). This allows distinguishing between items with the same name
 /// in different contexts.
 ///
+/// # Why `QualifiedName` and not `FullyQualifiedName`?
+///
+/// BAML doesn't have partially qualified names - every name is either:
+/// - A simple identifier resolved in the current scope, or
+/// - A complete path that unambiguously identifies an item
+///
+/// Since there's no partial qualification, the "fully" prefix is redundant.
+/// We use `QualifiedName` for brevity.
+///
 /// # Examples
 ///
 /// ```ignore
@@ -90,7 +99,7 @@ pub enum Namespace {
 }
 
 impl QualifiedName {
-    /// Create a QualifiedName for a local (project-level) item.
+    /// Create a [`QualifiedName`] for a local (project-level) item.
     ///
     /// This is the most common constructor - use it for user-defined
     /// classes, enums, functions, etc.
@@ -101,14 +110,14 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for a method on a local class.
+    /// Create a [`QualifiedName`] for a method on a local class.
     ///
     /// The method is identified by `ClassName.methodName` format.
     /// This is used for user-defined methods like `Baz.Greeting`.
-    pub fn local_method(class_name: Name, method_name: Name) -> Self {
+    pub fn local_method(class_name: &Name, method_name: &Name) -> Self {
         Self {
             namespace: Namespace::Local,
-            name: Name::new(format!("{}.{}", class_name, method_name)),
+            name: Name::new(format!("{class_name}.{method_name}")),
         }
     }
 
@@ -124,20 +133,18 @@ impl QualifiedName {
     ///
     /// Returns the path segments for this qualified name:
     /// - Local: empty vector
-    /// - Builtin: ["baml"] + path segments (e.g., ["baml", "Array"] for baml.Array.length)
-    /// - BamlStd: ["baml"] + path segments
-    /// - UserModule: module_path
-    /// - Package: [package_name] + module_path
+    /// - Builtin: `["baml"]` + path segments (e.g., `["baml", "Array"]` for `baml.Array.length`)
+    /// - `BamlStd`: `["baml"]` + path segments
+    /// - `UserModule`: `module_path`
+    /// - Package: `[package_name]` + `module_path`
     ///
-    /// Note: For non-baml-prefixed builtins like "env.get", returns ["env"].
+    /// Note: For non-baml-prefixed builtins like `env.get`, returns `["env"]`.
     pub fn module_path(&self) -> Vec<Name> {
         match &self.namespace {
             Namespace::Local => vec![],
             Namespace::Builtin { path } => {
                 // Check if this is a non-baml-prefixed builtin (e.g., "env.get")
-                let is_non_baml_builtin = path
-                    .first()
-                    .is_some_and(|first| first.as_str() == "env");
+                let is_non_baml_builtin = path.first().is_some_and(|first| first.as_str() == "env");
                 if is_non_baml_builtin {
                     path.clone()
                 } else {
@@ -163,7 +170,7 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for a builtin item.
+    /// Create a [`QualifiedName`] for a builtin item.
     ///
     /// # Arguments
     /// * `path` - The path segments leading to the item (e.g., `["Array"]`)
@@ -175,7 +182,7 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for a standard library item.
+    /// Create a [`QualifiedName`] for a standard library item.
     pub fn baml_std(path: Vec<Name>, name: Name) -> Self {
         Self {
             namespace: Namespace::BamlStd { path },
@@ -183,7 +190,7 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for a user module item.
+    /// Create a [`QualifiedName`] for a user module item.
     pub fn user_module(module_path: Vec<Name>, name: Name) -> Self {
         Self {
             namespace: Namespace::UserModule { module_path },
@@ -191,7 +198,7 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for an external package item.
+    /// Create a [`QualifiedName`] for an external package item.
     pub fn package(package_name: Name, module_path: Vec<Name>, name: Name) -> Self {
         Self {
             namespace: Namespace::Package {
@@ -202,22 +209,22 @@ impl QualifiedName {
         }
     }
 
-    /// Check if this QualifiedName refers to a local item.
+    /// Check if this [`QualifiedName`] refers to a local item.
     pub fn is_local(&self) -> bool {
         matches!(self.namespace, Namespace::Local)
     }
 
-    /// Check if this QualifiedName refers to a builtin.
+    /// Check if this [`QualifiedName`] refers to a builtin.
     pub fn is_builtin(&self) -> bool {
         matches!(self.namespace, Namespace::Builtin { .. })
     }
 
-    /// Check if this QualifiedName refers to a standard library item.
+    /// Check if this [`QualifiedName`] refers to a standard library item.
     pub fn is_baml_std(&self) -> bool {
         matches!(self.namespace, Namespace::BamlStd { .. })
     }
 
-    /// Create a QualifiedName from module path segments and an item name.
+    /// Create a [`QualifiedName`] from module path segments and an item name.
     ///
     /// Used when resolving module item paths like `baml.http.Response`.
     pub fn from_module_path(module_path: &[Name], item_name: Name) -> Self {
@@ -232,13 +239,14 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName from path segments (e.g., `["baml", "Array", "length"]`).
+    /// Create a [`QualifiedName`] from path segments (e.g., `["baml", "Array", "length"]`).
     ///
     /// The last segment becomes the name, earlier segments become the path.
     pub fn from_path_segments(segments: &[Name]) -> Self {
-        if segments.is_empty() {
-            panic!("cannot create QualifiedName from empty path");
-        }
+        assert!(
+            !segments.is_empty(),
+            "cannot create QualifiedName from empty path"
+        );
         if segments.len() == 1 {
             return Self::local(segments[0].clone());
         }
@@ -259,14 +267,14 @@ impl QualifiedName {
         }
     }
 
-    /// Create a QualifiedName for a builtin method on a receiver type.
+    /// Create a [`QualifiedName`] for a builtin method on a receiver type.
     ///
     /// E.g., `builtin_method("image", "from_url")` creates a path like `baml.image.from_url`.
     pub fn builtin_method(receiver_type: Name, method_name: Name) -> Self {
         Self::builtin(vec![receiver_type], method_name)
     }
 
-    /// Create a QualifiedName for a builtin primitive type (int, float, string, bool, etc.).
+    /// Create a [`QualifiedName`] for a builtin primitive type (int, float, string, bool, etc.).
     ///
     /// These are simple builtins at the root level with no path.
     pub fn builtin_primitive(name: Name) -> Self {
@@ -276,7 +284,7 @@ impl QualifiedName {
         }
     }
 
-    /// Get a display string for this QualifiedName.
+    /// Get a display string for this [`QualifiedName`].
     ///
     /// Returns a human-readable representation like:
     /// - `"User"` for local items
@@ -288,14 +296,11 @@ impl QualifiedName {
             Namespace::Builtin { path } => {
                 // Check if the path starts with a non-baml module (e.g., "env")
                 // These are stored with the module name in the path, so we don't add "baml."
-                let is_non_baml_builtin = path
-                    .first()
-                    .is_some_and(|first| first.as_str() == "env");
+                let is_non_baml_builtin = path.first().is_some_and(|first| first.as_str() == "env");
 
                 if is_non_baml_builtin {
                     // e.g., path: ["env"], name: "get" -> "env.get"
-                    let mut parts: Vec<&str> =
-                        path.iter().map(smol_str::SmolStr::as_str).collect();
+                    let mut parts: Vec<&str> = path.iter().map(smol_str::SmolStr::as_str).collect();
                     parts.push(self.name.as_str());
                     parts.join(".")
                 } else {
@@ -345,15 +350,15 @@ impl QualifiedName {
         self.display()
     }
 
-    /// Parse a builtin path string into a QualifiedName.
+    /// Parse a builtin path string into a [`QualifiedName`].
     ///
     /// Builtin paths follow the format:
-    /// - `"baml.Array.length"` -> Builtin { path: ["Array"] }, name: "length"
-    /// - `"baml.http.Response.text"` -> Builtin { path: ["http", "Response"] }, name: "text"
-    /// - `"env.get"` -> Builtin { path: ["env"] }, name: "get" (special non-baml prefix)
-    /// - `"baml.deep_copy"` -> Builtin { path: [] }, name: "deep_copy"
+    /// - `"baml.Array.length"` -> Builtin with path `["Array"]`, name: `"length"`
+    /// - `"baml.http.Response.text"` -> Builtin with path `["http", "Response"]`, name: `"text"`
+    /// - `"env.get"` -> Builtin with path `["env"]`, name: `"get"` (special non-baml prefix)
+    /// - `"baml.deep_copy"` -> Builtin with path `[]`, name: `"deep_copy"`
     ///
-    /// Note: Non-baml-prefixed paths like "env.get" are stored with the first segment
+    /// Note: Non-baml-prefixed paths like `"env.get"` are stored with the first segment
     /// as part of the path, so `to_runtime_string()` will produce the correct lookup key.
     ///
     /// # Panics
@@ -387,7 +392,9 @@ impl QualifiedName {
             // Use BamlStd for non-baml-prefixed builtins to distinguish them
             // This way display() won't add extra "baml." prefix
             return Self {
-                namespace: Namespace::Builtin { path: path_segments },
+                namespace: Namespace::Builtin {
+                    path: path_segments,
+                },
                 name,
             };
         }
@@ -599,7 +606,7 @@ mod tests {
         ];
         for path in paths {
             let qn = QualifiedName::from_builtin_path(path);
-            assert_eq!(qn.to_runtime_string(), path, "roundtrip failed for {}", path);
+            assert_eq!(qn.to_runtime_string(), path, "roundtrip failed for {path}");
         }
     }
 }

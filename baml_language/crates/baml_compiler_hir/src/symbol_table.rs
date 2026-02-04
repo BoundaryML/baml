@@ -31,7 +31,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, ItemId, TestLoc, TypeAliasLoc,
-    file_item_tree, fqn::FullyQualifiedName, project_items,
+    file_item_tree, fqn::QualifiedName, project_items,
 };
 
 /// A definition location in the symbol table.
@@ -126,14 +126,14 @@ pub struct SymbolTable<'db> {
     /// Searched when resolving type annotations like `class Foo { bar: MyType }`.
     #[tracked]
     #[returns(ref)]
-    pub types: FxHashMap<FullyQualifiedName, Definition<'db>>,
+    pub types: FxHashMap<QualifiedName, Definition<'db>>,
 
     /// Value definitions (functions).
     ///
     /// Searched when resolving value expressions like function calls.
     #[tracked]
     #[returns(ref)]
-    pub values: FxHashMap<FullyQualifiedName, Definition<'db>>,
+    pub values: FxHashMap<QualifiedName, Definition<'db>>,
 }
 
 impl<'db> SymbolTable<'db> {
@@ -141,7 +141,7 @@ impl<'db> SymbolTable<'db> {
     pub fn lookup_type(
         &self,
         db: &'db dyn crate::Db,
-        fqn: &FullyQualifiedName,
+        fqn: &QualifiedName,
     ) -> Option<Definition<'db>> {
         self.types(db).get(fqn).copied()
     }
@@ -150,7 +150,7 @@ impl<'db> SymbolTable<'db> {
     pub fn lookup_value(
         &self,
         db: &'db dyn crate::Db,
-        fqn: &FullyQualifiedName,
+        fqn: &QualifiedName,
     ) -> Option<Definition<'db>> {
         self.values(db).get(fqn).copied()
     }
@@ -165,8 +165,8 @@ pub fn symbol_table<'db>(
     db: &'db dyn crate::Db,
     project: baml_workspace::Project,
 ) -> SymbolTable<'db> {
-    let mut types: FxHashMap<FullyQualifiedName, Definition<'db>> = FxHashMap::default();
-    let mut values: FxHashMap<FullyQualifiedName, Definition<'db>> = FxHashMap::default();
+    let mut types: FxHashMap<QualifiedName, Definition<'db>> = FxHashMap::default();
+    let mut values: FxHashMap<QualifiedName, Definition<'db>> = FxHashMap::default();
 
     let items = project_items(db, project);
     for item in items.items(db) {
@@ -174,25 +174,25 @@ pub fn symbol_table<'db>(
             ItemId::Class(loc) => {
                 let item_tree = file_item_tree(db, loc.file(db));
                 let class = &item_tree[loc.id(db)];
-                let fqn = FullyQualifiedName::local(class.name.clone());
+                let fqn = QualifiedName::local(class.name.clone());
                 types.insert(fqn, Definition::Class(*loc));
             }
             ItemId::Enum(loc) => {
                 let item_tree = file_item_tree(db, loc.file(db));
                 let enum_def = &item_tree[loc.id(db)];
-                let fqn = FullyQualifiedName::local(enum_def.name.clone());
+                let fqn = QualifiedName::local(enum_def.name.clone());
                 types.insert(fqn, Definition::Enum(*loc));
             }
             ItemId::TypeAlias(loc) => {
                 let item_tree = file_item_tree(db, loc.file(db));
                 let alias = &item_tree[loc.id(db)];
-                let fqn = FullyQualifiedName::local(alias.name.clone());
+                let fqn = QualifiedName::local(alias.name.clone());
                 types.insert(fqn, Definition::TypeAlias(*loc));
             }
             ItemId::Function(loc) => {
                 let item_tree = file_item_tree(db, loc.file(db));
                 let func = &item_tree[loc.id(db)];
-                let fqn = FullyQualifiedName::local(func.name.clone());
+                let fqn = QualifiedName::local(func.name.clone());
                 values.insert(fqn, Definition::Function(*loc));
             }
             // Clients, generators, and tests are not typically referenced by name

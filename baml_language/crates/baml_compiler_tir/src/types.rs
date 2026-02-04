@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use baml_compiler_hir::FullyQualifiedName;
+use baml_compiler_hir::QualifiedName;
 
 /// The value component of a literal type.
 ///
@@ -58,14 +58,14 @@ pub enum Ty {
 
     // User-defined types (resolved with fully-qualified names)
     /// A class type with its fully-qualified name.
-    Class(FullyQualifiedName),
+    Class(QualifiedName),
     /// An enum type with its fully-qualified name.
-    Enum(FullyQualifiedName),
+    Enum(QualifiedName),
     /// A type alias with its fully-qualified name.
     /// Type aliases are NOT expanded during resolution - they stay as `TypeAlias(FQN)`.
     /// Expansion happens later during normalization when needed for subtype checks.
     /// This preserves user spelling for error messages and handles recursive types.
-    TypeAlias(FullyQualifiedName),
+    TypeAlias(QualifiedName),
 
     // Type constructors
     Optional(Box<Ty>),

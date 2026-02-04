@@ -1,7 +1,7 @@
 //! Unified type system for BAML.
 //!
 //! `baml_type::Ty` is the canonical type representation used from VIR through runtime.
-//! TIR keeps its own `Ty` with `FullyQualifiedName` and `TypeAlias` — this crate
+//! TIR keeps its own `Ty` with `QualifiedName` and `TypeAlias` — this crate
 //! provides the single conversion point from TIR types.
 
 use std::{
@@ -17,7 +17,7 @@ pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
-/// Replaces both `FullyQualifiedName` (VIR+) and plain `String` (bex_program).
+/// Replaces both `QualifiedName` (VIR+) and plain `String` (bex_program).
 /// `display_name` is pre-computed from the source FQN and does NOT participate
 /// in equality/hashing — it's a cache for display purposes.
 #[derive(Debug, Clone)]
@@ -221,9 +221,7 @@ impl Ty {
             Ty::Function { .. } => Err("Function type should not reach runtime".to_string()),
             Ty::Void => Err("Void type should not reach runtime".to_string()),
             Ty::WatchAccessor(_) => Err("WatchAccessor type should not reach runtime".to_string()),
-            Ty::BuiltinUnknown => {
-                Err("BuiltinUnknown type should not reach runtime".to_string())
-            }
+            Ty::BuiltinUnknown => Err("BuiltinUnknown type should not reach runtime".to_string()),
             // Recurse into containers
             Ty::Optional(inner) => inner.validate_runtime(),
             Ty::List(inner) => inner.validate_runtime(),

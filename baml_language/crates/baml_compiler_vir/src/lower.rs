@@ -291,8 +291,7 @@ impl<'a> LoweringContext<'a> {
                     // segment_types[i] = type after i-th field access
 
                     // Get the corresponding resolutions (computed in TIR)
-                    let segment_resolutions =
-                        self.inference.path_segment_resolutions.get(&hir_id);
+                    let segment_resolutions = self.inference.path_segment_resolutions.get(&hir_id);
 
                     // Start with the variable (first segment)
                     let first_ty = segment_types

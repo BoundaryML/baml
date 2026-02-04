@@ -374,9 +374,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Expr::Var(name) => {
                 // Get resolution from VIR (computed in TIR).
                 // TIR must resolve all variables - no fallbacks needed.
-                let resolution = body.resolution(expr_id).unwrap_or_else(|| {
-                    panic!("Missing resolution for variable: {name}")
-                });
+                let resolution = body
+                    .resolution(expr_id)
+                    .unwrap_or_else(|| panic!("Missing resolution for variable: {name}"));
 
                 match resolution {
                     ResolvedValue::Local { name, .. } => {
@@ -407,7 +407,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                             })),
                         );
                     }
-                    ResolvedValue::Class(fqn) | ResolvedValue::Enum(fqn) | ResolvedValue::TypeAlias(fqn) => {
+                    ResolvedValue::Class(fqn)
+                    | ResolvedValue::Enum(fqn)
+                    | ResolvedValue::TypeAlias(fqn) => {
                         // Type used as value (constructor)
                         self.builder.assign(
                             dest,
@@ -429,7 +431,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let resolution = body.resolution(expr_id).unwrap_or_else(|| {
                     panic!(
                         "Missing resolution for path expression: {:?}",
-                        segments.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(".")
+                        segments
+                            .iter()
+                            .map(smol_str::SmolStr::as_str)
+                            .collect::<Vec<_>>()
+                            .join(".")
                     )
                 });
 
@@ -462,35 +468,48 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                             })),
                         );
                     }
-                    ResolvedValue::ModuleItem { module_path, item_name } => {
+                    ResolvedValue::ModuleItem {
+                        module_path,
+                        item_name,
+                    } => {
                         let qn = QualifiedName::from_module_path(module_path, item_name.clone());
-                        self.builder.assign(
-                            dest,
-                            Rvalue::Use(Operand::Constant(Constant::Function(qn))),
-                        );
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(qn))));
                     }
-                    ResolvedValue::Class(fqn) | ResolvedValue::Enum(fqn) | ResolvedValue::TypeAlias(fqn) => {
+                    ResolvedValue::Class(fqn)
+                    | ResolvedValue::Enum(fqn)
+                    | ResolvedValue::TypeAlias(fqn) => {
                         // Type references used as values (e.g., constructor calls)
                         self.builder.assign(
                             dest,
                             Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
                         );
                     }
-                    ResolvedValue::TypeMethod { receiver_type, method_name } => {
+                    ResolvedValue::TypeMethod {
+                        receiver_type,
+                        method_name,
+                    } => {
                         // Static method call like `image.from_url`
-                        let qn = QualifiedName::builtin_method(receiver_type.clone(), method_name.clone());
-                        self.builder.assign(
-                            dest,
-                            Rvalue::Use(Operand::Constant(Constant::Function(qn))),
+                        let qn = QualifiedName::builtin_method(
+                            receiver_type.clone(),
+                            method_name.clone(),
                         );
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(qn))));
                     }
                     ResolvedValue::Field { .. } => {
-                        panic!("Field resolution should not appear in Path expression - should be FieldAccess")
+                        panic!(
+                            "Field resolution should not appear in Path expression - should be FieldAccess"
+                        )
                     }
                     ResolvedValue::Unknown => {
                         panic!(
                             "Unresolved path reached MIR: {:?}",
-                            segments.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(".")
+                            segments
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join(".")
                         )
                     }
                 }
@@ -895,7 +914,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                             );
                         }
                         _ => {
-                            panic!("Unexpected resolution for method reference {field}: {resolution:?}")
+                            panic!(
+                                "Unexpected resolution for method reference {field}: {resolution:?}"
+                            )
                         }
                     }
                 } else {
