@@ -9,7 +9,7 @@ use baml_base::{FileId, Span};
 use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::TypeExpr;
 use la_arena::{Arena, Idx};
-use rowan::{TextRange, ast::AstNode};
+use rowan::{TextRange, TextSize, ast::AstNode};
 
 use crate::{Name, source_map::HirSourceMap, type_ref::TypeRef};
 
@@ -666,11 +666,14 @@ struct LoweringContext {
 /// Used to track partial state while scanning tokens in a pattern.
 enum PatternElement {
     /// Simple identifier (could become binding or enum start)
-    Ident(Name),
+    /// Stores (name, `start_position`) for span tracking
+    Ident(Name, TextSize),
     /// Seen `EnumName.` - waiting for variant name
-    EnumStart(Name),
+    /// Stores (`enum_name`, `start_position`) for span tracking
+    EnumStart(Name, TextSize),
     /// Seen `name:` - waiting for type expression
-    TypedBindingStart(Name),
+    /// Stores (name, `start_position`) for span tracking
+    TypedBindingStart(Name, TextSize),
 }
 
 impl LoweringContext {
@@ -1565,7 +1568,7 @@ impl LoweringContext {
                             let text = token.text().to_string();
 
                             // First, check if we're completing an enum variant
-                            if let Some(PatternElement::EnumStart(enum_name)) =
+                            if let Some(PatternElement::EnumStart(enum_name, _start)) =
                                 current_element.take()
                             {
                                 // Complete the enum variant: EnumName.Variant
@@ -1607,20 +1610,28 @@ impl LoweringContext {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
                                     // Regular identifier - could be binding or start of enum variant
-                                    current_element = Some(PatternElement::Ident(Name::new(&text)));
+                                    // Track the start position for span tracking
+                                    current_element = Some(PatternElement::Ident(
+                                        Name::new(&text),
+                                        token.text_range().start(),
+                                    ));
                                 }
                             }
                         }
                         SyntaxKind::DOT => {
                             // Transition: Ident.Variant (enum variant pattern)
-                            if let Some(PatternElement::Ident(enum_name)) = current_element.take() {
-                                current_element = Some(PatternElement::EnumStart(enum_name));
+                            if let Some(PatternElement::Ident(enum_name, start)) =
+                                current_element.take()
+                            {
+                                current_element = Some(PatternElement::EnumStart(enum_name, start));
                             }
                         }
                         SyntaxKind::COLON => {
                             // Transition: ident: Type (typed binding pattern)
-                            if let Some(PatternElement::Ident(name)) = current_element.take() {
-                                current_element = Some(PatternElement::TypedBindingStart(name));
+                            if let Some(PatternElement::Ident(name, start)) = current_element.take()
+                            {
+                                current_element =
+                                    Some(PatternElement::TypedBindingStart(name, start));
                             }
                         }
                         SyntaxKind::MINUS => {
@@ -1699,15 +1710,21 @@ impl LoweringContext {
                         }
                         SyntaxKind::TYPE_EXPR => {
                             // Complete typed binding: ident: Type
-                            if let Some(PatternElement::TypedBindingStart(name)) =
+                            if let Some(PatternElement::TypedBindingStart(name, start)) =
                                 current_element.take()
                             {
                                 if let Some(type_expr) =
-                                    baml_compiler_syntax::ast::TypeExpr::cast(child_node)
+                                    baml_compiler_syntax::ast::TypeExpr::cast(child_node.clone())
                                 {
                                     let ty = crate::type_ref::TypeRef::from_ast(&type_expr);
+                                    // Compute span from name start to type end
+                                    let range =
+                                        TextRange::new(start, child_node.text_range().end());
                                     elements.push(
-                                        self.patterns.alloc(Pattern::TypedBinding { name, ty }),
+                                        self.alloc_pattern(
+                                            Pattern::TypedBinding { name, ty },
+                                            range,
+                                        ),
                                     );
                                 } else {
                                     // Failed to cast - treat as simple binding
@@ -1761,12 +1778,12 @@ impl LoweringContext {
     /// Finalize a partially-built pattern element.
     fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
         match element {
-            PatternElement::Ident(name) => self.patterns.alloc(Pattern::Binding(name)),
-            PatternElement::EnumStart(enum_name) => {
+            PatternElement::Ident(name, _start) => self.patterns.alloc(Pattern::Binding(name)),
+            PatternElement::EnumStart(enum_name, _start) => {
                 // Incomplete enum variant (missing variant name) - treat as binding
                 self.patterns.alloc(Pattern::Binding(enum_name))
             }
-            PatternElement::TypedBindingStart(name) => {
+            PatternElement::TypedBindingStart(name, _start) => {
                 // Incomplete typed binding (missing type) - treat as simple binding
                 self.patterns.alloc(Pattern::Binding(name))
             }

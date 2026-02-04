@@ -684,16 +684,24 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
         fn test_06_codegen() {
             let mut db = ProjectDatabase::new();
             let root = db.set_project_root(std::path::Path::new("."));
+
+            // Get the existing files (includes builtins loaded by set_project_root)
+            let mut all_files: Vec<_> = root.files(&db).clone();
+
+            // Declare source_files Vec for file_loaders to populate
             let mut source_files = Vec::new();
 
+            // Add user source files
             #file_loaders
 
-            // Update project root with the list of files for proper Salsa tracking
-            root.set_files(&mut db).to(source_files.clone());
+            // Extend the project files with user files
+            all_files.extend(source_files);
+            root.set_files(&mut db).to(all_files.clone());
 
             let mut output = String::new();
 
-            match baml_compiler_emit::compile_files(&db, &source_files) {
+            // Pass all files (builtins + user) to compile_files
+            match baml_compiler_emit::compile_files(&db, &all_files) {
                 Ok(program) => {
                     writeln!(output, "=== BYTECODE ===").unwrap();
                     writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();

@@ -27,10 +27,19 @@ impl fmt::Display for FileId {
 }
 
 /// A span in source code, tracking both file and position
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub file_id: FileId,
     pub range: TextRange,
+}
+
+impl Default for Span {
+    /// Creates a sentinel span that doesn't refer to any real file.
+    ///
+    /// Uses `u32::MAX` as the file ID to avoid conflicts with real files.
+    fn default() -> Self {
+        Self::fake()
+    }
 }
 
 impl Span {
@@ -46,9 +55,11 @@ impl Span {
     }
 
     /// Create a fake span for testing or when no real span is available.
+    ///
+    /// Uses a sentinel `FileId` (`u32::MAX`) that's unlikely to conflict with real files.
     pub fn fake() -> Self {
         Span {
-            file_id: FileId::new(0),
+            file_id: FileId::new(u32::MAX),
             range: TextRange::empty(TextSize::new(0)),
         }
     }

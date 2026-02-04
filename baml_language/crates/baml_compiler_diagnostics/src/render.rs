@@ -212,8 +212,9 @@ fn render_ariadne(
             .annotations
             .first()
             .map(|a| a.span)
+            // Use u32::MAX as sentinel for fake spans (matches Span::fake())
             .unwrap_or(Span {
-                file_id: FileId::new(0),
+                file_id: FileId::new(u32::MAX),
                 range: text_size::TextRange::new(0.into(), 0.into()),
             })
     });

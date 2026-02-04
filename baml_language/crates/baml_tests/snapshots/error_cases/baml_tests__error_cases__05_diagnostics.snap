@@ -54,11 +54,11 @@ expression: output
 ────╯
 
   [type] Error: Unknown type `b`
-   ╭─[ syntax_errors.baml:1:1 ]
-   │
- 1 │ // Missing closing brace
-   │ │ 
-   │ ╰─ Unknown type `b`
-   │ 
-   │ Note: Error code: E0002
-───╯
+    ╭─[ syntax_errors.baml:18:9 ]
+    │
+ 18 │         a: int | b: bool => "bad"
+    │         ─────┬────  
+    │              ╰────── Unknown type `b`
+    │ 
+    │ Note: Error code: E0002
+────╯

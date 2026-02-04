@@ -742,6 +742,8 @@ dependencies = [
 name = "baml_project"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
+ "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_mir",
@@ -760,6 +762,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
+ "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",

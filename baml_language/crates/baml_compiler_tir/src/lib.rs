@@ -19,7 +19,7 @@ use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
-    MatchArmId, Pattern, SignatureSourceMap, StmtId, TirContext, TypeId,
+    MatchArmId, PatId, Pattern, SignatureSourceMap, StmtId, TirContext, TypeId,
 };
 use baml_workspace::Project;
 
@@ -703,6 +703,14 @@ impl<'db> TypeContext<'db> {
         self.hir_source_map
             .as_ref()
             .and_then(|sm| sm.type_span(id))
+            .unwrap_or_default()
+    }
+
+    /// Look up the span for a pattern from the source map.
+    pub fn pattern_span(&self, id: PatId) -> Span {
+        self.hir_source_map
+            .as_ref()
+            .and_then(|sm| sm.pattern_span(id))
             .unwrap_or_default()
     }
 
@@ -1868,7 +1876,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         // Extract pattern and determine the narrowed type
                         let pattern = &body.patterns[arm.pattern];
                         let (binding_name, narrowed_ty) =
-                            extract_pattern_binding(ctx, pattern, &scrutinee_ty, body);
+                            extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
 
                         // Bind the pattern variable with the narrowed type
                         if let Some(name) = binding_name {
@@ -2178,14 +2186,16 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
 fn extract_pattern_binding(
     ctx: &mut TypeContext<'_>,
     pattern: &Pattern,
+    pattern_id: PatId,
     scrutinee_ty: &Ty,
     _body: &ExprBody,
 ) -> (Option<Name>, Ty) {
     match pattern {
         // Typed binding: `s: Success` -> s has type Success
         Pattern::TypedBinding { name, ty } => {
-            // TODO: Pattern types should use TypeId for proper span tracking
-            let narrowed_ty = ctx.lower_type(ty, Span::default());
+            // Use the pattern's span for type errors (points to where the type is used)
+            let pattern_span = ctx.pattern_span(pattern_id);
+            let narrowed_ty = ctx.lower_type(ty, pattern_span);
             (Some(name.clone()), narrowed_ty)
         }
 

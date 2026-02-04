@@ -61,4 +61,4 @@ fn Broken.Invalid() -> null {
 }
 
 fn Broken.BadUnionPattern:
-  (no MIR due to errors: missing expression at file 0:0..0)
+  (no MIR due to errors: missing expression at file 4294967295:0..0)

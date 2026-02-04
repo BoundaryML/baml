@@ -16,6 +16,9 @@ use baml_db::{FileId, SourceFile};
 use baml_workspace::Project;
 use salsa::Setter;
 
+// Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
+// The paths are defined in `baml_builtins::baml_sources::ALL`.
+
 /// Type alias for Salsa event callbacks
 pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 
@@ -221,22 +224,54 @@ impl ProjectDatabase {
     /// This creates a new Project in the database with an empty file list.
     /// Files should be added using `add_file` or `add_or_update_file`.
     ///
+    /// This also loads builtin BAML files (like `llm.baml`) into the project.
+    /// Builtin files are available from the start of the compilation pipeline.
+    ///
     /// Returns the created `Project`.
     pub fn set_project_root(&mut self, root: &Path) -> Project {
         let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
 
-        // Collect existing files that are under this root
-        let existing_files: Vec<SourceFile> = self
+        // Collect existing user files that are under this root
+        let user_files: Vec<SourceFile> = self
             .file_map
             .iter()
             .filter(|(p, _)| p.starts_with(&canonical_root))
             .map(|(_, f)| *f)
             .collect();
 
+        // Load builtin BAML files after user files (matches production order)
+        let builtin_files = self.load_builtin_baml_files();
+
+        // Combine user files with builtin files (user first, then builtins)
+        let mut all_files = user_files;
+        all_files.extend(builtin_files);
+
         // Create and set the project
-        let project = Project::new(self, canonical_root, existing_files);
+        let project = Project::new(self, canonical_root, all_files);
         self.project = Some(project);
         project
+    }
+
+    /// Load builtin BAML source files into the database.
+    ///
+    /// These files provide implementations for builtin namespaces like `baml.llm`.
+    /// They are loaded once when the project is set up and included in the
+    /// compilation pipeline from the start.
+    ///
+    /// Builtin files use the normal `FileId` allocation just like user files.
+    fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
+        let mut builtin_files = Vec::new();
+
+        // Load all builtin BAML sources using normal file ID allocation
+        for builtin_source in baml_builtins::baml_sources() {
+            let file = self.add_file_internal(
+                PathBuf::from(builtin_source.path),
+                builtin_source.source.to_string(),
+            );
+            builtin_files.push(file);
+        }
+
+        builtin_files
     }
 
     /// Add a file to the database.

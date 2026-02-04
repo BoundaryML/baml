@@ -46,7 +46,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 use std::collections::HashMap;
 
-use baml_base::{FileId, Name, SourceFile, Span};
+use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{
     self, ItemId, function_body, function_signature, function_signature_source_map,
 };
@@ -55,6 +55,8 @@ use baml_compiler_hir::{
 /// Functions from this file are namespaced as `baml.llm.*`.
 /// The path format `<builtin>/baml/llm.baml` is parsed by HIR's `file_namespace`
 /// to derive the namespace `baml.llm`.
+///
+/// Note: This path matches the one defined in `baml_builtins::baml_sources::ALL`.
 pub const BUILTIN_LLM_PATH: &str = "<builtin>/baml/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
@@ -94,16 +96,8 @@ pub fn compile_files(
         ("baml.llm.get_client_function", 1),
     ];
 
-    // Create the builtin llm.baml file and combine with user files
-    let builtin_file = SourceFile::new(
-        db,
-        baml_builtins::baml_sources::LLM.to_string(),
-        BUILTIN_LLM_PATH.into(),
-        FileId::new(u32::MAX - 1), // Use a high ID to avoid conflicts
-    );
-    let mut all_files: Vec<SourceFile> = files.to_vec();
-    all_files.push(builtin_file);
-    let files = &all_files;
+    // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
+    // in ProjectDatabase::set_project_root(), so they're already in the files list.
 
     let mut program = Program::new();
     let project = db.project();
